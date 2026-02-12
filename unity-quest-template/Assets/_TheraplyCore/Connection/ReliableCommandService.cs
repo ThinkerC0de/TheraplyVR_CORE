@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using UnityEngine;
 using TheraplyCore.Logging;
 using TheraplyCore.Network.Connection;
-using MessagePack;
 
 namespace TheraplyCore.Connection
 {
