@@ -118,14 +118,15 @@ namespace TheraplyCore.Network.Discovery
                 _udpClient = new UdpClient(_discoveryPort);
                 _udpClient.EnableBroadcast = true;
                 
+                // Set running flag BEFORE starting coroutine (critical!)
+                _isRunning = true;
+                
                 // Start broadcasting
                 // Note: Broadcasts on all platforms for testing (Quest + Editor)
                 _broadcastCoroutine = StartCoroutine(BroadcastLoop());
                 
                 // Start listening (always)
                 StartListening();
-                
-                _isRunning = true;
                 
                 Debug.Log($"[UDPDiscovery] Started on port {_discoveryPort} at {System.DateTime.Now:HH:mm:ss.fff}");
                 OnDiscoveryStarted?.Invoke();
