@@ -133,10 +133,9 @@ namespace TheraplyCore.Network.Discovery
                 _udpClient = new UdpClient(_discoveryPort);
                 _udpClient.EnableBroadcast = true;
                 
-                // Start broadcasting (Quest only)
-#if UNITY_ANDROID && !UNITY_EDITOR
+                // Start broadcasting
+                // Note: Broadcasts on all platforms for testing (Quest + Editor)
                 _broadcastCoroutine = StartCoroutine(BroadcastLoop());
-#endif
                 
                 // Start listening (always)
                 StartListening();

@@ -85,10 +85,8 @@ namespace TheraplyCore.Network.Connection
         
         private void Start()
         {
-            // Auto-start server on Quest
-#if UNITY_ANDROID && !UNITY_EDITOR
+            // Auto-start server on Quest and Editor (for testing)
             StartServer();
-#endif
         }
         
         private void Update()
