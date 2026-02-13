@@ -140,8 +140,21 @@ class ConnectionService {
     }
   }
   
-  void disconnect() {
-    _socket?.close();
+  void disconnect() async {
+    if (_socket == null) return;
+    
+    try {
+      // Flush any pending data before closing
+      await _socket!.flush();
+      // Give a moment for flush to complete
+      await Future.delayed(const Duration(milliseconds: 50));
+      // Gracefully close the socket
+      await _socket!.close();
+    } catch (e) {
+      // Ignore errors during disconnect
+      print('[Connection] ⚠️ Error during disconnect: $e');
+    }
+    
     _socket = null;
     _isConnected = false;
     _receiveBuffer.clear();

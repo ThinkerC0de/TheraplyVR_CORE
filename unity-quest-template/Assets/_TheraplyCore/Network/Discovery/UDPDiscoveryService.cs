@@ -41,7 +41,7 @@ namespace TheraplyCore.Network.Discovery
         [SerializeField] private string _customDeviceName = "";
         
         [Header("Debug")]
-        [SerializeField] private bool _logBroadcasts = false;
+        [SerializeField] private bool _logBroadcasts = true;  // Enable for timing diagnosis
         [SerializeField] private bool _logReceives = true;
         
         // ============================================
@@ -89,23 +89,8 @@ namespace TheraplyCore.Network.Discovery
         
         private void OnApplicationPause(bool pause)
         {
-            if (pause)
-            {
-                // Pause broadcasting but keep listening
-                if (_broadcastCoroutine != null)
-                {
-                    StopCoroutine(_broadcastCoroutine);
-                    _broadcastCoroutine = null;
-                }
-            }
-            else
-            {
-                // Resume broadcasting
-                if (_isRunning && _broadcastCoroutine == null)
-                {
-                    _broadcastCoroutine = StartCoroutine(BroadcastLoop());
-                }
-            }
+            // Broadcasting continues during pause/resume
+            // Coroutine is already running, no action needed
         }
         
         // ============================================
@@ -142,7 +127,7 @@ namespace TheraplyCore.Network.Discovery
                 
                 _isRunning = true;
                 
-                Debug.Log($"[UDPDiscovery] Started on port {_discoveryPort}");
+                Debug.Log($"[UDPDiscovery] Started on port {_discoveryPort} at {System.DateTime.Now:HH:mm:ss.fff}");
                 OnDiscoveryStarted?.Invoke();
             }
             catch (Exception e)
@@ -229,7 +214,7 @@ namespace TheraplyCore.Network.Discovery
                     
                     if (_logBroadcasts)
                     {
-                        Debug.Log($"[UDPDiscovery] Broadcast: {_myDeviceInfo.deviceName} @ {_myDeviceInfo.ip}");
+                        Debug.Log($"[UDPDiscovery] Broadcast: {_myDeviceInfo.deviceName} @ {_myDeviceInfo.ip} at {System.DateTime.Now:HH:mm:ss.fff}");
                     }
                 }
                 catch (Exception e)

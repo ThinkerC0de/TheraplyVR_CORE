@@ -112,19 +112,8 @@ namespace TheraplyCore.Network.Connection
         
         private void OnApplicationPause(bool pause)
         {
-            if (pause)
-            {
-                // Keep server running but connection might drop
-            }
-            else
-            {
-                // Resume - restart server if needed
-                if (!_isRunning)
-                {
-                    Debug.Log("[TCPServer] Restarting server after resume...");
-                    StartServer();
-                }
-            }
+            // Server keeps running during pause/resume
+            // No action needed - server and connections are persistent
         }
         
         // ============================================
@@ -319,6 +308,12 @@ namespace TheraplyCore.Network.Connection
                         Debug.Log("[TCPServer] Waiting for client connection...");
                     }
                     
+                    // Check if still running before accepting (prevents disposed exception)
+                    if (!_isRunning)
+                    {
+                        break;
+                    }
+                    
                     TcpClient client = await _tcpListener.AcceptTcpClientAsync();
                     
                     // Disconnect existing client if any
@@ -352,12 +347,24 @@ namespace TheraplyCore.Network.Connection
             }
             catch (OperationCanceledException)
             {
-                // Normal cancellation
+                // Normal cancellation during shutdown
+            }
+            catch (ObjectDisposedException)
+            {
+                // Listener was closed during shutdown - this is expected
+            }
+            catch (SocketException se) when (se.SocketErrorCode == SocketError.Interrupted)
+            {
+                // Accept was interrupted during shutdown - this is expected
             }
             catch (Exception e)
             {
-                Debug.LogError($"[TCPServer] Accept error: {e.Message}");
-                EnqueueMainThreadAction(() => OnError?.Invoke(e));
+                // Only log unexpected errors
+                if (_isRunning)
+                {
+                    Debug.LogError($"[TCPServer] Accept error: {e.Message}");
+                    EnqueueMainThreadAction(() => OnError?.Invoke(e));
+                }
             }
         }
         
