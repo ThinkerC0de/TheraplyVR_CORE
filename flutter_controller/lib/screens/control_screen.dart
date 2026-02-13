@@ -17,7 +17,7 @@ class _ControlScreenState extends State<ControlScreen> {
   bool _isConnected = false;
   String _statusMessage = 'Connecting...';
   StreamSubscription<bool>? _connectionSubscription;
-  StreamSubscription<String>? _messageSubscription;
+  StreamSubscription<Map<String, dynamic>>? _messageSubscription;
   
   @override
   void initState() {
@@ -38,8 +38,9 @@ class _ControlScreenState extends State<ControlScreen> {
     
     // Listen to messages
     _messageSubscription = _connection.messages.listen((message) {
-      print('[Control] Message: $message');
-      // TODO: Parse game status updates
+      print('[Control] Received command: ${message['commandId']}');
+      // TODO: Handle game status updates based on commandId
+      // Example: if (message['commandId'] == 'GAME_STATUS') { ... }
     });
     
     // Attempt connection
