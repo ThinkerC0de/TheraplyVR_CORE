@@ -14,9 +14,11 @@ class ScannerScreen extends StatefulWidget {
 
 class _ScannerScreenState extends State<ScannerScreen> {
   final DiscoveryService _discovery = DiscoveryService();
-  final List<DeviceInfo> _devices = [];
+  final Map<String, DeviceInfo> _devices = {}; // Changed to Map for easier updates
+  final Map<String, DateTime> _lastSeen = {}; // Track when device was last seen
   bool _isScanning = false;
   StreamSubscription<DeviceInfo>? _deviceSubscription;
+  Timer? _cleanupTimer;
   
   @override
   void initState() {
@@ -27,15 +29,40 @@ class _ScannerScreenState extends State<ScannerScreen> {
   void _startScanning() {
     setState(() {
       _isScanning = true;
-      _devices.clear();
+      // DON'T clear devices - keep them in list!
     });
     
+    // Listen for device updates
     _deviceSubscription = _discovery.devices.listen((device) {
       setState(() {
-        // Replace if same device (by IP)
-        _devices.removeWhere((d) => d.ip == device.ip);
-        _devices.add(device);
+        // Update or add device (keyed by IP)
+        _devices[device.ip] = device;
+        _lastSeen[device.ip] = DateTime.now();
       });
+    });
+    
+    // Cleanup old devices every 5 seconds
+    _cleanupTimer?.cancel();
+    _cleanupTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      final now = DateTime.now();
+      final toRemove = <String>[];
+      
+      _lastSeen.forEach((ip, lastSeenTime) {
+        // Remove if not seen in last 15 seconds
+        if (now.difference(lastSeenTime).inSeconds > 15) {
+          toRemove.add(ip);
+        }
+      });
+      
+      if (toRemove.isNotEmpty) {
+        setState(() {
+          for (var ip in toRemove) {
+            _devices.remove(ip);
+            _lastSeen.remove(ip);
+          }
+        });
+        print('[Scanner] Removed ${toRemove.length} stale device(s)');
+      }
     });
     
     _discovery.startScanning();
@@ -44,6 +71,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
   void _stopScanning() {
     _discovery.stopScanning();
     _deviceSubscription?.cancel();
+    _cleanupTimer?.cancel();
     setState(() {
       _isScanning = false;
     });
@@ -74,6 +102,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
   void dispose() {
     _discovery.dispose();
     _deviceSubscription?.cancel();
+    _cleanupTimer?.cancel();
     super.dispose();
   }
   
@@ -99,7 +128,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                 Expanded(
                   child: Text(
                     _isScanning
-                        ? 'Scanning for devices...'
+                        ? 'Scanning for devices... (${_devices.length} found)'
                         : '${_devices.length} device(s) found',
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                   ),
@@ -152,7 +181,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                 : ListView.builder(
                     itemCount: _devices.length,
                     itemBuilder: (context, index) {
-                      final device = _devices[index];
+                      final device = _devices.values.toList()[index];
                       return Card(
                         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         child: ListTile(

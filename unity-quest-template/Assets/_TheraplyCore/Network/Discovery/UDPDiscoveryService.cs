@@ -28,7 +28,7 @@ namespace TheraplyCore.Network.Discovery
         [SerializeField] private int _discoveryPort = 8767;
         
         [Tooltip("Interval between broadcasts (seconds)")]
-        [SerializeField] private float _broadcastInterval = 2.0f;
+        [SerializeField] private float _broadcastInterval = 0.5f;
         
         [Tooltip("Device info timeout (seconds) - mark device as offline")]
         [SerializeField] private float _deviceTimeout = 10.0f;
@@ -207,7 +207,12 @@ namespace TheraplyCore.Network.Discovery
         
         private IEnumerator BroadcastLoop()
         {
-            IPEndPoint broadcastEndpoint = new IPEndPoint(IPAddress.Broadcast, _discoveryPort);
+            // Calculate proper broadcast address for our network
+            string localIP = _myDeviceInfo.ip;
+            IPAddress broadcastAddress = CalculateBroadcastAddress(localIP);
+            IPEndPoint broadcastEndpoint = new IPEndPoint(broadcastAddress, _discoveryPort);
+            
+            Debug.Log($"[UDPDiscovery] Broadcasting to {broadcastAddress}:{_discoveryPort}");
             
             while (_isRunning)
             {
@@ -312,20 +317,124 @@ namespace TheraplyCore.Network.Discovery
             try
             {
                 var host = Dns.GetHostEntry(Dns.GetHostName());
+                IPAddress bestIP = null;
+                
+                Debug.Log("[UDPDiscovery] Available network interfaces:");
+                
                 foreach (var ip in host.AddressList)
                 {
                     if (ip.AddressFamily == AddressFamily.InterNetwork)
                     {
-                        return ip.ToString();
+                        string ipStr = ip.ToString();
+                        Debug.Log($"  - {ipStr}");
+                        
+                        // Skip loopback (127.x.x.x)
+                        if (ipStr.StartsWith("127."))
+                        {
+                            Debug.Log($"    -> Skipped (loopback)");
+                            continue;
+                        }
+                        
+                        // Skip APIPA/link-local (169.254.x.x)
+                        if (ipStr.StartsWith("169.254."))
+                        {
+                            Debug.Log($"    -> Skipped (APIPA/link-local)");
+                            continue;
+                        }
+                        
+                        // Skip common virtual adapters (100.x.x.x range often used by VPN/virtual adapters)
+                        if (ipStr.StartsWith("100."))
+                        {
+                            Debug.Log($"    -> Skipped (likely virtual adapter)");
+                            continue;
+                        }
+                        
+                        // Prefer typical private network ranges:
+                        // 192.168.x.x (most common home/office)
+                        // 10.x.x.x (corporate)
+                        // 172.16-31.x.x (less common)
+                        if (ipStr.StartsWith("192.168."))
+                        {
+                            Debug.Log($"    -> SELECTED (192.168.x.x - typical home/office network)");
+                            return ipStr;
+                        }
+                        
+                        if (ipStr.StartsWith("10."))
+                        {
+                            if (bestIP == null)
+                            {
+                                bestIP = ip;
+                                Debug.Log($"    -> Candidate (10.x.x.x - corporate network)");
+                            }
+                        }
+                        else if (ipStr.StartsWith("172."))
+                        {
+                            // Check if it's in 172.16.0.0 - 172.31.255.255 range
+                            string[] parts = ipStr.Split('.');
+                            if (parts.Length >= 2)
+                            {
+                                int secondOctet = int.Parse(parts[1]);
+                                if (secondOctet >= 16 && secondOctet <= 31)
+                                {
+                                    if (bestIP == null)
+                                    {
+                                        bestIP = ip;
+                                        Debug.Log($"    -> Candidate (172.16-31.x.x - private network)");
+                                    }
+                                }
+                            }
+                        }
+                        else if (bestIP == null)
+                        {
+                            // Fallback to any other IPv4 if nothing better found
+                            bestIP = ip;
+                            Debug.Log($"    -> Fallback candidate");
+                        }
                     }
+                }
+                
+                if (bestIP != null)
+                {
+                    Debug.Log($"[UDPDiscovery] Selected IP: {bestIP}");
+                    return bestIP.ToString();
                 }
             }
             catch (Exception e)
             {
-                Debug.LogWarning($"[UDPDiscovery] Failed to get IP: {e.Message}");
+                Debug.LogError($"[UDPDiscovery] Failed to get IP: {e.Message}");
             }
             
+            Debug.LogError("[UDPDiscovery] No suitable IP address found!");
             return "0.0.0.0";
+        }
+        
+        /// <summary>
+        /// Calculate broadcast address for the given local IP
+        /// For typical /24 networks (255.255.255.0), this converts:
+        /// 192.168.1.100 -> 192.168.1.255
+        /// </summary>
+        private IPAddress CalculateBroadcastAddress(string localIP)
+        {
+            try
+            {
+                string[] parts = localIP.Split('.');
+                if (parts.Length == 4)
+                {
+                    // Assume /24 network (most common for home/office)
+                    // Keep first 3 octets, set last to 255
+                    string broadcast = $"{parts[0]}.{parts[1]}.{parts[2]}.255";
+                    Debug.Log($"[UDPDiscovery] Calculated broadcast: {localIP} -> {broadcast}");
+                    return IPAddress.Parse(broadcast);
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[UDPDiscovery] Failed to calculate broadcast address: {e.Message}");
+            }
+            
+            // Fallback to global broadcast
+            Debug.Log("[UDPDiscovery] Using global broadcast (255.255.255.255)");
+            return IPAddress.Broadcast;
         }
     }
     
