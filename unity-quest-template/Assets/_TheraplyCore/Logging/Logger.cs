@@ -51,7 +51,7 @@ namespace TheraplyCore.Logging
         public static void SetMinLevel(LogLevel level)
         {
             _minLevel = level;
-            Debug.Log($"<color=cyan>[Logger]</color> Min level set to: {level}");
+            UnityEngine.Debug.Log($"<color=cyan>[Logger]</color> Min level set to: {level}");
         }
         
         /// <summary>
@@ -60,7 +60,7 @@ namespace TheraplyCore.Logging
         public static void SetRemoteLogging(bool enabled)
         {
             _remoteLoggingEnabled = enabled;
-            Debug.Log($"<color=cyan>[Logger]</color> Remote logging: {(enabled ? "ENABLED" : "DISABLED")}");
+            UnityEngine.Debug.Log($"<color=cyan>[Logger]</color> Remote logging: {(enabled ? "ENABLED" : "DISABLED")}");
         }
         
         /// <summary>

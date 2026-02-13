@@ -4,7 +4,6 @@ using System.Net.Sockets;
 using System.Text;
 using System.Collections;
 using UnityEngine;
-using MessagePack;
 
 namespace TheraplyCore.Network.Discovery
 {
@@ -16,7 +15,7 @@ namespace TheraplyCore.Network.Discovery
     /// - Quest: Broadcasts DeviceInfo every 2 seconds on port 8767
     /// - Controller: Listens on port 8767, discovers available devices
     /// 
-    /// MESSAGE FORMAT: MessagePack binary (DeviceInfo struct)
+    /// MESSAGE FORMAT: JSON (DeviceInfo struct)
     /// </summary>
     public class UDPDiscoveryService : MonoBehaviour
     {
@@ -217,8 +216,9 @@ namespace TheraplyCore.Network.Discovery
                     // Update timestamp
                     _myDeviceInfo.timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                     
-                    // Serialize with MessagePack
-                    byte[] data = MessagePackSerializer.Serialize(_myDeviceInfo);
+                    // Serialize with JSON
+                    string jsonString = JsonUtility.ToJson(_myDeviceInfo);
+                    byte[] data = System.Text.Encoding.UTF8.GetBytes(jsonString);
                     
                     // Broadcast
                     _udpClient.Send(data, data.Length, broadcastEndpoint);
@@ -253,7 +253,8 @@ namespace TheraplyCore.Network.Discovery
                     // Parse device info
                     try
                     {
-                        DeviceInfo deviceInfo = MessagePackSerializer.Deserialize<DeviceInfo>(result.Buffer);
+                        string jsonString = System.Text.Encoding.UTF8.GetString(result.Buffer);
+                        DeviceInfo deviceInfo = JsonUtility.FromJson<DeviceInfo>(jsonString);
                         
                         // Ignore messages from self (check device ID)
                         if (deviceInfo.deviceId == _myDeviceInfo.deviceId)
@@ -334,18 +335,18 @@ namespace TheraplyCore.Network.Discovery
     
     /// <summary>
     /// Device information broadcasted via UDP
-    /// Serialized with MessagePack for compact size
+    /// Serialized with JSON for simplicity
     /// </summary>
-    [MessagePackObject]
+    [Serializable]
     public struct DeviceInfo
     {
-        [Key(0)] public string deviceId;       // Unique device identifier
-        [Key(1)] public string deviceName;     // Human-readable name
-        [Key(2)] public string ip;             // Local IP address
-        [Key(3)] public int controlPort;       // TCP control port (8080)
-        [Key(4)] public int videoPort;         // UDP video port (8081)
-        [Key(5)] public int audioPort;         // UDP audio port (8082)
-        [Key(6)] public string studentId;      // Firebase student ID (if logged in)
-        [Key(7)] public long timestamp;        // Unix timestamp
+        public string deviceId;       // Unique device identifier
+        public string deviceName;     // Human-readable name
+        public string ip;             // Local IP address
+        public int controlPort;       // TCP control port (8080)
+        public int videoPort;         // UDP video port (8081)
+        public int audioPort;         // UDP audio port (8082)
+        public string studentId;      // Firebase student ID (if logged in)
+        public long timestamp;        // Unix timestamp
     }
 }

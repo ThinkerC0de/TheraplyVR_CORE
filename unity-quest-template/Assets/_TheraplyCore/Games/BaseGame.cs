@@ -5,6 +5,7 @@ using VContainer;
 using TheraplyCore.Logging;
 using TheraplyCore.Firebase;
 using TheraplyCore.Connection;
+using Logger = TheraplyCore.Logging.Logger;
 
 namespace TheraplyCore.Games
 {

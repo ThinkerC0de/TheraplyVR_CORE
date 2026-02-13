@@ -4,13 +4,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Concurrent;
 using UnityEngine;
-using MessagePack;
 
 namespace TheraplyCore.Network.Connection
 {
     /// <summary>
     /// TCP-based connection service for reliable control messages
-    /// Uses MessagePack for binary serialization
+    /// Uses JSON for message serialization
     /// 
     /// FEATURES:
     /// - Persistent TCP connection (NoDelay enabled)
@@ -242,8 +241,9 @@ namespace TheraplyCore.Network.Connection
             
             try
             {
-                // Serialize with MessagePack
-                byte[] messageData = MessagePackSerializer.Serialize(message);
+                // Serialize with JSON
+                string jsonString = JsonUtility.ToJson(message);
+                byte[] messageData = System.Text.Encoding.UTF8.GetBytes(jsonString);
                 
                 // Prepend length (4 bytes, big-endian)
                 byte[] lengthPrefix = BitConverter.GetBytes(messageData.Length);
@@ -291,7 +291,7 @@ namespace TheraplyCore.Network.Connection
                 messageId = Guid.NewGuid().ToString(),
                 timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                 commandId = commandId,
-                payload = payload != null ? MessagePackSerializer.Serialize(payload) : null
+                payload = payload != null ? System.Text.Encoding.UTF8.GetBytes(JsonUtility.ToJson(payload)) : null
             };
             
             return await SendMessageAsync(message);
@@ -342,8 +342,9 @@ namespace TheraplyCore.Network.Connection
                         break;
                     }
                     
-                    // Deserialize
-                    NetworkMessage message = MessagePackSerializer.Deserialize<NetworkMessage>(messageBuffer);
+                    // Deserialize from JSON
+                    string jsonString = System.Text.Encoding.UTF8.GetString(messageBuffer);
+                    NetworkMessage message = JsonUtility.FromJson<NetworkMessage>(jsonString);
                     
                     // Update stats
                     _messagesReceived++;
@@ -448,15 +449,15 @@ namespace TheraplyCore.Network.Connection
     // ============================================
     
     /// <summary>
-    /// Network message structure (MessagePack serialized)
+    /// Network message structure (JSON serialized)
     /// </summary>
-    [MessagePackObject]
+    [Serializable]
     public struct NetworkMessage
     {
-        [Key(0)] public string messageId;      // Unique message ID
-        [Key(1)] public long timestamp;        // Unix timestamp
-        [Key(2)] public string commandId;      // Command identifier (e.g., "SESSION_START")
-        [Key(3)] public byte[] payload;        // Nested MessagePack data
+        public string messageId;      // Unique message ID
+        public long timestamp;        // Unix timestamp
+        public string commandId;      // Command identifier (e.g., "SESSION_START")
+        public byte[] payload;        // Nested JSON data as bytes
     }
     
     /// <summary>

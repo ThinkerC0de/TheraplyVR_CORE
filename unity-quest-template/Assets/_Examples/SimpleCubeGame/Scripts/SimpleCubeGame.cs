@@ -4,7 +4,6 @@ using UnityEngine;
 using TheraplyCore.Games;
 using TheraplyCore.Network;
 using VContainer;
-using MessagePack;
 
 namespace TheraplyExamples
 {
@@ -23,7 +22,7 @@ namespace TheraplyExamples
     /// DEMONSTRATES:
     /// - Implementing IGameModule via BaseGame
     /// - Network command handling
-    /// - Configuration with MessagePack
+    /// - Configuration with JSON
     /// - Data collection for ML
     /// - Result reporting
     /// </summary>
@@ -64,7 +63,7 @@ namespace TheraplyExamples
         private SimpleCubeConfig _config;
         private int _score = 0;
         private int _totalClicks = 0;
-        private float _sessionStartTime;
+        private new float _sessionStartTime;
         private List<float> _reactionTimes = new List<float>();
         private float _lastSpawnTime;
         
@@ -82,15 +81,7 @@ namespace TheraplyExamples
             
             Debug.Log("[SimpleCubeGame] Initialized");
         }
-        
-        void OnDestroy()
-        {
-            // Unsubscribe (prevent memory leaks)
-            _onSessionStart.OnReceived -= HandleSessionStart;
-            _onSessionPause.OnReceived -= HandleSessionPause;
-            _onSessionResume.OnReceived -= HandleSessionResume;
-            _onConfigUpdate.OnReceived -= HandleConfigUpdate;
-        }
+
         
         void Update()
         {
@@ -115,9 +106,9 @@ namespace TheraplyExamples
         {
             try
             {
-                // Deserialize configuration from MessagePack
-                SimpleCubeConfig config = MessagePackSerializer.Deserialize<SimpleCubeConfig>(
-                    Convert.FromBase64String(payload));
+                // Deserialize configuration from JSON
+                SimpleCubeConfig config = JsonUtility.FromJson<SimpleCubeConfig>(
+                    System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(payload)));
                 
                 Debug.Log($"[SimpleCubeGame] Received config: difficulty={config.difficulty}, targetScore={config.targetScore}");
                 
@@ -145,8 +136,8 @@ namespace TheraplyExamples
         {
             try
             {
-                SimpleCubeConfig newConfig = MessagePackSerializer.Deserialize<SimpleCubeConfig>(
-                    Convert.FromBase64String(payload));
+                SimpleCubeConfig newConfig = JsonUtility.FromJson<SimpleCubeConfig>(
+                    System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(payload)));
                 
                 UpdateConfig(newConfig);
                 
@@ -401,16 +392,16 @@ namespace TheraplyExamples
     
     /// <summary>
     /// Configuration for SimpleCubeGame
-    /// MUST be marked with [MessagePackObject] for serialization
+    /// MUST be marked with [Serializable] for JSON serialization
     /// </summary>
-    [MessagePackObject]
+    [Serializable]
     public class SimpleCubeConfig : GameConfig
     {
-        [Key(0)] public int targetScore = 10;      // Score to win
-        [Key(1)] public float timeLimit = 0f;      // Time limit (0 = unlimited)
-        [Key(2)] public float cubeSize = 1.0f;     // Cube size multiplier
+        public int targetScore = 10;      // Score to win
+        public new float timeLimit = 0f;      // Time limit (0 = unlimited)
+        public float cubeSize = 1.0f;     // Cube size multiplier
         
-        // Constructor (required for MessagePack)
+        // Constructor
         public SimpleCubeConfig()
         {
             gameId = "example_cube_clicker";

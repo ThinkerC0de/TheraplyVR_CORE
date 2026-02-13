@@ -3,8 +3,8 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
-using TheraplyCore.Logging;
 using TheraplyCore.Games;
+using Logger = TheraplyCore.Logging.Logger;
 
 namespace TheraplyCore.Firebase
 {

@@ -1,9 +1,9 @@
 using System;
 using System.Threading.Tasks;
 using UnityEngine;
-using TheraplyCore.Logging;
 using TheraplyCore.Network.Discovery;
 using TheraplyCore.Network.Connection;
+using Logger = TheraplyCore.Logging.Logger;
 
 namespace TheraplyCore.Connection
 {
