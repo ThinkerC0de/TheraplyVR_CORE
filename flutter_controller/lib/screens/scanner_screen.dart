@@ -78,17 +78,18 @@ class _ScannerScreenState extends State<ScannerScreen> {
   }
   
   void _connectToDevice(DeviceInfo device) {
-    _stopScanning();
+    // Don't stop scanning - let ControlScreen pause it automatically
     
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ControlScreen(device: device),
+        builder: (context) => ControlScreen(
+          device: device,
+          discoveryService: _discovery,
+        ),
       ),
-    ).then((_) {
-      // Restart scanning when returning
-      _startScanning();
-    });
+    );
+    // Discovery will auto-resume when connection is lost
   }
   
   Future<void> _handleLogout() async {

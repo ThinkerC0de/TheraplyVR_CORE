@@ -9,6 +9,7 @@ class DiscoveryService {
   
   Stream<DeviceInfo> get devices => _deviceController.stream;
   bool _isScanning = false;
+  bool _isPaused = false;
   
   Future<void> startScanning() async {
     if (_isScanning) {
@@ -31,8 +32,11 @@ class DiscoveryService {
               final json = jsonDecode(message) as Map<String, dynamic>;
               final device = DeviceInfo.fromJson(json);
               
-              print('[Discovery] ✅ Found: ${device.deviceName} @ ${device.ip}');
-              _deviceController.add(device);
+              // Only emit device if not paused
+              if (!_isPaused) {
+                print('[Discovery] ✅ Found: ${device.deviceName} @ ${device.ip}');
+                _deviceController.add(device);
+              }
             } catch (e) {
               print('[Discovery] ⚠️ Parse error: $e');
             }
@@ -54,8 +58,26 @@ class DiscoveryService {
     _socket?.close();
     _socket = null;
     _isScanning = false;
+    _isPaused = false;
     
     print('[Discovery] ⏹️ Scanning stopped');
+  }
+  
+  /// Pause UDP scanning (e.g., when TCP connection established)
+  /// Socket remains open but stops emitting discovered devices
+  void pauseScanning() {
+    if (!_isScanning || _isPaused) return;
+    
+    _isPaused = true;
+    print('[Discovery] ⏸️ Scanning paused - TCP connection established');
+  }
+  
+  /// Resume UDP scanning (e.g., when TCP connection lost)
+  void resumeScanning() {
+    if (!_isScanning || !_isPaused) return;
+    
+    _isPaused = false;
+    print('[Discovery] ▶️ Scanning resumed - ready to discover devices');
   }
   
   void dispose() {

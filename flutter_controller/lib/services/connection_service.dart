@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
+import 'discovery_service.dart';
 
 class ConnectionService {
   Socket? _socket;
@@ -11,12 +12,20 @@ class ConnectionService {
   final StreamController<Map<String, dynamic>> _messageController = StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<bool> _connectionController = StreamController<bool>.broadcast();
   
+  // Discovery service reference (for automatic pause/resume)
+  DiscoveryService? _discoveryService;
+  
   // Buffer for incomplete messages
   final List<int> _receiveBuffer = [];
   
   Stream<Map<String, dynamic>> get messages => _messageController.stream;
   Stream<bool> get connectionStatus => _connectionController.stream;
   bool get isConnected => _isConnected;
+  
+  /// Set discovery service for automatic pause/resume
+  void setDiscoveryService(DiscoveryService discoveryService) {
+    _discoveryService = discoveryService;
+  }
   
   Future<bool> connect(String ip, int port) async {
     try {
@@ -33,6 +42,9 @@ class ConnectionService {
       
       _isConnected = true;
       _connectionController.add(true);
+      
+      // Pause UDP discovery when TCP connected
+      _discoveryService?.pauseScanning();
       
       print('[Connection] ✅ Connected successfully');
       
@@ -159,6 +171,10 @@ class ConnectionService {
     _isConnected = false;
     _receiveBuffer.clear();
     _connectionController.add(false);
+    
+    // Resume UDP discovery when TCP disconnected
+    _discoveryService?.resumeScanning();
+    
     print('[Connection] 🔌 Disconnected');
   }
   

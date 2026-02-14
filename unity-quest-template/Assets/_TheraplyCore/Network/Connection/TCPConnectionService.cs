@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Concurrent;
 using UnityEngine;
+using TheraplyCore.Network.Discovery;
 
 namespace TheraplyCore.Network.Connection
 {
@@ -17,6 +18,7 @@ namespace TheraplyCore.Network.Connection
     /// - Automatic message length prefix (4 bytes)
     /// - Command dispatch to NetworkCommand ScriptableObjects
     /// - Thread-safe queue for Unity main thread
+    /// - Automatic UDP discovery pause/resume
     /// </summary>
     public class TCPConnectionService : MonoBehaviour
     {
@@ -50,6 +52,9 @@ namespace TheraplyCore.Network.Connection
         private CancellationTokenSource _cancellationTokenSource;
         private bool _isConnected = false;
         
+        // Discovery service reference (for pause/resume)
+        private UDPDiscoveryService _discoveryService;
+        
         // Thread-safe queue for main thread execution
         private ConcurrentQueue<Action> _mainThreadQueue = new ConcurrentQueue<Action>();
         
@@ -81,6 +86,17 @@ namespace TheraplyCore.Network.Connection
         // ============================================
         // UNITY LIFECYCLE
         // ============================================
+        
+        private void Awake()
+        {
+            // Try to find UDPDiscoveryService on the same GameObject
+            _discoveryService = GetComponent<UDPDiscoveryService>();
+            
+            if (_discoveryService == null)
+            {
+                Debug.LogWarning("[TCPConnection] UDPDiscoveryService not found - discovery pause/resume disabled");
+            }
+        }
         
         private void Update()
         {
@@ -172,6 +188,12 @@ namespace TheraplyCore.Network.Connection
                     Debug.Log($"[TCPConnection] Connected to {ip}:{port}");
                 }
                 
+                // Pause UDP discovery when TCP connected
+                if (_discoveryService != null)
+                {
+                    _discoveryService.PauseBroadcast();
+                }
+                
                 // Start receive loop
                 _ = ReceiveLoopAsync(_cancellationTokenSource.Token);
                 
@@ -223,6 +245,12 @@ namespace TheraplyCore.Network.Connection
             if (_logConnections)
             {
                 Debug.Log("[TCPConnection] Disconnected");
+            }
+            
+            // Resume UDP discovery when TCP disconnected
+            if (_discoveryService != null)
+            {
+                _discoveryService.ResumeBroadcast();
             }
             
             EnqueueMainThreadAction(() => OnDisconnected?.Invoke());

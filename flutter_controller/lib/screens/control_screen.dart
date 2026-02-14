@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_controller/services/connection_service.dart';
+import 'package:flutter_controller/services/discovery_service.dart';
 import 'package:flutter_controller/models/device_info.dart';
 import 'dart:async';
 
 class ControlScreen extends StatefulWidget {
   final DeviceInfo device;
+  final DiscoveryService discoveryService;
   
-  const ControlScreen({super.key, required this.device});
+  const ControlScreen({
+    super.key, 
+    required this.device,
+    required this.discoveryService,
+  });
   
   @override
   State<ControlScreen> createState() => _ControlScreenState();
@@ -22,6 +28,10 @@ class _ControlScreenState extends State<ControlScreen> {
   @override
   void initState() {
     super.initState();
+    
+    // Link discovery service to connection service for auto pause/resume
+    _connection.setDiscoveryService(widget.discoveryService);
+    
     _connect();
   }
   
