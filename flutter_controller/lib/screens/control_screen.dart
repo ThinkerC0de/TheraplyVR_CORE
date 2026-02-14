@@ -2,15 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_controller/services/connection_service.dart';
 import 'package:flutter_controller/services/discovery_service.dart';
 import 'package:flutter_controller/models/device_info.dart';
+import 'package:flutter_controller/models/student.dart';
 import 'dart:async';
 
 class ControlScreen extends StatefulWidget {
   final DeviceInfo device;
+  final Student student;
   final DiscoveryService discoveryService;
   
   const ControlScreen({
     super.key, 
     required this.device,
+    required this.student,
     required this.discoveryService,
   });
   
@@ -132,6 +135,55 @@ class _ControlScreenState extends State<ControlScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // Student info card
+            Card(
+              elevation: 2,
+              color: Colors.blue[50],
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: Colors.blue,
+                      radius: 24,
+                      child: Text(
+                        widget.student.initials,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 20,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Student',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          Text(
+                            widget.student.fullName,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            
+            const SizedBox(height: 12),
+            
             // Device info card
             Card(
               elevation: 2,

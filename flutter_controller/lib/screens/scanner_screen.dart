@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_controller/services/discovery_service.dart';
 import 'package:flutter_controller/services/firebase_service.dart';
 import 'package:flutter_controller/models/device_info.dart';
+import 'package:flutter_controller/models/student.dart';
 import 'package:flutter_controller/screens/control_screen.dart';
 import 'dart:async';
 
 class ScannerScreen extends StatefulWidget {
-  const ScannerScreen({super.key});
+  final Student student;
+  
+  const ScannerScreen({super.key, required this.student});
 
   @override
   State<ScannerScreen> createState() => _ScannerScreenState();
@@ -85,6 +88,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
       MaterialPageRoute(
         builder: (context) => ControlScreen(
           device: device,
+          student: widget.student,
           discoveryService: _discovery,
         ),
       ),
@@ -111,7 +115,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Scan for Quest Devices'),
+        title: Text('Scan for ${widget.student.firstName}\'s Device'),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_controller/services/firebase_service.dart';
-import 'package:flutter_controller/screens/scanner_screen.dart';
+import 'package:flutter_controller/screens/students_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -37,7 +37,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (user != null && mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const ScannerScreen()),
+          MaterialPageRoute(builder: (context) => const StudentsScreen()),
         );
       }
     } catch (e) {
