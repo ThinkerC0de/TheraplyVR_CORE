@@ -2,7 +2,7 @@
 
 **A production-ready framework for building VR therapy applications with Quest 3 and mobile controller integration.**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Proprietary](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
 [![Unity Version](https://img.shields.io/badge/Unity-6000.3.8f1-blue.svg)](https://unity.com/)
 [![Platform](https://img.shields.io/badge/Platform-Quest%203%20%7C%20Android-green.svg)](https://www.meta.com/quest/)
 
@@ -385,7 +385,9 @@ This is a **framework project**. Contributions should focus on:
 
 ## 📄 License
 
-MIT License - See [LICENSE](LICENSE) for details.
+Proprietary license (All Rights Reserved).  
+Usage, redistribution, and commercial use require prior written authorization.  
+See [LICENSE](LICENSE) for details.
 
 ---
 

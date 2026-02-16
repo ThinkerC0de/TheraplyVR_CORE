@@ -74,7 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Loose Coupling** - ScriptableObject commands decouple layers
 - **Plugin Architecture** - Games are separate from core
 - **ML-Ready** - Structured data collection from day one
-- **Commercial-Friendly** - All dependencies MIT/Apache 2.0
+- **Dependency License Compatibility** - Third-party dependencies use permissive licenses
 
 ---
 
