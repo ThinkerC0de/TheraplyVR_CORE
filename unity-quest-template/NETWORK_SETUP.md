@@ -41,7 +41,7 @@ Create a GameObject named `VideoStreaming` with these components:
 ```
 VideoStreaming (GameObject)
 ├─ Camera
-├─ VideoStreamService
+├─ MediaStreamService
 └─ WebRTCServerSignaling
 ```
 
@@ -62,11 +62,11 @@ VideoStreaming (GameObject)
 
 **Component References (important):**
 - `TCPServerService._discoveryService` → `UDPDiscoveryService`
-- `TCPServerService._videoStreamService` → `VideoStreamService`
-- `WebRTCServerSignaling._videoStreamService` → `VideoStreamService`
+- `TCPServerService._mediaStreamService` → `MediaStreamService`
+- `WebRTCServerSignaling._mediaStreamService` → `MediaStreamService`
 - `WebRTCServerSignaling._tcpServer` → `TCPServerService`
 
-**VideoStreamService:**
+**MediaStreamService:**
 - `sourceCamera`: assign your XR camera manually (recommended)
 - `autoDetectCamera`: `false` when source camera is assigned
 - Streaming settings: `1280x720 @ 30fps` (default)
@@ -143,7 +143,7 @@ When Flutter connects to Quest via TCP, it automatically stops UDP scanning to s
 - Handles connection state
 - Auto-reconnects on app resume (retry/backoff)
 
-**WebRTCVideoService** (`lib/services/webrtc_video_service.dart`):
+**WebRTCMediaService** (`lib/services/webrtc_media_service.dart`):
 - Handles WebRTC offer/answer flow over TCP signaling
 - Applies ICE candidates
 - Emits remote `MediaStream` to UI
@@ -246,16 +246,16 @@ connection.messages.listen((message) {
 ### Connected but Black Video
 
 Common causes and checks:
-- `VideoStreamService.sourceCamera` points to wrong camera
+- `MediaStreamService.sourceCamera` points to wrong camera
 - `autoDetectCamera` selects a fallback camera unexpectedly
 - `WebRTC.Update()` coroutine is not running in Unity
 - Flutter reconnect happened but offer/answer did not renegotiate
 
 Expected Unity logs:
 ```
-[VideoStreamService] ✅ WebRTC streaming started (offer will be sent by signaling)
+[MediaStreamService] ✅ WebRTC streaming started (offer will be sent by signaling)
 [WebRTCServerSignaling] Sent WEBRTC_OFFER to client
-[VideoStreamService] Peer Connection State: Connected
+[MediaStreamService] Peer Connection State: Connected
 ```
 
 ### Messages Not Received

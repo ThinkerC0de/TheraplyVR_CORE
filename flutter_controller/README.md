@@ -163,7 +163,7 @@ flutter_controller/
 │   │   ├── firebase_service.dart # Auth + Firestore
 │   │   ├── discovery_service.dart # UDP scanning
 │   │   ├── connection_service.dart # TCP connection + reconnect
-│   │   ├── webrtc_video_service.dart # WebRTC signaling + media handling
+│   │   ├── webrtc_media_service.dart # WebRTC signaling + media handling
 │   │   └── foreground_service_bridge.dart # Android foreground service bridge
 │   └── models/
 │       ├── device_info.dart      # Quest device model

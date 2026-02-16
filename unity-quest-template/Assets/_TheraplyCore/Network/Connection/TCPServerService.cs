@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Concurrent;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace TheraplyCore.Network.Connection
 {
@@ -33,6 +34,14 @@ namespace TheraplyCore.Network.Connection
         [Tooltip("Receive buffer size (bytes)")]
         [SerializeField] private int _receiveBufferSize = 8192;
         
+        [Header("Dependencies")]
+        [Tooltip("UDP Discovery Service to pause/resume broadcast on connect/disconnect")]
+        [SerializeField] private TheraplyCore.Network.Discovery.UDPDiscoveryService _discoveryService;
+        
+        [Tooltip("media stream Service to auto-start/stop streaming on connect/disconnect")]
+        [FormerlySerializedAs("_videoStreamService")]
+        [SerializeField] private TheraplyCore.Streaming.MediaStreamService _mediaStreamService;
+        
         [Header("Debug")]
         [SerializeField] private bool _logConnections = true;
         [SerializeField] private bool _logMessages = false;
@@ -47,6 +56,7 @@ namespace TheraplyCore.Network.Connection
         private CancellationTokenSource _cancellationTokenSource;
         private bool _isRunning = false;
         private bool _hasClient = false;
+        private readonly SemaphoreSlim _sendLock = new SemaphoreSlim(1, 1);
         
         // Thread-safe queue for main thread execution
         private ConcurrentQueue<Action> _mainThreadQueue = new ConcurrentQueue<Action>();
@@ -85,7 +95,16 @@ namespace TheraplyCore.Network.Connection
         
         private void Start()
         {
-            // Auto-start server on Quest and Editor (for testing)
+            StartCoroutine(DelayedStartServer());
+        }
+        
+        private System.Collections.IEnumerator DelayedStartServer()
+        {
+            yield return new WaitForSeconds(1f);
+            if (_discoveryService == null)
+                _discoveryService = GetComponent<TheraplyCore.Network.Discovery.UDPDiscoveryService>();
+            if (_mediaStreamService == null)
+                _mediaStreamService = FindFirstObjectByType<TheraplyCore.Streaming.MediaStreamService>();
             StartServer();
         }
         
@@ -220,6 +239,19 @@ namespace TheraplyCore.Network.Connection
                 Debug.Log("[TCPServer] Client disconnected");
             }
             
+            // Stop media streaming when client disconnects
+            if (_mediaStreamService != null && _mediaStreamService.IsStreaming)
+            {
+                _mediaStreamService.StopStreaming();
+                Debug.Log("[TCPServer] Stopped media stream (client disconnected)");
+            }
+            
+            // Resume UDP broadcast when client disconnects (allow reconnection)
+            if (_discoveryService != null)
+            {
+                _discoveryService.ResumeBroadcast();
+            }
+            
             EnqueueMainThreadAction(() => OnClientDisconnected?.Invoke());
         }
         
@@ -236,8 +268,15 @@ namespace TheraplyCore.Network.Connection
             
             try
             {
-                // Serialize with JSON
-                string jsonString = JsonUtility.ToJson(message);
+                await _sendLock.WaitAsync();
+                if (!HasClient || _stream == null)
+                {
+                    Debug.LogWarning("[TCPServer] Cannot send - client disconnected before write");
+                    return false;
+                }
+
+                // JsonUtility does not serialize byte[] - use wrapper with Base64 payload
+                string jsonString = SerializeMessageForWire(message);
                 byte[] messageData = System.Text.Encoding.UTF8.GetBytes(jsonString);
                 
                 // Prepend length (4 bytes, big-endian)
@@ -274,6 +313,13 @@ namespace TheraplyCore.Network.Connection
                 
                 return false;
             }
+            finally
+            {
+                if (_sendLock.CurrentCount == 0)
+                {
+                    _sendLock.Release();
+                }
+            }
         }
         
         /// <summary>
@@ -290,6 +336,21 @@ namespace TheraplyCore.Network.Connection
             };
             
             return await SendMessageAsync(message);
+        }
+        
+        /// <summary>
+        /// Serialize NetworkMessage to JSON with payload as Base64 (JsonUtility does not serialize byte[]).
+        /// </summary>
+        private static string SerializeMessageForWire(NetworkMessage message)
+        {
+            var wrapper = new NetworkMessageJson
+            {
+                messageId = message.messageId,
+                timestamp = message.timestamp,
+                commandId = message.commandId,
+                payload = message.payload != null ? Convert.ToBase64String(message.payload) : null
+            };
+            return JsonUtility.ToJson(wrapper);
         }
         
         // ============================================
@@ -339,7 +400,18 @@ namespace TheraplyCore.Network.Connection
                         Debug.Log($"[TCPServer] Client connected: {clientIP}");
                     }
                     
-                    EnqueueMainThreadAction(() => OnClientConnected?.Invoke(clientIP));
+                    // Pause UDP broadcast when client connects (save bandwidth)
+                    if (_discoveryService != null)
+                    {
+                        _discoveryService.PauseBroadcast();
+                    }
+                    
+                    EnqueueMainThreadAction(() =>
+                    {
+                        OnClientConnected?.Invoke(clientIP);
+                        
+                        // WebRTC streaming + offer sent by WebRTCServerSignaling on OnClientConnected
+                    });
                     
                     // Start receive loop for this client
                     _ = ReceiveLoopAsync(cancellationToken);
@@ -385,7 +457,10 @@ namespace TheraplyCore.Network.Connection
                     
                     if (bytesRead != 4)
                     {
-                        Debug.LogWarning("[TCPServer] Incomplete length prefix - client disconnected");
+                        if (bytesRead == 0)
+                            Debug.Log("[TCPServer] Client closed connection");
+                        else
+                            Debug.LogWarning($"[TCPServer] Incomplete length prefix (got {bytesRead} bytes) - client disconnected");
                         break;
                     }
                     
@@ -415,7 +490,7 @@ namespace TheraplyCore.Network.Connection
                     
                     // Deserialize from JSON
                     string jsonString = System.Text.Encoding.UTF8.GetString(messageBuffer);
-                    NetworkMessage message = JsonUtility.FromJson<NetworkMessage>(jsonString);
+                    NetworkMessage message = NetworkMessageWireAdapter.DeserializeMessageFromWire(jsonString);
                     
                     // Update stats
                     _messagesReceived++;
@@ -530,5 +605,32 @@ namespace TheraplyCore.Network.Connection
         public int messagesReceived;
         public long bytesSent;
         public long bytesReceived;
+    }
+    
+    /// <summary>
+    /// JSON-serializable message with payload as Base64 (Unity JsonUtility does not serialize byte[]).
+    /// </summary>
+    [Serializable]
+    public class NetworkMessageJson
+    {
+        public string messageId;
+        public long timestamp;
+        public string commandId;
+        public string payload; // Base64-encoded when sent from server
+    }
+
+    internal static class NetworkMessageWireAdapter
+    {
+        public static NetworkMessage DeserializeMessageFromWire(string jsonString)
+        {
+            var wrapper = JsonUtility.FromJson<NetworkMessageJson>(jsonString);
+            return new NetworkMessage
+            {
+                messageId = wrapper.messageId,
+                timestamp = wrapper.timestamp,
+                commandId = wrapper.commandId,
+                payload = string.IsNullOrEmpty(wrapper.payload) ? null : Convert.FromBase64String(wrapper.payload)
+            };
+        }
     }
 }

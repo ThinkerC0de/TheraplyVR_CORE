@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_controller/services/connection_service.dart';
-import 'package:flutter_controller/services/webrtc_video_service.dart';
+import 'package:flutter_controller/services/webrtc_media_service.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'dart:async';
 
-/// Displays live video stream from Quest via WebRTC (signaling over TCP).
-class VideoStreamWidget extends StatefulWidget {
+/// Displays live media stream from Quest via WebRTC (signaling over TCP).
+class MediaStreamWidget extends StatefulWidget {
   final ConnectionService connection;
   final String? deviceIP;
   final int port;
 
-  const VideoStreamWidget({
+  const MediaStreamWidget({
     super.key,
     required this.connection,
     this.deviceIP,
@@ -18,16 +18,17 @@ class VideoStreamWidget extends StatefulWidget {
   });
 
   @override
-  State<VideoStreamWidget> createState() => _VideoStreamWidgetState();
+  State<MediaStreamWidget> createState() => _MediaStreamWidgetState();
 }
 
-class _VideoStreamWidgetState extends State<VideoStreamWidget> {
-  WebRTCVideoService? _webrtcService;
+class _MediaStreamWidgetState extends State<MediaStreamWidget> {
+  WebRTCMediaService? _webrtcService;
   StreamSubscription<MediaStream>? _streamSub;
   StreamSubscription<bool>? _connectionSub;
   RTCVideoRenderer? _renderer;
   String? _error;
   bool _rendererReady = false;
+  bool _pttPressed = false;
 
   @override
   void initState() {
@@ -45,7 +46,7 @@ class _VideoStreamWidgetState extends State<VideoStreamWidget> {
       if (mounted) setState(() => _error = e.toString());
       return;
     }
-    _webrtcService = WebRTCVideoService(widget.connection);
+    _webrtcService = WebRTCMediaService(widget.connection);
     _webrtcService!.start();
     _streamSub = _webrtcService!.onRemoteStream.listen((stream) {
       if (mounted) {
@@ -56,6 +57,7 @@ class _VideoStreamWidgetState extends State<VideoStreamWidget> {
     _connectionSub = widget.connection.connectionStatus.listen((connected) {
       if (!mounted) return;
       if (!connected) {
+        unawaited(_setPtt(false));
         setState(() => _renderer?.srcObject = null);
       }
     });
@@ -94,12 +96,57 @@ class _VideoStreamWidgetState extends State<VideoStreamWidget> {
                   )
                 else
                   _buildWaiting(),
+                Positioned(
+                  right: 12,
+                  bottom: 12,
+                  child: GestureDetector(
+                    onTapDown: (_) => _setPtt(true),
+                    onTapUp: (_) => _setPtt(false),
+                    onTapCancel: () => _setPtt(false),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 100),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: _pttPressed ? Colors.red : Colors.black54,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: _pttPressed ? Colors.redAccent : Colors.white24,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _pttPressed ? Icons.mic : Icons.mic_none,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _pttPressed ? 'Talking...' : 'Hold to Talk',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
         ),
       ],
     );
+  }
+
+  Future<void> _setPtt(bool enabled) async {
+    if (_pttPressed == enabled) return;
+    setState(() => _pttPressed = enabled);
+    await _webrtcService?.setTalkbackEnabled(enabled);
   }
 
   Widget _buildWaiting() {
@@ -114,7 +161,7 @@ class _VideoStreamWidgetState extends State<VideoStreamWidget> {
           ),
           SizedBox(height: 16),
           Text(
-            'Waiting for video stream...',
+            'Waiting for media stream...',
             style: TextStyle(color: Colors.white54, fontSize: 14),
           ),
           SizedBox(height: 4),

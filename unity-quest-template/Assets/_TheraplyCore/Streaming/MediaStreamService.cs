@@ -6,7 +6,7 @@ using Unity.WebRTC;
 namespace TheraplyCore.Streaming
 {
     /// <summary>
-    /// Video streaming service using Unity WebRTC
+    /// Media (video + audio) streaming service using Unity WebRTC
     /// Hardware-accelerated H.264 encoding with peer-to-peer streaming
     /// 
     /// REQUIRES: com.unity.webrtc package (install via Package Manager)
@@ -19,7 +19,7 @@ namespace TheraplyCore.Streaming
     /// - Built-in error recovery
     /// </summary>
     [RequireComponent(typeof(Camera))]
-    public class VideoStreamService : MonoBehaviour
+    public class MediaStreamService : MonoBehaviour
     {
         // ============================================
         // CONFIGURATION
@@ -28,7 +28,12 @@ namespace TheraplyCore.Streaming
         [Header("Camera Settings")]
         [SerializeField] private Camera _sourceCamera;
         [Tooltip("Auto-detect if not assigned")]
-        [SerializeField] private bool _autoDetectCamera = true;
+        [SerializeField] private bool _autoDetectCamera = false;
+
+        [Header("Audio Settings")]
+        [SerializeField] private bool _sendQuestAudio = true;
+        [SerializeField] private AudioListener _sourceAudioListener;
+        [SerializeField] private bool _receiveTherapistVoice = true;
         
         [Header("Streaming Settings")]
         [SerializeField] private int _streamWidth = 1280;
@@ -54,9 +59,13 @@ namespace TheraplyCore.Streaming
         private RTCPeerConnection _peerConnection;
         private MediaStream _mediaStream;
         private VideoStreamTrack _videoTrack;
+        private AudioStreamTrack _audioTrack;
         private RenderTexture _renderTexture;
         private Camera _captureCamera;
         private GameObject _captureCameraGo;
+        private AudioStreamTrack _remoteAudioTrack;
+        private AudioSource _remoteVoiceAudioSource;
+        private GameObject _remoteVoiceAudioGo;
         
         private bool _isStreaming = false;
 
@@ -87,11 +96,11 @@ namespace TheraplyCore.Streaming
                 _sourceCamera = FindVRCamera();
             if (_sourceCamera == null)
             {
-                Debug.LogError("[VideoStreamService] No camera found! Video streaming disabled.");
+                Debug.LogError("[MediaStreamService] No camera found! Video streaming disabled.");
                 enabled = false;
                 yield break;
             }
-            Debug.Log($"[VideoStreamService] Camera assigned: {_sourceCamera.name}");
+            Debug.Log($"[MediaStreamService] Camera assigned: {_sourceCamera.name}");
             InitializeCapture();
             // WebRTC streaming starts when client connects (StartStreaming + signaling)
         }
@@ -147,7 +156,7 @@ namespace TheraplyCore.Streaming
                 Camera cam = mainCameraGO.GetComponent<Camera>();
                 if (cam != null && cam.enabled)
                 {
-                    Debug.Log("[VideoStreamService] Found Main Camera");
+                    Debug.Log("[MediaStreamService] Found Main Camera");
                     return cam;
                 }
             }
@@ -156,7 +165,7 @@ namespace TheraplyCore.Streaming
             Camera ovrCamera = FindOVRCamera();
             if (ovrCamera != null)
             {
-                Debug.Log("[VideoStreamService] Found OVRCameraRig camera");
+                Debug.Log("[MediaStreamService] Found OVRCameraRig camera");
                 return ovrCamera;
             }
             
@@ -166,7 +175,7 @@ namespace TheraplyCore.Streaming
             {
                 if (cam.enabled && cam.gameObject.activeInHierarchy)
                 {
-                    Debug.LogWarning($"[VideoStreamService] Using fallback camera: {cam.name}");
+                    Debug.LogWarning($"[MediaStreamService] Using fallback camera: {cam.name}");
                     return cam;
                 }
             }
@@ -235,15 +244,15 @@ namespace TheraplyCore.Streaming
                 _captureCamera.targetTexture = _renderTexture;
                 _captureCamera.enabled = true;
 
-                Debug.Log($"[VideoStreamService] Using dedicated capture camera for XR source '{_sourceCamera.name}'");
+                Debug.Log($"[MediaStreamService] Using dedicated capture camera for XR source '{_sourceCamera.name}'");
             }
             else
             {
                 _sourceCamera.targetTexture = _renderTexture;
             }
             
-            Debug.Log($"[VideoStreamService] Initialized capture: {_streamWidth}x{_streamHeight} @ {_targetFps}fps");
-            Debug.Log($"[VideoStreamService] RenderTexture source camera: {(_captureCamera != null ? _captureCamera.name : _sourceCamera.name)}");
+            Debug.Log($"[MediaStreamService] Initialized capture: {_streamWidth}x{_streamHeight} @ {_targetFps}fps");
+            Debug.Log($"[MediaStreamService] RenderTexture source camera: {(_captureCamera != null ? _captureCamera.name : _sourceCamera.name)}");
         }
         
         // ============================================
@@ -256,7 +265,7 @@ namespace TheraplyCore.Streaming
             if (_isStreaming) return;
             if (_sourceCamera == null || _renderTexture == null)
             {
-                Debug.LogError("[VideoStreamService] Cannot start streaming - no camera or render texture!");
+                Debug.LogError("[MediaStreamService] Cannot start streaming - no camera or render texture!");
                 return;
             }
             try
@@ -264,6 +273,33 @@ namespace TheraplyCore.Streaming
                 _videoTrack = new VideoStreamTrack(_renderTexture);
                 _mediaStream = new MediaStream();
                 _mediaStream.AddTrack(_videoTrack);
+
+                if (_sendQuestAudio)
+                {
+                    if (_sourceAudioListener == null)
+                    {
+                        _sourceAudioListener = _sourceCamera != null
+                            ? _sourceCamera.GetComponent<AudioListener>()
+                            : null;
+                    }
+                    if (_sourceAudioListener == null)
+                    {
+                        _sourceAudioListener = FindFirstObjectByType<AudioListener>();
+                    }
+
+                    if (_sourceAudioListener != null)
+                    {
+                        _audioTrack = new AudioStreamTrack(_sourceAudioListener);
+                        _audioTrack.Loopback = false;
+                        _mediaStream.AddTrack(_audioTrack);
+                        Debug.Log($"[MediaStreamService] Audio send enabled from listener: {_sourceAudioListener.name}");
+                    }
+                    else
+                    {
+                        Debug.LogWarning("[MediaStreamService] Audio send enabled but no AudioListener found.");
+                    }
+                }
+
                 RTCConfiguration config = new RTCConfiguration
                 {
                     iceServers = new RTCIceServer[] { new RTCIceServer { urls = _stunServers } }
@@ -274,14 +310,15 @@ namespace TheraplyCore.Streaming
                 _peerConnection.OnIceCandidate = OnIceCandidate;
                 _peerConnection.OnIceConnectionChange = OnIceConnectionChange;
                 _peerConnection.OnConnectionStateChange = OnConnectionStateChange;
+                _peerConnection.OnTrack = OnTrack;
                 _isStreaming = true;
                 _framesSent = 0;
-                Debug.Log("[VideoStreamService] ✅ WebRTC streaming started (offer will be sent by signaling)");
+                Debug.Log("[MediaStreamService] ✅ WebRTC streaming started (offer will be sent by signaling)");
                 if (_logStats) StartCoroutine(LogStatistics());
             }
             catch (Exception e)
             {
-                Debug.LogError($"[VideoStreamService] Failed to start streaming: {e.Message}");
+                Debug.LogError($"[MediaStreamService] Failed to start streaming: {e.Message}");
             }
         }
         
@@ -300,12 +337,29 @@ namespace TheraplyCore.Streaming
                 _videoTrack.Dispose();
                 _videoTrack = null;
             }
+            if (_audioTrack != null)
+            {
+                _audioTrack.Dispose();
+                _audioTrack = null;
+            }
+            _remoteAudioTrack = null;
             if (_mediaStream != null)
             {
                 _mediaStream.Dispose();
                 _mediaStream = null;
             }
-            Debug.Log("[VideoStreamService] ⏸️ Streaming stopped");
+            if (_remoteVoiceAudioSource != null)
+            {
+                _remoteVoiceAudioSource.Stop();
+                _remoteVoiceAudioSource.clip = null;
+                _remoteVoiceAudioSource = null;
+            }
+            if (_remoteVoiceAudioGo != null)
+            {
+                Destroy(_remoteVoiceAudioGo);
+                _remoteVoiceAudioGo = null;
+            }
+            Debug.Log("[MediaStreamService] ⏸️ Streaming stopped");
         }
         
         // ============================================
@@ -320,7 +374,7 @@ namespace TheraplyCore.Streaming
         {
             if (_peerConnection == null)
             {
-                Debug.LogError("[VideoStreamService] Cannot create offer - no peer connection!");
+                Debug.LogError("[MediaStreamService] Cannot create offer - no peer connection!");
                 yield break;
             }
             
@@ -334,7 +388,7 @@ namespace TheraplyCore.Streaming
             
             if (op.IsError)
             {
-                Debug.LogError($"[VideoStreamService] Failed to create offer: {op.Error.message}");
+                Debug.LogError($"[MediaStreamService] Failed to create offer: {op.Error.message}");
                 yield break;
             }
             
@@ -344,17 +398,17 @@ namespace TheraplyCore.Streaming
             
             if (setLocalOp.IsError)
             {
-                Debug.LogError($"[VideoStreamService] Failed to set local description: {setLocalOp.Error.message}");
+                Debug.LogError($"[MediaStreamService] Failed to set local description: {setLocalOp.Error.message}");
                 yield break;
             }
             
             if (_logVerbose)
             {
-                Debug.Log($"[VideoStreamService] Created offer: {offer.sdp}");
+                Debug.Log($"[MediaStreamService] Created offer: {offer.sdp}");
             }
             else
             {
-                Debug.Log("[VideoStreamService] ✅ Created WebRTC offer");
+                Debug.Log("[MediaStreamService] ✅ Created WebRTC offer");
             }
             
             onOfferCreated?.Invoke(offer);
@@ -368,7 +422,7 @@ namespace TheraplyCore.Streaming
         {
             if (_peerConnection == null)
             {
-                Debug.LogError("[VideoStreamService] Cannot set answer - no peer connection!");
+                Debug.LogError("[MediaStreamService] Cannot set answer - no peer connection!");
                 yield break;
             }
             
@@ -377,11 +431,11 @@ namespace TheraplyCore.Streaming
             
             if (op.IsError)
             {
-                Debug.LogError($"[VideoStreamService] Failed to set remote description: {op.Error.message}");
+                Debug.LogError($"[MediaStreamService] Failed to set remote description: {op.Error.message}");
                 yield break;
             }
             
-            Debug.Log("[VideoStreamService] ✅ Remote answer set - connection establishing...");
+            Debug.Log("[MediaStreamService] ✅ Remote answer set - connection establishing...");
         }
         
         /// <summary>
@@ -391,7 +445,7 @@ namespace TheraplyCore.Streaming
         {
             if (_peerConnection == null)
             {
-                Debug.LogWarning("[VideoStreamService] Cannot add ICE candidate - no peer connection!");
+                Debug.LogWarning("[MediaStreamService] Cannot add ICE candidate - no peer connection!");
                 return;
             }
             
@@ -399,7 +453,7 @@ namespace TheraplyCore.Streaming
             
             if (_logVerbose)
             {
-                Debug.Log($"[VideoStreamService] Added ICE candidate: {candidate.Candidate}");
+                Debug.Log($"[MediaStreamService] Added ICE candidate: {candidate.Candidate}");
             }
         }
         
@@ -409,43 +463,79 @@ namespace TheraplyCore.Streaming
         
         private void OnIceCandidate(RTCIceCandidate candidate)
         {
-            if (_logVerbose) Debug.Log($"[VideoStreamService] ICE Candidate: {candidate.Candidate}");
+            if (_logVerbose) Debug.Log($"[MediaStreamService] ICE Candidate: {candidate.Candidate}");
             OnIceCandidateGenerated?.Invoke(candidate);
         }
         
         private void OnIceConnectionChange(RTCIceConnectionState state)
         {
-            Debug.Log($"[VideoStreamService] ICE Connection State: {state}");
+            Debug.Log($"[MediaStreamService] ICE Connection State: {state}");
             
             switch (state)
             {
                 case RTCIceConnectionState.Connected:
-                    Debug.Log("[VideoStreamService] ✅ ICE Connected - streaming active!");
+                    Debug.Log("[MediaStreamService] ✅ ICE Connected - streaming active!");
                     break;
                 case RTCIceConnectionState.Disconnected:
-                    Debug.LogWarning("[VideoStreamService] ⚠️ ICE Disconnected");
+                    Debug.LogWarning("[MediaStreamService] ⚠️ ICE Disconnected");
                     break;
                 case RTCIceConnectionState.Failed:
-                    Debug.LogError("[VideoStreamService] ❌ ICE Failed - connection lost");
+                    Debug.LogError("[MediaStreamService] ❌ ICE Failed - connection lost");
                     break;
             }
         }
         
         private void OnConnectionStateChange(RTCPeerConnectionState state)
         {
-            Debug.Log($"[VideoStreamService] Peer Connection State: {state}");
+            Debug.Log($"[MediaStreamService] Peer Connection State: {state}");
             
             switch (state)
             {
                 case RTCPeerConnectionState.Connected:
-                    Debug.Log("[VideoStreamService] 🎥 Video streaming LIVE!");
+                    Debug.Log("[MediaStreamService] 🎥 Video streaming LIVE!");
                     break;
                 case RTCPeerConnectionState.Failed:
-                    Debug.LogError("[VideoStreamService] ❌ Peer connection failed");
+                    Debug.LogError("[MediaStreamService] ❌ Peer connection failed");
                     break;
                 case RTCPeerConnectionState.Closed:
-                    Debug.Log("[VideoStreamService] Connection closed");
+                    Debug.Log("[MediaStreamService] Connection closed");
                     break;
+            }
+        }
+
+        private void OnTrack(RTCTrackEvent e)
+        {
+            if (!_receiveTherapistVoice || e.Track == null)
+            {
+                return;
+            }
+
+            if (e.Track is AudioStreamTrack incomingAudioTrack)
+            {
+                _remoteAudioTrack = incomingAudioTrack;
+
+                if (_remoteVoiceAudioSource == null)
+                {
+                    if (_remoteVoiceAudioGo == null)
+                    {
+                        _remoteVoiceAudioGo = new GameObject("TheraplyRemoteVoiceAudio");
+                        _remoteVoiceAudioGo.transform.SetParent(transform, worldPositionStays: false);
+                        _remoteVoiceAudioGo.transform.localPosition = Vector3.zero;
+                    }
+
+                    _remoteVoiceAudioSource = _remoteVoiceAudioGo.GetComponent<AudioSource>();
+                    if (_remoteVoiceAudioSource == null)
+                    {
+                        _remoteVoiceAudioSource = _remoteVoiceAudioGo.AddComponent<AudioSource>();
+                    }
+                    _remoteVoiceAudioSource.playOnAwake = false;
+                    _remoteVoiceAudioSource.loop = true;
+                    _remoteVoiceAudioSource.spatialBlend = 0f;
+                    _remoteVoiceAudioSource.volume = 1f;
+                }
+
+                _remoteVoiceAudioSource.SetTrack(incomingAudioTrack);
+                Debug.Log("[MediaStreamService] 🎤 Therapist voice track connected.");
             }
         }
         
@@ -464,7 +554,7 @@ namespace TheraplyCore.Streaming
                     var stats = _peerConnection.GetStats();
                     
                     // Log basic stats
-                    Debug.Log($"[VideoStreamService] Stats: Connection={_peerConnection.ConnectionState}, ICE={_peerConnection.IceConnectionState}");
+                    Debug.Log($"[MediaStreamService] Stats: Connection={_peerConnection.ConnectionState}, ICE={_peerConnection.IceConnectionState}");
                     
                     // TODO: Parse detailed stats (bitrate, packet loss, etc.)
                 }
@@ -502,7 +592,7 @@ namespace TheraplyCore.Streaming
                 Destroy(_renderTexture);
                 _renderTexture = null;
             }
-            Debug.Log("[VideoStreamService] Cleanup complete");
+            Debug.Log("[MediaStreamService] Cleanup complete");
         }
         
         // ============================================
@@ -542,7 +632,7 @@ namespace TheraplyCore.Streaming
             {
                 // Rebuild capture route when source changes.
                 InitializeCapture();
-                Debug.Log($"[VideoStreamService] Camera changed to: {_sourceCamera.name}");
+                Debug.Log($"[MediaStreamService] Camera changed to: {_sourceCamera.name}");
             }
         }
     }

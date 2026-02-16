@@ -1,10 +1,10 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_controller/services/connection_service.dart';
 import 'package:flutter_controller/services/discovery_service.dart';
 import 'package:flutter_controller/services/foreground_service_bridge.dart';
 import 'package:flutter_controller/models/device_info.dart';
 import 'package:flutter_controller/models/student.dart';
-import 'package:flutter_controller/widgets/video_stream_widget.dart';
+import 'package:flutter_controller/widgets/media_stream_widget.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'dart:async';
 
@@ -178,7 +178,7 @@ class _ControlScreenState extends State<ControlScreen> with WidgetsBindingObserv
       ),
       body: Column(
         children: [
-          // Video Stream (top half)
+          // Media Stream (top half)
           Expanded(
             flex: 5,
             child: Padding(
@@ -187,7 +187,7 @@ class _ControlScreenState extends State<ControlScreen> with WidgetsBindingObserv
                 alignment: Alignment.topCenter,
                 child: AspectRatio(
                   aspectRatio: 16 / 9,
-                  child: VideoStreamWidget(
+                  child: MediaStreamWidget(
                     connection: _connection,
                     deviceIP: widget.device.ip,
                     port: widget.device.videoPort,
