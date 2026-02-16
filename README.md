@@ -403,6 +403,7 @@ MIT License - See [LICENSE](LICENSE) for details.
 - **Repository:** [https://github.com/ThinkerC0de/theraply-vr-framework](https://github.com/ThinkerC0de/theraply-vr-framework)
 - **Issues:** [GitHub Issues](https://github.com/ThinkerC0de/theraply-vr-framework/issues)
 - **Documentation:** [docs/](docs/)
+- **Creator:** Marcin Szewczyk (`szewczyk.marcin@pranasense.pl`)
 
 ---
 
