@@ -4,6 +4,18 @@
 
 ---
 
+## Contract First Rule
+
+Every new mini-game must follow the stable contracts from:
+
+- `Assets/_TheraplyCore/Games/Contracts/GameContracts.cs`
+- `Assets/_TheraplyCore/Games/Contracts/GameCommands.cs`
+- `Assets/_TheraplyCore/Games/Contracts/GameRegistry.cs`
+
+If a game needs core changes, stop and add an extension point instead.
+
+---
+
 ## 📂 What Goes Here
 
 ### ✅ Your Production Games
@@ -145,9 +157,11 @@ void TestStart()
 
 Before you start building:
 
-1. **[Creating Games Guide](../../../docs/03-Creating-Games.md)** ⭐ READ THIS FIRST
-2. **[SimpleCubeGame Example](../_Examples/SimpleCubeGame/)** - Study this
-3. **[API Reference](../../../docs/API-Reference/)** - Reference docs
+1. **[Runtime Setup](../../../docs/02-Runtime-Setup.md)** ⭐ configure this first
+2. **[Creating Games Guide](../../../docs/03-Creating-Games.md)** ⭐ then build the game
+3. **[SimpleCubeGame Example](../_Examples/SimpleCubeGame/)** - Study this
+4. **[Mini-Game Contracts API](../../../docs/API-Reference/MiniGame-Contracts.md)** - Reference docs
+5. **[AI Scaffold Workflow](../../../docs/04-AI-Scaffold-Workflow.md)** - Generation flow
 
 ---
 
@@ -293,7 +307,8 @@ Write README.md for your game:
 ## 🆘 Need Help?
 
 - **[Creating Games Guide](../../../docs/03-Creating-Games.md)** - Complete tutorial
-- **[API Reference](../../../docs/API-Reference/)** - Detailed docs
+- **[Mini-Game Contracts API](../../../docs/API-Reference/MiniGame-Contracts.md)** - Detailed docs
+- **[AI Scaffold Workflow](../../../docs/04-AI-Scaffold-Workflow.md)** - Prompt and review flow
 - **[GitHub Discussions](https://github.com/yourusername/theraply-vr-framework/discussions)** - Community help
 - **[SimpleCubeGame](../_Examples/SimpleCubeGame/)** - Working example
 
