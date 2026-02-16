@@ -17,7 +17,10 @@ cd theraply-vr-framework
 
 1. Open `unity-quest-template` in Unity 6.3 (or newer compatible 6000.3.x).
 2. Let package import complete.
-3. Verify required scene components:
+3. Wait for automatic dependency restore:
+   - Unity UPM/Git packages from `Packages/manifest.json`
+   - NuGet packages (NuGetForUnity) from `Assets/packages.config`
+4. Verify required scene components:
    - `NetworkManager` with:
      - `UDPDiscoveryService`
      - `TCPServerService`
@@ -25,12 +28,21 @@ cd theraply-vr-framework
      - `Camera`
      - `VideoStreamService`
      - `WebRTCServerSignaling`
-4. Wire required references:
+5. Wire required references:
    - `TCPServerService._discoveryService` -> `UDPDiscoveryService`
    - `TCPServerService._videoStreamService` -> `VideoStreamService`
    - `WebRTCServerSignaling._videoStreamService` -> `VideoStreamService`
    - `WebRTCServerSignaling._tcpServer` -> `TCPServerService`
-5. Assign `VideoStreamService.sourceCamera` to your XR camera and disable `autoDetectCamera` (recommended).
+6. Assign `VideoStreamService.sourceCamera` to your XR camera and disable `autoDetectCamera` (recommended).
+
+### Unity dependency fallback (if auto-restore did not complete)
+
+1. Open `Window -> Package Manager` and wait for package resolution.
+2. Run `NuGet -> Restore Packages`.
+3. Reopen project if any assemblies are still missing.
+4. Verify network access to:
+   - `https://packages.unity.com`
+   - `https://api.nuget.org/v3/index.json`
 
 Detailed network and troubleshooting guide:
 - `unity-quest-template/NETWORK_SETUP.md`
@@ -91,4 +103,3 @@ Detailed controller notes:
   - TCP connected
   - WebRTC answer + ICE exchange
   - video track received
-

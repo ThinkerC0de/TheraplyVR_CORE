@@ -106,6 +106,29 @@ cd theraply-vr-framework
 # Build and Run
 ```
 
+### Automatic Dependency Bootstrap (Unity)
+
+After opening `unity-quest-template` in Unity:
+
+- UPM and Git packages are restored from `unity-quest-template/Packages/manifest.json`
+- Locked package versions are resolved from `unity-quest-template/Packages/packages-lock.json`
+- NuGet dependencies are restored by NuGetForUnity from:
+  - `unity-quest-template/Assets/packages.config`
+  - `unity-quest-template/Assets/NuGet.config`
+
+No manual package installation should be required on a clean clone.
+
+### If Auto-Restore Fails
+
+Use this quick fallback:
+
+1. Open Unity Package Manager and wait for package resolution to finish.
+2. In Unity, run `NuGet -> Restore Packages`.
+3. Confirm internet access to:
+   - `https://packages.unity.com`
+   - `https://api.nuget.org/v3/index.json`
+4. Reopen the Unity project once.
+
 ---
 
 ## 📚 Documentation
