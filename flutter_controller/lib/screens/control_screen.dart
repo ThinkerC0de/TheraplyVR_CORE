@@ -1,45 +1,52 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_controller/services/connection_service.dart';
 import 'package:flutter_controller/services/discovery_service.dart';
+import 'package:flutter_controller/services/foreground_service_bridge.dart';
 import 'package:flutter_controller/models/device_info.dart';
 import 'package:flutter_controller/models/student.dart';
+import 'package:flutter_controller/widgets/video_stream_widget.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import 'dart:async';
 
 class ControlScreen extends StatefulWidget {
   final DeviceInfo device;
   final Student student;
   final DiscoveryService discoveryService;
-  
+
   const ControlScreen({
-    super.key, 
+    super.key,
     required this.device,
     required this.student,
     required this.discoveryService,
   });
-  
+
   @override
   State<ControlScreen> createState() => _ControlScreenState();
 }
 
-class _ControlScreenState extends State<ControlScreen> {
+class _ControlScreenState extends State<ControlScreen> with WidgetsBindingObserver {
   final ConnectionService _connection = ConnectionService();
   bool _isConnected = false;
   String _statusMessage = 'Connecting...';
   StreamSubscription<bool>? _connectionSubscription;
   StreamSubscription<Map<String, dynamic>>? _messageSubscription;
-  
+  bool _isReconnecting = false;
+
   @override
   void initState() {
     super.initState();
-    
-    // Link discovery service to connection service for auto pause/resume
+    WidgetsBinding.instance.addObserver(this);
+
+    // Link discovery service for automatic pause/resume
     _connection.setDiscoveryService(widget.discoveryService);
-    
+
+    _setupConnectionListeners();
+    unawaited(ForegroundServiceBridge.start());
+    unawaited(WakelockPlus.enable());
     _connect();
   }
-  
-  Future<void> _connect() async {
-    // Listen to connection status
+
+  void _setupConnectionListeners() {
     _connectionSubscription = _connection.connectionStatus.listen((connected) {
       if (mounted) {
         setState(() {
@@ -48,20 +55,19 @@ class _ControlScreenState extends State<ControlScreen> {
         });
       }
     });
-    
-    // Listen to messages
+
     _messageSubscription = _connection.messages.listen((message) {
-      print('[Control] Received command: ${message['commandId']}');
-      // TODO: Handle game status updates based on commandId
-      // Example: if (message['commandId'] == 'GAME_STATUS') { ... }
+      print('[Control] Message: ${message['commandId']}');
     });
-    
-    // Attempt connection
+  }
+
+  Future<void> _connect() async {
+
     final success = await _connection.connect(
       widget.device.ip,
       widget.device.controlPort,
     );
-    
+
     if (!success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -72,10 +78,46 @@ class _ControlScreenState extends State<ControlScreen> {
       Navigator.pop(context);
     }
   }
-  
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_recoverConnectionAfterResume());
+    }
+  }
+
+  Future<void> _recoverConnectionAfterResume() async {
+    if (!mounted || _isReconnecting) return;
+    if (_connection.isConnected) return;
+
+    _isReconnecting = true;
+    if (mounted) {
+      setState(() => _statusMessage = 'Reconnecting...');
+    }
+
+    final ok = await _connection.reconnect();
+    if (!mounted) return;
+
+    setState(() {
+      _isConnected = ok;
+      _statusMessage = ok ? 'Connected' : 'Disconnected';
+    });
+
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Connection lost. Reconnect failed.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+
+    _isReconnecting = false;
+  }
+
   Future<void> _sendCommand(String command) async {
     await _connection.sendCommand(command, null);
-    
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -85,25 +127,29 @@ class _ControlScreenState extends State<ControlScreen> {
       );
     }
   }
-  
+
   void _handleDisconnect() {
+    unawaited(ForegroundServiceBridge.stop());
     _connection.disconnect();
     Navigator.pop(context);
   }
-  
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _connectionSubscription?.cancel();
     _messageSubscription?.cancel();
+    unawaited(ForegroundServiceBridge.stop());
+    unawaited(WakelockPlus.disable());
     _connection.dispose();
     super.dispose();
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Control Panel'),
+        title: Text('${widget.student.firstName} — ${widget.device.deviceName}'),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16),
@@ -130,166 +176,162 @@ class _ControlScreenState extends State<ControlScreen> {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Student info card
-            Card(
-              elevation: 2,
-              color: Colors.blue[50],
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      backgroundColor: Colors.blue,
-                      radius: 24,
-                      child: Text(
-                        widget.student.initials,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 20,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Student',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey,
-                            ),
-                          ),
-                          Text(
-                            widget.student.fullName,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+      body: Column(
+        children: [
+          // Video Stream (top half)
+          Expanded(
+            flex: 5,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: VideoStreamWidget(
+                    connection: _connection,
+                    deviceIP: widget.device.ip,
+                    port: widget.device.videoPort,
+                  ),
                 ),
               ),
             ),
-            
-            const SizedBox(height: 12),
-            
-            // Device info card
-            Card(
-              elevation: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+          ),
+
+          // Controls (bottom half)
+          Expanded(
+            flex: 4,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Device info row
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
                       children: [
-                        const Icon(Icons.headset_mic, size: 32, color: Colors.blue),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                widget.device.deviceName,
-                                style: const TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${widget.device.ip}:${widget.device.controlPort}',
-                                style: TextStyle(color: Colors.grey[600]),
-                              ),
-                            ],
-                          ),
+                        const Icon(Icons.headset_mic, size: 20, color: Colors.blue),
+                        const SizedBox(width: 8),
+                        Text(
+                          '${widget.device.ip}:${widget.device.controlPort}',
+                          style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                        ),
+                        const Spacer(),
+                        Text(
+                          'Video: ${widget.device.videoPort}',
+                          style: TextStyle(color: Colors.grey[500], fontSize: 12),
                         ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // Game control buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildCommandButton(
+                          icon: Icons.play_arrow,
+                          label: 'START',
+                          color: Colors.green,
+                          command: 'START_GAME',
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _buildCommandButton(
+                          icon: Icons.stop,
+                          label: 'STOP',
+                          color: Colors.red,
+                          command: 'STOP_GAME',
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _buildCommandButton(
+                          icon: Icons.refresh,
+                          label: 'RESET',
+                          color: Colors.blue,
+                          command: 'RESET_GAME',
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // Pause/Resume row
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildCommandButton(
+                          icon: Icons.pause,
+                          label: 'PAUSE',
+                          color: Colors.orange,
+                          command: 'PAUSE_GAME',
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _buildCommandButton(
+                          icon: Icons.play_circle_outline,
+                          label: 'RESUME',
+                          color: Colors.teal,
+                          command: 'RESUME_GAME',
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const Spacer(),
+
+                  // Disconnect button
+                  OutlinedButton.icon(
+                    onPressed: _handleDisconnect,
+                    icon: const Icon(Icons.logout, size: 18),
+                    label: const Text('Disconnect'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      foregroundColor: Colors.red[400],
+                      side: BorderSide(color: Colors.red[300]!),
+                    ),
+                  ),
+                ],
               ),
             ),
-            
-            const SizedBox(height: 24),
-            
-            // Game controls section
-            const Text(
-              'Game Controls',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            
-            // START button
-            ElevatedButton.icon(
-              onPressed: _isConnected ? () => _sendCommand('START_GAME') : null,
-              icon: const Icon(Icons.play_arrow),
-              label: const Text('START GAME'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-                disabledBackgroundColor: Colors.grey[300],
-              ),
-            ),
-            const SizedBox(height: 12),
-            
-            // STOP button
-            ElevatedButton.icon(
-              onPressed: _isConnected ? () => _sendCommand('STOP_GAME') : null,
-              icon: const Icon(Icons.stop),
-              label: const Text('STOP GAME'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-                disabledBackgroundColor: Colors.grey[300],
-              ),
-            ),
-            const SizedBox(height: 12),
-            
-            // RESET button
-            ElevatedButton.icon(
-              onPressed: _isConnected ? () => _sendCommand('RESET_GAME') : null,
-              icon: const Icon(Icons.refresh),
-              label: const Text('RESET GAME'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                disabledBackgroundColor: Colors.grey[300],
-              ),
-            ),
-            
-            const Spacer(),
-            
-            // Disconnect button
-            OutlinedButton.icon(
-              onPressed: _handleDisconnect,
-              icon: const Icon(Icons.logout),
-              label: const Text('Disconnect'),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-            ),
-            
-            const SizedBox(height: 8),
-            Text(
-              'Commands sent via TCP',
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCommandButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required String command,
+  }) {
+    return ElevatedButton(
+      onPressed: _isConnected ? () => _sendCommand(command) : null,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        foregroundColor: Colors.white,
+        disabledBackgroundColor: Colors.grey[300],
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 22),
+          const SizedBox(height: 2),
+          Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+        ],
       ),
     );
   }

@@ -8,46 +8,73 @@ import 'discovery_service.dart';
 class ConnectionService {
   Socket? _socket;
   bool _isConnected = false;
-  
+  bool _isDisconnecting = false;
+  Future<bool>? _connectInFlight;
+  String? _lastIp;
+  int? _lastPort;
+
   final StreamController<Map<String, dynamic>> _messageController = StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<bool> _connectionController = StreamController<bool>.broadcast();
-  
+
   // Discovery service reference (for automatic pause/resume)
   DiscoveryService? _discoveryService;
-  
+
   // Buffer for incomplete messages
   final List<int> _receiveBuffer = [];
-  
+  Map<String, dynamic>? _bufferedWebRtcOffer;
+  final List<Map<String, dynamic>> _bufferedWebRtcCandidates = [];
+  static const int _maxBufferedWebRtcCandidates = 64;
+
   Stream<Map<String, dynamic>> get messages => _messageController.stream;
   Stream<bool> get connectionStatus => _connectionController.stream;
   bool get isConnected => _isConnected;
-  
+
   /// Set discovery service for automatic pause/resume
   void setDiscoveryService(DiscoveryService discoveryService) {
     _discoveryService = discoveryService;
   }
-  
+
   Future<bool> connect(String ip, int port) async {
+    _lastIp = ip;
+    _lastPort = port;
+
+    if (_isConnected && _socket != null) {
+      return true;
+    }
+
+    if (_connectInFlight != null) {
+      return _connectInFlight!;
+    }
+
+    _connectInFlight = _connectInternal(ip, port);
+    final result = await _connectInFlight!;
+    _connectInFlight = null;
+    return result;
+  }
+
+  Future<bool> _connectInternal(String ip, int port) async {
     try {
       print('[Connection] 🔌 Connecting to $ip:$port');
-      
+
       _socket = await Socket.connect(
-        ip, 
-        port, 
+        ip,
+        port,
         timeout: const Duration(seconds: 5),
       );
-      
+
       // TCP no delay for low latency
       _socket!.setOption(SocketOption.tcpNoDelay, true);
-      
+
       _isConnected = true;
-      _connectionController.add(true);
-      
+      if (!_connectionController.isClosed) {
+        _connectionController.add(true);
+      }
+
       // Pause UDP discovery when TCP connected
       _discoveryService?.pauseScanning();
-      
+
       print('[Connection] ✅ Connected successfully');
-      
+
       // Listen for incoming messages
       _socket!.listen(
         _handleData,
@@ -56,60 +83,92 @@ class ConnectionService {
           disconnect();
         },
         onDone: () {
-          print('[Connection] 🔌 Disconnected');
+          print('[Connection] 🔌 Socket closed (onDone) - peer or app closed connection');
           disconnect();
         },
         cancelOnError: false,
       );
-      
+
       return true;
     } catch (e) {
       print('[Connection] ❌ Failed to connect: $e');
       _isConnected = false;
-      _connectionController.add(false);
+      if (!_connectionController.isClosed) {
+        _connectionController.add(false);
+      }
       return false;
     }
   }
-  
+
+  Future<bool> reconnect({
+    int maxAttempts = 8,
+    Duration baseDelay = const Duration(milliseconds: 300),
+  }) async {
+    final ip = _lastIp;
+    final port = _lastPort;
+    if (ip == null || port == null) {
+      print('[Connection] ⚠️ Cannot reconnect - no last endpoint');
+      return false;
+    }
+
+    if (_isConnected && _socket != null) {
+      return true;
+    }
+
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      final ok = await connect(ip, port);
+      if (ok) {
+        print('[Connection] ✅ Reconnected on attempt $attempt');
+        return true;
+      }
+
+      final ms = baseDelay.inMilliseconds * attempt;
+      await Future.delayed(Duration(milliseconds: ms));
+    }
+
+    print('[Connection] ❌ Reconnect failed after $maxAttempts attempts');
+    return false;
+  }
+
   void _handleData(Uint8List data) {
-    // Add received data to buffer
     _receiveBuffer.addAll(data);
-    
-    // Process all complete messages in buffer
+
     while (_receiveBuffer.length >= 4) {
       try {
-        // Read length prefix (4 bytes, big-endian)
+        // Read 4-byte length prefix (big-endian)
         final lengthBytes = _receiveBuffer.sublist(0, 4);
         final messageLength = ByteData.sublistView(Uint8List.fromList(lengthBytes)).getInt32(0, Endian.big);
         
         // Validate length
         if (messageLength <= 0 || messageLength > 10 * 1024 * 1024) {
-          print('[Connection] ❌ Invalid message length: $messageLength');
+          print('[Connection] ❌ Invalid message length: $messageLength - clearing buffer');
           _receiveBuffer.clear();
           disconnect();
           return;
         }
         
-        // Check if we have the complete message
+        // Wait for complete message
         if (_receiveBuffer.length < 4 + messageLength) {
-          // Wait for more data
-          break;
+          break; // Need more data
         }
         
-        // Extract message
+        // Extract message bytes
         final messageBytes = _receiveBuffer.sublist(4, 4 + messageLength);
-        final messageJson = utf8.decode(messageBytes);
-        
-        // Remove processed bytes from buffer
         _receiveBuffer.removeRange(0, 4 + messageLength);
         
-        // Parse and emit message
+        // Decode JSON
+        final messageJson = utf8.decode(messageBytes);
+        
         try {
           final message = jsonDecode(messageJson) as Map<String, dynamic>;
-          print('[Connection] 📥 Received: ${message['commandId']}');
-          _messageController.add(message);
+          _bufferWebRtcSignalingIfNeeded(message);
+          if (kDebugMode) print('[Connection] 📥 Received: ${message['commandId']}');
+          if (!_messageController.isClosed) {
+            _messageController.add(message);
+          }
         } catch (e) {
           print('[Connection] ⚠️ Failed to parse JSON: $e');
+          print('[Connection] JSON preview: ${messageJson.substring(0, messageJson.length > 100 ? 100 : messageJson.length)}');
         }
       } catch (e) {
         print('[Connection] ⚠️ Error processing message: $e');
@@ -118,69 +177,110 @@ class ConnectionService {
       }
     }
   }
-  
+
+  List<Map<String, dynamic>> drainBufferedWebRtcSignaling() {
+    final drained = <Map<String, dynamic>>[];
+    if (_bufferedWebRtcOffer != null) {
+      drained.add(_bufferedWebRtcOffer!);
+    }
+    drained.addAll(_bufferedWebRtcCandidates);
+    _bufferedWebRtcOffer = null;
+    _bufferedWebRtcCandidates.clear();
+    return drained;
+  }
+
+  void _bufferWebRtcSignalingIfNeeded(Map<String, dynamic> message) {
+    final commandId = message['commandId'];
+    if (commandId == 'WEBRTC_OFFER') {
+      _bufferedWebRtcOffer = message;
+      _bufferedWebRtcCandidates.clear();
+      return;
+    }
+
+    if (commandId == 'WEBRTC_ICE_CANDIDATE') {
+      _bufferedWebRtcCandidates.add(message);
+      if (_bufferedWebRtcCandidates.length > _maxBufferedWebRtcCandidates) {
+        _bufferedWebRtcCandidates.removeAt(0);
+      }
+    }
+  }
+
   Future<void> sendCommand(String commandId, Map<String, dynamic>? payload) async {
     if (!_isConnected || _socket == null) {
       print('[Connection] ⚠️ Cannot send - not connected');
       return;
     }
-    
+
     try {
-      // Create message matching Unity's NetworkMessage structure
+      // Create message matching Unity's NetworkMessageJson structure
       final message = {
         'messageId': DateTime.now().millisecondsSinceEpoch.toString(),
         'timestamp': (DateTime.now().millisecondsSinceEpoch / 1000).floor(),
         'commandId': commandId,
-        'payload': payload != null ? utf8.encode(jsonEncode(payload)) : null,
+        // CRITICAL: Unity expects payload as Base64 string!
+        'payload': payload != null ? base64Encode(utf8.encode(jsonEncode(payload))) : null,
       };
-      
+
       final messageJson = jsonEncode(message);
       final messageBytes = utf8.encode(messageJson);
-      
+
       // Send length prefix (4 bytes, big-endian)
       final lengthBytes = ByteData(4)
         ..setInt32(0, messageBytes.length, Endian.big);
-      
+
       _socket!.add(lengthBytes.buffer.asUint8List());
       _socket!.add(messageBytes);
       await _socket!.flush();
-      
+
       print('[Connection] 📤 Sent: $commandId (${messageBytes.length} bytes)');
     } catch (e) {
       print('[Connection] ❌ Send failed: $e');
       disconnect();
     }
   }
-  
-  void disconnect() async {
-    if (_socket == null) return;
-    
-    try {
-      // Flush any pending data before closing
-      await _socket!.flush();
-      // Give a moment for flush to complete
-      await Future.delayed(const Duration(milliseconds: 50));
-      // Gracefully close the socket
-      await _socket!.close();
-    } catch (e) {
-      // Ignore errors during disconnect
-      print('[Connection] ⚠️ Error during disconnect: $e');
+
+  Future<void> disconnect() async {
+    if (_isDisconnecting) return;
+
+    final socket = _socket;
+    if (socket == null) {
+      _isConnected = false;
+      return;
     }
-    
+
+    _isDisconnecting = true;
     _socket = null;
     _isConnected = false;
     _receiveBuffer.clear();
-    _connectionController.add(false);
-    
-    // Resume UDP discovery when TCP disconnected
+    if (!_connectionController.isClosed) {
+      _connectionController.add(false);
+    }
     _discoveryService?.resumeScanning();
-    
+
+    try {
+      // Flush any pending data before closing
+      await socket.flush();
+      // Give a moment for flush to complete
+      await Future.delayed(const Duration(milliseconds: 50));
+      // Gracefully close the socket
+      await socket.close();
+    } catch (e) {
+      // Ignore errors during disconnect
+      print('[Connection] ⚠️ Error during disconnect: $e');
+    } finally {
+      _isDisconnecting = false;
+    }
+
     print('[Connection] 🔌 Disconnected');
   }
-  
+
   void dispose() {
-    disconnect();
-    _messageController.close();
-    _connectionController.close();
+    unawaited(disconnect());
+    if (!_messageController.isClosed) {
+      _messageController.close();
+    }
+    if (!_connectionController.isClosed) {
+      _connectionController.close();
+    }
   }
 }

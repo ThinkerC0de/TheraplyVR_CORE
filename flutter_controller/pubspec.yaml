@@ -18,6 +18,12 @@ dependencies:
   # UI
   cupertino_icons: ^1.0.8
 
+  # WebRTC (video stream from Quest) - 1.x for current Flutter embedding
+  flutter_webrtc: ^1.3.0
+
+  # Keep screen awake during active control session
+  wakelock_plus: ^1.2.8
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
