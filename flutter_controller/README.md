@@ -82,6 +82,9 @@ adb install build/app/outputs/flutter-apk/app-release.apk
 - START/STOP/RESET buttons
 - Connection status indicator
 - Real-time messaging
+- Live WebRTC video preview from Quest (16:9)
+- Automatic reconnect after app resume/background interruption
+- Android foreground session support during active control session
 
 ---
 
@@ -124,6 +127,18 @@ Solution:
 3. Quest app is listening on TCP
 ```
 
+### **Video preview freezes after app resume**
+```
+Expected behavior:
+1. TCP reconnect starts automatically on app resume
+2. WebRTC signaling is renegotiated
+3. Preview recovers automatically
+
+If not recovered:
+- Check Unity logs for reconnect + WEBRTC_OFFER
+- Check controller logs for WEBRTC_ANSWER and ICE exchange
+```
+
 ### **Build errors**
 ```bash
 # Clean and rebuild
@@ -147,7 +162,9 @@ flutter_controller/
 │   ├── services/
 │   │   ├── firebase_service.dart # Auth + Firestore
 │   │   ├── discovery_service.dart # UDP scanning
-│   │   └── connection_service.dart # TCP connection
+│   │   ├── connection_service.dart # TCP connection + reconnect
+│   │   ├── webrtc_video_service.dart # WebRTC signaling + media handling
+│   │   └── foreground_service_bridge.dart # Android foreground service bridge
 │   └── models/
 │       ├── device_info.dart      # Quest device model
 │       └── game_status.dart      # Game state model
@@ -177,7 +194,8 @@ After app runs successfully:
 - **Default login** is pre-filled for quick testing
 - **UDP port 8767** must match Unity's discovery port
 - **TCP port 8080** must match Unity's control port
-- **Emojis in logs** help identify message types (✅ = success, ❌ = error)
+- **Control Screen keeps screen awake** (wakelock enabled while active)
+- **Foreground service stops automatically** when app task is removed from recents
 
 ---
 

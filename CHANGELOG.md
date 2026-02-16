@@ -9,13 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned Features
-- [ ] Streaming module (H.264 hardware encoding)
-- [ ] Firebase session management
-- [ ] Reconnection logic with exponential backoff
-- [ ] Flutter controller UI
-- [ ] Data batching and upload
-- [ ] Lifecycle management (HMD mount/unmount)
+### Added
+- Android foreground session service for active control sessions.
+- Automatic TCP reconnect on Flutter app resume with retry/backoff.
+- WebRTC stream recovery path after reconnect/resume.
+- 16:9 video preview container in Flutter control screen.
+
+### Changed
+- Network stack documentation updated to reflect UDP discovery + TCP control + WebRTC media.
+- Unity WebRTC lifecycle usage aligned with current package API (`WebRTC.Update()` coroutine without unsupported init/dispose calls).
 
 ---
 

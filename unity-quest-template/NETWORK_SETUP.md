@@ -3,8 +3,8 @@
 ## Overview
 The Theraply VR Framework uses a client-server architecture for Quest-Controller communication:
 
-- **Quest (Unity)** = TCP Server + UDP Broadcaster
-- **Flutter Controller** = TCP Client + UDP Listener
+- **Quest (Unity)** = UDP Broadcaster + TCP Server + WebRTC Video Source
+- **Flutter Controller** = UDP Listener + TCP Client + WebRTC Video Receiver
 
 ## Architecture
 
@@ -18,6 +18,9 @@ The Theraply VR Framework uses a client-server architecture for Quest-Controller
 │                 │           │                  │
 │ TCP Server      │◄─────────►│ TCP Client       │
 │ (Port 8080)     │  Connect  │                  │
+│                 │           │                  │
+│ WebRTC Video    │◄─────────►│ WebRTC Receiver  │
+│ (ICE dynamic)   │  P2P Media│ (ICE dynamic)    │
 └─────────────────┘           └──────────────────┘
 ```
 
@@ -31,6 +34,15 @@ Create a GameObject named `NetworkManager` with these components:
 NetworkManager (GameObject)
 ├─ UDPDiscoveryService   (broadcasts device info)
 └─ TCPServerService      (accepts TCP connections)
+```
+
+Create a GameObject named `VideoStreaming` with these components:
+
+```
+VideoStreaming (GameObject)
+├─ Camera
+├─ VideoStreamService
+└─ WebRTCServerSignaling
 ```
 
 ### 2. Configure Components
@@ -48,12 +60,36 @@ NetworkManager (GameObject)
 - Log Connections: `true` (for debugging)
 - Log Messages: `false` (reduce spam)
 
+**Component References (important):**
+- `TCPServerService._discoveryService` → `UDPDiscoveryService`
+- `TCPServerService._videoStreamService` → `VideoStreamService`
+- `WebRTCServerSignaling._videoStreamService` → `VideoStreamService`
+- `WebRTCServerSignaling._tcpServer` → `TCPServerService`
+
+**VideoStreamService:**
+- `sourceCamera`: assign your XR camera manually (recommended)
+- `autoDetectCamera`: `false` when source camera is assigned
+- Streaming settings: `1280x720 @ 30fps` (default)
+
 ### 3. How It Works
 
 **On Quest Start:**
 1. `UDPDiscoveryService` starts broadcasting device info every 0.5s
 2. `TCPServerService` starts listening on port 8080
 3. Quest waits for Flutter controller to connect
+
+**When Client Connects:**
+1. `TCPServerService` detects client connection
+2. Automatically pauses UDP broadcast (saves bandwidth)
+3. `WebRTCServerSignaling` starts stream and sends `WEBRTC_OFFER`
+4. Flutter sends `WEBRTC_ANSWER` and ICE candidates
+5. Video starts over WebRTC media channel
+
+**When Client Disconnects:**
+1. `TCPServerService` detects disconnection
+2. Automatically resumes UDP broadcast
+3. WebRTC stream is stopped
+4. Quest becomes discoverable again for reconnection
 
 **Device Info Broadcast (UDP):**
 ```json
@@ -77,16 +113,24 @@ NetworkManager (GameObject)
 {
   "messageId": "guid",
   "timestamp": 1707838418,
-  "commandId": "SESSION_START",
+  "commandId": "WEBRTC_OFFER",
   "payload": null
 }
 ```
+
+WebRTC signaling command IDs:
+- `WEBRTC_OFFER` (Unity → Flutter)
+- `WEBRTC_ANSWER` (Flutter → Unity)
+- `WEBRTC_ICE_CANDIDATE` (both directions)
 
 ## Flutter Setup
 
 ### 1. Services
 
 The Flutter app uses two services:
+
+**Discovery Pause on Connect:**
+When Flutter connects to Quest via TCP, it automatically stops UDP scanning to save battery and CPU. When returning to scanner screen (after disconnect), scanning resumes automatically.
 
 **DiscoveryService** (`lib/services/discovery_service.dart`):
 - Listens for UDP broadcasts from Quest
@@ -97,6 +141,17 @@ The Flutter app uses two services:
 - Connects to Quest TCP server
 - Sends/receives length-prefixed JSON messages
 - Handles connection state
+- Auto-reconnects on app resume (retry/backoff)
+
+**WebRTCVideoService** (`lib/services/webrtc_video_service.dart`):
+- Handles WebRTC offer/answer flow over TCP signaling
+- Applies ICE candidates
+- Emits remote `MediaStream` to UI
+
+**Foreground Session (Android):**
+- Active control session starts an Android foreground service
+- Helps keep connection alive when app is backgrounded
+- Stops automatically when app task is removed from recents
 
 ### 2. Usage Flow
 
@@ -187,6 +242,21 @@ connection.messages.listen((message) {
 - TCP Server not started (add `TCPServerService` to scene)
 - Firewall blocking TCP port 8080
 - Wrong IP address or port
+
+### Connected but Black Video
+
+Common causes and checks:
+- `VideoStreamService.sourceCamera` points to wrong camera
+- `autoDetectCamera` selects a fallback camera unexpectedly
+- `WebRTC.Update()` coroutine is not running in Unity
+- Flutter reconnect happened but offer/answer did not renegotiate
+
+Expected Unity logs:
+```
+[VideoStreamService] ✅ WebRTC streaming started (offer will be sent by signaling)
+[WebRTCServerSignaling] Sent WEBRTC_OFFER to client
+[VideoStreamService] Peer Connection State: Connected
+```
 
 ### Messages Not Received
 

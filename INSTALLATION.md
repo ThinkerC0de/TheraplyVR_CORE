@@ -1,183 +1,94 @@
-# 🚀 Theraply Framework - Complete Installation Package
+# Theraply VR Framework - Installation Guide
 
-**All production systems ready to use!**
+This document describes the current setup flow for the full stack:
 
----
+- Unity Quest app (`unity-quest-template`)
+- Flutter controller (`flutter_controller`)
+- Local network communication (UDP discovery + TCP control + WebRTC video)
 
-## 📦 What's Included
+## 1. Clone Repository
 
-This package contains 7 files (1,905 lines of production code):
-
-### **Production Systems:**
-1. ✅ **Logger.cs** (244 lines) - Fatal/Error/Warning/Info/Debug logging
-2. ✅ **ConnectionStateManager.cs** (391 lines) - Auto-reconnection
-3. ✅ **ReliableCommandService.cs** (410 lines) - ACK system
-4. ✅ **FirebaseDataService.cs** (260 lines) - Non-blocking writes
-5. ✅ **BaseGameV2.cs** (260 lines) - Updated base class
-
-### **Documentation:**
-6. ✅ **PRODUCTION-ISSUES-SOLUTIONS.md** - Complete architecture
-7. ✅ **PRODUCTION-SYSTEMS-INTEGRATION.md** - Quick integration guide
-
----
-
-## 🎯 Installation Steps
-
-### **Step 1: Download Files**
-
-All files are in this conversation thread ⬆️ Scroll up and download:
-
-**Code Files (go in Unity project):**
-1. `Logger.cs` → `Assets/_TheraplyCore/Logging/`
-2. `ConnectionStateManager.cs` → `Assets/_TheraplyCore/Connection/`
-3. `ReliableCommandService.cs` → `Assets/_TheraplyCore/Connection/`
-4. `FirebaseDataService.cs` → `Assets/_TheraplyCore/Firebase/`
-5. `BaseGameV2.cs` → `Assets/_TheraplyCore/Games/`
-
-**Documentation (go in docs folder):**
-6. `PRODUCTION-ISSUES-SOLUTIONS.md` → `docs/`
-7. `PRODUCTION-SYSTEMS-INTEGRATION.md` → `docs/`
-8. `SESSION-2-SUMMARY.md` → `docs/`
-
-### **Step 2: Create Folder Structure**
-
-In your Unity project, create these folders if they don't exist:
-
-```
-Assets/
-├── _TheraplyCore/
-│   ├── Logging/           ← New folder
-│   ├── Connection/        ← New folder
-│   ├── Firebase/          ← New folder
-│   └── Games/             (existing)
+```bash
+git clone https://github.com/ThinkerC0de/theraply-vr-framework.git
+cd theraply-vr-framework
 ```
 
-### **Step 3: Copy Files**
+## 2. Unity Setup (Quest)
 
-Place each file in its correct folder (see Step 1).
+1. Open `unity-quest-template` in Unity 6.3 (or newer compatible 6000.3.x).
+2. Let package import complete.
+3. Verify required scene components:
+   - `NetworkManager` with:
+     - `UDPDiscoveryService`
+     - `TCPServerService`
+   - `VideoStreaming` with:
+     - `Camera`
+     - `VideoStreamService`
+     - `WebRTCServerSignaling`
+4. Wire required references:
+   - `TCPServerService._discoveryService` -> `UDPDiscoveryService`
+   - `TCPServerService._videoStreamService` -> `VideoStreamService`
+   - `WebRTCServerSignaling._videoStreamService` -> `VideoStreamService`
+   - `WebRTCServerSignaling._tcpServer` -> `TCPServerService`
+5. Assign `VideoStreamService.sourceCamera` to your XR camera and disable `autoDetectCamera` (recommended).
 
-### **Step 4: Verify in Unity**
+Detailed network and troubleshooting guide:
+- `unity-quest-template/NETWORK_SETUP.md`
 
-Open Unity and check Console for errors. All files should compile successfully.
+## 3. Flutter Controller Setup
 
----
-
-## ✅ Quick Test
-
-After installation, test that everything works:
-
-### **Test 1: Logger**
-
-```csharp
-using TheraplyCore.Logging;
-
-void Start() {
-    Logger.Info("Logger working!");
-    Logger.Warning("This is a warning");
-    Logger.Error("This is an error");
-}
+```bash
+cd flutter_controller
+flutter pub get
 ```
 
-**Expected output:**
-```
-[12:34:56.789] [INFO] Logger working!
-[12:34:56.790] [WARN] This is a warning
-[12:34:56.791] [ERROR] This is an error
-```
+### Firebase
 
-### **Test 2: Systems Available**
+Place Firebase Android config in:
 
-Check that all classes are accessible:
-
-```csharp
-using TheraplyCore.Logging;
-using TheraplyCore.Connection;
-using TheraplyCore.Firebase;
-using TheraplyCore.Games;
-
-// All should compile without errors
+```text
+flutter_controller/android/app/google-services.json
 ```
 
----
+Ensure Firebase Authentication and Firestore are configured for your project.
 
-## 🎮 Next Steps
+### Run / Build
 
-### **Option A: Update Existing Game**
-
-If you have an existing game using BaseGame:
-
-```csharp
-// OLD
-public class MyGame : BaseGame { }
-
-// NEW  
-public class MyGame : BaseGameV2 { }
+```bash
+flutter run
 ```
 
-### **Option B: Create Demo Scene**
+or
 
-I can create a complete demo scene for you with:
-- All systems configured
-- SimpleCubeGame v2
-- Test UI
+```bash
+flutter build apk
+```
 
-**Say "create demo scene" and I'll make it!**
+Detailed controller notes:
+- `flutter_controller/README.md`
 
-### **Option C: Start Flutter App**
+## 4. Runtime Requirements
 
-Once Unity is set up, we can start the Flutter controller app.
+- Quest and controller phone must be on the same WiFi subnet.
+- UDP discovery port: `8767`
+- TCP control port: `8080`
+- Video stream: WebRTC media channel (dynamic ICE ports)
 
-**Say "start Flutter" and I'll begin!**
+## 5. Lifecycle Behavior (Current)
 
----
+- Control sessions use Android foreground service while active.
+- Foreground service is stopped automatically when app task is removed from recents.
+- On app resume, controller attempts TCP reconnect and recovers WebRTC preview automatically.
 
-## 📊 Progress Check
+## 6. Verification Checklist
 
-After installation, you should have:
+- Unity logs show:
+  - TCP server started
+  - UDP broadcast active
+  - WebRTC offer sent on controller connect
+- Flutter logs show:
+  - device discovered
+  - TCP connected
+  - WebRTC answer + ICE exchange
+  - video track received
 
-**Unity Quest App:**
-- ✅ Core API (IGameModule, BaseGame, BaseGameV2)
-- ✅ Network Layer (UDP, TCP)
-- ✅ Production Systems (Logger, ConnectionManager, ReliableCommand, FirebaseData)
-- ⏳ Demo Scene (next step)
-- ⏳ Firebase Integration (next step)
-
-**Overall: ~45% of v1.0.0**
-
----
-
-## 🆘 Troubleshooting
-
-### **Issue: "Namespace not found"**
-
-**Solution:** Make sure all files are in correct folders:
-- Logger.cs in `Logging/` folder
-- ConnectionStateManager.cs in `Connection/` folder
-- etc.
-
-### **Issue: "VContainer missing"**
-
-**Solution:** Install VContainer via Package Manager:
-1. Window → Package Manager
-2. Add package from git URL: `https://github.com/hadashiA/VContainer.git?path=VContainer/Assets/VContainer`
-
-### **Issue: "MessagePack missing"**
-
-**Solution:** Install MessagePack via Package Manager:
-1. Window → Package Manager  
-2. Add package from git URL: `https://github.com/neuecc/MessagePack-CSharp.git?path=src/MessagePack.UnityClient/Assets/Scripts/MessagePack`
-
----
-
-## 💬 Questions?
-
-I'm here to help! Just ask:
-- "How do I use Logger?"
-- "Show me ConnectionStateManager example"
-- "Create demo scene"
-- "Start Flutter app"
-- "Help with Firebase setup"
-
----
-
-**Ready to build production-quality VR therapy apps! 🚀**

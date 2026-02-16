@@ -12,7 +12,7 @@
 
 Theraply VR Framework is a **clean, modular foundation** for building therapeutic VR experiences. It provides:
 
-- **Real-time P2P networking** (UDP discovery + TCP control + UDP streaming)
+- **Real-time P2P networking** (UDP discovery + TCP control + WebRTC video streaming)
 - **Session management** with Firebase integration
 - **ML-ready data collection** (structured, batched writes)
 - **Game module API** for plug-and-play mini-games
@@ -44,7 +44,7 @@ This is a **FRAMEWORK, not a product**. Think of it like Unity Engine:
 │  └── Your Games (separate repo)                         │
 │      └── Implements IGameModule                         │
 └─────────────────────────────────────────────────────────┘
-                        ↕ UDP/TCP
+                        ↕ UDP/TCP/WebRTC
 ┌─────────────────────────────────────────────────────────┐
 │  Android Phone (Therapist)                              │
 ├─────────────────────────────────────────────────────────┤
@@ -69,6 +69,7 @@ This is a **FRAMEWORK, not a product**. Think of it like Unity Engine:
 |----------|------|---------|--------|
 | UDP | 8767 | Device Discovery | JSON |
 | TCP | 8080 | Control Messages | JSON |
+| WebRTC | dynamic (ICE) | Video Stream | RTP/RTCP |
 
 ---
 
@@ -110,9 +111,9 @@ cd theraply-vr-framework
 ## 📚 Documentation
 
 ### Getting Started
-- **[Project Setup](docs/UNITY-DEMO-SCENE-SETUP.md)** - Complete Unity scene setup guide
-- **[Git Workflow](docs/GIT-UNITY-WORKFLOW.md)** - Version control best practices
-- **[Flutter App](docs/FLUTTER-APP-CREATED.md)** - Mobile controller setup
+- **[Unity Network Setup](unity-quest-template/NETWORK_SETUP.md)** - Scene wiring and protocol flow
+- **[Flutter Controller Setup](flutter_controller/README.md)** - Controller app setup and troubleshooting
+- **[Installation Notes](INSTALLATION.md)** - Project bootstrap notes
 
 ### Architecture
 - **[Network Protocol](docs/04-Network-Protocol.md)** - Message formats and flow
@@ -219,6 +220,7 @@ public class SimpleCubeGame : BaseGame
 
 - ✅ **UDP Discovery** - Automatic device detection on local network
 - ✅ **TCP Control Channel** - Reliable command delivery
+- ✅ **WebRTC Video Streaming** - Quest video preview in Flutter controller
 - ✅ **JSON Serialization** - Unity's built-in JsonUtility (zero dependencies)
 - ✅ **Reconnection Logic** - Exponential backoff with automatic retry
 - ✅ **Session Management** - Firebase-backed with local caching
@@ -237,6 +239,8 @@ public class SimpleCubeGame : BaseGame
 - ✅ **Firebase Auth** - Therapist login
 - ✅ **UDP Scanner** - Discover Quest devices
 - ✅ **TCP Control** - Send game commands
+- ✅ **Foreground Session Persistence (Android)** - Keeps active control session alive in background
+- ✅ **Auto-Recovery on Resume** - Reconnects TCP and restores WebRTC preview after interruptions
 - ✅ **Generic UI** - Works with any game module
 
 ---
@@ -260,6 +264,8 @@ public class SimpleCubeGame : BaseGame
 | firebase_core | ^3.8.1 | BSD-3 |
 | firebase_auth | ^5.3.4 | BSD-3 |
 | cloud_firestore | ^5.6.1 | BSD-3 |
+| flutter_webrtc | ^1.3.0 | BSD-3 |
+| wakelock_plus | ^1.2.8 | BSD-3 |
 
 ---
 
@@ -279,6 +285,11 @@ public class SimpleCubeGame : BaseGame
 - **Discovery:** <2s device detection
 - **Control Latency:** <50ms command delivery
 - **Connection:** Auto-reconnect with exponential backoff
+
+### Streaming Lifecycle
+- Unity starts video streaming after TCP client connection and WebRTC signaling.
+- Flutter can recover connection after app resume/background interruptions.
+- Android foreground service is used during active control sessions and is stopped when the app task is removed.
 
 ---
 
