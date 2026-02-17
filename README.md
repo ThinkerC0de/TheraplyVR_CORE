@@ -142,6 +142,11 @@ Use this quick fallback:
 - **[Network Protocol](docs/04-Network-Protocol.md)** - Message formats and flow
 - **[Data Collection](docs/05-Data-Collection.md)** - ML-ready data structure
 
+### Reliability and Recovery
+- **[Session Resilience Roadmap](docs/06-Session-Resilience-Roadmap.md)** - Failure scenarios, architecture, and phased delivery plan
+- **[Session Resilience Prompting Guide](docs/07-Session-Resilience-Prompting.md)** - Copy/paste prompts to resume work after context/token resets
+- **[Session Resilience Worklog](docs/08-Session-Resilience-Worklog.md)** - Single source of truth for done/todo items
+
 ---
 
 ## 🎮 Creating Your First Game
