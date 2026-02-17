@@ -20,8 +20,82 @@ namespace TheraplyCore.Games.Runtime
         [Header("Behavior")]
         [SerializeField] private bool _enrichPayloadWithSessionMetadata = true;
         [SerializeField] private bool _logTelemetry = false;
+        [SerializeField] private int _maxPendingTelemetryFallback = 256;
+        [SerializeField] private bool _logTelemetryFallback = false;
+
+        private readonly Queue<GameDataPoint> _pendingFallbackPoints = new Queue<GameDataPoint>();
+        private bool _fallbackWarningIssued;
 
         private void Awake()
+        {
+            ResolveDependencies();
+            TryFlushFallbackQueue();
+        }
+
+        public void Track(string eventName, IReadOnlyDictionary<string, object> payload, int payloadVersion = 1)
+        {
+            if (string.IsNullOrWhiteSpace(eventName))
+            {
+                Logger.Warning("[Telemetry] Ignoring event with empty name.");
+                return;
+            }
+
+            try
+            {
+                ResolveDependencies();
+                TryFlushFallbackQueue();
+
+                var mutablePayload = payload != null
+                    ? new Dictionary<string, object>(payload)
+                    : new Dictionary<string, object>();
+
+                mutablePayload["eventName"] = eventName;
+                mutablePayload["payloadVersion"] = payloadVersion;
+
+                if (_enrichPayloadWithSessionMetadata && _sessionContext != null)
+                {
+                    if (!mutablePayload.ContainsKey("sessionId")) mutablePayload["sessionId"] = _sessionContext.SessionId;
+                    if (!mutablePayload.ContainsKey("patientId")) mutablePayload["patientId"] = _sessionContext.PatientId;
+                    if (!mutablePayload.ContainsKey("therapistId")) mutablePayload["therapistId"] = _sessionContext.TherapistId;
+                }
+
+                var point = new GameDataPoint
+                {
+                    timestamp = DateTime.UtcNow,
+                    dataType = eventName,
+                    payload = mutablePayload,
+                };
+
+                if (_firebaseDataService != null)
+                {
+                    _firebaseDataService.QueueDataPoint(point);
+                }
+                else
+                {
+                    BufferFallbackPoint(point, "FirebaseDataService unresolved");
+                }
+
+                if (_logTelemetry)
+                {
+                    Logger.Debug($"[Telemetry] {eventName} tracked (payload keys: {mutablePayload.Count})");
+                }
+            }
+            catch (Exception e)
+            {
+                BufferFallbackPoint(
+                    new GameDataPoint
+                    {
+                        timestamp = DateTime.UtcNow,
+                        dataType = eventName,
+                        payload = payload != null
+                            ? new Dictionary<string, object>(payload)
+                            : new Dictionary<string, object>(),
+                    },
+                    $"Track exception: {e.Message}");
+            }
+        }
+
+        private void ResolveDependencies()
         {
             if (_firebaseDataService == null)
             {
@@ -34,47 +108,77 @@ namespace TheraplyCore.Games.Runtime
             }
         }
 
-        public void Track(string eventName, IReadOnlyDictionary<string, object> payload, int payloadVersion = 1)
+        private void BufferFallbackPoint(GameDataPoint point, string reason)
         {
-            if (string.IsNullOrWhiteSpace(eventName))
+            if (point == null)
             {
-                Logger.Warning("[Telemetry] Ignoring event with empty name.");
                 return;
             }
 
-            var mutablePayload = payload != null
-                ? new Dictionary<string, object>(payload)
-                : new Dictionary<string, object>();
-
-            mutablePayload["eventName"] = eventName;
-            mutablePayload["payloadVersion"] = payloadVersion;
-
-            if (_enrichPayloadWithSessionMetadata && _sessionContext != null)
+            var safeLimit = Math.Max(16, _maxPendingTelemetryFallback);
+            if (_pendingFallbackPoints.Count >= safeLimit)
             {
-                if (!mutablePayload.ContainsKey("sessionId")) mutablePayload["sessionId"] = _sessionContext.SessionId;
-                if (!mutablePayload.ContainsKey("patientId")) mutablePayload["patientId"] = _sessionContext.PatientId;
-                if (!mutablePayload.ContainsKey("therapistId")) mutablePayload["therapistId"] = _sessionContext.TherapistId;
+                _pendingFallbackPoints.Dequeue();
+                Logger.Warning($"[Telemetry] Fallback buffer full. Dropped oldest point (limit={safeLimit}).");
             }
 
-            var point = new GameDataPoint
+            _pendingFallbackPoints.Enqueue(point);
+            if (!_fallbackWarningIssued)
             {
-                timestamp = DateTime.UtcNow,
-                dataType = eventName,
-                payload = mutablePayload,
-            };
-
-            if (_firebaseDataService != null)
-            {
-                _firebaseDataService.QueueDataPoint(point);
+                _fallbackWarningIssued = true;
+                Logger.Warning($"[Telemetry] Entered fallback buffering mode ({reason}).");
             }
-            else
+            else if (_logTelemetryFallback)
             {
-                Logger.Warning($"[Telemetry] FirebaseDataService not found, dropped event: {eventName}");
+                Logger.Debug($"[Telemetry] Buffered event '{point.dataType}'. Pending={_pendingFallbackPoints.Count}.");
+            }
+        }
+
+        private void TryFlushFallbackQueue()
+        {
+            if (_firebaseDataService == null || _pendingFallbackPoints.Count == 0)
+            {
+                return;
             }
 
-            if (_logTelemetry)
+            var flushBudget = _pendingFallbackPoints.Count;
+            var flushed = 0;
+            for (var i = 0; i < flushBudget; i++)
             {
-                Logger.Debug($"[Telemetry] {eventName} tracked (payload keys: {mutablePayload.Count})");
+                if (_pendingFallbackPoints.Count == 0)
+                {
+                    break;
+                }
+
+                var pending = _pendingFallbackPoints.Peek();
+                if (pending == null)
+                {
+                    _pendingFallbackPoints.Dequeue();
+                    continue;
+                }
+
+                try
+                {
+                    _firebaseDataService.QueueDataPoint(pending);
+                    _pendingFallbackPoints.Dequeue();
+                    flushed++;
+                }
+                catch (Exception e)
+                {
+                    Logger.Warning($"[Telemetry] Fallback flush paused: {e.Message}");
+                    break;
+                }
+            }
+
+            if (_logTelemetryFallback && flushed > 0)
+            {
+                Logger.Info(
+                    $"[Telemetry] Flushed {flushed} buffered event(s). Remaining: {_pendingFallbackPoints.Count}.");
+            }
+
+            if (_pendingFallbackPoints.Count == 0)
+            {
+                _fallbackWarningIssued = false;
             }
         }
     }

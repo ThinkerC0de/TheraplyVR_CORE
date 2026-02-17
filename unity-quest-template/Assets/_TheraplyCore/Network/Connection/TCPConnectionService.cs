@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Concurrent;
 using UnityEngine;
+using MessagePack;
 using TheraplyCore.Network.Discovery;
 
 namespace TheraplyCore.Network.Connection
@@ -477,15 +478,23 @@ namespace TheraplyCore.Network.Connection
     // ============================================
     
     /// <summary>
-    /// Network message structure (JSON serialized)
+    /// Network message structure (JSON serialized with MessagePack attributes for future use)
     /// </summary>
-    [Serializable]
+    [MessagePackObject]
     public struct NetworkMessage
     {
-        public string messageId;      // Unique message ID
-        public long timestamp;        // Unix timestamp
-        public string commandId;      // Command identifier (e.g., "SESSION_START")
-        public byte[] payload;        // Nested JSON data as bytes
+        [Key(0)] public string messageId;      // Unique message ID
+        [Key(1)] public long timestamp;        // Unix timestamp
+        [Key(2)] public string commandId;      // Command identifier (e.g., "SESSION_START")
+        [Key(3)] public byte[] payload;        // Nested MessagePack data
+        
+        // Helper property for string payloads (WebRTC signaling)
+        [IgnoreMember]
+        public string payloadString
+        {
+            get => payload != null ? System.Text.Encoding.UTF8.GetString(payload) : null;
+            set => payload = value != null ? System.Text.Encoding.UTF8.GetBytes(value) : null;
+        }
     }
     
     /// <summary>

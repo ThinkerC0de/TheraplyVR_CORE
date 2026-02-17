@@ -1,8 +1,9 @@
 using System;
+using System.Collections;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Collections;
+using System.Threading.Tasks;
 using UnityEngine;
 
 namespace TheraplyCore.Network.Discovery
@@ -98,8 +99,7 @@ namespace TheraplyCore.Network.Discovery
         // ============================================
         
         /// <summary>
-        /// Start discovery service
-        /// Begins broadcasting (if Quest) and listening for devices
+        /// Start discovery service. Resolves local IP off main thread to avoid freezing the editor.
         /// </summary>
         public void StartDiscovery()
         {
@@ -108,26 +108,35 @@ namespace TheraplyCore.Network.Discovery
                 Debug.LogWarning("[UDPDiscovery] Already running");
                 return;
             }
+            StartCoroutine(StartDiscoveryAsync());
+        }
+        
+        private IEnumerator StartDiscoveryAsync()
+        {
+            yield return new WaitForSeconds(1f);
+            // Resolve local IP on background thread so main thread never blocks
+            var ipTask = Task.Run(() => GetLocalIPAddress());
+            float timeout = 3f;
+            float deadline = Time.realtimeSinceStartup + timeout;
+            while (!ipTask.IsCompleted && Time.realtimeSinceStartup < deadline)
+                yield return null;
+            
+            string localIP = "0.0.0.0";
+            if (ipTask.IsCompleted && !ipTask.IsFaulted)
+            {
+                try { localIP = ipTask.Result ?? "0.0.0.0"; } catch { localIP = "0.0.0.0"; }
+            }
+            if (string.IsNullOrEmpty(localIP) || localIP == "127.0.0.1") localIP = "0.0.0.0";
+            
+            _myDeviceInfo = CreateDeviceInfoWithIP(localIP);
             
             try
             {
-                // Initialize device info
-                _myDeviceInfo = CreateDeviceInfo();
-                
-                // Create UDP client
                 _udpClient = new UdpClient(_discoveryPort);
                 _udpClient.EnableBroadcast = true;
-                
-                // Set running flag BEFORE starting coroutine (critical!)
                 _isRunning = true;
-                
-                // Start broadcasting
-                // Note: Broadcasts on all platforms for testing (Quest + Editor)
                 _broadcastCoroutine = StartCoroutine(BroadcastLoop());
-                
-                // Start listening (always)
                 StartListening();
-                
                 Debug.Log($"[UDPDiscovery] Started on port {_discoveryPort} at {System.DateTime.Now:HH:mm:ss.fff}");
                 OnDiscoveryStarted?.Invoke();
             }
@@ -173,8 +182,7 @@ namespace TheraplyCore.Network.Discovery
             
             if (_isRunning)
             {
-                // Refresh device info
-                _myDeviceInfo = CreateDeviceInfo();
+                _myDeviceInfo = CreateDeviceInfoWithIP(_myDeviceInfo.ip);
             }
         }
         
@@ -184,6 +192,32 @@ namespace TheraplyCore.Network.Discovery
         public DeviceInfo GetMyDeviceInfo()
         {
             return _myDeviceInfo;
+        }
+        
+        /// <summary>
+        /// Pause broadcasting (e.g., when client connected)
+        /// Keeps listening active
+        /// </summary>
+        public void PauseBroadcast()
+        {
+            if (_broadcastCoroutine != null)
+            {
+                StopCoroutine(_broadcastCoroutine);
+                _broadcastCoroutine = null;
+                Debug.Log("[UDPDiscovery] Broadcast paused (client connected)");
+            }
+        }
+        
+        /// <summary>
+        /// Resume broadcasting (e.g., when client disconnected)
+        /// </summary>
+        public void ResumeBroadcast()
+        {
+            if (_isRunning && _broadcastCoroutine == null)
+            {
+                _broadcastCoroutine = StartCoroutine(BroadcastLoop());
+                Debug.Log("[UDPDiscovery] Broadcast resumed (client disconnected)");
+            }
         }
         
         // ============================================
@@ -280,7 +314,7 @@ namespace TheraplyCore.Network.Discovery
         // HELPERS
         // ============================================
         
-        private DeviceInfo CreateDeviceInfo()
+        private DeviceInfo CreateDeviceInfoWithIP(string localIP)
         {
             return new DeviceInfo
             {
@@ -288,7 +322,7 @@ namespace TheraplyCore.Network.Discovery
                 deviceName = string.IsNullOrEmpty(_customDeviceName) 
                     ? SystemInfo.deviceName 
                     : _customDeviceName,
-                ip = GetLocalIPAddress(),
+                ip = localIP,
                 controlPort = 8080,
                 videoPort = 8081,
                 audioPort = 8082,
@@ -297,99 +331,33 @@ namespace TheraplyCore.Network.Discovery
             };
         }
         
+        /// <summary>
+        /// Get local IP without Dns.GetHostName() to avoid freezing the editor on slow/VPN networks.
+        /// Uses a short UDP connect to a public IP to discover the outgoing interface (no DNS lookup).
+        /// </summary>
         private string GetLocalIPAddress()
         {
             try
             {
-                var host = Dns.GetHostEntry(Dns.GetHostName());
-                IPAddress bestIP = null;
-                
-                Debug.Log("[UDPDiscovery] Available network interfaces:");
-                
-                foreach (var ip in host.AddressList)
+                using (var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp))
                 {
-                    if (ip.AddressFamily == AddressFamily.InterNetwork)
+                    socket.Connect(IPAddress.Parse("8.8.8.8"), 65530);
+                    var endPoint = socket.LocalEndPoint as IPEndPoint;
+                    if (endPoint != null)
                     {
-                        string ipStr = ip.ToString();
-                        Debug.Log($"  - {ipStr}");
-                        
-                        // Skip loopback (127.x.x.x)
-                        if (ipStr.StartsWith("127."))
+                        string ip = endPoint.Address.ToString();
+                        if (!ip.StartsWith("127."))
                         {
-                            Debug.Log($"    -> Skipped (loopback)");
-                            continue;
-                        }
-                        
-                        // Skip APIPA/link-local (169.254.x.x)
-                        if (ipStr.StartsWith("169.254."))
-                        {
-                            Debug.Log($"    -> Skipped (APIPA/link-local)");
-                            continue;
-                        }
-                        
-                        // Skip common virtual adapters (100.x.x.x range often used by VPN/virtual adapters)
-                        if (ipStr.StartsWith("100."))
-                        {
-                            Debug.Log($"    -> Skipped (likely virtual adapter)");
-                            continue;
-                        }
-                        
-                        // Prefer typical private network ranges:
-                        // 192.168.x.x (most common home/office)
-                        // 10.x.x.x (corporate)
-                        // 172.16-31.x.x (less common)
-                        if (ipStr.StartsWith("192.168."))
-                        {
-                            Debug.Log($"    -> SELECTED (192.168.x.x - typical home/office network)");
-                            return ipStr;
-                        }
-                        
-                        if (ipStr.StartsWith("10."))
-                        {
-                            if (bestIP == null)
-                            {
-                                bestIP = ip;
-                                Debug.Log($"    -> Candidate (10.x.x.x - corporate network)");
-                            }
-                        }
-                        else if (ipStr.StartsWith("172."))
-                        {
-                            // Check if it's in 172.16.0.0 - 172.31.255.255 range
-                            string[] parts = ipStr.Split('.');
-                            if (parts.Length >= 2)
-                            {
-                                int secondOctet = int.Parse(parts[1]);
-                                if (secondOctet >= 16 && secondOctet <= 31)
-                                {
-                                    if (bestIP == null)
-                                    {
-                                        bestIP = ip;
-                                        Debug.Log($"    -> Candidate (172.16-31.x.x - private network)");
-                                    }
-                                }
-                            }
-                        }
-                        else if (bestIP == null)
-                        {
-                            // Fallback to any other IPv4 if nothing better found
-                            bestIP = ip;
-                            Debug.Log($"    -> Fallback candidate");
+                            Debug.Log($"[UDPDiscovery] Local IP: {ip}");
+                            return ip;
                         }
                     }
-                }
-                
-                if (bestIP != null)
-                {
-                    Debug.Log($"[UDPDiscovery] Selected IP: {bestIP}");
-                    return bestIP.ToString();
                 }
             }
             catch (Exception e)
             {
-                Debug.LogError($"[UDPDiscovery] Failed to get IP: {e.Message}");
+                Debug.LogWarning($"[UDPDiscovery] Could not get local IP: {e.Message}");
             }
-            
-            Debug.LogError("[UDPDiscovery] No suitable IP address found!");
             return "0.0.0.0";
         }
         

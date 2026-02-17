@@ -16,6 +16,7 @@ namespace TheraplyCore.Games.Runtime
         [SerializeField] private MiniGameTelemetryService _telemetryService;
         [SerializeField] private MiniGameClockService _clockService;
         [SerializeField] private MiniGameFeedbackService _feedbackService;
+        [SerializeField] private MiniGameSessionSnapshotService _snapshotService;
 
         public ISessionContext Session => _sessionContext;
         public ICommandBus CommandBus => _commandBus;
@@ -36,12 +37,20 @@ namespace TheraplyCore.Games.Runtime
             if (_telemetryService == null) _telemetryService = GetComponent<MiniGameTelemetryService>();
             if (_clockService == null) _clockService = GetComponent<MiniGameClockService>();
             if (_feedbackService == null) _feedbackService = GetComponent<MiniGameFeedbackService>();
+            if (_snapshotService == null) _snapshotService = GetComponent<MiniGameSessionSnapshotService>();
 
             if (_sessionContext == null) _sessionContext = FindFirstObjectByType<MiniGameSessionContext>();
             if (_commandBus == null) _commandBus = FindFirstObjectByType<MiniGameCommandBus>();
             if (_telemetryService == null) _telemetryService = FindFirstObjectByType<MiniGameTelemetryService>();
             if (_clockService == null) _clockService = FindFirstObjectByType<MiniGameClockService>();
             if (_feedbackService == null) _feedbackService = FindFirstObjectByType<MiniGameFeedbackService>();
+            if (_snapshotService == null) _snapshotService = FindFirstObjectByType<MiniGameSessionSnapshotService>();
+
+            if (_snapshotService == null && _sessionContext != null)
+            {
+                _snapshotService = _sessionContext.gameObject.AddComponent<MiniGameSessionSnapshotService>();
+                Logger.Info("[MiniGameContext] Added MiniGameSessionSnapshotService for periodic checkpointing.");
+            }
         }
 
         private void ValidateContext()
@@ -51,6 +60,7 @@ namespace TheraplyCore.Games.Runtime
             if (_telemetryService == null) Logger.Warning("[MiniGameContext] Missing TelemetryService.");
             if (_clockService == null) Logger.Warning("[MiniGameContext] Missing ClockService.");
             if (_feedbackService == null) Logger.Warning("[MiniGameContext] Missing FeedbackService.");
+            if (_snapshotService == null) Logger.Warning("[MiniGameContext] Missing SessionSnapshotService.");
         }
     }
 }
