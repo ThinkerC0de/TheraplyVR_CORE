@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'dart:convert';
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_controller/models/critical_command_envelope.dart';
 import 'discovery_service.dart';
 
 class ConnectionService {
@@ -13,8 +13,10 @@ class ConnectionService {
   String? _lastIp;
   int? _lastPort;
 
-  final StreamController<Map<String, dynamic>> _messageController = StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<bool> _connectionController = StreamController<bool>.broadcast();
+  final StreamController<Map<String, dynamic>> _messageController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<bool> _connectionController =
+      StreamController<bool>.broadcast();
 
   // Discovery service reference (for automatic pause/resume)
   DiscoveryService? _discoveryService;
@@ -23,6 +25,7 @@ class ConnectionService {
   final List<int> _receiveBuffer = [];
   Map<String, dynamic>? _bufferedWebRtcOffer;
   final List<Map<String, dynamic>> _bufferedWebRtcCandidates = [];
+  final Map<String, Completer<CriticalCommandAck>> _pendingCriticalAcks = {};
   static const int _maxBufferedWebRtcCandidates = 64;
 
   Stream<Map<String, dynamic>> get messages => _messageController.stream;
@@ -83,7 +86,8 @@ class ConnectionService {
           disconnect();
         },
         onDone: () {
-          print('[Connection] 🔌 Socket closed (onDone) - peer or app closed connection');
+          print(
+              '[Connection] 🔌 Socket closed (onDone) - peer or app closed connection');
           disconnect();
         },
         cancelOnError: false,
@@ -137,38 +141,45 @@ class ConnectionService {
       try {
         // Read 4-byte length prefix (big-endian)
         final lengthBytes = _receiveBuffer.sublist(0, 4);
-        final messageLength = ByteData.sublistView(Uint8List.fromList(lengthBytes)).getInt32(0, Endian.big);
-        
+        final messageLength =
+            ByteData.sublistView(Uint8List.fromList(lengthBytes))
+                .getInt32(0, Endian.big);
+
         // Validate length
         if (messageLength <= 0 || messageLength > 10 * 1024 * 1024) {
-          print('[Connection] ❌ Invalid message length: $messageLength - clearing buffer');
+          print(
+              '[Connection] ❌ Invalid message length: $messageLength - clearing buffer');
           _receiveBuffer.clear();
           disconnect();
           return;
         }
-        
+
         // Wait for complete message
         if (_receiveBuffer.length < 4 + messageLength) {
           break; // Need more data
         }
-        
+
         // Extract message bytes
         final messageBytes = _receiveBuffer.sublist(4, 4 + messageLength);
         _receiveBuffer.removeRange(0, 4 + messageLength);
-        
+
         // Decode JSON
         final messageJson = utf8.decode(messageBytes);
-        
+
         try {
           final message = jsonDecode(messageJson) as Map<String, dynamic>;
+          _handleCriticalAckIfNeeded(message);
           _bufferWebRtcSignalingIfNeeded(message);
-          if (kDebugMode) print('[Connection] 📥 Received: ${message['commandId']}');
+          if (kDebugMode) {
+            print('[Connection] 📥 Received: ${message['commandId']}');
+          }
           if (!_messageController.isClosed) {
             _messageController.add(message);
           }
         } catch (e) {
           print('[Connection] ⚠️ Failed to parse JSON: $e');
-          print('[Connection] JSON preview: ${messageJson.substring(0, messageJson.length > 100 ? 100 : messageJson.length)}');
+          print(
+              '[Connection] JSON preview: ${messageJson.substring(0, messageJson.length > 100 ? 100 : messageJson.length)}');
         }
       } catch (e) {
         print('[Connection] ⚠️ Error processing message: $e');
@@ -205,20 +216,30 @@ class ConnectionService {
     }
   }
 
-  Future<void> sendCommand(String commandId, Map<String, dynamic>? payload) async {
+  Future<void> sendCommand(
+    String commandId,
+    Map<String, dynamic>? payload, {
+    String? messageId,
+    DateTime? timestampUtc,
+  }) async {
     if (!_isConnected || _socket == null) {
       print('[Connection] ⚠️ Cannot send - not connected');
       return;
     }
 
     try {
+      final issuedAt = (timestampUtc ?? DateTime.now().toUtc()).toUtc();
+
       // Create message matching Unity's NetworkMessageJson structure
       final message = {
-        'messageId': DateTime.now().millisecondsSinceEpoch.toString(),
-        'timestamp': (DateTime.now().millisecondsSinceEpoch / 1000).floor(),
+        'messageId':
+            messageId ?? DateTime.now().millisecondsSinceEpoch.toString(),
+        'timestamp': (issuedAt.millisecondsSinceEpoch / 1000).floor(),
         'commandId': commandId,
         // CRITICAL: Unity expects payload as Base64 string!
-        'payload': payload != null ? base64Encode(utf8.encode(jsonEncode(payload))) : null,
+        'payload': payload != null
+            ? base64Encode(utf8.encode(jsonEncode(payload)))
+            : null,
       };
 
       final messageJson = jsonEncode(message);
@@ -239,12 +260,109 @@ class ConnectionService {
     }
   }
 
+  Future<void> sendCriticalCommand({
+    required String commandId,
+    required String sessionId,
+    Map<String, dynamic>? payload,
+    DateTime? expiresAtUtc,
+    Duration ackTimeout = const Duration(seconds: 3),
+    int maxRetries = 3,
+  }) async {
+    String lastReasonCode = 'UNKNOWN';
+    int attempt = 0;
+
+    while (attempt < maxRetries) {
+      attempt++;
+
+      final envelope = CriticalCommandEnvelope.create(
+        sessionId: sessionId,
+        commandId: commandId,
+        payload: payload,
+        expiresAtUtc: expiresAtUtc,
+      );
+
+      final ackCompleter = Completer<CriticalCommandAck>();
+      _pendingCriticalAcks[envelope.messageId] = ackCompleter;
+
+      await sendCommand(
+        commandId,
+        envelope.toJson(),
+        messageId: envelope.messageId,
+        timestampUtc: DateTime.parse(envelope.issuedAtUtc).toUtc(),
+      );
+
+      try {
+        final ack = await ackCompleter.future.timeout(ackTimeout);
+        if (ack.isAck) {
+          return;
+        }
+
+        lastReasonCode =
+            ack.reasonCode.isNotEmpty ? ack.reasonCode : CommandAckStatus.nack;
+        print(
+            '[Connection] ⚠️ NACK for $commandId (attempt $attempt/$maxRetries): $lastReasonCode');
+      } on TimeoutException {
+        lastReasonCode = 'ACK_TIMEOUT';
+        print(
+            '[Connection] ⚠️ ACK timeout for $commandId (attempt $attempt/$maxRetries)');
+      } finally {
+        _pendingCriticalAcks.remove(envelope.messageId);
+      }
+
+      if (attempt < maxRetries) {
+        await Future.delayed(Duration(milliseconds: 250 * attempt));
+      }
+    }
+
+    throw Exception(
+      'Critical command $commandId failed after $maxRetries attempts (reason=$lastReasonCode)',
+    );
+  }
+
+  void _handleCriticalAckIfNeeded(Map<String, dynamic> message) {
+    final ack = CriticalCommandAck.tryFromNetworkMessage(message);
+    if (ack == null || ack.messageId.isEmpty) {
+      return;
+    }
+
+    final pending = _pendingCriticalAcks.remove(ack.messageId);
+    if (pending != null && !pending.isCompleted) {
+      pending.complete(ack);
+    }
+  }
+
+  void _failPendingCriticalAcks(String reasonCode) {
+    if (_pendingCriticalAcks.isEmpty) {
+      return;
+    }
+
+    final keys = _pendingCriticalAcks.keys.toList();
+    for (final key in keys) {
+      final pending = _pendingCriticalAcks.remove(key);
+      if (pending == null || pending.isCompleted) {
+        continue;
+      }
+
+      pending.complete(
+        CriticalCommandAck(
+          messageId: key,
+          commandId: '',
+          sessionId: '',
+          status: CommandAckStatus.nack,
+          reasonCode: reasonCode,
+          processedAtUtc: DateTime.now().toUtc().toIso8601String(),
+        ),
+      );
+    }
+  }
+
   Future<void> disconnect() async {
     if (_isDisconnecting) return;
 
     final socket = _socket;
     if (socket == null) {
       _isConnected = false;
+      _failPendingCriticalAcks('DISCONNECTED');
       return;
     }
 
@@ -252,6 +370,7 @@ class ConnectionService {
     _socket = null;
     _isConnected = false;
     _receiveBuffer.clear();
+    _failPendingCriticalAcks('DISCONNECTED');
     if (!_connectionController.isClosed) {
       _connectionController.add(false);
     }

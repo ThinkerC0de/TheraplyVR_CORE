@@ -20,7 +20,6 @@ class StudentService {
     
     return _studentsCollection
         .where('therapistId', isEqualTo: therapistId)
-        .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
       return snapshot.docs

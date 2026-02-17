@@ -81,8 +81,8 @@ class _StudentsScreenState extends State<StudentsScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showStudentDialog(context),
-        child: const Icon(Icons.add),
         tooltip: 'Add Student',
+        child: const Icon(Icons.add),
       ),
     );
   }
@@ -155,10 +155,11 @@ class _StudentsScreenState extends State<StudentsScreen> {
   }
   
   void _showStudentDialog(BuildContext context, {Student? student}) {
-    final isEditing = student != null;
-    final firstNameController = TextEditingController(text: student?.firstName ?? '');
-    final lastNameController = TextEditingController(text: student?.lastName ?? '');
-    final notesController = TextEditingController(text: student?.notes ?? '');
+    final editingStudent = student;
+    final isEditing = editingStudent != null;
+    final firstNameController = TextEditingController(text: editingStudent?.firstName ?? '');
+    final lastNameController = TextEditingController(text: editingStudent?.lastName ?? '');
+    final notesController = TextEditingController(text: editingStudent?.notes ?? '');
     
     showDialog(
       context: context,
@@ -219,9 +220,9 @@ class _StudentsScreenState extends State<StudentsScreen> {
               }
               
               try {
-                if (isEditing) {
+                if (editingStudent != null) {
                   await StudentService.updateStudent(
-                    studentId: student!.id,
+                    studentId: editingStudent.id,
                     firstName: firstName,
                     lastName: lastName,
                     notes: notes.isNotEmpty ? notes : null,

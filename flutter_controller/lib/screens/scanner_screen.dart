@@ -71,15 +71,6 @@ class _ScannerScreenState extends State<ScannerScreen> {
     _discovery.startScanning();
   }
   
-  void _stopScanning() {
-    _discovery.stopScanning();
-    _deviceSubscription?.cancel();
-    _cleanupTimer?.cancel();
-    setState(() {
-      _isScanning = false;
-    });
-  }
-  
   void _connectToDevice(DeviceInfo device) {
     // Don't stop scanning - let ControlScreen pause it automatically
     
