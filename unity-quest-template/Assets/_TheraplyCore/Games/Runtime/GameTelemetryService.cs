@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using TheraplyCore.Firebase;
+using GameContracts = TheraplyCore.Games.Contracts;
 using TheraplyCore.Games.Contracts;
 using Logger = TheraplyCore.Logging.Logger;
 
@@ -11,11 +12,11 @@ namespace TheraplyCore.Games.Runtime
     /// Bridges contract telemetry to the existing Firebase data queue.
     /// </summary>
     [DisallowMultipleComponent]
-    public class MiniGameTelemetryService : MonoBehaviour, ITelemetryService
+    public class GameTelemetryService : MonoBehaviour, GameContracts.ITelemetryService
     {
         [Header("Dependencies")]
         [SerializeField] private FirebaseDataService _firebaseDataService;
-        [SerializeField] private MiniGameSessionContext _sessionContext;
+        [SerializeField] private GameSessionContext _sessionContext;
 
         [Header("Behavior")]
         [SerializeField] private bool _enrichPayloadWithSessionMetadata = true;
@@ -104,7 +105,7 @@ namespace TheraplyCore.Games.Runtime
 
             if (_sessionContext == null)
             {
-                _sessionContext = FindFirstObjectByType<MiniGameSessionContext>();
+                _sessionContext = FindFirstObjectByType<GameSessionContext>();
             }
         }
 

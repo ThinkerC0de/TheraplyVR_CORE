@@ -50,7 +50,7 @@ namespace TheraplyCore.Firebase
         [SerializeField] private int _maxDurableStoreQueueSize = 2048;
         [SerializeField] private bool _logLocalPersistence = false;
         [SerializeField] private bool _allowVolatileQueueFallbackWhenDurableWriteFails = true;
-        [SerializeField] private MiniGameSessionContext _sessionContext;
+        [SerializeField] private GameSessionContext _sessionContext;
 
         [Header("Outbox Sync")]
         [SerializeField] private bool _enableOutboxSync = true;
@@ -250,7 +250,7 @@ namespace TheraplyCore.Firebase
         {
             if (_sessionContext == null)
             {
-                _sessionContext = FindFirstObjectByType<MiniGameSessionContext>();
+                _sessionContext = FindFirstObjectByType<GameSessionContext>();
             }
 
             if (_persistCriticalSessionEventsLocally)

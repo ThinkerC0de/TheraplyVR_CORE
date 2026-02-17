@@ -1,16 +1,17 @@
 using System;
 using System.IO;
 using UnityEngine;
+using GameContracts = TheraplyCore.Games.Contracts;
 using TheraplyCore.Games.Contracts;
 using Logger = TheraplyCore.Logging.Logger;
 
 namespace TheraplyCore.Games.Runtime
 {
     /// <summary>
-    /// Runtime session context shared by all mini-games.
+    /// Runtime session context shared by all games.
     /// </summary>
     [DisallowMultipleComponent]
-    public class MiniGameSessionContext : MonoBehaviour, ISessionContext
+    public class GameSessionContext : MonoBehaviour, GameContracts.ISessionContext
     {
         [Header("Default Session Values")]
         [SerializeField] private string _patientId = "unknown_patient";
@@ -20,7 +21,7 @@ namespace TheraplyCore.Games.Runtime
         [SerializeField] private bool _deferAutoStartWhenRecoverySnapshotExists = true;
         [SerializeField] private string _recoverySnapshotFolder = "session_resilience";
         [SerializeField] private string _recoverySnapshotFileName = "snapshot.json";
-        [SerializeField] private SessionLifecycleState _sessionState = SessionLifecycleState.CREATED;
+        [SerializeField] private GameContracts.SessionLifecycleState _sessionState = GameContracts.SessionLifecycleState.CREATED;
 
         private DateTime _startedAtUtc;
 
@@ -28,10 +29,10 @@ namespace TheraplyCore.Games.Runtime
         public string PatientId => _patientId;
         public string TherapistId => _therapistId;
         public DateTime StartedAtUtc => _startedAtUtc;
-        public SessionLifecycleState SessionState => _sessionState;
+        public GameContracts.SessionLifecycleState SessionState => _sessionState;
 
         public event Action OnSessionChanged;
-        public event Action<SessionLifecycleState, SessionLifecycleState, string> OnSessionStateChanged;
+        public event Action<GameContracts.SessionLifecycleState, GameContracts.SessionLifecycleState, string> OnSessionStateChanged;
 
         private void Awake()
         {
@@ -66,7 +67,7 @@ namespace TheraplyCore.Games.Runtime
             _therapistId = requestedTherapistId;
             _sessionId = requestedSessionId;
             _startedAtUtc = DateTime.UtcNow;
-            _sessionState = SessionLifecycleState.CREATED;
+            _sessionState = GameContracts.SessionLifecycleState.CREATED;
 
             Logger.Info($"[SessionContext] Session created: {_sessionId} (patient={_patientId}, therapist={_therapistId}, state={_sessionState})");
             OnSessionStateChanged?.Invoke(previousState, _sessionState, "BEGIN_SESSION");
@@ -78,7 +79,7 @@ namespace TheraplyCore.Games.Runtime
             string therapistId,
             string sessionId,
             DateTime startedAtUtc,
-            SessionLifecycleState restoredState,
+            GameContracts.SessionLifecycleState restoredState,
             string reasonCode = "RESTORE_SNAPSHOT",
             bool forceReplaceActive = true)
         {
@@ -116,11 +117,11 @@ namespace TheraplyCore.Games.Runtime
             return !string.IsNullOrWhiteSpace(_sessionId) && !IsTerminalState(_sessionState);
         }
 
-        private static bool IsTerminalState(SessionLifecycleState state)
+        private static bool IsTerminalState(GameContracts.SessionLifecycleState state)
         {
-            return state == SessionLifecycleState.COMPLETED ||
-                   state == SessionLifecycleState.ABORTED_BY_THERAPIST ||
-                   state == SessionLifecycleState.FAILED_TECHNICAL;
+            return state == GameContracts.SessionLifecycleState.COMPLETED ||
+                   state == GameContracts.SessionLifecycleState.ABORTED_BY_THERAPIST ||
+                   state == GameContracts.SessionLifecycleState.FAILED_TECHNICAL;
         }
 
         private static DateTime NormalizeUtc(DateTime utcCandidate)
@@ -165,7 +166,7 @@ namespace TheraplyCore.Games.Runtime
                     return false;
                 }
 
-                if (!SessionFsmContract.TryParseWireState(probe.sessionState, out var state))
+                if (!GameContracts.SessionFsmContract.TryParseWireState(probe.sessionState, out var state))
                 {
                     return true;
                 }
@@ -193,19 +194,19 @@ namespace TheraplyCore.Games.Runtime
             OnSessionChanged?.Invoke();
         }
 
-        public bool CanTransitionTo(SessionLifecycleState nextState)
+        public bool CanTransitionTo(GameContracts.SessionLifecycleState nextState)
         {
-            return SessionFsmContract.CanTransition(_sessionState, nextState);
+            return GameContracts.SessionFsmContract.CanTransition(_sessionState, nextState);
         }
 
-        public bool TryTransitionTo(SessionLifecycleState nextState, string reasonCode = null)
+        public bool TryTransitionTo(GameContracts.SessionLifecycleState nextState, string reasonCode = null)
         {
             if (_sessionState == nextState)
             {
                 return true;
             }
 
-            if (!SessionFsmContract.CanTransition(_sessionState, nextState))
+            if (!GameContracts.SessionFsmContract.CanTransition(_sessionState, nextState))
             {
                 Logger.Warning(
                     $"[SessionContext] Invalid transition rejected: {_sessionState} -> {nextState} (session={_sessionId}, reason={reasonCode ?? "unspecified"})");
@@ -233,7 +234,7 @@ namespace TheraplyCore.Games.Runtime
         [ContextMenu("Debug Transition: CREATED -> IN_PROGRESS")]
         private void DebugTransitionToInProgress()
         {
-            TryTransitionTo(SessionLifecycleState.IN_PROGRESS, "debug_transition");
+            TryTransitionTo(GameContracts.SessionLifecycleState.IN_PROGRESS, "debug_transition");
         }
 #endif
     }

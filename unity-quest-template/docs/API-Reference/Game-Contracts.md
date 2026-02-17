@@ -1,4 +1,4 @@
-# Mini-Game Contracts API
+# Game Contracts API
 
 ## Namespace
 
@@ -6,24 +6,24 @@
 
 ## Interfaces
 
-### IMiniGameModule
+### IGameModule
 
-Core contract implemented by each mini-game.
+Core contract implemented by each game.
 
 Methods:
-- `Initialize(IMiniGameConfig config, IMiniGameContext context)`
+- `Initialize(IGameConfig config, IGameContext context)`
 - `StartGame()`
 - `PauseGame()`
 - `ResumeGame()`
-- `StopGame(MiniGameStopReason reason)`
-- `UpdateConfig(IMiniGameConfig newConfig)`
+- `StopGame(GameStopReason reason)`
+- `UpdateConfig(IGameConfig newConfig)`
 - `BuildResult()`
 
 Properties:
 - `string GameId`
-- `MiniGameState State`
+- `GameState State`
 
-### IMiniGameConfig
+### IGameConfig
 
 Versioned config contract for each game.
 
@@ -31,7 +31,7 @@ Properties:
 - `string GameId`
 - `int Version`
 
-### IMiniGameResult
+### IGameResult
 
 Unified game result contract.
 
@@ -41,9 +41,9 @@ Properties:
 - `float DurationSec`
 - `IReadOnlyDictionary<string, object> Metrics`
 
-### IMiniGameContext
+### IGameContext
 
-Dependency boundary for mini-games.
+Dependency boundary for games.
 
 Properties:
 - `ISessionContext Session`
@@ -73,7 +73,7 @@ Methods:
 Game lookup abstraction to avoid core branching.
 
 Methods:
-- `bool TryResolve(string gameId, out IMiniGameModule module)`
+- `bool TryResolve(string gameId, out IGameModule module)`
 
 ## Command Models
 
@@ -84,12 +84,12 @@ Methods:
 - `UpdateConfigCommand<TConfig>`
 
 All commands implement `IGameCommand` and include `CorrelationId`.
-Standard IDs are exposed in `MiniGameCommandIds`.
+Standard IDs are exposed in `GameCommandIds`.
 
 ## Enums
 
-- `MiniGameState`
-- `MiniGameStopReason`
+- `GameState`
+- `GameStopReason`
 
 ## Runtime Implementations
 
@@ -97,12 +97,12 @@ Namespace:
 - `TheraplyCore.Games.Runtime`
 
 Main runtime services:
-- `MiniGameSessionContext`
-- `MiniGameClockService`
-- `MiniGameFeedbackService`
-- `MiniGameTelemetryService`
-- `MiniGameCommandBus`
-- `MiniGameContextService`
-- `MiniGameRegistryService`
-- `MiniGameRuntimeService`
-- `MiniGameModuleBase` (base class for new mini-games)
+- `GameSessionContext`
+- `GameClockService`
+- `GameFeedbackService`
+- `GameTelemetryService`
+- `GameCommandBus`
+- `GameContextService`
+- `GameRegistryService`
+- `GameRuntimeService`
+- `GameModuleBase` (base class for new games)

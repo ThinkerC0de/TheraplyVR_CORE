@@ -485,7 +485,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d6cb1583047afe29a4f1bc5d9e3087c2, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.MiniGameSessionSnapshotService
+  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.GameSessionSnapshotService
   _sessionContext: {fileID: 1784697675}
   _runtimeService: {fileID: 1784697668}
   _autoRestoreOnStart: 1
@@ -509,7 +509,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 63d0feb3a3e00494cb92e26ca37b110d, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.MiniGameRuntimeService
+  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.GameRuntimeService
   _registryService: {fileID: 1784697669}
   _contextService: {fileID: 1784697670}
   _commandBus: {fileID: 1784697674}
@@ -529,7 +529,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a9c9504f8b267ce418b8dadea6908759, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.MiniGameRegistryService
+  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.GameRegistryService
   _entries: []
   _logMappings: 1
 --- !u!114 &1784697670
@@ -543,7 +543,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9ac807e234624bc44b10ccdb7feba9a8, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.MiniGameContextService
+  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.GameContextService
   _sessionContext: {fileID: 1784697675}
   _commandBus: {fileID: 1784697674}
   _telemetryService: {fileID: 1784697673}
@@ -561,7 +561,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 18064193841d1e94690bcf111f8425c6, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.MiniGameFeedbackService
+  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.GameFeedbackService
   _audioSource: {fileID: 0}
   _audioEntries: []
   _logMissingAudioIds: 1
@@ -577,7 +577,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 87daa6854fa55b24cb1fc871c8a28aeb, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.MiniGameClockService
+  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.GameClockService
   _sessionContext: {fileID: 1784697675}
   _syncToSessionStart: 1
 --- !u!114 &1784697673
@@ -591,7 +591,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4b8992a82d12812488d8aebfb64ab750, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.MiniGameTelemetryService
+  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.GameTelemetryService
   _firebaseDataService: {fileID: 1784697666}
   _sessionContext: {fileID: 1784697675}
   _enrichPayloadWithSessionMetadata: 1
@@ -607,7 +607,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 0e2239066cca1a04aa0f2a7fae58d806, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.MiniGameCommandBus
+  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.GameCommandBus
   _tcpServerService: {fileID: 854900686}
   _tcpConnectionService: {fileID: 0}
   _sessionContext: {fileID: 1784697675}
@@ -625,7 +625,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fa1297a2af8d0084db56a5e063f5f264, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.MiniGameSessionContext
+  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.GameSessionContext
   _patientId: unknown_patient
   _therapistId: unknown_therapist
   _sessionId: 

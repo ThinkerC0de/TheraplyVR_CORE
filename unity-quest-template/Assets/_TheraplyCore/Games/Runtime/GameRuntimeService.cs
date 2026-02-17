@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
 using TheraplyCore.Firebase;
+using GameContracts = TheraplyCore.Games.Contracts;
 using TheraplyCore.Games.Contracts;
 using TheraplyCore.Network.Connection;
 using Logger = TheraplyCore.Logging.Logger;
@@ -17,12 +18,12 @@ namespace TheraplyCore.Games.Runtime
     /// Runtime controller that coordinates active game lifecycle through contract services.
     /// </summary>
     [DisallowMultipleComponent]
-    public class MiniGameRuntimeService : MonoBehaviour
+    public class GameRuntimeService : MonoBehaviour
     {
         [Header("Dependencies")]
-        [SerializeField] private MiniGameRegistryService _registryService;
-        [SerializeField] private MiniGameContextService _contextService;
-        [SerializeField] private MiniGameCommandBus _commandBus;
+        [SerializeField] private GameRegistryService _registryService;
+        [SerializeField] private GameContextService _contextService;
+        [SerializeField] private GameCommandBus _commandBus;
         [SerializeField] private TCPServerService _tcpServerService;
         [SerializeField] private FirebaseDataService _firebaseDataService;
 
@@ -52,14 +53,14 @@ namespace TheraplyCore.Games.Runtime
         [SerializeField] private int _maxPendingCrashSignals = 64;
         [SerializeField] private bool _logCrashCapture = true;
 
-        private readonly Dictionary<string, IMiniGameConfig> _knownConfigs =
-            new Dictionary<string, IMiniGameConfig>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, GameContracts.IGameConfig> _knownConfigs =
+            new Dictionary<string, GameContracts.IGameConfig>(StringComparer.OrdinalIgnoreCase);
         private readonly Queue<PendingCrashSignal> _pendingCrashSignals = new Queue<PendingCrashSignal>();
         private readonly object _pendingCrashSignalsLock = new object();
 
-        private IMiniGameModule _activeGame;
+        private GameContracts.IGameModule _activeGame;
         private string _activeGameId;
-        private MiniGameSessionContext _sessionContext;
+        private GameSessionContext _sessionContext;
         private Coroutine _syncStatusPollRoutine;
         private string _lastRuntimeStatus = string.Empty;
         private bool _syncPending;
@@ -73,16 +74,16 @@ namespace TheraplyCore.Games.Runtime
         private DateTime _lastCrashFingerprintAtUtc = DateTime.MinValue;
         private int _capturedCrashReportCount;
 
-        public IMiniGameModule ActiveGame => _activeGame;
+        public GameContracts.IGameModule ActiveGame => _activeGame;
         public string ActiveGameId => _activeGameId;
-        public MiniGameState ActiveGameState => _activeGame == null ? MiniGameState.NotInitialized : _activeGame.State;
+        public GameContracts.GameState ActiveGameState => _activeGame == null ? GameContracts.GameState.NotInitialized : _activeGame.State;
         public string LastPublishedRuntimeStatus => _lastRuntimeStatus;
 
         private void Awake()
         {
-            if (_registryService == null) _registryService = FindFirstObjectByType<MiniGameRegistryService>();
-            if (_contextService == null) _contextService = FindFirstObjectByType<MiniGameContextService>();
-            if (_commandBus == null) _commandBus = FindFirstObjectByType<MiniGameCommandBus>();
+            if (_registryService == null) _registryService = FindFirstObjectByType<GameRegistryService>();
+            if (_contextService == null) _contextService = FindFirstObjectByType<GameContextService>();
+            if (_commandBus == null) _commandBus = FindFirstObjectByType<GameCommandBus>();
             if (_tcpServerService == null) _tcpServerService = FindFirstObjectByType<TCPServerService>();
             if (_firebaseDataService == null) _firebaseDataService = FindFirstObjectByType<FirebaseDataService>();
             _sessionContext = ResolveSessionContext();
@@ -165,33 +166,33 @@ namespace TheraplyCore.Games.Runtime
         {
             if (_registryService == null)
             {
-                Logger.Warning("[MiniGameRuntime] Registry service is missing.");
+                Logger.Warning("[GameRuntime] Registry service is missing.");
                 return false;
             }
 
             if (string.IsNullOrWhiteSpace(gameId))
             {
-                Logger.Warning("[MiniGameRuntime] Cannot activate game with empty gameId.");
+                Logger.Warning("[GameRuntime] Cannot activate game with empty gameId.");
                 return false;
             }
 
             if (!_registryService.TryResolve(gameId, out var module))
             {
-                Logger.Warning($"[MiniGameRuntime] Game not found in registry: {gameId}");
+                Logger.Warning($"[GameRuntime] Game not found in registry: {gameId}");
                 return false;
             }
 
             _activeGame = module;
             _activeGameId = gameId;
-            Logger.Info($"[MiniGameRuntime] Active game set: {gameId}");
+            Logger.Info($"[GameRuntime] Active game set: {gameId}");
             return true;
         }
 
-        public bool InitializeGame(string gameId, IMiniGameConfig config)
+        public bool InitializeGame(string gameId, GameContracts.IGameConfig config)
         {
             if (config == null)
             {
-                Logger.Warning("[MiniGameRuntime] Initialize failed: config is null.");
+                Logger.Warning("[GameRuntime] Initialize failed: config is null.");
                 return false;
             }
 
@@ -202,7 +203,7 @@ namespace TheraplyCore.Games.Runtime
 
             if (_contextService == null)
             {
-                Logger.Warning("[MiniGameRuntime] Initialize failed: context service is missing.");
+                Logger.Warning("[GameRuntime] Initialize failed: context service is missing.");
                 return false;
             }
 
@@ -211,11 +212,11 @@ namespace TheraplyCore.Games.Runtime
             return true;
         }
 
-        public bool UpdateGameConfig(string gameId, IMiniGameConfig config)
+        public bool UpdateGameConfig(string gameId, GameContracts.IGameConfig config)
         {
             if (config == null)
             {
-                Logger.Warning("[MiniGameRuntime] Update config failed: config is null.");
+                Logger.Warning("[GameRuntime] Update config failed: config is null.");
                 return false;
             }
 
@@ -226,11 +227,11 @@ namespace TheraplyCore.Games.Runtime
 
             _knownConfigs[gameId] = config;
 
-            if (_activeGame.State == MiniGameState.NotInitialized)
+            if (_activeGame.State == GameContracts.GameState.NotInitialized)
             {
                 if (_contextService == null)
                 {
-                    Logger.Warning("[MiniGameRuntime] Update config failed: context service is missing.");
+                    Logger.Warning("[GameRuntime] Update config failed: context service is missing.");
                     return false;
                 }
 
@@ -252,13 +253,13 @@ namespace TheraplyCore.Games.Runtime
             }
 
             var shouldEmitSessionStart = _sessionContext != null &&
-                                         _sessionContext.SessionState == SessionLifecycleState.CREATED;
+                                         _sessionContext.SessionState == GameContracts.SessionLifecycleState.CREATED;
 
-            if (_activeGame.State == MiniGameState.NotInitialized)
+            if (_activeGame.State == GameContracts.GameState.NotInitialized)
             {
                 if (!_knownConfigs.TryGetValue(_activeGameId, out var cachedConfig))
                 {
-                    Logger.Warning($"[MiniGameRuntime] Start failed: {_activeGameId} has no config. Call InitializeGame first.");
+                    Logger.Warning($"[GameRuntime] Start failed: {_activeGameId} has no config. Call InitializeGame first.");
                     return false;
                 }
 
@@ -266,7 +267,7 @@ namespace TheraplyCore.Games.Runtime
             }
 
             _activeGame.StartGame();
-            TryTransitionSessionState(SessionLifecycleState.IN_PROGRESS, "START_GAME");
+            TryTransitionSessionState(GameContracts.SessionLifecycleState.IN_PROGRESS, "START_GAME");
             TrackCriticalRuntimeEvent("game_start", new Dictionary<string, object>
             {
                 { "gameId", _activeGameId ?? string.Empty },
@@ -288,7 +289,7 @@ namespace TheraplyCore.Games.Runtime
         {
             if (!EnsureActiveGame()) return false;
             _activeGame.PauseGame();
-            TryTransitionSessionState(SessionLifecycleState.PAUSED, "PAUSE_GAME");
+            TryTransitionSessionState(GameContracts.SessionLifecycleState.PAUSED, "PAUSE_GAME");
             return true;
         }
 
@@ -296,11 +297,11 @@ namespace TheraplyCore.Games.Runtime
         {
             if (!EnsureActiveGame()) return false;
             _activeGame.ResumeGame();
-            TryTransitionSessionState(SessionLifecycleState.IN_PROGRESS, "RESUME_GAME");
+            TryTransitionSessionState(GameContracts.SessionLifecycleState.IN_PROGRESS, "RESUME_GAME");
             return true;
         }
 
-        public bool StopActiveGame(MiniGameStopReason reason)
+        public bool StopActiveGame(GameContracts.GameStopReason reason)
         {
             if (!EnsureActiveGame()) return false;
             _activeGame.StopGame(reason);
@@ -364,9 +365,9 @@ namespace TheraplyCore.Games.Runtime
                 throw new InvalidOperationException("STOP_GAME_NO_ACTIVE_GAME");
             }
 
-            var reason = MiniGameStopReason.TherapistStop;
+            var reason = GameContracts.GameStopReason.TherapistStop;
             if (!string.IsNullOrWhiteSpace(command?.reason) &&
-                Enum.TryParse(command.reason, true, out MiniGameStopReason parsedReason))
+                Enum.TryParse(command.reason, true, out GameContracts.GameStopReason parsedReason))
             {
                 reason = parsedReason;
             }
@@ -381,14 +382,14 @@ namespace TheraplyCore.Games.Runtime
         {
             if (_activeGame != null || EnsureActiveGame())
             {
-                if (!StopActiveGame(MiniGameStopReason.TherapistStop))
+                if (!StopActiveGame(GameContracts.GameStopReason.TherapistStop))
                 {
                     throw new InvalidOperationException("END_SESSION_STOP_FAILED");
                 }
                 return;
             }
 
-            if (!TryTransitionSessionState(SessionLifecycleState.ABORTED_BY_THERAPIST, "END_SESSION"))
+            if (!TryTransitionSessionState(GameContracts.SessionLifecycleState.ABORTED_BY_THERAPIST, "END_SESSION"))
             {
                 throw new InvalidOperationException("END_SESSION_TRANSITION_FAILED");
             }
@@ -516,7 +517,7 @@ namespace TheraplyCore.Games.Runtime
                 return SetActiveGame(_defaultGameId);
             }
 
-            Logger.Warning("[MiniGameRuntime] No active game selected.");
+            Logger.Warning("[GameRuntime] No active game selected.");
             return false;
         }
 
@@ -530,17 +531,17 @@ namespace TheraplyCore.Games.Runtime
             return EnsureActiveGame();
         }
 
-        private MiniGameSessionContext ResolveSessionContext()
+        private GameSessionContext ResolveSessionContext()
         {
-            if (_contextService?.Session is MiniGameSessionContext typedSessionContext)
+            if (_contextService?.Session is GameSessionContext typedSessionContext)
             {
                 return typedSessionContext;
             }
 
-            return FindFirstObjectByType<MiniGameSessionContext>();
+            return FindFirstObjectByType<GameSessionContext>();
         }
 
-        private bool TryTransitionSessionState(SessionLifecycleState targetState, string reasonCode)
+        private bool TryTransitionSessionState(GameContracts.SessionLifecycleState targetState, string reasonCode)
         {
             if (_sessionContext == null)
             {
@@ -549,7 +550,7 @@ namespace TheraplyCore.Games.Runtime
 
             if (_sessionContext == null)
             {
-                Logger.Warning("[MiniGameRuntime] Session context missing. Cannot update session lifecycle state.");
+                Logger.Warning("[GameRuntime] Session context missing. Cannot update session lifecycle state.");
                 return false;
             }
 
@@ -557,8 +558,8 @@ namespace TheraplyCore.Games.Runtime
         }
 
         private void HandleSessionStateChanged(
-            SessionLifecycleState previousState,
-            SessionLifecycleState currentState,
+            GameContracts.SessionLifecycleState previousState,
+            GameContracts.SessionLifecycleState currentState,
             string reasonCode)
         {
             if (_commandBus == null || _sessionContext == null)
@@ -571,8 +572,8 @@ namespace TheraplyCore.Games.Runtime
                 sessionId = _sessionContext.SessionId,
                 patientId = _sessionContext.PatientId,
                 therapistId = _sessionContext.TherapistId,
-                state = SessionFsmContract.ToWireState(currentState),
-                previousState = SessionFsmContract.ToWireState(previousState),
+                state = GameContracts.SessionFsmContract.ToWireState(currentState),
+                previousState = GameContracts.SessionFsmContract.ToWireState(previousState),
                 reasonCode = reasonCode ?? string.Empty,
                 changedAtUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             };
@@ -596,7 +597,7 @@ namespace TheraplyCore.Games.Runtime
             }
             catch (Exception e)
             {
-                Logger.Warning($"[MiniGameRuntime] Failed to publish {MiniGameCommandIds.SessionStateUpdate}: {e.Message}");
+                Logger.Warning($"[GameRuntime] Failed to publish {GameCommandIds.SessionStateUpdate}: {e.Message}");
                 TrackCriticalRuntimeEvent("error", new Dictionary<string, object>
                 {
                     { "source", "SESSION_STATE_UPDATE" },
@@ -825,7 +826,7 @@ namespace TheraplyCore.Games.Runtime
             if (_logCrashCapture)
             {
                 Logger.Warning(
-                    $"[MiniGameRuntime][CrashContext] Captured {report.logType} source={report.source} session={report.sessionId} report={report.reportId}");
+                    $"[GameRuntime][CrashContext] Captured {report.logType} source={report.source} session={report.sessionId} report={report.reportId}");
             }
         }
 
@@ -851,7 +852,7 @@ namespace TheraplyCore.Games.Runtime
                 sessionId = _sessionContext?.SessionId ?? string.Empty,
                 patientId = _sessionContext?.PatientId ?? string.Empty,
                 therapistId = _sessionContext?.TherapistId ?? string.Empty,
-                sessionState = _sessionContext == null ? string.Empty : SessionFsmContract.ToWireState(_sessionContext.SessionState),
+                sessionState = _sessionContext == null ? string.Empty : GameContracts.SessionFsmContract.ToWireState(_sessionContext.SessionState),
                 activeGameId = _activeGameId ?? string.Empty,
                 activeGameState = ActiveGameState.ToString(),
                 runtimeStatus = ResolveRuntimeStatusForCrashReport(pendingQueueSize),
@@ -892,7 +893,7 @@ namespace TheraplyCore.Games.Runtime
             }
             catch (Exception e)
             {
-                UnityEngine.Debug.LogWarning($"[MiniGameRuntime][CrashContext] Failed to persist crash report: {e.Message}");
+                UnityEngine.Debug.LogWarning($"[GameRuntime][CrashContext] Failed to persist crash report: {e.Message}");
             }
         }
 
@@ -1068,7 +1069,7 @@ namespace TheraplyCore.Games.Runtime
             }
 
             var hasActiveGame = _activeGame != null;
-            var activeGameState = hasActiveGame ? _activeGame.State : MiniGameState.NotInitialized;
+            var activeGameState = hasActiveGame ? _activeGame.State : GameContracts.GameState.NotInitialized;
             var isHealthy = EvaluateWatchdogHealth(sessionState, hasActiveGame, activeGameState, out var healthCode);
 
             if (isHealthy)
@@ -1076,7 +1077,7 @@ namespace TheraplyCore.Games.Runtime
                 if (_watchdogHangReported)
                 {
                     Logger.Info(
-                        $"[MiniGameRuntime][Watchdog] Recovered: session={sessionId}, state={sessionState}, gameState={activeGameState}, healthCode={healthCode}");
+                        $"[GameRuntime][Watchdog] Recovered: session={sessionId}, state={sessionState}, gameState={activeGameState}, healthCode={healthCode}");
                     TrackWatchdogEvent("watchdog_recovered", healthCode, sessionState, activeGameState, 0f);
                 }
 
@@ -1091,17 +1092,17 @@ namespace TheraplyCore.Games.Runtime
                 {
                     _watchdogHangReported = true;
                     Logger.Warning(
-                        $"[MiniGameRuntime][Watchdog] Hung state detected: session={sessionId}, state={sessionState}, gameState={activeGameState}, healthCode={healthCode}, unhealthyForSec={unhealthySeconds:F1}");
+                        $"[GameRuntime][Watchdog] Hung state detected: session={sessionId}, state={sessionState}, gameState={activeGameState}, healthCode={healthCode}, unhealthyForSec={unhealthySeconds:F1}");
                     TrackWatchdogEvent("watchdog_hung_state", healthCode, sessionState, activeGameState, unhealthySeconds);
 
                     if (_watchdogAutoInterruptInProgress &&
-                        sessionState == SessionLifecycleState.IN_PROGRESS &&
-                        TryTransitionSessionState(SessionLifecycleState.INTERRUPTED, "WATCHDOG_HUNG_STATE"))
+                        sessionState == GameContracts.SessionLifecycleState.IN_PROGRESS &&
+                        TryTransitionSessionState(GameContracts.SessionLifecycleState.INTERRUPTED, "WATCHDOG_HUNG_STATE"))
                     {
                         TrackWatchdogEvent(
                             "watchdog_forced_interrupt",
                             "WATCHDOG_HUNG_STATE",
-                            SessionLifecycleState.INTERRUPTED,
+                            GameContracts.SessionLifecycleState.INTERRUPTED,
                             activeGameState,
                             unhealthySeconds);
                     }
@@ -1119,8 +1120,8 @@ namespace TheraplyCore.Games.Runtime
         private void TrackWatchdogEvent(
             string eventName,
             string healthCode,
-            SessionLifecycleState sessionState,
-            MiniGameState activeGameState,
+            GameContracts.SessionLifecycleState sessionState,
+            GameContracts.GameState activeGameState,
             float unhealthyForSec)
         {
             if (!_watchdogEmitTelemetry)
@@ -1131,7 +1132,7 @@ namespace TheraplyCore.Games.Runtime
             TrackCriticalRuntimeEvent(eventName, new Dictionary<string, object>
             {
                 { "sessionId", _sessionContext?.SessionId ?? string.Empty },
-                { "state", SessionFsmContract.ToWireState(sessionState) },
+                { "state", GameContracts.SessionFsmContract.ToWireState(sessionState) },
                 { "healthCode", healthCode ?? string.Empty },
                 { "activeGameId", _activeGameId ?? string.Empty },
                 { "activeGameState", activeGameState.ToString() },
@@ -1141,8 +1142,8 @@ namespace TheraplyCore.Games.Runtime
 
         private void PublishSessionWatchdogHeartbeat(
             float heartbeatIntervalSeconds,
-            SessionLifecycleState sessionState,
-            MiniGameState activeGameState,
+            GameContracts.SessionLifecycleState sessionState,
+            GameContracts.GameState activeGameState,
             string healthCode,
             bool healthy)
         {
@@ -1168,7 +1169,7 @@ namespace TheraplyCore.Games.Runtime
                 therapistId = _sessionContext?.TherapistId ?? string.Empty,
                 sessionState = _sessionContext == null
                     ? string.Empty
-                    : SessionFsmContract.ToWireState(_sessionContext.SessionState),
+                    : GameContracts.SessionFsmContract.ToWireState(_sessionContext.SessionState),
                 runtimeStatus = ResolveRuntimeStatus(pendingQueueSize),
                 healthCode = healthCode ?? string.Empty,
                 healthy = healthy,
@@ -1184,7 +1185,7 @@ namespace TheraplyCore.Games.Runtime
             if (_watchdogLogHeartbeat)
             {
                 Logger.Debug(
-                    $"[MiniGameRuntime][Watchdog] Heartbeat: session={command.sessionId}, state={command.sessionState}, healthy={command.healthy}, healthCode={command.healthCode}");
+                    $"[GameRuntime][Watchdog] Heartbeat: session={command.sessionId}, state={command.sessionState}, healthy={command.healthy}, healthCode={command.healthCode}");
             }
 
             _ = PublishSessionWatchdogHeartbeatAsync(command);
@@ -1204,26 +1205,26 @@ namespace TheraplyCore.Games.Runtime
             catch (Exception e)
             {
                 Logger.Warning(
-                    $"[MiniGameRuntime] Failed to publish {MiniGameCommandIds.SessionWatchdogHeartbeat}: {e.Message}");
+                    $"[GameRuntime] Failed to publish {GameCommandIds.SessionWatchdogHeartbeat}: {e.Message}");
             }
         }
 
         private static bool EvaluateWatchdogHealth(
-            SessionLifecycleState sessionState,
+            GameContracts.SessionLifecycleState sessionState,
             bool hasActiveGame,
-            MiniGameState activeGameState,
+            GameContracts.GameState activeGameState,
             out string healthCode)
         {
             switch (sessionState)
             {
-                case SessionLifecycleState.IN_PROGRESS:
+                case GameContracts.SessionLifecycleState.IN_PROGRESS:
                     if (!hasActiveGame)
                     {
                         healthCode = "IN_PROGRESS_NO_ACTIVE_GAME";
                         return false;
                     }
 
-                    if (activeGameState != MiniGameState.Playing)
+                    if (activeGameState != GameContracts.GameState.Playing)
                     {
                         healthCode = $"IN_PROGRESS_GAME_STATE_{activeGameState.ToString().ToUpperInvariant()}";
                         return false;
@@ -1232,14 +1233,14 @@ namespace TheraplyCore.Games.Runtime
                     healthCode = "OK";
                     return true;
 
-                case SessionLifecycleState.PAUSED:
+                case GameContracts.SessionLifecycleState.PAUSED:
                     if (!hasActiveGame)
                     {
                         healthCode = "PAUSED_NO_ACTIVE_GAME";
                         return false;
                     }
 
-                    if (activeGameState != MiniGameState.Paused)
+                    if (activeGameState != GameContracts.GameState.Paused)
                     {
                         healthCode = $"PAUSED_GAME_STATE_{activeGameState.ToString().ToUpperInvariant()}";
                         return false;
@@ -1248,14 +1249,14 @@ namespace TheraplyCore.Games.Runtime
                     healthCode = "OK";
                     return true;
 
-                case SessionLifecycleState.CREATED:
-                case SessionLifecycleState.INTERRUPTED:
+                case GameContracts.SessionLifecycleState.CREATED:
+                case GameContracts.SessionLifecycleState.INTERRUPTED:
                     healthCode = "OK";
                     return true;
 
-                case SessionLifecycleState.COMPLETED:
-                case SessionLifecycleState.ABORTED_BY_THERAPIST:
-                case SessionLifecycleState.FAILED_TECHNICAL:
+                case GameContracts.SessionLifecycleState.COMPLETED:
+                case GameContracts.SessionLifecycleState.ABORTED_BY_THERAPIST:
+                case GameContracts.SessionLifecycleState.FAILED_TECHNICAL:
                 default:
                     healthCode = "TERMINAL";
                     return true;
@@ -1334,7 +1335,7 @@ namespace TheraplyCore.Games.Runtime
             catch (Exception e)
             {
                 Logger.Warning(
-                    $"[MiniGameRuntime] Failed to publish {MiniGameCommandIds.RuntimeStatusUpdate}: {e.Message}");
+                    $"[GameRuntime] Failed to publish {GameCommandIds.RuntimeStatusUpdate}: {e.Message}");
             }
         }
 
@@ -1352,7 +1353,7 @@ namespace TheraplyCore.Games.Runtime
             catch (Exception e)
             {
                 Logger.Warning(
-                    $"[MiniGameRuntime] Failed to publish {MiniGameCommandIds.ManualResyncReport}: {e.Message}");
+                    $"[GameRuntime] Failed to publish {GameCommandIds.ManualResyncReport}: {e.Message}");
             }
         }
 
@@ -1380,7 +1381,7 @@ namespace TheraplyCore.Games.Runtime
             }
             catch (Exception e)
             {
-                Logger.Warning($"[MiniGameRuntime] Failed to read queue statistics: {e.Message}");
+                Logger.Warning($"[GameRuntime] Failed to read queue statistics: {e.Message}");
                 return 0;
             }
         }
@@ -1400,12 +1401,12 @@ namespace TheraplyCore.Games.Runtime
             return _tcpServerService.HasClient;
         }
 
-        private static bool IsSessionActiveNonTerminal(SessionLifecycleState state)
+        private static bool IsSessionActiveNonTerminal(GameContracts.SessionLifecycleState state)
         {
-            return state == SessionLifecycleState.CREATED ||
-                   state == SessionLifecycleState.IN_PROGRESS ||
-                   state == SessionLifecycleState.PAUSED ||
-                   state == SessionLifecycleState.INTERRUPTED;
+            return state == GameContracts.SessionLifecycleState.CREATED ||
+                   state == GameContracts.SessionLifecycleState.IN_PROGRESS ||
+                   state == GameContracts.SessionLifecycleState.PAUSED ||
+                   state == GameContracts.SessionLifecycleState.INTERRUPTED;
         }
 
         private string ResolveRuntimeStatus(int pendingQueueSize)
@@ -1422,16 +1423,16 @@ namespace TheraplyCore.Games.Runtime
 
             switch (_sessionContext.SessionState)
             {
-                case SessionLifecycleState.IN_PROGRESS:
+                case GameContracts.SessionLifecycleState.IN_PROGRESS:
                     return RuntimeStatusValues.Playing;
-                case SessionLifecycleState.PAUSED:
+                case GameContracts.SessionLifecycleState.PAUSED:
                     return RuntimeStatusValues.Paused;
-                case SessionLifecycleState.INTERRUPTED:
-                case SessionLifecycleState.FAILED_TECHNICAL:
+                case GameContracts.SessionLifecycleState.INTERRUPTED:
+                case GameContracts.SessionLifecycleState.FAILED_TECHNICAL:
                     return RuntimeStatusValues.Interrupted;
-                case SessionLifecycleState.CREATED:
-                case SessionLifecycleState.COMPLETED:
-                case SessionLifecycleState.ABORTED_BY_THERAPIST:
+                case GameContracts.SessionLifecycleState.CREATED:
+                case GameContracts.SessionLifecycleState.COMPLETED:
+                case GameContracts.SessionLifecycleState.ABORTED_BY_THERAPIST:
                 default:
                     return RuntimeStatusValues.Connected;
             }
@@ -1450,25 +1451,25 @@ namespace TheraplyCore.Games.Runtime
             }
             catch (Exception e)
             {
-                Logger.Warning($"[MiniGameRuntime] Failed to track critical event {eventName}: {e.Message}");
+                Logger.Warning($"[GameRuntime] Failed to track critical event {eventName}: {e.Message}");
             }
         }
 
-        private static SessionLifecycleState MapStopReasonToSessionState(MiniGameStopReason reason)
+        private static GameContracts.SessionLifecycleState MapStopReasonToSessionState(GameContracts.GameStopReason reason)
         {
             switch (reason)
             {
-                case MiniGameStopReason.Completed:
-                    return SessionLifecycleState.COMPLETED;
-                case MiniGameStopReason.TherapistStop:
-                    return SessionLifecycleState.ABORTED_BY_THERAPIST;
-                case MiniGameStopReason.Error:
-                    return SessionLifecycleState.FAILED_TECHNICAL;
-                case MiniGameStopReason.Timeout:
-                case MiniGameStopReason.UserExit:
-                case MiniGameStopReason.NetworkLoss:
+                case GameContracts.GameStopReason.Completed:
+                    return GameContracts.SessionLifecycleState.COMPLETED;
+                case GameContracts.GameStopReason.TherapistStop:
+                    return GameContracts.SessionLifecycleState.ABORTED_BY_THERAPIST;
+                case GameContracts.GameStopReason.Error:
+                    return GameContracts.SessionLifecycleState.FAILED_TECHNICAL;
+                case GameContracts.GameStopReason.Timeout:
+                case GameContracts.GameStopReason.UserExit:
+                case GameContracts.GameStopReason.NetworkLoss:
                 default:
-                    return SessionLifecycleState.INTERRUPTED;
+                    return GameContracts.SessionLifecycleState.INTERRUPTED;
             }
         }
 

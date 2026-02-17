@@ -1,16 +1,17 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using GameContracts = TheraplyCore.Games.Contracts;
 using TheraplyCore.Games.Contracts;
 using Logger = TheraplyCore.Logging.Logger;
 
 namespace TheraplyCore.Games.Runtime
 {
     /// <summary>
-    /// Shared feedback adapter for mini-games (audio, hints, haptics stub).
+    /// Shared feedback adapter for games (audio, hints, haptics stub).
     /// </summary>
     [DisallowMultipleComponent]
-    public class MiniGameFeedbackService : MonoBehaviour, IGameFeedback
+    public class GameFeedbackService : MonoBehaviour, GameContracts.IGameFeedback
     {
         [Serializable]
         private class AudioFeedbackEntry

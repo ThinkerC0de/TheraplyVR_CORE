@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
+using GameContracts = TheraplyCore.Games.Contracts;
 using TheraplyCore.Games.Contracts;
 using Logger = TheraplyCore.Logging.Logger;
 
@@ -16,11 +17,11 @@ namespace TheraplyCore.Games.Runtime
     /// Writes are offloaded to a background worker to keep gameplay thread idle.
     /// </summary>
     [DisallowMultipleComponent]
-    public class MiniGameSessionSnapshotService : MonoBehaviour
+    public class GameSessionSnapshotService : MonoBehaviour
     {
         [Header("Dependencies")]
-        [SerializeField] private MiniGameSessionContext _sessionContext;
-        [SerializeField] private MiniGameRuntimeService _runtimeService;
+        [SerializeField] private GameSessionContext _sessionContext;
+        [SerializeField] private GameRuntimeService _runtimeService;
 
         [Header("Snapshot Policy")]
         [SerializeField] private bool _autoRestoreOnStart = true;
@@ -151,9 +152,9 @@ namespace TheraplyCore.Games.Runtime
                     return false;
                 }
 
-                if (!SessionFsmContract.TryParseWireState(snapshot.sessionState, out var restoredState))
+                if (!GameContracts.SessionFsmContract.TryParseWireState(snapshot.sessionState, out var restoredState))
                 {
-                    restoredState = SessionLifecycleState.CREATED;
+                    restoredState = GameContracts.SessionLifecycleState.CREATED;
                 }
 
                 if (IsTerminalState(restoredState))
@@ -222,8 +223,8 @@ namespace TheraplyCore.Games.Runtime
         }
 
         private void HandleSessionStateChanged(
-            SessionLifecycleState previousState,
-            SessionLifecycleState currentState,
+            GameContracts.SessionLifecycleState previousState,
+            GameContracts.SessionLifecycleState currentState,
             string reasonCode)
         {
             if (_snapshotOnStateBoundaries)
@@ -292,8 +293,8 @@ namespace TheraplyCore.Games.Runtime
 
             var nowUtc = DateTime.UtcNow;
             var state = _sessionContext != null
-                ? SessionFsmContract.ToWireState(_sessionContext.SessionState)
-                : SessionFsmContract.ToWireState(SessionLifecycleState.CREATED);
+                ? GameContracts.SessionFsmContract.ToWireState(_sessionContext.SessionState)
+                : GameContracts.SessionFsmContract.ToWireState(GameContracts.SessionLifecycleState.CREATED);
 
             var startedAtUtc = _sessionContext?.StartedAtUtc ?? DateTime.UtcNow;
             if (startedAtUtc == default)
@@ -438,22 +439,22 @@ namespace TheraplyCore.Games.Runtime
         {
             if (_sessionContext == null)
             {
-                _sessionContext = GetComponent<MiniGameSessionContext>();
+                _sessionContext = GetComponent<GameSessionContext>();
             }
 
             if (_runtimeService == null)
             {
-                _runtimeService = GetComponent<MiniGameRuntimeService>();
+                _runtimeService = GetComponent<GameRuntimeService>();
             }
 
             if (_sessionContext == null)
             {
-                _sessionContext = FindFirstObjectByType<MiniGameSessionContext>();
+                _sessionContext = FindFirstObjectByType<GameSessionContext>();
             }
 
             if (_runtimeService == null)
             {
-                _runtimeService = FindFirstObjectByType<MiniGameRuntimeService>();
+                _runtimeService = FindFirstObjectByType<GameRuntimeService>();
             }
         }
 
@@ -476,14 +477,14 @@ namespace TheraplyCore.Games.Runtime
             return DateTime.UtcNow;
         }
 
-        private static bool IsTerminalState(SessionLifecycleState state)
+        private static bool IsTerminalState(GameContracts.SessionLifecycleState state)
         {
-            return state == SessionLifecycleState.COMPLETED ||
-                   state == SessionLifecycleState.ABORTED_BY_THERAPIST ||
-                   state == SessionLifecycleState.FAILED_TECHNICAL;
+            return state == GameContracts.SessionLifecycleState.COMPLETED ||
+                   state == GameContracts.SessionLifecycleState.ABORTED_BY_THERAPIST ||
+                   state == GameContracts.SessionLifecycleState.FAILED_TECHNICAL;
         }
 
-        private SessionLifecycleState ResolveRecoveredState(SessionLifecycleState sourceState)
+        private GameContracts.SessionLifecycleState ResolveRecoveredState(GameContracts.SessionLifecycleState sourceState)
         {
             if (!_recoverToInterruptedOnStart)
             {
@@ -495,7 +496,7 @@ namespace TheraplyCore.Games.Runtime
                 return sourceState;
             }
 
-            return SessionLifecycleState.INTERRUPTED;
+            return GameContracts.SessionLifecycleState.INTERRUPTED;
         }
 
 #if UNITY_EDITOR

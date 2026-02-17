@@ -1,10 +1,10 @@
 # Creating Games (Framework Contract v1)
 
-This guide explains how to build mini-games so core code does not need changes for each new game.
+This guide explains how to build games so core code does not need changes for each new game.
 
 ## Goal
 
-Each mini-game should:
+Each game should:
 - implement a stable contract,
 - use only services from game context,
 - emit standard telemetry,
@@ -19,12 +19,12 @@ Use interfaces from:
 - runtime implementations from `Assets/_TheraplyCore/Games/Runtime/`
 
 Required implementation points:
-1. `IMiniGameModule`
-2. `IMiniGameConfig`
-3. `IMiniGameResult`
+1. `IGameModule`
+2. `IGameConfig`
+3. `IGameResult`
 
 Recommended base class:
-- `MiniGameModuleBase` (path: `Assets/_TheraplyCore/Games/Runtime/MiniGameModuleBase.cs`)
+- `GameModuleBase` (path: `Assets/_TheraplyCore/Games/Runtime/GameModuleBase.cs`)
 
 ## Standard Lifecycle
 
@@ -35,7 +35,7 @@ Required lifecycle sequence:
 4. `StopGame(reason)`
 5. `BuildResult()`
 
-State transitions should use `MiniGameState`.
+State transitions should use `GameState`.
 
 ## Typed Commands
 
@@ -47,7 +47,7 @@ Use typed commands:
 - `StopGameCommand`
 - `UpdateConfigCommand<TConfig>`
 
-Wire-level IDs are defined in `MiniGameCommandIds`.
+Wire-level IDs are defined in `GameCommandIds`.
 
 ## Telemetry Standard
 
@@ -82,27 +82,27 @@ Example config fields:
 
 ## Scene/Prefab Configuration Checklist
 
-1. Add game manager object with mini-game component.
+1. Add game manager object with game component.
 2. Add runtime components from `docs/01-Runtime-Setup.md`.
-3. Inject/register required services for `IMiniGameContext`.
+3. Inject/register required services for `IGameContext`.
 4. Register game in registry (`gameId -> module`).
 5. Verify telemetry events in logs.
 
 ## Runtime Components (Required)
 
 At least one scene object must provide:
-- `MiniGameSessionContext`
-- `MiniGameCommandBus`
-- `MiniGameTelemetryService`
-- `MiniGameClockService`
-- `MiniGameFeedbackService`
-- `MiniGameContextService`
-- `MiniGameRegistryService`
-- `MiniGameRuntimeService`
+- `GameSessionContext`
+- `GameCommandBus`
+- `GameTelemetryService`
+- `GameClockService`
+- `GameFeedbackService`
+- `GameContextService`
+- `GameRegistryService`
+- `GameRuntimeService`
 
 ## Definition of Done
 
-A mini-game is ready only if:
+A game is ready only if:
 - it runs full lifecycle,
 - typed commands work,
 - required telemetry events are emitted,

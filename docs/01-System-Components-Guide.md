@@ -51,13 +51,13 @@ Legend:
 ## Contracts Layer
 
 ### `GameContracts.cs` (`unity-quest-template/Assets/_TheraplyCore/Games/Contracts/GameContracts.cs`) - Required
-- Role: canonical interfaces and enums for mini-game runtime.
+- Role: canonical interfaces and enums for game runtime.
 - Core types:
-  - `IMiniGameModule`, `IMiniGameConfig`, `IMiniGameResult`
-  - `IMiniGameContext`, `ISessionContext`, `ICommandBus`, `ITelemetryService`, `IGameClock`, `IGameFeedback`
-  - `SessionLifecycleState`, `SessionFsmContract`, `MiniGameState`, `MiniGameStopReason`
+  - `IGameModule`, `IGameConfig`, `IGameResult`
+  - `IGameContext`, `ISessionContext`, `ICommandBus`, `ITelemetryService`, `IGameClock`, `IGameFeedback`
+  - `SessionLifecycleState`, `SessionFsmContract`, `GameState`, `GameStopReason`
 - Use:
-  - all new mini-games implement `IMiniGameModule` (usually via `MiniGameModuleBase`)
+  - all new games implement `IGameModule` (usually via `GameModuleBase`)
   - all session transitions should use `SessionFsmContract`
 - Configuration:
   - no Inspector configuration; this is the contract layer.
@@ -75,12 +75,12 @@ Legend:
 
 ### `GameRegistry.cs` (`unity-quest-template/Assets/_TheraplyCore/Games/Contracts/GameRegistry.cs`) - Required
 - Role: `IGameRegistry` abstraction (`TryResolve(gameId, out module)`).
-- Use: implemented by `MiniGameRegistryService`.
+- Use: implemented by `GameRegistryService`.
 - Configuration: none.
 
 ## Runtime Orchestration Layer
 
-### `MiniGameSessionContext.cs` (`unity-quest-template/Assets/_TheraplyCore/Games/Runtime/MiniGameSessionContext.cs`) - Required
+### `GameSessionContext.cs` (`unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameSessionContext.cs`) - Required
 - Role: session identity + lifecycle state machine holder.
 - Main responsibilities:
   - session creation (`BeginSession`)
@@ -98,7 +98,7 @@ Legend:
   - place once in scene
   - other runtime services read/write session state through this component.
 
-### `MiniGameSessionSnapshotService.cs` (`unity-quest-template/Assets/_TheraplyCore/Games/Runtime/MiniGameSessionSnapshotService.cs`) - Required
+### `GameSessionSnapshotService.cs` (`unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameSessionSnapshotService.cs`) - Required
 - Role: asynchronous snapshot writer + auto-restore.
 - Main behavior:
   - periodic snapshots (`_snapshotIntervalSeconds`)
@@ -119,11 +119,11 @@ Legend:
   - assign `_sessionContext` and `_runtimeService`
   - keep enabled in all production scenes.
 
-### `MiniGameRegistryService.cs` (`unity-quest-template/Assets/_TheraplyCore/Games/Runtime/MiniGameRegistryService.cs`) - Required
-- Role: runtime map `gameId -> IMiniGameModule`.
+### `GameRegistryService.cs` (`unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameRegistryService.cs`) - Required
+- Role: runtime map `gameId -> IGameModule`.
 - Main behavior:
   - builds registry from serialized `_entries`
-  - validates that `moduleBehaviour` implements `IMiniGameModule`
+  - validates that `moduleBehaviour` implements `IGameModule`
 - Inspector configuration:
   - `_entries` list (`gameId`, `moduleBehaviour`)
   - `_logMappings`
@@ -131,8 +131,8 @@ Legend:
   - add each game module here
   - keep `gameId` unique.
 
-### `MiniGameContextService.cs` (`unity-quest-template/Assets/_TheraplyCore/Games/Runtime/MiniGameContextService.cs`) - Required
-- Role: composition root implementing `IMiniGameContext`.
+### `GameContextService.cs` (`unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameContextService.cs`) - Required
+- Role: composition root implementing `IGameContext`.
 - Exposes:
   - `Session`, `CommandBus`, `Telemetry`, `Clock`, `Feedback`
 - Inspector configuration:
@@ -145,7 +145,7 @@ Legend:
 - Use:
   - central context dependency passed into modules in `Initialize`.
 
-### `MiniGameCommandBus.cs` (`unity-quest-template/Assets/_TheraplyCore/Games/Runtime/MiniGameCommandBus.cs`) - Required
+### `GameCommandBus.cs` (`unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameCommandBus.cs`) - Required
 - Role: typed command bus over TCP messages.
 - Main behavior:
   - subscribes handlers by typed command
@@ -163,9 +163,9 @@ Legend:
   - `_sessionContext`
   - `_logInbound`, `_logOutbound`, `_logUnmappedIncoming`
 - Use:
-  - this is the command transport for `MiniGameRuntimeService`.
+  - this is the command transport for `GameRuntimeService`.
 
-### `MiniGameRuntimeService.cs` (`unity-quest-template/Assets/_TheraplyCore/Games/Runtime/MiniGameRuntimeService.cs`) - Required
+### `GameRuntimeService.cs` (`unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs`) - Required
 - Role: top-level runtime orchestrator.
 - Main behavior:
   - command handlers for `START_GAME`, `PAUSE_GAME`, `RESUME_GAME`, `STOP_GAME`, `END_SESSION`, `MANUAL_RESYNC`
@@ -187,7 +187,7 @@ Legend:
 - Use:
   - keep exactly one active instance per runtime scene.
 
-### `MiniGameTelemetryService.cs` (`unity-quest-template/Assets/_TheraplyCore/Games/Runtime/MiniGameTelemetryService.cs`) - Required
+### `GameTelemetryService.cs` (`unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameTelemetryService.cs`) - Required
 - Role: telemetry adapter (`ITelemetryService`) to `FirebaseDataService`.
 - Main behavior:
   - enriches payload with session metadata
@@ -203,7 +203,7 @@ Legend:
 - Use:
   - runtime and modules call `Context.Telemetry.Track(...)`.
 
-### `MiniGameClockService.cs` (`unity-quest-template/Assets/_TheraplyCore/Games/Runtime/MiniGameClockService.cs`) - Required
+### `GameClockService.cs` (`unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameClockService.cs`) - Required
 - Role: `IGameClock` implementation.
 - Behavior:
   - by default returns elapsed time from session start UTC
@@ -214,7 +214,7 @@ Legend:
 - Use:
   - read through `Context.Clock.ElapsedSeconds`.
 
-### `MiniGameFeedbackService.cs` (`unity-quest-template/Assets/_TheraplyCore/Games/Runtime/MiniGameFeedbackService.cs`) - Optional
+### `GameFeedbackService.cs` (`unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameFeedbackService.cs`) - Optional
 - Role: `IGameFeedback` adapter (audio + hint logging + haptic stub).
 - Inspector configuration:
   - `_audioSource`
@@ -224,8 +224,8 @@ Legend:
 - Use:
   - module calls `Context.Feedback.PlaySfx("id")`, `ShowHint("key")`, `HapticPulse(...)`.
 
-### `MiniGameModuleBase.cs` (`unity-quest-template/Assets/_TheraplyCore/Games/Runtime/MiniGameModuleBase.cs`) - Required for new games
-- Role: default `IMiniGameModule` base with lifecycle timing and telemetry hooks.
+### `GameModuleBase.cs` (`unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameModuleBase.cs`) - Required for new games
+- Role: default `IGameModule` base with lifecycle timing and telemetry hooks.
 - Use:
   - inherit and implement `GameId`
   - override lifecycle methods only if needed
@@ -390,7 +390,7 @@ Legend:
 - Role: older game API path.
 - Status:
   - still present and usable for legacy modules
-  - new modules should target contracts (`IMiniGameModule` + `MiniGameModuleBase`).
+  - new modules should target contracts (`IGameModule` + `GameModuleBase`).
 
 ### `NetworkCommand.cs` (`unity-quest-template/Assets/_TheraplyCore/Network/NetworkCommand.cs`) - Legacy bridge
 - Role: ScriptableObject command events for designer-driven workflows.
@@ -404,7 +404,7 @@ Legend:
   - older ACK/retry command service
 - Status:
   - retained for compatibility
-  - current resilience path uses Flutter critical envelopes + `MiniGameCommandBus` ACK/NACK.
+  - current resilience path uses Flutter critical envelopes + `GameCommandBus` ACK/NACK.
 
 ## Flutter Components
 
@@ -586,19 +586,19 @@ For production scene, ensure these references are wired:
 - `WebRTCServerSignaling`
   - `_mediaStreamService` -> `MediaStreamService`
   - `_tcpServer` -> `TCPServerService`
-- `MiniGameSessionContext`
+- `GameSessionContext`
   - auto-start/defer strategy according to rollout policy
-- `MiniGameSessionSnapshotService`
+- `GameSessionSnapshotService`
   - `_sessionContext`, `_runtimeService`
-- `MiniGameRegistryService`
+- `GameRegistryService`
   - all `gameId -> moduleBehaviour` entries
-- `MiniGameCommandBus`
+- `GameCommandBus`
   - `_tcpServerService`, `_sessionContext`
-- `MiniGameContextService`
+- `GameContextService`
   - all context dependencies assigned
-- `MiniGameRuntimeService`
+- `GameRuntimeService`
   - `_registryService`, `_contextService`, `_commandBus`, `_tcpServerService`, `_firebaseDataService`
-- `MiniGameTelemetryService`
+- `GameTelemetryService`
   - `_firebaseDataService`, `_sessionContext`
 - `FirebaseDataService`
   - backend endpoint/auth values

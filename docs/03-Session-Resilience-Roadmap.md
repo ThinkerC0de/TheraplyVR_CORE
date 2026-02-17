@@ -42,7 +42,7 @@ This roadmap is focused on correctness of patient/student data handling.
 7. Duplicate command send from mobile (double tap/retry storm).
 8. Patient switch while old session is still active.
 9. Null reference in scene manager code.
-10. Long session with multiple mini-games and partial completion.
+10. Long session with multiple games and partial completion.
 11. Save/upload happens late and therapist cannot see immediate mobile preview.
 12. Controller/hardware interruptions and temporary pause.
 
@@ -200,4 +200,4 @@ Exit Criteria:
 ## Tracking and Execution Rules
 1. Every completed task must update `docs/05-Session-Resilience-Worklog.md`.
 2. Each implementation PR must map to roadmap item IDs.
-3. No mini-game migration starts before P0 completion.
+3. No game migration starts before P0 completion.

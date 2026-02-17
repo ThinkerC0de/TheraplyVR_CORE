@@ -1,35 +1,36 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using GameContracts = TheraplyCore.Games.Contracts;
 using TheraplyCore.Games.Contracts;
 using Logger = TheraplyCore.Logging.Logger;
 
 namespace TheraplyCore.Games.Runtime
 {
     /// <summary>
-    /// Default implementation for IMiniGameModule lifecycle with telemetry hooks.
+    /// Default implementation for GameContracts.IGameModule lifecycle with telemetry hooks.
     /// </summary>
-    public abstract class MiniGameModuleBase : MonoBehaviour, IMiniGameModule
+    public abstract class GameModuleBase : MonoBehaviour, GameContracts.IGameModule
     {
         private float _startedAtRealtime = -1f;
         private float _pauseStartedAtRealtime = -1f;
         private float _accumulatedPauseSeconds = 0f;
 
-        protected IMiniGameContext Context { get; private set; }
-        protected IMiniGameConfig CurrentConfig { get; private set; }
+        protected GameContracts.IGameContext Context { get; private set; }
+        protected GameContracts.IGameConfig CurrentConfig { get; private set; }
 
         public abstract string GameId { get; }
 
-        public MiniGameState State { get; protected set; } = MiniGameState.NotInitialized;
+        public GameContracts.GameState State { get; protected set; } = GameContracts.GameState.NotInitialized;
 
-        public virtual void Initialize(IMiniGameConfig config, IMiniGameContext context)
+        public virtual void Initialize(GameContracts.IGameConfig config, GameContracts.IGameContext context)
         {
             if (config == null) throw new ArgumentNullException(nameof(config));
             if (context == null) throw new ArgumentNullException(nameof(context));
 
             Context = context;
             CurrentConfig = config;
-            State = MiniGameState.Initialized;
+            State = GameContracts.GameState.Initialized;
 
             ResetTiming();
 
@@ -43,7 +44,7 @@ namespace TheraplyCore.Games.Runtime
 
         public virtual void StartGame()
         {
-            if (State != MiniGameState.Initialized && State != MiniGameState.Paused)
+            if (State != GameContracts.GameState.Initialized && State != GameContracts.GameState.Paused)
             {
                 Logger.Warning($"[{GameId}] Cannot start from state: {State}");
                 return;
@@ -54,33 +55,33 @@ namespace TheraplyCore.Games.Runtime
                 _startedAtRealtime = Time.realtimeSinceStartup;
             }
 
-            if (State == MiniGameState.Paused && _pauseStartedAtRealtime >= 0f)
+            if (State == GameContracts.GameState.Paused && _pauseStartedAtRealtime >= 0f)
             {
                 _accumulatedPauseSeconds += Time.realtimeSinceStartup - _pauseStartedAtRealtime;
                 _pauseStartedAtRealtime = -1f;
             }
 
-            var eventName = State == MiniGameState.Paused ? "game_resumed" : "game_started";
-            State = MiniGameState.Playing;
+            var eventName = State == GameContracts.GameState.Paused ? "game_resumed" : "game_started";
+            State = GameContracts.GameState.Playing;
             TrackEvent(eventName);
         }
 
         public virtual void PauseGame()
         {
-            if (State != MiniGameState.Playing)
+            if (State != GameContracts.GameState.Playing)
             {
                 Logger.Warning($"[{GameId}] Cannot pause from state: {State}");
                 return;
             }
 
             _pauseStartedAtRealtime = Time.realtimeSinceStartup;
-            State = MiniGameState.Paused;
+            State = GameContracts.GameState.Paused;
             TrackEvent("game_paused");
         }
 
         public virtual void ResumeGame()
         {
-            if (State != MiniGameState.Paused)
+            if (State != GameContracts.GameState.Paused)
             {
                 Logger.Warning($"[{GameId}] Cannot resume from state: {State}");
                 return;
@@ -89,21 +90,21 @@ namespace TheraplyCore.Games.Runtime
             StartGame();
         }
 
-        public virtual void StopGame(MiniGameStopReason reason)
+        public virtual void StopGame(GameContracts.GameStopReason reason)
         {
-            if (State == MiniGameState.NotInitialized)
+            if (State == GameContracts.GameState.NotInitialized)
             {
                 Logger.Warning($"[{GameId}] StopGame ignored. State is NotInitialized.");
                 return;
             }
 
-            if (State == MiniGameState.Paused && _pauseStartedAtRealtime >= 0f)
+            if (State == GameContracts.GameState.Paused && _pauseStartedAtRealtime >= 0f)
             {
                 _accumulatedPauseSeconds += Time.realtimeSinceStartup - _pauseStartedAtRealtime;
                 _pauseStartedAtRealtime = -1f;
             }
 
-            State = reason == MiniGameStopReason.Completed ? MiniGameState.Completed : MiniGameState.Failed;
+            State = reason == GameContracts.GameStopReason.Completed ? GameContracts.GameState.Completed : GameContracts.GameState.Failed;
 
             TrackEvent("game_stopped", new Dictionary<string, object>
             {
@@ -113,7 +114,7 @@ namespace TheraplyCore.Games.Runtime
             });
         }
 
-        public virtual void UpdateConfig(IMiniGameConfig newConfig)
+        public virtual void UpdateConfig(GameContracts.IGameConfig newConfig)
         {
             if (newConfig == null) throw new ArgumentNullException(nameof(newConfig));
 
@@ -125,7 +126,7 @@ namespace TheraplyCore.Games.Runtime
             });
         }
 
-        public virtual IMiniGameResult BuildResult()
+        public virtual GameContracts.IGameResult BuildResult()
         {
             var metrics = new Dictionary<string, object>
             {
@@ -133,9 +134,9 @@ namespace TheraplyCore.Games.Runtime
                 { "durationSec", GetDurationSeconds() },
             };
 
-            return new MiniGameResult(
+            return new GameResult(
                 GameId,
-                State == MiniGameState.Completed,
+                State == GameContracts.GameState.Completed,
                 GetDurationSeconds(),
                 metrics);
         }
@@ -150,7 +151,7 @@ namespace TheraplyCore.Games.Runtime
             var now = Time.realtimeSinceStartup;
             var paused = _accumulatedPauseSeconds;
 
-            if (State == MiniGameState.Paused && _pauseStartedAtRealtime >= 0f)
+            if (State == GameContracts.GameState.Paused && _pauseStartedAtRealtime >= 0f)
             {
                 paused += now - _pauseStartedAtRealtime;
             }
@@ -184,13 +185,13 @@ namespace TheraplyCore.Games.Runtime
     }
 
     /// <summary>
-    /// Default result implementation for contract-based mini-games.
+    /// Default result implementation for contract-based games.
     /// </summary>
-    public sealed class MiniGameResult : IMiniGameResult
+    public sealed class GameResult : GameContracts.IGameResult
     {
         private readonly IReadOnlyDictionary<string, object> _metrics;
 
-        public MiniGameResult(string gameId, bool completed, float durationSec, IReadOnlyDictionary<string, object> metrics)
+        public GameResult(string gameId, bool completed, float durationSec, IReadOnlyDictionary<string, object> metrics)
         {
             GameId = gameId;
             Completed = completed;

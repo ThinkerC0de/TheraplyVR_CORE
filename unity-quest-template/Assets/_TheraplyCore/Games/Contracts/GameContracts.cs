@@ -5,31 +5,31 @@ using System.Threading.Tasks;
 namespace TheraplyCore.Games.Contracts
 {
     /// <summary>
-    /// Stable contract for all future mini-games.
+    /// Stable contract for all future games.
     /// Core code should depend on this interface only.
     /// </summary>
-    public interface IMiniGameModule
+    public interface IGameModule
     {
         string GameId { get; }
-        MiniGameState State { get; }
+        GameState State { get; }
 
-        void Initialize(IMiniGameConfig config, IMiniGameContext context);
+        void Initialize(IGameConfig config, IGameContext context);
         void StartGame();
         void PauseGame();
         void ResumeGame();
-        void StopGame(MiniGameStopReason reason);
-        void UpdateConfig(IMiniGameConfig newConfig);
+        void StopGame(GameStopReason reason);
+        void UpdateConfig(IGameConfig newConfig);
 
-        IMiniGameResult BuildResult();
+        IGameResult BuildResult();
     }
 
-    public interface IMiniGameConfig
+    public interface IGameConfig
     {
         string GameId { get; }
         int Version { get; }
     }
 
-    public interface IMiniGameResult
+    public interface IGameResult
     {
         string GameId { get; }
         bool Completed { get; }
@@ -37,7 +37,7 @@ namespace TheraplyCore.Games.Contracts
         IReadOnlyDictionary<string, object> Metrics { get; }
     }
 
-    public interface IMiniGameContext
+    public interface IGameContext
     {
         ISessionContext Session { get; }
         ICommandBus CommandBus { get; }
@@ -169,7 +169,7 @@ namespace TheraplyCore.Games.Contracts
         }
     }
 
-    public enum MiniGameState
+    public enum GameState
     {
         NotInitialized,
         Initialized,
@@ -179,7 +179,7 @@ namespace TheraplyCore.Games.Contracts
         Failed,
     }
 
-    public enum MiniGameStopReason
+    public enum GameStopReason
     {
         Completed,
         TherapistStop,

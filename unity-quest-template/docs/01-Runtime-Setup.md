@@ -4,24 +4,24 @@ This guide configures the runtime required by `TheraplyCore.Games.Contracts`.
 
 ## 1. Add Runtime Root Object
 
-In your scene create one GameObject, for example `MiniGameRuntimeRoot`.
+In your scene create one GameObject, for example `GameRuntimeRoot`.
 
 Add components:
-1. `MiniGameSessionContext`
-2. `MiniGameClockService`
-3. `MiniGameFeedbackService`
-4. `MiniGameTelemetryService`
-5. `MiniGameCommandBus`
-6. `MiniGameContextService`
-7. `MiniGameRegistryService`
-8. `MiniGameRuntimeService`
+1. `GameSessionContext`
+2. `GameClockService`
+3. `GameFeedbackService`
+4. `GameTelemetryService`
+5. `GameCommandBus`
+6. `GameContextService`
+7. `GameRegistryService`
+8. `GameRuntimeService`
 
 Paths:
 - `Assets/_TheraplyCore/Games/Runtime/`
 
 ## 2. Wire Network Dependencies
 
-`MiniGameCommandBus` supports both runtime modes:
+`GameCommandBus` supports both runtime modes:
 - host mode: `TCPServerService`
 - client mode: `TCPConnectionService`
 
@@ -30,20 +30,20 @@ If both exist, host route (`TCPServerService`) is preferred when a client is con
 
 ## 3. Wire Telemetry Dependencies
 
-On `MiniGameTelemetryService`:
+On `GameTelemetryService`:
 1. Assign `FirebaseDataService`.
-2. Assign `MiniGameSessionContext`.
+2. Assign `GameSessionContext`.
 3. Enable payload enrichment (recommended).
 
 ## 4. Register Games
 
-On `MiniGameRegistryService` add one entry per game:
+On `GameRegistryService` add one entry per game:
 - `gameId`: unique ID, same as game module.
-- `moduleBehaviour`: component implementing `IMiniGameModule`.
+- `moduleBehaviour`: component implementing `IGameModule`.
 
 ## 5. Runtime Controller
 
-On `MiniGameRuntimeService`:
+On `GameRuntimeService`:
 1. Assign registry/context/command bus.
 2. Set optional default game ID.
 3. Keep `Subscribe To Standard Commands` enabled for automatic command handling.

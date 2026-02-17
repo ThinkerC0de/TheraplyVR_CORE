@@ -1,36 +1,37 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using GameContracts = TheraplyCore.Games.Contracts;
 using TheraplyCore.Games.Contracts;
 using Logger = TheraplyCore.Logging.Logger;
 
 namespace TheraplyCore.Games.Runtime
 {
     [Serializable]
-    public class MiniGameRegistryEntry
+    public class GameRegistryEntry
     {
         public string gameId;
         public MonoBehaviour moduleBehaviour;
     }
 
     /// <summary>
-    /// Concrete registry mapping game IDs to mini-game modules.
+    /// Concrete registry mapping game IDs to game modules.
     /// </summary>
     [DisallowMultipleComponent]
-    public class MiniGameRegistryService : MonoBehaviour, IGameRegistry
+    public class GameRegistryService : MonoBehaviour, IGameRegistry
     {
-        [SerializeField] private List<MiniGameRegistryEntry> _entries = new List<MiniGameRegistryEntry>();
+        [SerializeField] private List<GameRegistryEntry> _entries = new List<GameRegistryEntry>();
         [SerializeField] private bool _logMappings = true;
 
-        private readonly Dictionary<string, IMiniGameModule> _modules =
-            new Dictionary<string, IMiniGameModule>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, GameContracts.IGameModule> _modules =
+            new Dictionary<string, GameContracts.IGameModule>(StringComparer.OrdinalIgnoreCase);
 
         private void Awake()
         {
             RebuildRegistry();
         }
 
-        public bool TryResolve(string gameId, out IMiniGameModule module)
+        public bool TryResolve(string gameId, out GameContracts.IGameModule module)
         {
             if (string.IsNullOrWhiteSpace(gameId))
             {
@@ -52,15 +53,15 @@ namespace TheraplyCore.Games.Runtime
                     continue;
                 }
 
-                if (!(entry.moduleBehaviour is IMiniGameModule module))
+                if (!(entry.moduleBehaviour is GameContracts.IGameModule module))
                 {
-                    Logger.Warning($"[MiniGameRegistry] {entry.moduleBehaviour.name} does not implement IMiniGameModule.");
+                    Logger.Warning($"[GameRegistry] {entry.moduleBehaviour.name} does not implement GameContracts.IGameModule.");
                     continue;
                 }
 
                 if (_modules.ContainsKey(entry.gameId))
                 {
-                    Logger.Warning($"[MiniGameRegistry] Duplicate gameId ignored: {entry.gameId}");
+                    Logger.Warning($"[GameRegistry] Duplicate gameId ignored: {entry.gameId}");
                     continue;
                 }
 
@@ -69,11 +70,11 @@ namespace TheraplyCore.Games.Runtime
 
             if (_logMappings)
             {
-                Logger.Info($"[MiniGameRegistry] Loaded {_modules.Count} game mappings.");
+                Logger.Info($"[GameRegistry] Loaded {_modules.Count} game mappings.");
             }
         }
 
-        public bool RegisterRuntime(string gameId, IMiniGameModule module)
+        public bool RegisterRuntime(string gameId, GameContracts.IGameModule module)
         {
             if (string.IsNullOrWhiteSpace(gameId) || module == null)
             {
@@ -90,7 +91,7 @@ namespace TheraplyCore.Games.Runtime
         {
             foreach (var pair in _modules)
             {
-                Logger.Info($"[MiniGameRegistry] {pair.Key} -> {pair.Value.GetType().Name}");
+                Logger.Info($"[GameRegistry] {pair.Key} -> {pair.Value.GetType().Name}");
             }
         }
 #endif

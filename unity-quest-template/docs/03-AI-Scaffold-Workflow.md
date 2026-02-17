@@ -1,6 +1,6 @@
 # AI Scaffold Workflow
 
-This workflow turns a therapist idea into a mini-game scaffold without changing core code.
+This workflow turns a therapist idea into a game scaffold without changing core code.
 
 ## Input Template (Therapist Idea)
 
@@ -17,11 +17,11 @@ Prepare a normalized spec (JSON/YAML) with:
 ## Generation Rules
 
 AI generation must:
-1. implement `IMiniGameModule`,
-2. use `IMiniGameContext` services only,
+1. implement `IGameModule`,
+2. use `IGameContext` services only,
 3. subscribe to typed commands only,
 4. emit required telemetry events,
-5. produce `IMiniGameResult`.
+5. produce `IGameResult`.
 
 AI must not:
 - change core contracts,
@@ -32,8 +32,8 @@ AI must not:
 
 For each generated game:
 - game folder in `_YourGames/<GameName>/`
-- `<GameName>Config` implementing `IMiniGameConfig`
-- `<GameName>Module` implementing `IMiniGameModule`
+- `<GameName>Config` implementing `IGameConfig`
+- `<GameName>Module` implementing `IGameModule`
 - command binding class
 - telemetry mapping doc
 - setup checklist

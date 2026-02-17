@@ -1,6 +1,6 @@
 # Creating Games with Theraply VR Framework
 
-**A complete guide to building therapeutic mini-games using the Theraply VR Framework.**
+**A complete guide to building therapeutic games using the Theraply VR Framework.**
 
 ---
 

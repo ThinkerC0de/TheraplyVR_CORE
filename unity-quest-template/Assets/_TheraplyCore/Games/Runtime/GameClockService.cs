@@ -1,16 +1,16 @@
 using System;
 using UnityEngine;
+using GameContracts = TheraplyCore.Games.Contracts;
 using TheraplyCore.Games.Contracts;
-
 namespace TheraplyCore.Games.Runtime
 {
     /// <summary>
-    /// Clock service used by mini-games for timing.
+    /// Clock service used by games for timing.
     /// </summary>
     [DisallowMultipleComponent]
-    public class MiniGameClockService : MonoBehaviour, IGameClock
+    public class GameClockService : MonoBehaviour, GameContracts.IGameClock
     {
-        [SerializeField] private MiniGameSessionContext _sessionContext;
+        [SerializeField] private GameSessionContext _sessionContext;
         [SerializeField] private bool _syncToSessionStart = true;
 
         private float _fallbackStartRealtime;
@@ -32,7 +32,7 @@ namespace TheraplyCore.Games.Runtime
         {
             if (_sessionContext == null)
             {
-                _sessionContext = GetComponent<MiniGameSessionContext>();
+                _sessionContext = GetComponent<GameSessionContext>();
             }
 
             ResetClock();

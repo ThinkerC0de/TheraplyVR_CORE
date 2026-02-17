@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
+using GameContracts = TheraplyCore.Games.Contracts;
 using TheraplyCore.Games.Contracts;
 using TheraplyCore.Network.Connection;
 using Logger = TheraplyCore.Logging.Logger;
@@ -15,12 +16,12 @@ namespace TheraplyCore.Games.Runtime
     /// Supports both TCPServerService (Quest host) and TCPConnectionService (client mode).
     /// </summary>
     [DisallowMultipleComponent]
-    public class MiniGameCommandBus : MonoBehaviour, ICommandBus
+    public class GameCommandBus : MonoBehaviour, GameContracts.ICommandBus
     {
         [Header("Dependencies")]
         [SerializeField] private TCPServerService _tcpServerService;
         [SerializeField] private TCPConnectionService _tcpConnectionService;
-        [SerializeField] private MiniGameSessionContext _sessionContext;
+        [SerializeField] private GameSessionContext _sessionContext;
 
         [Header("Debug")]
         [SerializeField] private bool _logInbound = true;
@@ -45,7 +46,7 @@ namespace TheraplyCore.Games.Runtime
 
             if (_sessionContext == null)
             {
-                _sessionContext = FindFirstObjectByType<MiniGameSessionContext>();
+                _sessionContext = FindFirstObjectByType<GameSessionContext>();
             }
 
             RegisterBuiltInCommandMappings();
@@ -97,7 +98,7 @@ namespace TheraplyCore.Games.Runtime
 
             if (_logInbound)
             {
-                Logger.Debug($"[MiniGameCommandBus] Subscribed {commandType.Name} -> {commandId}");
+                Logger.Debug($"[GameCommandBus] Subscribed {commandType.Name} -> {commandId}");
             }
         }
 
@@ -140,12 +141,12 @@ namespace TheraplyCore.Games.Runtime
             var sent = await SendMessageInternalAsync(message);
             if (!sent)
             {
-                throw new InvalidOperationException($"[MiniGameCommandBus] Failed to send command: {commandId}");
+                throw new InvalidOperationException($"[GameCommandBus] Failed to send command: {commandId}");
             }
 
             if (_logOutbound)
             {
-                Logger.Debug($"[MiniGameCommandBus] Sent {commandId} ({commandType.Name})");
+                Logger.Debug($"[GameCommandBus] Sent {commandId} ({commandType.Name})");
             }
         }
 
@@ -166,7 +167,7 @@ namespace TheraplyCore.Games.Runtime
                 return await _tcpConnectionService.SendMessageAsync(message);
             }
 
-            Logger.Warning("[MiniGameCommandBus] Cannot send command. No active TCP route.");
+            Logger.Warning("[GameCommandBus] Cannot send command. No active TCP route.");
             return false;
         }
 
@@ -183,7 +184,7 @@ namespace TheraplyCore.Games.Runtime
             {
                 if (_logUnmappedIncoming)
                 {
-                    Logger.Debug($"[MiniGameCommandBus] Unmapped incoming command: {message.commandId}");
+                    Logger.Debug($"[GameCommandBus] Unmapped incoming command: {message.commandId}");
                 }
 
                 if (isCritical)
@@ -234,7 +235,7 @@ namespace TheraplyCore.Games.Runtime
                 }
                 catch (Exception e)
                 {
-                    Logger.Error($"[MiniGameCommandBus] Handler failed for {message.commandId}: {e.Message}", e);
+                    Logger.Error($"[GameCommandBus] Handler failed for {message.commandId}: {e.Message}", e);
                     if (isCritical)
                     {
                         _ = SendCriticalAckAsync(
@@ -249,7 +250,7 @@ namespace TheraplyCore.Games.Runtime
 
             if (_logInbound)
             {
-                Logger.Debug($"[MiniGameCommandBus] Received {message.commandId} (handlers={snapshot.Length})");
+                Logger.Debug($"[GameCommandBus] Received {message.commandId} (handlers={snapshot.Length})");
             }
 
             if (isCritical)
@@ -292,7 +293,7 @@ namespace TheraplyCore.Games.Runtime
             }
             catch (Exception e)
             {
-                Logger.Error($"[MiniGameCommandBus] Deserialize failed for {commandType.Name}: {e.Message}", e);
+                Logger.Error($"[GameCommandBus] Deserialize failed for {commandType.Name}: {e.Message}", e);
                 rejectReasonCode = AckReasonCodes.DeserializeFailed;
                 return false;
             }
@@ -316,7 +317,7 @@ namespace TheraplyCore.Games.Runtime
             if (string.IsNullOrWhiteSpace(payloadJson))
             {
                 Logger.Warning(
-                    $"[MiniGameCommandBus] Critical command without envelope payload: {message.commandId} (msgId={message.messageId})");
+                    $"[GameCommandBus] Critical command without envelope payload: {message.commandId} (msgId={message.messageId})");
                 return true;
             }
 
@@ -327,7 +328,7 @@ namespace TheraplyCore.Games.Runtime
             }
             catch (Exception e)
             {
-                Logger.Warning($"[MiniGameCommandBus] Critical envelope parse failed for {message.commandId}: {e.Message}");
+                Logger.Warning($"[GameCommandBus] Critical envelope parse failed for {message.commandId}: {e.Message}");
                 return true; // allow legacy payload format
             }
 
@@ -365,7 +366,7 @@ namespace TheraplyCore.Games.Runtime
             if (!string.Equals(message.commandId, envelope.commandId, StringComparison.OrdinalIgnoreCase))
             {
                 Logger.Warning(
-                    $"[MiniGameCommandBus] Rejecting critical command. commandId mismatch wire={message.commandId} envelope={envelope.commandId}");
+                    $"[GameCommandBus] Rejecting critical command. commandId mismatch wire={message.commandId} envelope={envelope.commandId}");
                 rejectReasonCode = AckReasonCodes.EnvelopeCommandIdMismatch;
                 return false;
             }
@@ -373,14 +374,14 @@ namespace TheraplyCore.Games.Runtime
             if (!string.Equals(message.messageId, envelope.messageId, StringComparison.Ordinal))
             {
                 Logger.Warning(
-                    $"[MiniGameCommandBus] Rejecting critical command. messageId mismatch wire={message.messageId} envelope={envelope.messageId}");
+                    $"[GameCommandBus] Rejecting critical command. messageId mismatch wire={message.messageId} envelope={envelope.messageId}");
                 rejectReasonCode = AckReasonCodes.EnvelopeMessageIdMismatch;
                 return false;
             }
 
             if (!TryParseUtc(envelope.issuedAtUtc, out _))
             {
-                Logger.Warning($"[MiniGameCommandBus] Rejecting critical command. Invalid issuedAtUtc: {envelope.issuedAtUtc}");
+                Logger.Warning($"[GameCommandBus] Rejecting critical command. Invalid issuedAtUtc: {envelope.issuedAtUtc}");
                 rejectReasonCode = AckReasonCodes.EnvelopeInvalidIssuedAt;
                 return false;
             }
@@ -389,7 +390,7 @@ namespace TheraplyCore.Games.Runtime
             {
                 if (!TryParseUtc(envelope.expiresAtUtc, out var expiresAtUtc))
                 {
-                    Logger.Warning($"[MiniGameCommandBus] Rejecting critical command. Invalid expiresAtUtc: {envelope.expiresAtUtc}");
+                    Logger.Warning($"[GameCommandBus] Rejecting critical command. Invalid expiresAtUtc: {envelope.expiresAtUtc}");
                     rejectReasonCode = AckReasonCodes.EnvelopeInvalidExpiresAt;
                     return false;
                 }
@@ -397,7 +398,7 @@ namespace TheraplyCore.Games.Runtime
                 if (DateTime.UtcNow > expiresAtUtc)
                 {
                     Logger.Warning(
-                        $"[MiniGameCommandBus] Rejecting expired critical command: {message.commandId} (expiredAt={expiresAtUtc:O})");
+                        $"[GameCommandBus] Rejecting expired critical command: {message.commandId} (expiredAt={expiresAtUtc:O})");
                     rejectReasonCode = AckReasonCodes.EnvelopeExpired;
                     return false;
                 }
@@ -425,7 +426,7 @@ namespace TheraplyCore.Games.Runtime
 
             if (_sessionContext == null)
             {
-                _sessionContext = FindFirstObjectByType<MiniGameSessionContext>();
+                _sessionContext = FindFirstObjectByType<GameSessionContext>();
             }
 
             if (_sessionContext == null)
@@ -449,23 +450,23 @@ namespace TheraplyCore.Games.Runtime
             }
 
             // Bootstrap case: runtime already has CREATED session; allow START_GAME to attach.
-            if (activeState == SessionLifecycleState.CREATED &&
-                string.Equals(commandId, MiniGameCommandIds.StartGame, StringComparison.OrdinalIgnoreCase))
+            if (activeState == GameContracts.SessionLifecycleState.CREATED &&
+                string.Equals(commandId, GameCommandIds.StartGame, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
 
             Logger.Warning(
-                $"[MiniGameCommandBus] Rejecting critical command due active session lock. activeSession={activeSessionId}, state={activeState}, incomingSession={envelopeSessionId}, command={commandId}");
+                $"[GameCommandBus] Rejecting critical command due active session lock. activeSession={activeSessionId}, state={activeState}, incomingSession={envelopeSessionId}, command={commandId}");
             rejectReasonCode = AckReasonCodes.SessionLockConflict;
             return false;
         }
 
-        private static bool IsTerminalState(SessionLifecycleState state)
+        private static bool IsTerminalState(GameContracts.SessionLifecycleState state)
         {
-            return state == SessionLifecycleState.COMPLETED ||
-                   state == SessionLifecycleState.ABORTED_BY_THERAPIST ||
-                   state == SessionLifecycleState.FAILED_TECHNICAL;
+            return state == GameContracts.SessionLifecycleState.COMPLETED ||
+                   state == GameContracts.SessionLifecycleState.ABORTED_BY_THERAPIST ||
+                   state == GameContracts.SessionLifecycleState.FAILED_TECHNICAL;
         }
 
         private async Task SendCriticalAckAsync(
@@ -488,7 +489,7 @@ namespace TheraplyCore.Games.Runtime
             {
                 messageId = Guid.NewGuid().ToString(),
                 timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                commandId = MiniGameCommandIds.CommandAck,
+                commandId = GameCommandIds.CommandAck,
                 payloadString = JsonUtility.ToJson(ackPayload),
             };
 
@@ -496,7 +497,7 @@ namespace TheraplyCore.Games.Runtime
             if (!sent)
             {
                 Logger.Warning(
-                    $"[MiniGameCommandBus] Failed to send {MiniGameCommandIds.CommandAck} for {requestMessage.commandId} ({requestMessage.messageId})");
+                    $"[GameCommandBus] Failed to send {GameCommandIds.CommandAck} for {requestMessage.commandId} ({requestMessage.messageId})");
             }
         }
 
@@ -552,17 +553,17 @@ namespace TheraplyCore.Games.Runtime
 
         private void RegisterBuiltInCommandMappings()
         {
-            SetCommandIdMapping(typeof(StartGameCommand), MiniGameCommandIds.StartGame);
-            SetCommandIdMapping(typeof(PauseGameCommand), MiniGameCommandIds.PauseGame);
-            SetCommandIdMapping(typeof(ResumeGameCommand), MiniGameCommandIds.ResumeGame);
-            SetCommandIdMapping(typeof(StopGameCommand), MiniGameCommandIds.StopGame);
-            SetCommandIdMapping(typeof(EndSessionCommand), MiniGameCommandIds.EndSession);
-            SetCommandIdMapping(typeof(CriticalCommandAckPayload), MiniGameCommandIds.CommandAck);
-            SetCommandIdMapping(typeof(SessionStateUpdateCommand), MiniGameCommandIds.SessionStateUpdate);
-            SetCommandIdMapping(typeof(RuntimeStatusUpdateCommand), MiniGameCommandIds.RuntimeStatusUpdate);
-            SetCommandIdMapping(typeof(SessionWatchdogHeartbeatCommand), MiniGameCommandIds.SessionWatchdogHeartbeat);
-            SetCommandIdMapping(typeof(ManualResyncCommand), MiniGameCommandIds.ManualResync);
-            SetCommandIdMapping(typeof(ManualResyncReportCommand), MiniGameCommandIds.ManualResyncReport);
+            SetCommandIdMapping(typeof(StartGameCommand), GameCommandIds.StartGame);
+            SetCommandIdMapping(typeof(PauseGameCommand), GameCommandIds.PauseGame);
+            SetCommandIdMapping(typeof(ResumeGameCommand), GameCommandIds.ResumeGame);
+            SetCommandIdMapping(typeof(StopGameCommand), GameCommandIds.StopGame);
+            SetCommandIdMapping(typeof(EndSessionCommand), GameCommandIds.EndSession);
+            SetCommandIdMapping(typeof(CriticalCommandAckPayload), GameCommandIds.CommandAck);
+            SetCommandIdMapping(typeof(SessionStateUpdateCommand), GameCommandIds.SessionStateUpdate);
+            SetCommandIdMapping(typeof(RuntimeStatusUpdateCommand), GameCommandIds.RuntimeStatusUpdate);
+            SetCommandIdMapping(typeof(SessionWatchdogHeartbeatCommand), GameCommandIds.SessionWatchdogHeartbeat);
+            SetCommandIdMapping(typeof(ManualResyncCommand), GameCommandIds.ManualResync);
+            SetCommandIdMapping(typeof(ManualResyncReportCommand), GameCommandIds.ManualResyncReport);
         }
 
         private static class AckReasonCodes
@@ -590,8 +591,8 @@ namespace TheraplyCore.Games.Runtime
             if (commandType.IsGenericType &&
                 commandType.GetGenericTypeDefinition() == typeof(UpdateConfigCommand<>))
             {
-                SetCommandIdMapping(commandType, MiniGameCommandIds.UpdateConfig);
-                return MiniGameCommandIds.UpdateConfig;
+                SetCommandIdMapping(commandType, GameCommandIds.UpdateConfig);
+                return GameCommandIds.UpdateConfig;
             }
 
             var generated = ToWireCommandId(commandType.Name);

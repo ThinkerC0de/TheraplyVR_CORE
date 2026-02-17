@@ -1,12 +1,12 @@
 # Your Games Go Here! 🎮
 
-**This folder is for YOUR production mini-games.**
+**This folder is for YOUR production games.**
 
 ---
 
 ## Contract First Rule
 
-Every new mini-game must follow the stable contracts from:
+Every new game must follow the stable contracts from:
 
 - `Assets/_TheraplyCore/Games/Contracts/GameContracts.cs`
 - `Assets/_TheraplyCore/Games/Contracts/GameCommands.cs`
@@ -23,7 +23,7 @@ If a game needs core changes, stop and add an extension point instead.
 - Puzzle
 - Butterflies
 - Mindfulness
-- Any therapeutic mini-games you build
+- Any therapeutic games you build
 
 ### ❌ Not Here
 - ~~Framework code~~ (goes in `_TheraplyCore/`)
@@ -160,7 +160,7 @@ Before you start building:
 1. **[Unity Network Setup](../../NETWORK_SETUP.md)** ⭐ configure this first
 2. **[Creating Games Guide](../../../docs/02-Creating-Games.md)** ⭐ then build the game
 3. **[SimpleCubeGame Example](../_Examples/SimpleCubeGame/)** - Study this
-4. **[Mini-Game Contracts](../_TheraplyCore/Games/Contracts/GameContracts.cs)** - Reference contracts
+4. **[Game Contracts](../_TheraplyCore/Games/Contracts/GameContracts.cs)** - Reference contracts
 5. **[System Components Guide](../../../docs/01-System-Components-Guide.md)** - Architecture and configuration reference
 
 ---
@@ -307,7 +307,7 @@ Write README.md for your game:
 ## 🆘 Need Help?
 
 - **[Creating Games Guide](../../../docs/02-Creating-Games.md)** - Complete tutorial
-- **[Mini-Game Contracts](../_TheraplyCore/Games/Contracts/GameContracts.cs)** - Detailed contracts
+- **[Game Contracts](../_TheraplyCore/Games/Contracts/GameContracts.cs)** - Detailed contracts
 - **[System Components Guide](../../../docs/01-System-Components-Guide.md)** - Runtime architecture and setup
 - **[GitHub Discussions](https://github.com/yourusername/theraply-vr-framework/discussions)** - Community help
 - **[SimpleCubeGame](../_Examples/SimpleCubeGame/)** - Working example

@@ -15,7 +15,7 @@ Theraply VR Framework is a **clean, modular foundation** for building therapeuti
 - **Real-time P2P networking** (UDP discovery + TCP control + WebRTC video streaming)
 - **Session management** with Firebase integration
 - **ML-ready data collection** (structured, batched writes)
-- **Game module API** for plug-and-play mini-games
+- **Game module API** for plug-and-play games
 - **Lifecycle resilience** (reconnection, pause/resume handling)
 - **Zero external dependencies** (uses Unity's built-in JsonUtility)
 
@@ -140,7 +140,7 @@ Use this quick fallback:
 
 ### Architecture
 - **[System Components Guide](docs/01-System-Components-Guide.md)** - End-to-end reference for Unity and Flutter components, usage, and configuration
-- **[Creating Games Guide](docs/02-Creating-Games.md)** - Mini-game implementation patterns and contracts
+- **[Creating Games Guide](docs/02-Creating-Games.md)** - game implementation patterns and contracts
 
 ### Reliability and Recovery
 - **[Session Resilience Roadmap](docs/03-Session-Resilience-Roadmap.md)** - Failure scenarios, architecture, and phased delivery plan

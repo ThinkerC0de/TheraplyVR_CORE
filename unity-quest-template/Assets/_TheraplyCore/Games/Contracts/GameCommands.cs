@@ -6,7 +6,7 @@ namespace TheraplyCore.Games.Contracts
     /// <summary>
     /// Canonical command IDs used on the wire between controller and runtime.
     /// </summary>
-    public static class MiniGameCommandIds
+    public static class GameCommandIds
     {
         public const string StartGame = "START_GAME";
         public const string PauseGame = "PAUSE_GAME";
@@ -27,11 +27,11 @@ namespace TheraplyCore.Games.Contracts
         private static readonly HashSet<string> Values =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
-                MiniGameCommandIds.StartGame,
-                MiniGameCommandIds.PauseGame,
-                MiniGameCommandIds.ResumeGame,
-                MiniGameCommandIds.StopGame,
-                MiniGameCommandIds.EndSession,
+                GameCommandIds.StartGame,
+                GameCommandIds.PauseGame,
+                GameCommandIds.ResumeGame,
+                GameCommandIds.StopGame,
+                GameCommandIds.EndSession,
             };
 
         public static bool IsCritical(string commandId)
@@ -95,7 +95,7 @@ namespace TheraplyCore.Games.Contracts
     }
 
     [Serializable]
-    public sealed class UpdateConfigCommand<TConfig> : IGameCommand where TConfig : IMiniGameConfig
+    public sealed class UpdateConfigCommand<TConfig> : IGameCommand where TConfig : IGameConfig
     {
         public string correlationId;
         public string gameId;

@@ -41,6 +41,7 @@
 24. `DONE` - `R-P4-002` - Added save/resume regression suite covering decision-gate policy matrix and protocol-level resume/start-new session continuity assertions.
 25. `DONE` - `R-P4-003` - Added rollout checklist and incident response SOP with staged rollout gates, no-go thresholds, and fault-specific runbooks.
 26. `DONE` - `R-P5-001` - Added automated Unity CLI compile/build validation flow with documentation and executed full validation set (Unity + Flutter).
+27. `DONE` - `R-DOC-004` - Standardized runtime/docs naming from `MiniGame` to `Game` across contracts, services, scene wiring, and API references.
 
 ## P0 Backlog - Protocol and Session Safety Baseline
 
@@ -60,7 +61,7 @@
 | Item ID | Task | Status | Notes |
 |---|---|---|---|
 | R-P1-001 | Introduce SQLite WAL session/event store | DONE | Added `SessionEventStore` with background writer queue, SQLite WAL backend (`session_events.db`), NDJSON fallback/mirror, sequence + checksum envelope fields, and durable queue stats |
-| R-P1-002 | Implement periodic snapshotting and restore | DONE | Added `MiniGameSessionSnapshotService` (`snapshot.json`) with periodic + state-boundary snapshots and startup restore of non-terminal sessions into `MiniGameSessionContext`; writes are queued to background worker |
+| R-P1-002 | Implement periodic snapshotting and restore | DONE | Added `GameSessionSnapshotService` (`snapshot.json`) with periodic + state-boundary snapshots and startup restore of non-terminal sessions into `GameSessionContext`; writes are queued to background worker |
 | R-P1-003 | Auto-recovery flow on app restart to `INTERRUPTED` | DONE | On boot snapshot restore now maps non-terminal snapshot states to `INTERRUPTED` with `AUTO_RECOVERY_APP_RESTART`; context auto-start defers when recoverable snapshot exists |
 | R-P1-004 | Therapist decision gate: `Resume` vs `Start New` | DONE | `ControlScreen` now blocks critical commands until operator chooses; `Resume` attaches to Quest session, `Start New` explicitly sends `END_SESSION` before creating new mobile session id |
 
@@ -77,9 +78,9 @@
 
 | Item ID | Task | Status | Notes |
 |---|---|---|---|
-| R-P3-001 | Add critical null-guard wrappers and safe fallback | DONE | `FirebaseDataService` now guards null points and can fall back to volatile queue when durable write fails; `MiniGameTelemetryService` now buffers telemetry when `FirebaseDataService` is unavailable and flushes buffered events when dependency recovers |
+| R-P3-001 | Add critical null-guard wrappers and safe fallback | DONE | `FirebaseDataService` now guards null points and can fall back to volatile queue when durable write fails; `GameTelemetryService` now buffers telemetry when `FirebaseDataService` is unavailable and flushes buffered events when dependency recovers |
 | R-P3-002 | Add session watchdog heartbeat | DONE | Unity runtime now emits `SESSION_WATCHDOG_HEARTBEAT` with health metadata (`healthy`, `healthCode`, heartbeat/stale timings), detects `IN_PROGRESS`/`PAUSED` state drift against active game state, logs/telemetry on hung detection, and can transition to `INTERRUPTED` via `WATCHDOG_HUNG_STATE`; Flutter parses/visualizes watchdog freshness in Control UI |
-| R-P3-003 | Add structured crash context tied to `sessionId` | DONE | `MiniGameRuntimeService` now captures Unity exception/unhandled crash signals, enriches with session/runtime/device context, persists NDJSON reports (`session_resilience/crash_reports.ndjson`), and emits structured critical `error` telemetry (`eventName=crash_context`) with `sessionId` linkage |
+| R-P3-003 | Add structured crash context tied to `sessionId` | DONE | `GameRuntimeService` now captures Unity exception/unhandled crash signals, enriches with session/runtime/device context, persists NDJSON reports (`session_resilience/crash_reports.ndjson`), and emits structured critical `error` telemetry (`eventName=crash_context`) with `sessionId` linkage |
 
 ## P4 Backlog - Hardening
 
@@ -97,7 +98,10 @@
 
 ## Notes
 - Wand-specific behavior from Focus and Calm is optional for telemetry and not required in P0-P2.
-- No mini-game migration starts until P0 is complete.
+- No game migration starts until P0 is complete.
+- Naming update (2026-02-17, R-DOC-004): replaced `MiniGame` runtime nomenclature with `Game` in core contracts/services (`GameContracts`, `GameCommandBus`, `GameRuntimeService`, `GameSessionContext`, etc.), Unity scene component references, and docs (`Game-Contracts.md` + guide updates) to align terminology with therapist-facing product language.
+- Validation run (2026-02-17, R-DOC-004): Unity CLI compile executed via `powershell -ExecutionPolicy Bypass -File .\scripts\unity_cli_validate.ps1 -Mode compile` and passed.
+- Validation run (2026-02-17, R-DOC-004): `flutter analyze`, `flutter test`, and `flutter build apk --debug` pass.
 - Automation hardening update (2026-02-17, P5-001): added `scripts/unity_cli_validate.ps1` (`compile`/`build`/`both`) plus Unity execute-methods in `unity-quest-template/Assets/_TheraplyCore/Editor/Automation/UnityCliValidation.cs` for deterministic CLI compile/build checks.
 - Validation run (2026-02-17, P5-001): `flutter analyze`, `flutter test`, and `flutter build apk --debug` pass.
 - Validation run (2026-02-17, P5-001): Unity compile/build WAS executed in CLI using `powershell -ExecutionPolicy Bypass -File .\scripts\unity_cli_validate.ps1 -Mode both` (run against detached worktree path `C:\Users\licen\Projects\theraply-vr-framework-cli-validation` because main project path had an open Unity Editor lock); compile and android-build steps passed.
@@ -106,7 +110,7 @@
 - Analyzer warnings in `scanner_screen.dart` and `students_screen.dart` were fixed during this work block.
 - Local durability baseline currently stores payload as JSON string and uses append-only NDJSON for critical event types.
 - Quest FPS guardrail in persistence path: gameplay thread now only enqueues durable records; disk writes happen in background store worker with bounded queue and fallback mode reporting.
-- Snapshot guardrail: checkpoints are enqueued and flushed by background writer task (`MiniGameSessionSnapshotService`), not direct synchronous writes from gameplay callbacks.
+- Snapshot guardrail: checkpoints are enqueued and flushed by background writer task (`GameSessionSnapshotService`), not direct synchronous writes from gameplay callbacks.
 - Recovery behavior: boot restore promotes any non-terminal snapshot (`CREATED/IN_PROGRESS/PAUSED/INTERRUPTED`) to runtime state `INTERRUPTED` to avoid implicit resume after crash/restart.
 - Therapist reconnect gate: when mobile detects a different non-terminal Quest session id, UI enforces `Resume`/`Start New` decision before control commands proceed.
 - Validation run (2026-02-17, P2-001): `flutter analyze`, `flutter test`, and `flutter build apk --debug` pass; Unity compile/build not executed in CLI.
@@ -119,12 +123,12 @@
 - Firebase backend path is now production-ready for resilience sync: `SubmitSessionIngestBatchAsync` and `SubmitSessionReconciliationRequestAsync` call configured HTTPS endpoints (with timeout/auth headers/API key support), parse direct/wrapped JSON responses, and preserve simulate mode via `_simulateFirebase`.
 - Manual support recovery path: `MANUAL_RESYNC` can target missing-on-server/unsynced session events (or all local events if requested), re-queues selected `eventId`s in `sync_outbox`, forces immediate upload cycle, and publishes `MANUAL_RESYNC_REPORT` with before/after reconciliation counters.
 - Validation run (2026-02-17, Unity Editor local/no Flutter, scene `Assets/_Examples/Scenes/SessionResilienceTest.unity`): startup recovery restored snapshot session to `INTERRUPTED`; durable store started with SQLite fallback to NDJSON when WAL init failed; after flush shutdown fix in `FirebaseDataService`, Play Mode stop completed cleanly (`App quitting -> Flushing all data -> All data flushed`) without editor hang.
-- Scene wiring update (2026-02-17): critical runtime references in `SessionResilienceTest.unity` were explicitly connected (`TCPServerService`, `FirebaseDataService`, `MiniGameRuntimeService`, `MiniGameContextService`, `MiniGameSessionSnapshotService`, `MiniGameTelemetryService`, `MiniGameClockService`, `MiniGameCommandBus`) to reduce reliance on runtime auto-discovery.
-- Guardrail update (2026-02-17, P3-001): null/fallback wrappers added in `FirebaseDataService` and `MiniGameTelemetryService`; critical events no longer hard-drop on durable write failure by default (configurable fallback), and telemetry is buffered/flushed when `FirebaseDataService` dependency is temporarily missing.
+- Scene wiring update (2026-02-17): critical runtime references in `SessionResilienceTest.unity` were explicitly connected (`TCPServerService`, `FirebaseDataService`, `GameRuntimeService`, `GameContextService`, `GameSessionSnapshotService`, `GameTelemetryService`, `GameClockService`, `GameCommandBus`) to reduce reliance on runtime auto-discovery.
+- Guardrail update (2026-02-17, P3-001): null/fallback wrappers added in `FirebaseDataService` and `GameTelemetryService`; critical events no longer hard-drop on durable write failure by default (configurable fallback), and telemetry is buffered/flushed when `FirebaseDataService` dependency is temporarily missing.
 - Validation run (2026-02-17, P3-001): `flutter analyze`, `flutter test`, and `flutter build apk --debug` pass; Unity compile/build not executed in CLI (manual Editor validation used in this block).
-- Watchdog update (2026-02-17, P3-002): `MiniGameRuntimeService` now runs periodic watchdog health checks and publishes `SESSION_WATCHDOG_HEARTBEAT`; `MiniGameCommandBus` and contracts include heartbeat command mapping/payload; Flutter `ControlScreen` now shows watchdog health/freshness from heartbeat stream.
+- Watchdog update (2026-02-17, P3-002): `GameRuntimeService` now runs periodic watchdog health checks and publishes `SESSION_WATCHDOG_HEARTBEAT`; `GameCommandBus` and contracts include heartbeat command mapping/payload; Flutter `ControlScreen` now shows watchdog health/freshness from heartbeat stream.
 - Validation run (2026-02-17, P3-002): `flutter analyze`, `flutter test`, and `flutter build apk --debug` pass; Unity compile/build not executed in CLI.
-- Crash-context update (2026-02-17, P3-003): `MiniGameRuntimeService` now registers crash hooks (`Application.logMessageReceivedThreaded`, `AppDomain.CurrentDomain.UnhandledException`), queues/processes structured crash reports on main thread, persists NDJSON crash context reports with session/runtime metadata, and forwards structured `error` telemetry with `sessionId` + report identifiers.
+- Crash-context update (2026-02-17, P3-003): `GameRuntimeService` now registers crash hooks (`Application.logMessageReceivedThreaded`, `AppDomain.CurrentDomain.UnhandledException`), queues/processes structured crash reports on main thread, persists NDJSON crash context reports with session/runtime metadata, and forwards structured `error` telemetry with `sessionId` + report identifiers.
 - Validation run (2026-02-17, P3-003): `flutter analyze`, `flutter test`, and `flutter build apk --debug` pass; Unity compile/build not executed in CLI.
 - Chaos matrix update (2026-02-17, P4-001): added `flutter_controller/test/chaos_fault_matrix_test.dart` with automated fault scenarios for network toggle (in-flight retry + reconnect), app kill (pending command interruption + restart recovery), device reboot (runtime status reattach + control continuity), delayed ACK (stale ACK ignored, retry ACK accepted), and duplicate command fault noise (repeat command remains ACK-isolated under duplicate ACK injection).
 - Validation run (2026-02-17, P4-001): `flutter analyze`, `flutter test`, and `flutter build apk --debug` pass; Unity compile/build not executed in CLI.

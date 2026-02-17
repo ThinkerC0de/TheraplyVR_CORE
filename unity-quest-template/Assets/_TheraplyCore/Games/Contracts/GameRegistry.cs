@@ -5,6 +5,6 @@ namespace TheraplyCore.Games.Contracts
     /// </summary>
     public interface IGameRegistry
     {
-        bool TryResolve(string gameId, out IMiniGameModule module);
+        bool TryResolve(string gameId, out IGameModule module);
     }
 }
