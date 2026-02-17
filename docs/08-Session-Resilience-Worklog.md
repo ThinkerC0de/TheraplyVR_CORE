@@ -142,3 +142,4 @@
 - Validation run (2026-02-17, P4-002): `flutter analyze`, `flutter test`, and `flutter build apk --debug` pass; Unity compile/build not executed in CLI.
 - Rollout/SOP update (2026-02-17, P4-003): added `docs/09-Session-Resilience-Rollout-SOP.md` covering release roles, pre-rollout checklist, staged rollout progression (canary/beta/broad), go/no-go metrics (`no-loss sessions`, ACK timeout rate, outbox age, crash trend), incident severity levels, first-15-minute response, and fault-specific runbooks.
 - Validation run (2026-02-17, P4-003): `flutter analyze`, `flutter test`, and `flutter build apk --debug` pass; Unity compile/build not executed in CLI.
+- Documentation update (2026-02-17): added `docs/10-System-Components-Guide.md` with component-by-component system reference (Unity + Flutter), including purpose, usage, dependencies, and configuration checklists; linked from `README.md` and `docs/README.md`.

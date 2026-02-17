@@ -139,8 +139,8 @@ Use this quick fallback:
 - **[Installation Notes](INSTALLATION.md)** - Project bootstrap notes
 
 ### Architecture
-- **[Network Protocol](docs/04-Network-Protocol.md)** - Message formats and flow
-- **[Data Collection](docs/05-Data-Collection.md)** - ML-ready data structure
+- **[System Components Guide](docs/10-System-Components-Guide.md)** - End-to-end reference for Unity and Flutter components, usage, and configuration
+- **[Creating Games Guide](docs/03-Creating-Games.md)** - Mini-game implementation patterns and contracts
 
 ### Reliability and Recovery
 - **[Session Resilience Roadmap](docs/06-Session-Resilience-Roadmap.md)** - Failure scenarios, architecture, and phased delivery plan

@@ -157,11 +157,11 @@ void TestStart()
 
 Before you start building:
 
-1. **[Runtime Setup](../../../docs/02-Runtime-Setup.md)** ⭐ configure this first
+1. **[Unity Network Setup](../../NETWORK_SETUP.md)** ⭐ configure this first
 2. **[Creating Games Guide](../../../docs/03-Creating-Games.md)** ⭐ then build the game
 3. **[SimpleCubeGame Example](../_Examples/SimpleCubeGame/)** - Study this
-4. **[Mini-Game Contracts API](../../../docs/API-Reference/MiniGame-Contracts.md)** - Reference docs
-5. **[AI Scaffold Workflow](../../../docs/04-AI-Scaffold-Workflow.md)** - Generation flow
+4. **[Mini-Game Contracts](../_TheraplyCore/Games/Contracts/GameContracts.cs)** - Reference contracts
+5. **[System Components Guide](../../../docs/10-System-Components-Guide.md)** - Architecture and configuration reference
 
 ---
 
@@ -307,8 +307,8 @@ Write README.md for your game:
 ## 🆘 Need Help?
 
 - **[Creating Games Guide](../../../docs/03-Creating-Games.md)** - Complete tutorial
-- **[Mini-Game Contracts API](../../../docs/API-Reference/MiniGame-Contracts.md)** - Detailed docs
-- **[AI Scaffold Workflow](../../../docs/04-AI-Scaffold-Workflow.md)** - Prompt and review flow
+- **[Mini-Game Contracts](../_TheraplyCore/Games/Contracts/GameContracts.cs)** - Detailed contracts
+- **[System Components Guide](../../../docs/10-System-Components-Guide.md)** - Runtime architecture and setup
 - **[GitHub Discussions](https://github.com/yourusername/theraply-vr-framework/discussions)** - Community help
 - **[SimpleCubeGame](../_Examples/SimpleCubeGame/)** - Working example
 

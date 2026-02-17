@@ -2,6 +2,7 @@
 
 ## Core
 - [03-Creating-Games.md](03-Creating-Games.md)
+- [10-System-Components-Guide.md](10-System-Components-Guide.md)
 
 ## Session Resilience Program
 - [06-Session-Resilience-Roadmap.md](06-Session-Resilience-Roadmap.md)

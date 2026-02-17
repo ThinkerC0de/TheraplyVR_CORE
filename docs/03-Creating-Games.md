@@ -686,7 +686,7 @@ Before releasing your game:
 ## 🎓 Next Steps
 
 1. **Study the example:** [SimpleCubeGame](../unity-quest-template/Assets/_Examples/SimpleCubeGame/)
-2. **Read API docs:** [IGameModule](API-Reference/IGameModule.md), [BaseGame](API-Reference/BaseGame.md)
+2. **Read API docs:** [IGameModule](../unity-quest-template/Assets/_TheraplyCore/Games/IGameModule.cs), [BaseGame](../unity-quest-template/Assets/_TheraplyCore/Games/BaseGame.cs)
 3. **Join discussions:** [GitHub Discussions](https://github.com/yourusername/theraply-vr-framework/discussions)
 
 ---
