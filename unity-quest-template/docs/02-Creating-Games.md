@@ -83,7 +83,7 @@ Example config fields:
 ## Scene/Prefab Configuration Checklist
 
 1. Add game manager object with mini-game component.
-2. Add runtime components from `docs/02-Runtime-Setup.md`.
+2. Add runtime components from `docs/01-Runtime-Setup.md`.
 3. Inject/register required services for `IMiniGameContext`.
 4. Register game in registry (`gameId -> module`).
 5. Verify telemetry events in logs.

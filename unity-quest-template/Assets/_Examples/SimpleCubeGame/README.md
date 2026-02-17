@@ -269,7 +269,7 @@ Then: Right-click component → "Test Start Game"
 ## 🎓 Next Steps
 
 1. **Understand this example completely**
-2. **Read:** [Creating Games Guide](../../../docs/03-Creating-Games.md)
+2. **Read:** [Creating Games Guide](../../../docs/02-Creating-Games.md)
 3. **Build your own game** in `_YourGames/`
 4. **Use same patterns** shown here
 

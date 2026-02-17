@@ -40,6 +40,7 @@
 23. `DONE` - `R-P4-001` - Added automated chaos fault matrix coverage for network toggle, app kill, device reboot, delayed ACK, and duplicate-command fault noise in Flutter signaling tests.
 24. `DONE` - `R-P4-002` - Added save/resume regression suite covering decision-gate policy matrix and protocol-level resume/start-new session continuity assertions.
 25. `DONE` - `R-P4-003` - Added rollout checklist and incident response SOP with staged rollout gates, no-go thresholds, and fault-specific runbooks.
+26. `DONE` - `R-P5-001` - Added automated Unity CLI compile/build validation flow with documentation and executed full validation set (Unity + Flutter).
 
 ## P0 Backlog - Protocol and Session Safety Baseline
 
@@ -86,11 +87,20 @@
 |---|---|---|---|
 | R-P4-001 | Build chaos test matrix (network/app/device faults) | DONE | Added `flutter_controller/test/chaos_fault_matrix_test.dart` covering network toggle, app kill, device reboot, delayed ACK, and duplicate command fault isolation |
 | R-P4-002 | Build save/resume regression suite | DONE | Added `flutter_controller/test/save_resume_regression_test.dart` with save/resume decision-policy matrix and resume/start-new protocol regression scenarios |
-| R-P4-003 | Define rollout checklist and incident SOP | DONE | Added `docs/09-Session-Resilience-Rollout-SOP.md` with pre-rollout checklist, staged rollout gates, go/no-go thresholds, incident severity model, and runbooks |
+| R-P4-003 | Define rollout checklist and incident SOP | DONE | Added `docs/06-Session-Resilience-Rollout-SOP.md` with pre-rollout checklist, staged rollout gates, go/no-go thresholds, incident severity model, and runbooks |
+
+## P5 Backlog - Operational Automation Hardening
+
+| Item ID | Task | Status | Notes |
+|---|---|---|---|
+| R-P5-001 | Add automated Unity CLI compile/build validation and operational docs | DONE | Added `scripts/unity_cli_validate.ps1` and `UnityCliValidation` execute-methods; documented command usage/prerequisites/outputs/failures in `README.md` and `docs/01-System-Components-Guide.md`; validated Unity CLI + Flutter command set |
 
 ## Notes
 - Wand-specific behavior from Focus and Calm is optional for telemetry and not required in P0-P2.
 - No mini-game migration starts until P0 is complete.
+- Automation hardening update (2026-02-17, P5-001): added `scripts/unity_cli_validate.ps1` (`compile`/`build`/`both`) plus Unity execute-methods in `unity-quest-template/Assets/_TheraplyCore/Editor/Automation/UnityCliValidation.cs` for deterministic CLI compile/build checks.
+- Validation run (2026-02-17, P5-001): `flutter analyze`, `flutter test`, and `flutter build apk --debug` pass.
+- Validation run (2026-02-17, P5-001): Unity compile/build WAS executed in CLI using `powershell -ExecutionPolicy Bypass -File .\scripts\unity_cli_validate.ps1 -Mode both` (run against detached worktree path `C:\Users\licen\Projects\theraply-vr-framework-cli-validation` because main project path had an open Unity Editor lock); compile and android-build steps passed.
 - Validation run (2026-02-17): `flutter analyze`, `flutter test`, and `flutter build apk --debug` pass.
 - Validation run (2026-02-17, P1-001): `flutter analyze`, `flutter test`, and `flutter build apk --debug` pass; Unity compile/build not executed in CLI.
 - Analyzer warnings in `scanner_screen.dart` and `students_screen.dart` were fixed during this work block.
@@ -140,6 +150,6 @@
 
 - Save/resume regression update (2026-02-17, P4-002): added `flutter_controller/test/save_resume_regression_test.dart` with policy matrix coverage and protocol-level resume/start-new flow checks using framed TCP mock server + ACK verification.
 - Validation run (2026-02-17, P4-002): `flutter analyze`, `flutter test`, and `flutter build apk --debug` pass; Unity compile/build not executed in CLI.
-- Rollout/SOP update (2026-02-17, P4-003): added `docs/09-Session-Resilience-Rollout-SOP.md` covering release roles, pre-rollout checklist, staged rollout progression (canary/beta/broad), go/no-go metrics (`no-loss sessions`, ACK timeout rate, outbox age, crash trend), incident severity levels, first-15-minute response, and fault-specific runbooks.
+- Rollout/SOP update (2026-02-17, P4-003): added `docs/06-Session-Resilience-Rollout-SOP.md` covering release roles, pre-rollout checklist, staged rollout progression (canary/beta/broad), go/no-go metrics (`no-loss sessions`, ACK timeout rate, outbox age, crash trend), incident severity levels, first-15-minute response, and fault-specific runbooks.
 - Validation run (2026-02-17, P4-003): `flutter analyze`, `flutter test`, and `flutter build apk --debug` pass; Unity compile/build not executed in CLI.
-- Documentation update (2026-02-17): added `docs/10-System-Components-Guide.md` with component-by-component system reference (Unity + Flutter), including purpose, usage, dependencies, and configuration checklists; linked from `README.md` and `docs/README.md`.
+- Documentation update (2026-02-17): added `docs/01-System-Components-Guide.md` with component-by-component system reference (Unity + Flutter), including purpose, usage, dependencies, and configuration checklists; linked from `README.md` and `docs/README.md`.

@@ -4,8 +4,8 @@
 Provide a reliable way to continue work after chat reset, token limits, or workspace restart.
 
 Use this guide together with:
-- `docs/06-Session-Resilience-Roadmap.md`
-- `docs/08-Session-Resilience-Worklog.md`
+- `docs/03-Session-Resilience-Roadmap.md`
+- `docs/05-Session-Resilience-Worklog.md`
 
 ## Golden Rule
 Every time a work block ends, update the worklog first.
@@ -16,7 +16,7 @@ That makes resume deterministic.
 Use this when chat context is gone:
 
 ```text
-Resume work from docs/08-Session-Resilience-Worklog.md and docs/06-Session-Resilience-Roadmap.md.
+Resume work from docs/05-Session-Resilience-Worklog.md and docs/03-Session-Resilience-Roadmap.md.
 Project main is C:\Users\licen\Projects\theraply-vr-framework.
 Reference projects are read-only:
 - C:\Users\licen\Focus&Calm_old\Focus&Calm
@@ -31,9 +31,9 @@ Use when you want one exact task:
 
 ```text
 Continue Session Resilience roadmap.
-Implement item R-P0-00X from docs/08-Session-Resilience-Worklog.md.
-Follow constraints in docs/06-Session-Resilience-Roadmap.md.
-Update docs/08-Session-Resilience-Worklog.md when done.
+Implement item R-P0-00X from docs/05-Session-Resilience-Worklog.md.
+Follow constraints in docs/03-Session-Resilience-Roadmap.md.
+Update docs/05-Session-Resilience-Worklog.md when done.
 ```
 
 ## Audit Prompt (status only, no code)
@@ -41,7 +41,7 @@ Use for planning checkpoints:
 
 ```text
 Audit current progress for Session Resilience.
-Read docs/06-Session-Resilience-Roadmap.md and docs/08-Session-Resilience-Worklog.md.
+Read docs/03-Session-Resilience-Roadmap.md and docs/05-Session-Resilience-Worklog.md.
 Report:
 1) done items,
 2) risks,
@@ -57,7 +57,7 @@ Analyze these new field issues against Session Resilience roadmap.
 Classify each issue:
 - already covered by an existing roadmap item, or
 - missing (create new item proposal).
-Then update docs/08-Session-Resilience-Worklog.md backlog section.
+Then update docs/05-Session-Resilience-Worklog.md backlog section.
 ```
 
 ## What To Include In Any Resume Prompt
@@ -85,4 +85,3 @@ When context is getting long:
 4. Start new chat with Minimal Resume Prompt.
 
 If this is followed, continuity is preserved even with zero chat history.
-

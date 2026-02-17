@@ -1,14 +1,14 @@
 # Framework Docs Index
 
 ## Core
-- [03-Creating-Games.md](03-Creating-Games.md)
-- [10-System-Components-Guide.md](10-System-Components-Guide.md)
+- [01-System-Components-Guide.md](01-System-Components-Guide.md)
+- [02-Creating-Games.md](02-Creating-Games.md)
 
 ## Session Resilience Program
-- [06-Session-Resilience-Roadmap.md](06-Session-Resilience-Roadmap.md)
-- [07-Session-Resilience-Prompting.md](07-Session-Resilience-Prompting.md)
-- [08-Session-Resilience-Worklog.md](08-Session-Resilience-Worklog.md)
-- [09-Session-Resilience-Rollout-SOP.md](09-Session-Resilience-Rollout-SOP.md)
+- [03-Session-Resilience-Roadmap.md](03-Session-Resilience-Roadmap.md)
+- [04-Session-Resilience-Prompting.md](04-Session-Resilience-Prompting.md)
+- [05-Session-Resilience-Worklog.md](05-Session-Resilience-Worklog.md)
+- [06-Session-Resilience-Rollout-SOP.md](06-Session-Resilience-Rollout-SOP.md)
 
 ## Usage Pattern
 1. Read roadmap.

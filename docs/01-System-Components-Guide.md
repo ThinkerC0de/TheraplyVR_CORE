@@ -644,6 +644,33 @@ Command flow used today:
 
 ## Testing and Validation Components
 
+Automation runners:
+
+- Unity CLI validator script: `scripts/unity_cli_validate.ps1`
+  - compile execute-method: `TheraplyCore.Editor.Automation.UnityCliValidation.RunCompileValidation`
+  - build execute-method: `TheraplyCore.Editor.Automation.UnityCliValidation.RunAndroidDebugBuildValidation`
+  - default logs:
+    - `unity-quest-template/Temp/CliValidation/logs/unity_cli_compile.log`
+    - `unity-quest-template/Temp/CliValidation/logs/unity_cli_build.log`
+  - default build artifact:
+    - `unity-quest-template/Temp/CliValidation/build/TheraplyCliValidation.apk`
+- Unity automation source:
+  - `unity-quest-template/Assets/_TheraplyCore/Editor/Automation/UnityCliValidation.cs`
+
+Standard validation command set:
+
+```powershell
+# repo root
+powershell -ExecutionPolicy Bypass -File .\scripts\unity_cli_validate.ps1 -Mode both
+```
+
+```bash
+# flutter_controller
+flutter analyze
+flutter test
+flutter build apk --debug
+```
+
 Flutter test suites that protect resilience behavior:
 
 - `flutter_controller/test/chaos_fault_matrix_test.dart`
@@ -655,4 +682,3 @@ Flutter test suites that protect resilience behavior:
 - `flutter_controller/test/manual_resync_report_signal_test.dart`
 
 These tests are part of the safety net for session resilience hardening.
-

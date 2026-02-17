@@ -185,7 +185,19 @@ Deliverables:
 Exit Criteria:
 - Predefined reliability threshold reached (example: >= 99.9% no-loss sessions in stress tests).
 
+## Phase P5 - Operational Automation Hardening
+Target: make resilience validation repeatable and CLI-driven for every work block.
+
+Deliverables:
+1. Automated Unity CLI compile/build validation scripts and execute-methods.
+2. Documentation with exact commands, prerequisites, expected outputs, and common failures.
+3. Validation discipline: `flutter analyze`, `flutter test`, `flutter build apk --debug`, plus Unity CLI compile/build check in each resilience hardening cycle.
+
+Exit Criteria:
+- Unity compile/build validation can be executed from terminal with one documented command.
+- Worklog entries explicitly state whether Unity CLI compile/build was run and include the concrete command used.
+
 ## Tracking and Execution Rules
-1. Every completed task must update `docs/08-Session-Resilience-Worklog.md`.
+1. Every completed task must update `docs/05-Session-Resilience-Worklog.md`.
 2. Each implementation PR must map to roadmap item IDs.
 3. No mini-game migration starts before P0 completion.

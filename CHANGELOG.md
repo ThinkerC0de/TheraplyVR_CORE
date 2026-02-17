@@ -53,7 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Documentation
 - Comprehensive README with architecture overview
-- "Creating Games" guide (03-Creating-Games.md)
+- "Creating Games" guide (docs/02-Creating-Games.md)
 - SimpleCubeGame documentation
 - _YourGames folder guide with best practices
 - API usage patterns and examples

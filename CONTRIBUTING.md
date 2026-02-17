@@ -13,7 +13,7 @@ This repository contains:
 2. Do not mix unrelated refactors with behavior changes.
 3. If behavior changes, include or update tests.
 4. Update relevant docs when contracts, flows, or setup change.
-5. For resilience program work, map changes to roadmap item IDs and update `docs/08-Session-Resilience-Worklog.md`.
+5. For resilience program work, map changes to roadmap item IDs and update `docs/05-Session-Resilience-Worklog.md`.
 
 ## Validation Before Merge
 
@@ -45,4 +45,3 @@ If you add or remove docs:
 
 1. Update `README.md` documentation links.
 2. Update `docs/README.md` index.
-

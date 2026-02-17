@@ -139,13 +139,13 @@ Use this quick fallback:
 - **[Installation Notes](INSTALLATION.md)** - Project bootstrap notes
 
 ### Architecture
-- **[System Components Guide](docs/10-System-Components-Guide.md)** - End-to-end reference for Unity and Flutter components, usage, and configuration
-- **[Creating Games Guide](docs/03-Creating-Games.md)** - Mini-game implementation patterns and contracts
+- **[System Components Guide](docs/01-System-Components-Guide.md)** - End-to-end reference for Unity and Flutter components, usage, and configuration
+- **[Creating Games Guide](docs/02-Creating-Games.md)** - Mini-game implementation patterns and contracts
 
 ### Reliability and Recovery
-- **[Session Resilience Roadmap](docs/06-Session-Resilience-Roadmap.md)** - Failure scenarios, architecture, and phased delivery plan
-- **[Session Resilience Prompting Guide](docs/07-Session-Resilience-Prompting.md)** - Copy/paste prompts to resume work after context/token resets
-- **[Session Resilience Worklog](docs/08-Session-Resilience-Worklog.md)** - Single source of truth for done/todo items
+- **[Session Resilience Roadmap](docs/03-Session-Resilience-Roadmap.md)** - Failure scenarios, architecture, and phased delivery plan
+- **[Session Resilience Prompting Guide](docs/04-Session-Resilience-Prompting.md)** - Copy/paste prompts to resume work after context/token resets
+- **[Session Resilience Worklog](docs/05-Session-Resilience-Worklog.md)** - Single source of truth for done/todo items
 
 ---
 
@@ -323,7 +323,52 @@ public class SimpleCubeGame : BaseGame
 
 ## 🧪 Testing
 
-### Unity Compilation Test
+### Automated CLI Validation (Unity + Flutter)
+
+Prerequisites:
+- Unity 6.3 (`6000.3.8f1`) with Android Build Support (SDK/NDK/OpenJDK).
+- Flutter SDK available in `PATH`.
+- No other Unity Editor instance open for the same `unity-quest-template` path (or run the command on a separate worktree path).
+
+Commands:
+
+```powershell
+# from repo root
+powershell -ExecutionPolicy Bypass -File .\scripts\unity_cli_validate.ps1 -Mode both
+
+# optional split runs
+powershell -ExecutionPolicy Bypass -File .\scripts\unity_cli_validate.ps1 -Mode compile
+powershell -ExecutionPolicy Bypass -File .\scripts\unity_cli_validate.ps1 -Mode build
+
+# optional explicit scene override for build check
+powershell -ExecutionPolicy Bypass -File .\scripts\unity_cli_validate.ps1 -Mode build -BuildScenes 'Assets/_Examples/Scenes/SessionResilienceTest.unity'
+```
+
+```bash
+# from flutter_controller/
+flutter analyze
+flutter test
+flutter build apk --debug
+```
+
+Expected output:
+- Unity script prints:
+  - `[OK] Step 'compile' passed`
+  - `[OK] Step 'android-build' passed`
+  - build artifact path, e.g. `unity-quest-template/Temp/CliValidation/build/TheraplyCliValidation.apk`
+- `flutter analyze` ends with `No issues found!`
+- `flutter test` ends with `All tests passed!`
+- `flutter build apk --debug` ends with `Built ... app-debug.apk`
+
+Common failures:
+- `It looks like another Unity instance is running with this project open`:
+  - close the existing editor for that project path, or run CLI validation on a separate worktree path.
+- `No scenes available for CLI build`:
+  - add enabled scenes in Unity Build Settings, or pass `-BuildScenes`.
+- Android module/SDK issues:
+  - install Android Build Support for the target Unity version and accept Android SDK licenses.
+
+### Unity Manual Compilation Check (Fallback)
 ```
 1. Open project in Unity 6.3
 2. Wait for import (first time: ~5 minutes)
