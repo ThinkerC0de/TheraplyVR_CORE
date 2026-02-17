@@ -1,5 +1,19 @@
 {
   "dependencies": {
+    "com.github-glitchenzo.nugetforunity": {
+      "version": "https://github.com/GlitchEnzo/NuGetForUnity.git?path=/src/NuGetForUnity",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {},
+      "hash": "c2af83c9d4f8cdaada9d4a0e94de2f195d8e1d01"
+    },
+    "com.unity.editorcoroutines": {
+      "version": "1.0.1",
+      "depth": 1,
+      "source": "registry",
+      "dependencies": {},
+      "url": "https://packages.unity.com"
+    },
     "com.unity.multiplayer.center": {
       "version": "1.0.1",
       "depth": 0,
@@ -7,6 +21,17 @@
       "dependencies": {
         "com.unity.modules.uielements": "1.0.0"
       }
+    },
+    "com.unity.webrtc": {
+      "version": "3.0.0",
+      "depth": 0,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.modules.audio": "1.0.0",
+        "com.unity.editorcoroutines": "1.0.0",
+        "com.unity.modules.jsonserialize": "1.0.0"
+      },
+      "url": "https://packages.unity.com"
     },
     "jp.hadashikick.vcontainer": {
       "version": "https://github.com/hadashiA/VContainer.git?path=VContainer/Assets/VContainer",
