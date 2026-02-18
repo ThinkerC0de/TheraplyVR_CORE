@@ -1,0 +1,735 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!29 &1
+OcclusionCullingSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_OcclusionBakeSettings:
+    smallestOccluder: 5
+    smallestHole: 0.25
+    backfaceThreshold: 100
+  m_SceneGUID: 00000000000000000000000000000000
+  m_OcclusionCullingData: {fileID: 0}
+--- !u!104 &2
+RenderSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 10
+  m_Fog: 0
+  m_FogColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
+  m_FogMode: 3
+  m_FogDensity: 0.01
+  m_LinearFogStart: 0
+  m_LinearFogEnd: 300
+  m_AmbientSkyColor: {r: 0.212, g: 0.227, b: 0.259, a: 1}
+  m_AmbientEquatorColor: {r: 0.114, g: 0.125, b: 0.133, a: 1}
+  m_AmbientGroundColor: {r: 0.047, g: 0.043, b: 0.035, a: 1}
+  m_AmbientIntensity: 1
+  m_AmbientMode: 0
+  m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
+  m_SkyboxMaterial: {fileID: 10304, guid: 0000000000000000f000000000000000, type: 0}
+  m_HaloStrength: 0.5
+  m_FlareStrength: 1
+  m_FlareFadeSpeed: 3
+  m_HaloTexture: {fileID: 0}
+  m_SpotCookie: {fileID: 10001, guid: 0000000000000000e000000000000000, type: 0}
+  m_DefaultReflectionMode: 0
+  m_DefaultReflectionResolution: 128
+  m_ReflectionBounces: 1
+  m_ReflectionIntensity: 1
+  m_CustomReflection: {fileID: 0}
+  m_Sun: {fileID: 0}
+  m_UseRadianceAmbientProbe: 0
+--- !u!157 &3
+LightmapSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 13
+  m_BakeOnSceneLoad: 0
+  m_GISettings:
+    serializedVersion: 2
+    m_BounceScale: 1
+    m_IndirectOutputScale: 1
+    m_AlbedoBoost: 1
+    m_EnvironmentLightingMode: 0
+    m_EnableBakedLightmaps: 1
+    m_EnableRealtimeLightmaps: 0
+  m_LightmapEditorSettings:
+    serializedVersion: 12
+    m_Resolution: 2
+    m_BakeResolution: 40
+    m_AtlasSize: 1024
+    m_AO: 0
+    m_AOMaxDistance: 1
+    m_CompAOExponent: 1
+    m_CompAOExponentDirect: 0
+    m_ExtractAmbientOcclusion: 0
+    m_Padding: 2
+    m_LightmapParameters: {fileID: 0}
+    m_LightmapsBakeMode: 1
+    m_TextureCompression: 1
+    m_ReflectionCompression: 2
+    m_MixedBakeMode: 2
+    m_BakeBackend: 2
+    m_PVRSampling: 1
+    m_PVRDirectSampleCount: 32
+    m_PVRSampleCount: 512
+    m_PVRBounces: 2
+    m_PVREnvironmentSampleCount: 256
+    m_PVREnvironmentReferencePointCount: 2048
+    m_PVRFilteringMode: 1
+    m_PVRDenoiserTypeDirect: 1
+    m_PVRDenoiserTypeIndirect: 1
+    m_PVRDenoiserTypeAO: 1
+    m_PVRFilterTypeDirect: 0
+    m_PVRFilterTypeIndirect: 0
+    m_PVRFilterTypeAO: 0
+    m_PVREnvironmentMIS: 1
+    m_PVRCulling: 1
+    m_PVRFilteringGaussRadiusDirect: 1
+    m_PVRFilteringGaussRadiusIndirect: 1
+    m_PVRFilteringGaussRadiusAO: 1
+    m_PVRFilteringAtrousPositionSigmaDirect: 0.5
+    m_PVRFilteringAtrousPositionSigmaIndirect: 2
+    m_PVRFilteringAtrousPositionSigmaAO: 1
+    m_ExportTrainingData: 0
+    m_TrainingDataDestination: TrainingData
+    m_LightProbeSampleCountMultiplier: 4
+  m_LightingDataAsset: {fileID: 20201, guid: 0000000000000000f000000000000000, type: 0}
+  m_LightingSettings: {fileID: 0}
+--- !u!196 &4
+NavMeshSettings:
+  serializedVersion: 2
+  m_ObjectHideFlags: 0
+  m_BuildSettings:
+    serializedVersion: 3
+    agentTypeID: 0
+    agentRadius: 0.5
+    agentHeight: 2
+    agentSlope: 45
+    agentClimb: 0.4
+    ledgeDropHeight: 0
+    maxJumpAcrossDistance: 0
+    minRegionArea: 2
+    manualCellSize: 0
+    cellSize: 0.16666667
+    manualTileSize: 0
+    tileSize: 256
+    buildHeightMesh: 0
+    maxJobWorkers: 0
+    preserveTilesOutsideBounds: 0
+    debug:
+      m_Flags: 0
+  m_NavMeshData: {fileID: 0}
+--- !u!1 &854900682
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 854900685}
+  - component: {fileID: 854900684}
+  - component: {fileID: 854900686}
+  m_Layer: 0
+  m_Name: 'NetworkManager '
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &854900684
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 854900682}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4cc16c10f39eb4e4585598fe6a9a59b1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Network.Discovery.UDPDiscoveryService
+  _discoveryPort: 8767
+  _broadcastInterval: 0.5
+  _deviceTimeout: 10
+  _studentId: 
+  _customDeviceName: 
+  _logBroadcasts: 1
+  _logReceives: 1
+--- !u!4 &854900685
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 854900682}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &854900686
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 854900682}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 095738401066ef44fbd364163b172818, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Network.Connection.TCPServerService
+  _serverPort: 8080
+  _sendBufferSize: 8192
+  _receiveBufferSize: 8192
+  _discoveryService: {fileID: 854900684}
+  _mediaStreamService: {fileID: 1684796133}
+  _logConnections: 1
+  _logMessages: 0
+--- !u!1 &1129943613
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1129943615}
+  - component: {fileID: 1129943614}
+  m_Layer: 0
+  m_Name: Directional Light
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!108 &1129943614
+Light:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1129943613}
+  m_Enabled: 1
+  serializedVersion: 12
+  m_Type: 1
+  m_Color: {r: 1, g: 0.95686275, b: 0.8392157, a: 1}
+  m_Intensity: 1
+  m_Range: 10
+  m_SpotAngle: 30
+  m_InnerSpotAngle: 21.80208
+  m_CookieSize2D: {x: 0.5, y: 0.5}
+  m_Shadows:
+    m_Type: 2
+    m_Resolution: -1
+    m_CustomResolution: -1
+    m_Strength: 1
+    m_Bias: 0.05
+    m_NormalBias: 0.4
+    m_NearPlane: 0.2
+    m_CullingMatrixOverride:
+      e00: 1
+      e01: 0
+      e02: 0
+      e03: 0
+      e10: 0
+      e11: 1
+      e12: 0
+      e13: 0
+      e20: 0
+      e21: 0
+      e22: 1
+      e23: 0
+      e30: 0
+      e31: 0
+      e32: 0
+      e33: 1
+    m_UseCullingMatrixOverride: 0
+  m_Cookie: {fileID: 0}
+  m_DrawHalo: 0
+  m_Flare: {fileID: 0}
+  m_RenderMode: 0
+  m_CullingMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_RenderingLayerMask: 1
+  m_Lightmapping: 4
+  m_LightShadowCasterMode: 0
+  m_AreaSize: {x: 1, y: 1}
+  m_BounceIntensity: 1
+  m_ColorTemperature: 6570
+  m_UseColorTemperature: 0
+  m_BoundingSphereOverride: {x: 0, y: 0, z: 0, w: 0}
+  m_UseBoundingSphereOverride: 0
+  m_UseViewFrustumForShadowCasterCull: 1
+  m_ForceVisible: 0
+  m_ShadowRadius: 0
+  m_ShadowAngle: 0
+  m_LightUnit: 1
+  m_LuxAtDistance: 1
+  m_EnableSpotReflector: 1
+--- !u!4 &1129943615
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1129943613}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0.40821788, y: -0.23456968, z: 0.10938163, w: 0.8754261}
+  m_LocalPosition: {x: 0, y: 3, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 50, y: -30, z: 0}
+--- !u!1 &1684796129
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1684796132}
+  - component: {fileID: 1684796131}
+  - component: {fileID: 1684796130}
+  - component: {fileID: 1684796133}
+  m_Layer: 0
+  m_Name: Main Camera
+  m_TagString: MainCamera
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!81 &1684796130
+AudioListener:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1684796129}
+  m_Enabled: 1
+--- !u!20 &1684796131
+Camera:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1684796129}
+  m_Enabled: 1
+  serializedVersion: 2
+  m_ClearFlags: 1
+  m_BackGroundColor: {r: 0.19215687, g: 0.3019608, b: 0.4745098, a: 0}
+  m_projectionMatrixMode: 1
+  m_GateFitMode: 2
+  m_FOVAxisMode: 0
+  m_Iso: 200
+  m_ShutterSpeed: 0.005
+  m_Aperture: 16
+  m_FocusDistance: 10
+  m_FocalLength: 50
+  m_BladeCount: 5
+  m_Curvature: {x: 2, y: 11}
+  m_BarrelClipping: 0.25
+  m_Anamorphism: 0
+  m_SensorSize: {x: 36, y: 24}
+  m_LensShift: {x: 0, y: 0}
+  m_NormalizedViewPortRect:
+    serializedVersion: 2
+    x: 0
+    y: 0
+    width: 1
+    height: 1
+  near clip plane: 0.3
+  far clip plane: 1000
+  field of view: 60
+  orthographic: 0
+  orthographic size: 5
+  m_Depth: -1
+  m_CullingMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_RenderingPath: -1
+  m_TargetTexture: {fileID: 0}
+  m_TargetDisplay: 0
+  m_TargetEye: 3
+  m_HDR: 1
+  m_AllowMSAA: 1
+  m_AllowDynamicResolution: 0
+  m_ForceIntoRT: 0
+  m_OcclusionCulling: 1
+  m_StereoConvergence: 10
+  m_StereoSeparation: 0.022
+--- !u!4 &1684796132
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1684796129}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 1, z: -10}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1684796133
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1684796129}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 646a1dd8e2daa5c44bb41daafd5a5fe6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Streaming.MediaStreamService
+  _sourceCamera: {fileID: 1684796131}
+  _autoDetectCamera: 0
+  _sendQuestAudio: 1
+  _sourceAudioListener: {fileID: 1684796130}
+  _receiveTherapistVoice: 1
+  _streamWidth: 1280
+  _streamHeight: 720
+  _targetFps: 60
+  _targetBitrate: 2500000
+  _stunServers:
+  - stun:stun.l.google.com:19302
+  - stun:stun1.l.google.com:19302
+  _logStats: 1
+  _logVerbose: 0
+--- !u!1 &1784697665
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1784697676}
+  - component: {fileID: 1784697674}
+  - component: {fileID: 1784697675}
+  - component: {fileID: 1784697673}
+  - component: {fileID: 1784697672}
+  - component: {fileID: 1784697671}
+  - component: {fileID: 1784697670}
+  - component: {fileID: 1784697669}
+  - component: {fileID: 1784697668}
+  - component: {fileID: 1784697667}
+  - component: {fileID: 1784697666}
+  m_Layer: 0
+  m_Name: RuntimeServices
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1784697666
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1784697665}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4576d87bb3cf77b4a97c10172dcb4723, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Firebase.FirebaseDataService
+  _batchSize: 10
+  _batchInterval: 5
+  _maxQueueSize: 1000
+  _dropOldestOnFull: 1
+  _logWrites: 1
+  _simulateFirebase: 0
+  _sessionIngestEndpointUrl: http://127.0.0.1:18765/session-ingest
+  _sessionReconciliationEndpointUrl: http://127.0.0.1:18765/session-reconciliation
+  _firebaseAuthBearerToken: 
+  _firebaseApiKey: 
+  _firebaseRequestTimeoutSeconds: 20
+  _logFirebaseBackendPayloads: 1
+  _logFirebaseBackendDiagnostics: 1
+  _persistCriticalSessionEventsLocally: 1
+  _persistAllEventsToDurableStore: 1
+  _preferSqliteWalStore: 1
+  _mirrorDurableEventsToNdjson: 1
+  _localDurableFolder: session_resilience
+  _localDurableFileName: events.ndjson
+  _sqliteStoreFileName: session_events.db
+  _maxDurableStoreQueueSize: 2048
+  _logLocalPersistence: 1
+  _allowVolatileQueueFallbackWhenDurableWriteFails: 1
+  _sessionContext: {fileID: 1784697675}
+  _enableOutboxSync: 1
+  _outboxSyncIntervalSeconds: 2
+  _outboxBatchSize: 32
+  _outboxBackoffBaseSeconds: 1
+  _outboxBackoffMaxSeconds: 60
+  _outboxBackoffJitter: 0.2
+  _logOutboxSync: 1
+  _outboxWorkerId: 
+--- !u!114 &1784697667
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1784697665}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d6cb1583047afe29a4f1bc5d9e3087c2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.GameSessionSnapshotService
+  _sessionContext: {fileID: 1784697675}
+  _runtimeService: {fileID: 1784697668}
+  _autoRestoreOnStart: 1
+  _recoverToInterruptedOnStart: 1
+  _recoveryReasonCode: AUTO_RECOVERY_APP_RESTART
+  _snapshotOnSessionChanged: 1
+  _snapshotOnStateBoundaries: 1
+  _snapshotIntervalSeconds: 5
+  _snapshotFolder: session_resilience
+  _snapshotFileName: snapshot.json
+  _maxPendingSnapshots: 32
+  _logSnapshots: 0
+--- !u!114 &1784697668
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1784697665}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 63d0feb3a3e00494cb92e26ca37b110d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.GameRuntimeService
+  _registryService: {fileID: 1784697669}
+  _contextService: {fileID: 1784697670}
+  _commandBus: {fileID: 1784697674}
+  _tcpServerService: {fileID: 854900686}
+  _firebaseDataService: {fileID: 1784697666}
+  _defaultGameId: 
+  _subscribeToStandardCommands: 1
+  _syncStatusPollIntervalSeconds: 1
+  _enableSessionWatchdog: 1
+  _watchdogHeartbeatIntervalSeconds: 2
+  _watchdogHungThresholdSeconds: 8
+  _watchdogAutoInterruptInProgress: 1
+  _watchdogEmitTelemetry: 1
+  _watchdogLogHeartbeat: 0
+  _enableStructuredCrashContext: 1
+  _captureUnityExceptionLogs: 1
+  _captureAppDomainUnhandledExceptions: 1
+  _captureUnityErrorLogs: 0
+  _persistCrashReportsLocally: 1
+  _emitCrashReportsToTelemetry: 1
+  _crashReportFolder: session_resilience
+  _crashReportFileName: crash_reports.ndjson
+  _maxCrashReportsPerFrame: 2
+  _maxPendingCrashSignals: 64
+  _logCrashCapture: 1
+--- !u!114 &1784697669
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1784697665}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a9c9504f8b267ce418b8dadea6908759, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.GameRegistryService
+  _entries: []
+  _logMappings: 1
+  _autoDiscoverSceneModules: 1
+  _autoProvisionFallbackModuleWhenEmpty: 1
+  _autoProvisionFallbackGameId: 
+  _autoProvisionFallbackModuleTypeName: 
+  _autoProvisionHostObjectName: GameModuleRuntime
+  _enableOnDemandProvisioning: 1
+  _runtimeProvisionEntries: []
+--- !u!114 &1784697670
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1784697665}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9ac807e234624bc44b10ccdb7feba9a8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.GameContextService
+  _sessionContext: {fileID: 1784697675}
+  _commandBus: {fileID: 1784697674}
+  _telemetryService: {fileID: 1784697673}
+  _clockService: {fileID: 1784697672}
+  _feedbackService: {fileID: 1784697671}
+  _snapshotService: {fileID: 1784697667}
+--- !u!114 &1784697671
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1784697665}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 18064193841d1e94690bcf111f8425c6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.GameFeedbackService
+  _audioSource: {fileID: 0}
+  _audioEntries: []
+  _logMissingAudioIds: 1
+  _logHints: 1
+--- !u!114 &1784697672
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1784697665}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 87daa6854fa55b24cb1fc871c8a28aeb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.GameClockService
+  _sessionContext: {fileID: 1784697675}
+  _syncToSessionStart: 1
+--- !u!114 &1784697673
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1784697665}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4b8992a82d12812488d8aebfb64ab750, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.GameTelemetryService
+  _firebaseDataService: {fileID: 1784697666}
+  _sessionContext: {fileID: 1784697675}
+  _enrichPayloadWithSessionMetadata: 1
+  _logTelemetry: 0
+  _maxPendingTelemetryFallback: 256
+  _logTelemetryFallback: 0
+--- !u!114 &1784697674
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1784697665}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0e2239066cca1a04aa0f2a7fae58d806, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.GameCommandBus
+  _tcpServerService: {fileID: 854900686}
+  _tcpConnectionService: {fileID: 0}
+  _sessionContext: {fileID: 1784697675}
+  _logInbound: 1
+  _logOutbound: 1
+  _logUnmappedIncoming: 0
+--- !u!114 &1784697675
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1784697665}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fa1297a2af8d0084db56a5e063f5f264, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.GameSessionContext
+  _patientId: unknown_patient
+  _therapistId: unknown_therapist
+  _sessionId: 
+  _autoStartSessionOnAwake: 1
+  _deferAutoStartWhenRecoverySnapshotExists: 1
+  _recoverySnapshotFolder: session_resilience
+  _recoverySnapshotFileName: snapshot.json
+  _sessionState: 0
+--- !u!4 &1784697676
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1784697665}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1965591283
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1965591285}
+  - component: {fileID: 1965591284}
+  m_Layer: 0
+  m_Name: VideoStreaming
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1965591284
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1965591283}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f755fd64d05659540ba7022cf233b3f6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Streaming.WebRTCServerSignaling
+  _mediaStreamService: {fileID: 1684796133}
+  _tcpServer: {fileID: 854900686}
+  _logSignaling: 1
+--- !u!4 &1965591285
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1965591283}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1660057539 &9223372036854775807
+SceneRoots:
+  m_ObjectHideFlags: 0
+  m_Roots:
+  - {fileID: 1684796132}
+  - {fileID: 1129943615}
+  - {fileID: 1784697676}
+  - {fileID: 854900685}
+  - {fileID: 1965591285}

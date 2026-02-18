@@ -29,6 +29,28 @@ namespace TheraplyCore.Games.Contracts
         int Version { get; }
     }
 
+    /// <summary>
+    /// Optional contract for modules that can supply a runtime-safe default config.
+    /// Used by smoke tests and minimal start flows when no explicit UPDATE_CONFIG exists yet.
+    /// </summary>
+    public interface IDefaultGameConfigProvider
+    {
+        IGameConfig CreateDefaultConfig();
+    }
+
+    /// <summary>
+    /// Optional contract for modules that can translate START_GAME payload fields into runtime config.
+    /// Allows mobile-selected parameters to be applied without a separate UPDATE_CONFIG command.
+    /// </summary>
+    public interface IStartCommandConfigProvider
+    {
+        bool TryCreateConfigFromStartCommand(
+            StartGameCommand command,
+            IGameConfig previousConfig,
+            out IGameConfig resolvedConfig,
+            out string reasonCode);
+    }
+
     public interface IGameResult
     {
         string GameId { get; }

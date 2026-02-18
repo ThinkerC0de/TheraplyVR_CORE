@@ -671,6 +671,80 @@ flutter test
 flutter build apk --debug
 ```
 
+### Session Smoke + Firebase Network Validation (M1 -> M3)
+
+Smoke flow baseline:
+- Example games are kept in `_Examples`:
+  - `smoke_test_game` (`unity-quest-template/Assets/_Examples/Scripts/SmokeTestGameModule.cs`)
+  - `demo_cube_clicker` (`unity-quest-template/Assets/_Examples/Scripts/DemoCubeGameModule.cs`)
+- Game-specific IDs are not hardcoded in core runtime paths.
+- Example runtime registration is handled in `_Examples` bootstrap code (`unity-quest-template/Assets/_Examples/Scripts/ExampleGameRuntimeBootstrap.cs`).
+- Mobile selector: `flutter_controller/lib/screens/control_screen.dart` (dropdown in `ControlScreen`).
+- Critical command payloads now include selected `gameId` for `START_GAME`, `PAUSE_GAME`, `RESUME_GAME`, `STOP_GAME`.
+
+Firebase real-network validation runner:
+- Execute-method source:
+  - `unity-quest-template/Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs`
+- Validation game selection order:
+  1. Unity CLI argument `-validationGameId=<gameId>`
+  2. Runtime active/default game id (if configured)
+  3. First registered/bootstrapped example game module
+- Run command (repo root):
+
+```powershell
+"C:\Program Files\Unity\Hub\Editor\6000.3.8f1\Editor\Unity.exe" `
+  -batchmode -nographics `
+  -projectPath "C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template" `
+  -validationGameId "smoke_test_game" `
+  -executeMethod "TheraplyCore.Editor.Automation.FirebaseNetworkValidation.RunFirebaseNetworkValidation" `
+  -logFile "C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Temp\CliValidation\logs\firebase_network_validation.log"
+```
+
+Expected PASS markers in log:
+- `[FirebaseNetworkValidation] Online phase: ...`
+- `[FirebaseNetworkValidation] Offline phase: ...`
+- `[FirebaseNetworkValidation] Reconnect phase: ...`
+- `[FirebaseNetworkValidation] PASS: ...`
+
+### Firebase Mock vs Real Toggle
+
+Primary toggle in `FirebaseDataService`:
+- `_simulateFirebase = true` -> simulated backend responses.
+- `_simulateFirebase = false` -> real HTTP calls to ingest/reconciliation endpoints.
+
+Recommended test-scene wiring (`SessionResilienceTest.unity`):
+- `_simulateFirebase: false`
+- `_sessionIngestEndpointUrl: http://127.0.0.1:<port>/session-ingest`
+- `_sessionReconciliationEndpointUrl: http://127.0.0.1:<port>/session-reconciliation`
+- `_logFirebaseBackendPayloads: true`
+- `_logFirebaseBackendDiagnostics: true`
+
+NDJSON fallback note:
+- If SQLite WAL init fails, runtime can fall back to NDJSON backend.
+- Current NDJSON backend supports outbox + sequence index operations required by resilience validation.
+
+### Common Failures and Fixes
+
+- Symptom: batch run hangs with scene recovery prompt.
+  - Cause: stale `.utmp` recovery state.
+  - Fix: close stale Unity process and rerun validation from clean batch session.
+
+- Symptom: outbox/reconciliation unavailable in fallback mode.
+  - Cause: SQLite unavailable and fallback backend lacks required operations.
+  - Fix: ensure fallback backend supports outbox + sequence index (implemented in `SessionEventStore` NDJSON backend).
+
+- Symptom: Unity exception `Create can only be called from the main thread`.
+  - Cause: backend web request path executed off main thread.
+  - Fix: keep Unity networking calls on main thread in validation flow.
+
+- Symptom: no ingest/reconciliation logs despite command send.
+  - Cause: endpoint misconfiguration or simulated mode still enabled.
+  - Fix: verify scene/component fields and ensure `_simulateFirebase` is `false`.
+
+- Symptom: `Unable to resolve validation gameId` in Firebase CLI validation.
+  - Cause: no runtime default and no game module registered in scene.
+  - Fix: pass `-validationGameId=<gameId>` or ensure example module bootstrap/registration is present.
+
 Flutter test suites that protect resilience behavior:
 
 - `flutter_controller/test/chaos_fault_matrix_test.dart`

@@ -42,6 +42,10 @@
 25. `DONE` - `R-P4-003` - Added rollout checklist and incident response SOP with staged rollout gates, no-go thresholds, and fault-specific runbooks.
 26. `DONE` - `R-P5-001` - Added automated Unity CLI compile/build validation flow with documentation and executed full validation set (Unity + Flutter).
 27. `DONE` - `R-DOC-004` - Standardized runtime/docs naming from `MiniGame` to `Game` across contracts, services, scene wiring, and API references.
+28. `DONE` - `R-P5-002` - Added practical smoke execution flow with explicit game selection (`smoke_test_game`) across mobile + Unity runtime command payloads.
+29. `DONE` - `R-P5-003` - Activated real Firebase endpoint path by default for resilience test scene and added backend diagnostics logging for ingest/reconciliation success/failure reason codes.
+30. `DONE` - `R-P5-004` - Added deterministic Unity automation for online/offline/reconnect resilience validation and executed full M4 command set with passing Unity/Flutter checks.
+31. `DONE` - `R-P5-005` - Removed hardcoded validation `gameId` from Firebase automation and added dynamic runtime/example module resolution with CLI override support (`-validationGameId`).
 
 ## P0 Backlog - Protocol and Session Safety Baseline
 
@@ -95,8 +99,70 @@
 | Item ID | Task | Status | Notes |
 |---|---|---|---|
 | R-P5-001 | Add automated Unity CLI compile/build validation and operational docs | DONE | Added `scripts/unity_cli_validate.ps1` and `UnityCliValidation` execute-methods; documented command usage/prerequisites/outputs/failures in `README.md` and `docs/01-System-Components-Guide.md`; validated Unity CLI + Flutter command set |
+| R-P5-002 | Add minimal smoke game execution path (mobile selector + runtime explicit `gameId`) | DONE | Added `smoke_test_game` module, selector in `ControlScreen`, and explicit `gameId` payload propagation for START/PAUSE/RESUME/STOP; runtime now resolves/starts by explicit `gameId` with auto-discovery fallback |
+| R-P5-003 | Enable real Firebase endpoint validation path with diagnostics | DONE | `FirebaseDataService` defaults to real mode (`_simulateFirebase=false`) and logs backend ingest/reconciliation diagnostics + reason codes; test scene endpoints wired to local validation backend |
+| R-P5-004 | Add Unity Firebase online/offline/reconnect automation and run full validation set | DONE | Added `FirebaseNetworkValidation` execute-method automation and validated M3 + M4 commands in this workspace |
+| R-P5-005 | Remove core hardcoded validation game IDs and keep game-specific wiring in examples | DONE | `FirebaseNetworkValidation` now resolves `gameId` dynamically (CLI/runtime/registry) and can bootstrap example modules for validation without core `smoke_test_game` literals |
+
+## P6 Backlog - Catalog, Entitlements, and Guided Session Modes
+
+| Item ID | Task | Status | Notes |
+|---|---|---|---|
+| R-P6-001 | Define shared game catalog contract for mobile and Quest (`gameId`, `sceneKey`, `contentVersion`, `parameterSchema`, `entitlementKey`) | TODO | Contract must be runtime-safe, versioned, and backward compatible with already installed content |
+| R-P6-002 | Add mobile game-catalog UI with runtime availability and install state | TODO | Therapist sees full allowed list; launch only when Quest reports game as ready |
+| R-P6-003 | Implement role/license entitlement model (`THERAPIST_FULL`, `PARENT_PURCHASED_PACKS`) | TODO | One source of truth for visible + launchable games across Flutter and Unity |
+| R-P6-004 | Implement Quest game content lifecycle (manifest sync, download, verify, install, activate, rollback) | TODO | On-demand content delivery must survive reconnect/restart and report deterministic state |
+| R-P6-005 | Extend protocol with content-management commands/events | TODO | Add `SYNC_CATALOG`, `INSTALL_GAME`, `UNINSTALL_GAME`, `GAME_INSTALL_STATUS`, and ACK/NACK semantics |
+| R-P6-006 | Build therapist session-template/program builder with per-game parameter presets | TODO | Enables reusable plans and home mode handoff |
+| R-P6-007 | Build parent one-button guided mode from therapist-defined plan | TODO | Parent flow must minimize decisions and auto-drive next safe step |
+| R-P6-008 | Define adaptive continuation policy for interrupted/incomplete child sessions | TODO | System should safely continue or reschedule unfinished plan segments without data loss |
+| R-P6-009 | Enforce per-child session closure lock in UX + protocol | TODO | Block start of new session for same child until previous is explicitly ended/aborted |
+| R-P6-010 | Add validation matrix for therapist vs parent flows and entitlement edge cases | TODO | Include offline, stale entitlement cache, partial download, uninstall, and role switch scenarios |
+| R-P6-011 | Add game-driven Flutter control-layout schema (editor-configurable) | TODO | Per-game control UI should be defined by declarative schema (`controls`, bindings, layout, style tokens, validation), versioned, bundled with game content, and rendered by Flutter runtime without hardcoded screen logic |
 
 ## Notes
+- Validation run (2026-02-17, Unity follow-up/modularity): Firebase network automation passed after removing hardcoded validation `gameId` and adding dynamic module/game resolution.
+- Firebase validation command used (2026-02-17):
+  - `"C:\Program Files\Unity\Hub\Editor\6000.3.8f1\Editor\Unity.exe" -batchmode -nographics -projectPath "C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template" -buildTarget Android -executeMethod "TheraplyCore.Editor.Automation.FirebaseNetworkValidation.RunFirebaseNetworkValidation" -logFile "C:\Users\licen\Projects\theraply-vr-framework\docs\evidence\firebase_network_validation_20260217_2138.log"`
+- Firebase validation PASS evidence (2026-02-17):
+  - `[FirebaseNetworkValidation] PASS: gameId=demo_cube_clicker; session=...; onlineAccepted=32; onlineSynced=32; offlineFailureDelta=1; offlineRetryDelta=32; pendingAfterReconnect=0; reconnectAccepted=390; reconnectSynced=390`
+- Validation run (2026-02-17, full command set re-check):
+  - `flutter analyze` -> PASS (`No issues found!`).
+  - `flutter test` -> PASS (`All tests passed!`).
+  - `flutter build apk --debug` -> PASS (`Built build\app\outputs\flutter-apk\app-debug.apk`).
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\unity_cli_validate.ps1 -Mode both` -> PASS (Unity compile + android-build).
+- Execution order checkpoint (2026-02-17): M1 smoke flow DONE -> M3 real-network validation DONE -> P6 backlog remains TODO.
+- Smoke flow implementation (2026-02-17):
+  - Mobile selector + `gameId` payload path: `flutter_controller/lib/screens/control_screen.dart`.
+  - Smoke module: `unity-quest-template/Assets/_Examples/Scripts/SmokeTestGameModule.cs` (`smoke_test_game`).
+  - Runtime explicit startup and result reporting hardening:
+    - `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs`
+    - `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameRegistryService.cs`
+- Firebase real-network activation (2026-02-17):
+  - Default simulate toggle set to real path in `unity-quest-template/Assets/_TheraplyCore/Firebase/FirebaseDataService.cs` (`_simulateFirebase = false`).
+  - Scene endpoints wired in `unity-quest-template/Assets/_Examples/Scenes/SessionResilienceTest.unity`.
+  - Added backend diagnostics fields/logging for ingest/reconciliation success/failure + reason codes.
+- M3 validation run command (2026-02-17):
+  - `"C:\Program Files\Unity\Hub\Editor\6000.3.8f1\Editor\Unity.exe" -batchmode -nographics -projectPath "C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template" -executeMethod "TheraplyCore.Editor.Automation.FirebaseNetworkValidation.RunFirebaseNetworkValidation" -logFile "C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Temp\CliValidation\logs\unity_firebase_network_validation.log"`
+  - PASS evidence in log:
+    - `[FirebaseNetworkValidation] Online phase: accepted=32, outboxSynced=32, pending=280, inFlight=0.`
+    - `[FirebaseNetworkValidation] Offline phase: failureDelta=1, retryDelta=32, pending=284.`
+    - `[FirebaseNetworkValidation] Reconnect phase: accepted=316, pending=0, inFlight=0, synced=316.`
+    - `[FirebaseNetworkValidation] PASS: session=...`
+- M4 validation runs (2026-02-17):
+  - `flutter analyze` -> PASS (`No issues found!`).
+  - `flutter test` -> PASS (`All tests passed!`).
+  - `flutter build apk --debug` -> PASS (`Built build\app\outputs\flutter-apk\app-debug.apk`).
+  - Unity compile/build executed via:
+    - `powershell -ExecutionPolicy Bypass -File .\scripts\unity_cli_validate.ps1 -Mode both`
+  - Unity result: compile PASS + android-build PASS (`TheraplyCliValidation.apk` generated in `unity-quest-template\Temp\CliValidation\build`).
+- Common failures observed + fixes (2026-02-17):
+  - Batch scene recovery prompt from stale `.utmp` caused apparent hang in long Unity batch runs.
+  - Main-thread exceptions in network path (`UnityWebRequest.Create`) were avoided by keeping validation flow on Unity main thread.
+  - SQLite init fallback to NDJSON blocked outbox/reconciliation capabilities; NDJSON backend now supports outbox + sequence-index operations needed by resilience validation.
+- Firebase toggle reminder:
+  - Mock mode: `_simulateFirebase = true`.
+  - Real endpoint mode: `_simulateFirebase = false` + configured `_sessionIngestEndpointUrl`/`_sessionReconciliationEndpointUrl`.
 - Wand-specific behavior from Focus and Calm is optional for telemetry and not required in P0-P2.
 - No game migration starts until P0 is complete.
 - Naming update (2026-02-17, R-DOC-004): replaced `MiniGame` runtime nomenclature with `Game` in core contracts/services (`GameContracts`, `GameCommandBus`, `GameRuntimeService`, `GameSessionContext`, etc.), Unity scene component references, and docs (`Game-Contracts.md` + guide updates) to align terminology with therapist-facing product language.

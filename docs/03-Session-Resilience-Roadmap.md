@@ -197,7 +197,43 @@ Exit Criteria:
 - Unity compile/build validation can be executed from terminal with one documented command.
 - Worklog entries explicitly state whether Unity CLI compile/build was run and include the concrete command used.
 
+## Phase P6 - Catalog, Entitlements, and Guided Session Modes
+Target: align game availability between mobile and Quest, with role-aware access and safe parent automation.
+
+Deliverables:
+1. Shared game catalog contract (`gameId`, `displayName`, `contentVersion`, `sceneKey`, `parameterSchema`, `entitlementKey`, `deliveryMode`).
+2. Mobile game selection screen backed by catalog + runtime availability state.
+3. Entitlements service for role/license (`THERAPIST_FULL`, `PARENT_PURCHASED_PACKS`) with offline cache and expiration policy.
+4. Quest content lifecycle for on-demand game delivery (manifest check, download, verify, install/activate, rollback).
+5. Protocol commands/events for catalog and content state (`SYNC_CATALOG`, `INSTALL_GAME`, `UNINSTALL_GAME`, `GAME_INSTALL_STATUS`).
+6. Therapist program builder for reusable session templates and per-game parameter presets.
+7. Parent one-button guided mode that runs therapist-defined plans with adaptive fallback when a child stops early.
+8. Session closure invariant enforcement: no new child session can start until previous session is explicitly ended/aborted.
+9. Declarative mobile control-layout schema per game (authorable with game content) so Flutter renders game-specific setup/control UI from metadata, not hardcoded screen branches.
+
+Exit Criteria:
+- Mobile catalog and Quest installed-game state are consistent after reconnect/restart.
+- Role/license updates correctly change visible/launchable game list without manual reinstall.
+- Parent guided mode can continue interrupted plans without hidden duplicate sessions or data loss.
+
+## Execution Order Checkpoint (2026-02-17)
+Strict execution order for current block:
+1. Editor/mobile smoke game flow first (`smoke_test_game`, explicit `gameId` path).
+2. Real Firebase network validation second (online/offline/reconnect, outbox retry/drain evidence).
+3. Catalog/licensing/parent-mode architecture only after steps 1-2 are green.
+
+Current checkpoint status:
+- Step 1: DONE.
+- Step 2: DONE.
+- Step 3: TODO (remains in Phase P6 backlog).
+
+## Execution Update (2026-02-17, Unity Follow-Up)
+- Firebase network automation now resolves validation `gameId` dynamically (CLI arg/runtime default/registered module) instead of hardcoded `smoke_test_game` in core automation logic.
+- Demo gameplay prototype remains in examples (`demo_cube_clicker`, `DemoCubeScene`) and is launchable by explicit `gameId` through existing runtime command flow.
+- P6 remains deferred until catalog/licensing scope is started explicitly.
+
 ## Tracking and Execution Rules
 1. Every completed task must update `docs/05-Session-Resilience-Worklog.md`.
 2. Each implementation PR must map to roadmap item IDs.
 3. No game migration starts before P0 completion.
+4. P6 implementation work starts only after smoke flow + real-network validation pass in current workspace.

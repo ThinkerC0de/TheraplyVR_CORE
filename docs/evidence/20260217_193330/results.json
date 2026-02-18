@@ -1,0 +1,46 @@
+﻿[
+    {
+        "id":  "flutter_analyze",
+        "status":  "PASS",
+        "exitCode":  0,
+        "command":  "flutter analyze",
+        "workingDirectory":  "C:\\Users\\licen\\Projects\\theraply-vr-framework\\flutter_controller",
+        "logFile":  "C:\\Users\\licen\\Projects\\theraply-vr-framework\\docs\\evidence\\20260217_193330\\commands\\flutter_analyze.log",
+        "startedAtUtc":  "2026-02-17T18:33:31.1025222Z",
+        "finishedAtUtc":  "2026-02-17T18:33:35.2576298Z",
+        "notes":  ""
+    },
+    {
+        "id":  "flutter_test",
+        "status":  "PASS",
+        "exitCode":  0,
+        "command":  "flutter test",
+        "workingDirectory":  "C:\\Users\\licen\\Projects\\theraply-vr-framework\\flutter_controller",
+        "logFile":  "C:\\Users\\licen\\Projects\\theraply-vr-framework\\docs\\evidence\\20260217_193330\\commands\\flutter_test.log",
+        "startedAtUtc":  "2026-02-17T18:33:35.2688928Z",
+        "finishedAtUtc":  "2026-02-17T18:33:46.9437395Z",
+        "notes":  ""
+    },
+    {
+        "id":  "flutter_build_apk_debug",
+        "status":  "PASS",
+        "exitCode":  0,
+        "command":  "flutter build apk --debug",
+        "workingDirectory":  "C:\\Users\\licen\\Projects\\theraply-vr-framework\\flutter_controller",
+        "logFile":  "C:\\Users\\licen\\Projects\\theraply-vr-framework\\docs\\evidence\\20260217_193330\\commands\\flutter_build_apk_debug.log",
+        "startedAtUtc":  "2026-02-17T18:33:46.9462430Z",
+        "finishedAtUtc":  "2026-02-17T18:33:52.5986531Z",
+        "notes":  ""
+    },
+    {
+        "id":  "unity_cli_validate_both",
+        "status":  "PASS",
+        "exitCode":  0,
+        "command":  "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -ExecutionPolicy Bypass -File C:\\Users\\licen\\Projects\\theraply-vr-framework\\scripts\\unity_cli_validate.ps1 -Mode both",
+        "workingDirectory":  "C:\\Users\\licen\\Projects\\theraply-vr-framework",
+        "logFile":  "C:\\Users\\licen\\Projects\\theraply-vr-framework\\docs\\evidence\\20260217_193330\\commands\\unity_cli_validate_both.log",
+        "startedAtUtc":  "2026-02-17T18:33:52.5996592Z",
+        "finishedAtUtc":  "2026-02-17T18:34:28.1323844Z",
+        "notes":  ""
+    }
+]

@@ -29,7 +29,7 @@ namespace TheraplyCore.Firebase
         
         [Header("Debug")]
         [SerializeField] private bool _logWrites = true;
-        [SerializeField] private bool _simulateFirebase = true;
+        [SerializeField] private bool _simulateFirebase = false;
 
         [Header("Firebase Backend")]
         [SerializeField] private string _sessionIngestEndpointUrl = string.Empty;
@@ -38,6 +38,7 @@ namespace TheraplyCore.Firebase
         [SerializeField] private string _firebaseApiKey = string.Empty;
         [SerializeField] [Range(3, 120)] private int _firebaseRequestTimeoutSeconds = 20;
         [SerializeField] private bool _logFirebaseBackendPayloads = false;
+        [SerializeField] private bool _logFirebaseBackendDiagnostics = true;
 
         [Header("Local Durability")]
         [SerializeField] private bool _persistCriticalSessionEventsLocally = true;
@@ -1187,15 +1188,22 @@ namespace TheraplyCore.Firebase
                     }
                     else
                     {
+                        var retryReason = NormalizeOutboxErrorCode(
+                            string.IsNullOrWhiteSpace(result.reasonCode)
+                                ? "INGEST_RETRY_REQUESTED"
+                                : result.reasonCode);
                         retryRecords.Add(new SessionOutboxRetryRecord
                         {
                             eventId = eventId,
                             nextAttemptUtc = ComputeNextOutboxAttemptUtc(attemptCount),
-                            errorCode = NormalizeOutboxErrorCode(
-                                string.IsNullOrWhiteSpace(result.reasonCode)
-                                    ? "INGEST_RETRY_REQUESTED"
-                                    : result.reasonCode),
+                            errorCode = retryReason,
                         });
+
+                        if (_logFirebaseBackendDiagnostics || _logOutboxSync)
+                        {
+                            Logger.Warning(
+                                $"[FirebaseData] Outbox event {eventId} requested retry (reason={retryReason}, attempt={attemptCount}).");
+                        }
                     }
 
                     attemptByEventId.Remove(eventId);
@@ -1252,16 +1260,7 @@ namespace TheraplyCore.Firebase
                 }
             }
 
-            var sourceDeviceId = SystemInfo.deviceUniqueIdentifier;
-            if (string.IsNullOrWhiteSpace(sourceDeviceId))
-            {
-                sourceDeviceId = SystemInfo.deviceName;
-            }
-
-            if (string.IsNullOrWhiteSpace(sourceDeviceId))
-            {
-                sourceDeviceId = "unknown_device";
-            }
+            var sourceDeviceId = ResolveDeviceIdentifierSafe();
 
             return new SessionIngestBatchRequest
             {
@@ -1288,11 +1287,22 @@ namespace TheraplyCore.Firebase
             if (_simulateFirebase)
             {
                 await Task.Delay(UnityEngine.Random.Range(40, 140));
-                return SimulateSessionIngestResponse(request);
+                var simulated = SimulateSessionIngestResponse(request);
+                LogIngestResult(
+                    operationMode: "SIMULATED",
+                    endpoint: "simulated",
+                    response: simulated,
+                    attemptedEvents: request.events.Count);
+                return simulated;
             }
 
             if (!TryResolveBackendEndpointUrl(_sessionIngestEndpointUrl, out var endpointUrl, out var endpointErrorCode))
             {
+                LogBackendCallFailure(
+                    operationName: "SESSION_INGEST",
+                    endpoint: _sessionIngestEndpointUrl,
+                    errorCode: endpointErrorCode,
+                    details: "Endpoint resolution failed.");
                 return new SessionIngestBatchResponse
                 {
                     success = false,
@@ -1308,6 +1318,11 @@ namespace TheraplyCore.Firebase
             }
             catch (Exception e)
             {
+                LogBackendCallFailure(
+                    operationName: "SESSION_INGEST",
+                    endpoint: endpointUrl,
+                    errorCode: "INGEST_REQUEST_SERIALIZE_FAILED",
+                    details: e.Message);
                 return new SessionIngestBatchResponse
                 {
                     success = false,
@@ -1319,6 +1334,11 @@ namespace TheraplyCore.Firebase
             var backendResult = await PostBackendJsonAsync(endpointUrl, requestJson, "SESSION_INGEST");
             if (!backendResult.success)
             {
+                LogBackendCallFailure(
+                    operationName: "SESSION_INGEST",
+                    endpoint: endpointUrl,
+                    errorCode: backendResult.errorCode,
+                    details: $"status={backendResult.statusCode}");
                 return new SessionIngestBatchResponse
                 {
                     success = false,
@@ -1332,6 +1352,11 @@ namespace TheraplyCore.Firebase
                     out var response,
                     out var parseErrorCode))
             {
+                LogBackendCallFailure(
+                    operationName: "SESSION_INGEST",
+                    endpoint: endpointUrl,
+                    errorCode: parseErrorCode,
+                    details: "Response parse failed.");
                 return new SessionIngestBatchResponse
                 {
                     success = false,
@@ -1350,6 +1375,11 @@ namespace TheraplyCore.Firebase
                 response.errorCode = "INGEST_BACKEND_REJECTED";
             }
 
+            LogIngestResult(
+                operationMode: "NETWORK",
+                endpoint: endpointUrl,
+                response: response,
+                attemptedEvents: request.events.Count);
             return response;
         }
 
@@ -1462,16 +1492,7 @@ namespace TheraplyCore.Firebase
 
         private SessionReconciliationRequest BuildSessionReconciliationRequest(string sessionId)
         {
-            var sourceDeviceId = SystemInfo.deviceUniqueIdentifier;
-            if (string.IsNullOrWhiteSpace(sourceDeviceId))
-            {
-                sourceDeviceId = SystemInfo.deviceName;
-            }
-
-            if (string.IsNullOrWhiteSpace(sourceDeviceId))
-            {
-                sourceDeviceId = "unknown_device";
-            }
+            var sourceDeviceId = ResolveDeviceIdentifierSafe();
 
             return new SessionReconciliationRequest
             {
@@ -1498,7 +1519,13 @@ namespace TheraplyCore.Firebase
             if (_simulateFirebase)
             {
                 await Task.Delay(UnityEngine.Random.Range(20, 80));
-                return SimulateSessionReconciliationResponse(request);
+                var simulated = SimulateSessionReconciliationResponse(request);
+                LogReconciliationResult(
+                    operationMode: "SIMULATED",
+                    endpoint: "simulated",
+                    response: simulated,
+                    sessionId: request.sessionId);
+                return simulated;
             }
 
             if (!TryResolveBackendEndpointUrl(
@@ -1506,6 +1533,11 @@ namespace TheraplyCore.Firebase
                     out var endpointUrl,
                     out var endpointErrorCode))
             {
+                LogBackendCallFailure(
+                    operationName: "SESSION_RECONCILIATION",
+                    endpoint: _sessionReconciliationEndpointUrl,
+                    errorCode: endpointErrorCode,
+                    details: "Endpoint resolution failed.");
                 return new SessionReconciliationResponse
                 {
                     success = false,
@@ -1521,6 +1553,11 @@ namespace TheraplyCore.Firebase
             }
             catch (Exception)
             {
+                LogBackendCallFailure(
+                    operationName: "SESSION_RECONCILIATION",
+                    endpoint: endpointUrl,
+                    errorCode: "RECONCILIATION_REQUEST_SERIALIZE_FAILED",
+                    details: "Request serialization failed.");
                 return new SessionReconciliationResponse
                 {
                     success = false,
@@ -1532,6 +1569,11 @@ namespace TheraplyCore.Firebase
             var backendResult = await PostBackendJsonAsync(endpointUrl, requestJson, "SESSION_RECONCILIATION");
             if (!backendResult.success)
             {
+                LogBackendCallFailure(
+                    operationName: "SESSION_RECONCILIATION",
+                    endpoint: endpointUrl,
+                    errorCode: backendResult.errorCode,
+                    details: $"status={backendResult.statusCode}");
                 return new SessionReconciliationResponse
                 {
                     success = false,
@@ -1545,6 +1587,11 @@ namespace TheraplyCore.Firebase
                     out var response,
                     out var parseErrorCode))
             {
+                LogBackendCallFailure(
+                    operationName: "SESSION_RECONCILIATION",
+                    endpoint: endpointUrl,
+                    errorCode: parseErrorCode,
+                    details: "Response parse failed.");
                 return new SessionReconciliationResponse
                 {
                     success = false,
@@ -1563,6 +1610,11 @@ namespace TheraplyCore.Firebase
                 response.errorCode = "RECONCILIATION_BACKEND_REJECTED";
             }
 
+            LogReconciliationResult(
+                operationMode: "NETWORK",
+                endpoint: endpointUrl,
+                response: response,
+                sessionId: request.sessionId);
             return response;
         }
 
@@ -1718,6 +1770,11 @@ namespace TheraplyCore.Firebase
                 {
                     result.success = true;
                     result.errorCode = string.Empty;
+                    if (_logFirebaseBackendDiagnostics || _logOutboxSync || _logFirebaseBackendPayloads)
+                    {
+                        Logger.Info(
+                            $"[FirebaseData] Backend {operationName} success (status={request.responseCode}, bytes={payloadBytes.Length})");
+                    }
                     return result;
                 }
 
@@ -1750,6 +1807,104 @@ namespace TheraplyCore.Firebase
 
                 return result;
             }
+        }
+
+        private void LogBackendCallFailure(
+            string operationName,
+            string endpoint,
+            string errorCode,
+            string details)
+        {
+            if (!_logFirebaseBackendDiagnostics && !_logOutboxSync && !_logFirebaseBackendPayloads)
+            {
+                return;
+            }
+
+            Logger.Warning(
+                $"[FirebaseData] {operationName} failed: {NormalizeOutboxErrorCode(errorCode)} " +
+                $"(endpoint={endpoint}, details={details})");
+        }
+
+        private void LogIngestResult(
+            string operationMode,
+            string endpoint,
+            SessionIngestBatchResponse response,
+            int attemptedEvents)
+        {
+            if (!_logFirebaseBackendDiagnostics && !_logOutboxSync && !_logFirebaseBackendPayloads)
+            {
+                return;
+            }
+
+            if (response == null)
+            {
+                Logger.Warning(
+                    $"[FirebaseData] SESSION_INGEST {operationMode} returned null response (endpoint={endpoint}).");
+                return;
+            }
+
+            var acceptedCount = 0;
+            var duplicateCount = 0;
+            var retryCount = 0;
+            if (response.eventResults != null)
+            {
+                for (var i = 0; i < response.eventResults.Count; i++)
+                {
+                    var status = response.eventResults[i]?.status ?? string.Empty;
+                    if (string.Equals(status, SessionIngestStatus.Accepted, StringComparison.OrdinalIgnoreCase))
+                    {
+                        acceptedCount++;
+                    }
+                    else if (string.Equals(status, SessionIngestStatus.Duplicate, StringComparison.OrdinalIgnoreCase))
+                    {
+                        duplicateCount++;
+                    }
+                    else
+                    {
+                        retryCount++;
+                    }
+                }
+            }
+
+            if (response.success)
+            {
+                Logger.Info(
+                    $"[FirebaseData] SESSION_INGEST {operationMode} success: attempted={attemptedEvents}, accepted={acceptedCount}, duplicates={duplicateCount}, retry={retryCount}, endpoint={endpoint}");
+                return;
+            }
+
+            Logger.Warning(
+                $"[FirebaseData] SESSION_INGEST {operationMode} failed: reason={NormalizeOutboxErrorCode(response.errorCode)}, attempted={attemptedEvents}, accepted={acceptedCount}, duplicates={duplicateCount}, retry={retryCount}, endpoint={endpoint}");
+        }
+
+        private void LogReconciliationResult(
+            string operationMode,
+            string endpoint,
+            SessionReconciliationResponse response,
+            string sessionId)
+        {
+            if (!_logFirebaseBackendDiagnostics && !_logOutboxSync && !_logFirebaseBackendPayloads)
+            {
+                return;
+            }
+
+            if (response == null)
+            {
+                Logger.Warning(
+                    $"[FirebaseData] SESSION_RECONCILIATION {operationMode} returned null response (session={sessionId}, endpoint={endpoint}).");
+                return;
+            }
+
+            var eventCount = response.events == null ? 0 : response.events.Count;
+            if (response.success)
+            {
+                Logger.Info(
+                    $"[FirebaseData] SESSION_RECONCILIATION {operationMode} success: session={sessionId}, events={eventCount}, endpoint={endpoint}");
+                return;
+            }
+
+            Logger.Warning(
+                $"[FirebaseData] SESSION_RECONCILIATION {operationMode} failed: session={sessionId}, reason={NormalizeOutboxErrorCode(response.errorCode)}, events={eventCount}, endpoint={endpoint}");
         }
 
         private static bool TryParseSessionIngestResponse(
@@ -1988,18 +2143,27 @@ namespace TheraplyCore.Firebase
                 return _outboxWorkerId.Trim();
             }
 
-            var uniqueDeviceId = SystemInfo.deviceUniqueIdentifier;
-            if (string.IsNullOrWhiteSpace(uniqueDeviceId))
-            {
-                uniqueDeviceId = SystemInfo.deviceName;
-            }
-
-            if (string.IsNullOrWhiteSpace(uniqueDeviceId))
-            {
-                uniqueDeviceId = "unknown_device";
-            }
+            var uniqueDeviceId = ResolveDeviceIdentifierSafe();
 
             return $"quest_{uniqueDeviceId}";
+        }
+
+        private static string ResolveDeviceIdentifierSafe()
+        {
+            try
+            {
+                var deviceId = SystemInfo.deviceUniqueIdentifier;
+                if (string.IsNullOrWhiteSpace(deviceId))
+                {
+                    deviceId = SystemInfo.deviceName;
+                }
+
+                return string.IsNullOrWhiteSpace(deviceId) ? "unknown_device" : deviceId;
+            }
+            catch (Exception)
+            {
+                return "unknown_device";
+            }
         }
 
         private static string NormalizeOutboxErrorCode(string rawErrorCode)
@@ -2170,7 +2334,7 @@ namespace TheraplyCore.Firebase
                     sessionId = ResolveSessionId(dataPoint),
                     patientId = ResolvePatientId(dataPoint),
                     therapistId = ResolveTherapistId(dataPoint),
-                    deviceId = SystemInfo.deviceUniqueIdentifier ?? "unknown_device",
+                    deviceId = ResolveDeviceIdentifierSafe(),
                     sequence = 0,
                     eventType = dataPoint.dataType ?? "unknown_event",
                     eventVersion = 1,

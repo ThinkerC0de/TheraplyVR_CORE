@@ -1,0 +1,20 @@
+﻿branch=main
+head=1257aea
+
+[git branch --show-current stderr]
+
+
+[git rev-parse --short HEAD stderr]
+
+
+[git status --short stderr]
+
+
+[git diff --name-only stderr]
+warning: in the working copy of 'docs/01-System-Components-Guide.md', LF will be replaced by CRLF the next time Git touches it warning: in the working copy of 'docs/03-Session-Resilience-Roadmap.md', LF will be replaced by CRLF the next time Git touches it warning: in the working copy of 'docs/05-Session-Resilience-Worklog.md', LF will be replaced by CRLF the next time Git touches it warning: in the working copy of 'flutter_controller/lib/screens/control_screen.dart', LF will be replaced by CRLF the next time Git touches it warning: in the working copy of 'unity-quest-template/Assets/_Examples/Scenes/SessionResilienceTest.unity', LF will be replaced by CRLF the next time Git touches it warning: in the working copy of 'unity-quest-template/Assets/_TheraplyCore/Firebase/FirebaseDataService.cs', LF will be replaced by CRLF the next time Git touches it warning: in the working copy of 'unity-quest-template/Assets/_TheraplyCore/Firebase/SessionEventStore.cs', LF will be replaced by CRLF the next time Git touches it warning: in the working copy of 'unity-quest-template/Assets/_TheraplyCore/Games/Contracts/GameContracts.cs', LF will be replaced by CRLF the next time Git touches it warning: in the working copy of 'unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameRegistryService.cs', LF will be replaced by CRLF the next time Git touches it warning: in the working copy of 'unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs', LF will be replaced by CRLF the next time Git touches it
+
+[git status --short]
+ M docs/01-System-Components-Guide.md  M docs/03-Session-Resilience-Roadmap.md  M docs/05-Session-Resilience-Worklog.md  M flutter_controller/lib/screens/control_screen.dart  M unity-quest-template/Assets/_Examples/Scenes/SessionResilienceTest.unity  M unity-quest-template/Assets/_TheraplyCore/Firebase/FirebaseDataService.cs  M unity-quest-template/Assets/_TheraplyCore/Firebase/SessionEventStore.cs  M unity-quest-template/Assets/_TheraplyCore/Games/Contracts/GameContracts.cs  M unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameRegistryService.cs  M unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs ?? docs/evidence/ ?? scripts/collect_validation_evidence.ps1 ?? unity-quest-template/.utmp/ ?? unity-quest-template/Assets/_Examples/Scripts/SmokeTestGameModule.cs ?? unity-quest-template/Assets/_Examples/Scripts/SmokeTestGameModule.cs.meta ?? unity-quest-template/Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs ?? unity-quest-template/Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs.meta
+
+[git diff --name-only]
+docs/01-System-Components-Guide.md docs/03-Session-Resilience-Roadmap.md docs/05-Session-Resilience-Worklog.md flutter_controller/lib/screens/control_screen.dart unity-quest-template/Assets/_Examples/Scenes/SessionResilienceTest.unity unity-quest-template/Assets/_TheraplyCore/Firebase/FirebaseDataService.cs unity-quest-template/Assets/_TheraplyCore/Firebase/SessionEventStore.cs unity-quest-template/Assets/_TheraplyCore/Games/Contracts/GameContracts.cs unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameRegistryService.cs unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs

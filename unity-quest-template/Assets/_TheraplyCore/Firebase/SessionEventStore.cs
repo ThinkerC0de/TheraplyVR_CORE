@@ -562,6 +562,12 @@ namespace TheraplyCore.Firebase
             private readonly string _jsonLinePath;
             private readonly bool _logVerbose;
             private readonly object _writeLock = new object();
+            private readonly Dictionary<string, DurableSessionEventRecord> _recordsByEventId =
+                new Dictionary<string, DurableSessionEventRecord>(StringComparer.Ordinal);
+            private readonly Dictionary<string, JsonLineOutboxRow> _outboxByEventId =
+                new Dictionary<string, JsonLineOutboxRow>(StringComparer.Ordinal);
+            private readonly Dictionary<string, long> _lastSequenceBySession =
+                new Dictionary<string, long>(StringComparer.Ordinal);
 
             public JsonLineEventStoreBackend(string jsonLinePath, bool logVerbose)
             {
@@ -578,16 +584,42 @@ namespace TheraplyCore.Firebase
                 {
                     Directory.CreateDirectory(directory);
                 }
+
+                LoadExistingRecords();
             }
 
             public string Mode => "ndjson";
-            public bool SupportsOutbox => false;
+            public bool SupportsOutbox => true;
 
             public void Persist(DurableSessionEventRecord record)
             {
-                var line = JsonUtility.ToJson(record);
                 lock (_writeLock)
                 {
+                    if (record == null)
+                    {
+                        return;
+                    }
+
+                    if (record.sequence <= 0)
+                    {
+                        record.sequence = ResolveNextSequence(record.sessionId);
+                    }
+
+                    if (string.IsNullOrWhiteSpace(record.checksum))
+                    {
+                        record.checksum = ComputeChecksum(record);
+                    }
+
+                    if (_recordsByEventId.ContainsKey(record.eventId))
+                    {
+                        return;
+                    }
+
+                    _recordsByEventId[record.eventId] = record;
+                    TrackSessionSequence(record.sessionId, record.sequence);
+                    EnsureOutboxRow(record.eventId, record.createdAtUtc);
+
+                    var line = JsonUtility.ToJson(record);
                     File.AppendAllText(_jsonLinePath, line + Environment.NewLine, Encoding.UTF8);
                 }
 
@@ -604,20 +636,192 @@ namespace TheraplyCore.Firebase
                 out string error)
             {
                 batch = new List<SessionOutboxBatchItem>();
-                error = "Outbox is not supported by NDJSON backend.";
-                return false;
+                error = string.Empty;
+
+                var safeBatchSize = Math.Max(1, maxBatchSize);
+                var safeWorkerId = string.IsNullOrWhiteSpace(workerId) ? "default_worker" : workerId.Trim();
+                var nowUtc = DateTime.UtcNow;
+
+                lock (_writeLock)
+                {
+                    try
+                    {
+                        var candidates = new List<KeyValuePair<string, JsonLineOutboxRow>>();
+                        foreach (var pair in _outboxByEventId)
+                        {
+                            var row = pair.Value;
+                            if (!string.Equals(row.status, "PENDING", StringComparison.OrdinalIgnoreCase))
+                            {
+                                continue;
+                            }
+
+                            if (row.nextAttemptUtc > nowUtc)
+                            {
+                                continue;
+                            }
+
+                            candidates.Add(pair);
+                        }
+
+                        candidates.Sort((a, b) =>
+                        {
+                            var nextAttemptCompare = a.Value.nextAttemptUtc.CompareTo(b.Value.nextAttemptUtc);
+                            if (nextAttemptCompare != 0)
+                            {
+                                return nextAttemptCompare;
+                            }
+
+                            var createdCompare = a.Value.createdAtUtc.CompareTo(b.Value.createdAtUtc);
+                            if (createdCompare != 0)
+                            {
+                                return createdCompare;
+                            }
+
+                            return string.CompareOrdinal(a.Key, b.Key);
+                        });
+
+                        var count = 0;
+                        for (var i = 0; i < candidates.Count && count < safeBatchSize; i++)
+                        {
+                            var eventId = candidates[i].Key;
+                            var row = candidates[i].Value;
+
+                            if (!_recordsByEventId.TryGetValue(eventId, out var record) || record == null)
+                            {
+                                row.status = "SYNCED";
+                                row.lastError = "MISSING_SESSION_EVENT";
+                                row.syncedAtUtc = nowUtc;
+                                row.lockedBy = string.Empty;
+                                row.lockedAtUtc = default;
+                                continue;
+                            }
+
+                            row.status = "IN_FLIGHT";
+                            row.attemptCount += 1;
+                            row.lastAttemptUtc = nowUtc;
+                            row.lockedBy = safeWorkerId;
+                            row.lockedAtUtc = nowUtc;
+                            row.syncedAtUtc = default;
+
+                            batch.Add(new SessionOutboxBatchItem
+                            {
+                                record = record,
+                                attemptCount = row.attemptCount,
+                            });
+
+                            count++;
+                        }
+
+                        return true;
+                    }
+                    catch (Exception e)
+                    {
+                        error = e.Message;
+                        return false;
+                    }
+                }
             }
 
             public bool MarkOutboxBatchSynced(IReadOnlyList<string> eventIds, out string error)
             {
-                error = "Outbox is not supported by NDJSON backend.";
-                return false;
+                error = string.Empty;
+                if (eventIds == null || eventIds.Count == 0)
+                {
+                    return true;
+                }
+
+                var nowUtc = DateTime.UtcNow;
+                lock (_writeLock)
+                {
+                    try
+                    {
+                        for (var i = 0; i < eventIds.Count; i++)
+                        {
+                            var eventId = eventIds[i];
+                            if (string.IsNullOrWhiteSpace(eventId))
+                            {
+                                continue;
+                            }
+
+                            if (!_outboxByEventId.TryGetValue(eventId.Trim(), out var row))
+                            {
+                                continue;
+                            }
+
+                            row.status = "SYNCED";
+                            row.syncedAtUtc = nowUtc;
+                            row.lockedBy = string.Empty;
+                            row.lockedAtUtc = default;
+                            row.lastError = string.Empty;
+                        }
+
+                        return true;
+                    }
+                    catch (Exception e)
+                    {
+                        error = e.Message;
+                        return false;
+                    }
+                }
             }
 
             public bool RescheduleOutboxBatch(IReadOnlyList<SessionOutboxRetryRecord> retryRecords, out string error)
             {
-                error = "Outbox is not supported by NDJSON backend.";
-                return false;
+                error = string.Empty;
+                if (retryRecords == null || retryRecords.Count == 0)
+                {
+                    return true;
+                }
+
+                lock (_writeLock)
+                {
+                    try
+                    {
+                        for (var i = 0; i < retryRecords.Count; i++)
+                        {
+                            var retryRecord = retryRecords[i];
+                            if (string.IsNullOrWhiteSpace(retryRecord.eventId))
+                            {
+                                continue;
+                            }
+
+                            var eventId = retryRecord.eventId.Trim();
+                            if (!_outboxByEventId.TryGetValue(eventId, out var row))
+                            {
+                                continue;
+                            }
+
+                            if (string.Equals(row.status, "SYNCED", StringComparison.OrdinalIgnoreCase))
+                            {
+                                continue;
+                            }
+
+                            var nextAttemptUtc = retryRecord.nextAttemptUtc == default
+                                ? DateTime.UtcNow
+                                : retryRecord.nextAttemptUtc;
+                            if (nextAttemptUtc.Kind != DateTimeKind.Utc)
+                            {
+                                nextAttemptUtc = nextAttemptUtc.ToUniversalTime();
+                            }
+
+                            row.status = "PENDING";
+                            row.nextAttemptUtc = nextAttemptUtc;
+                            row.lastError = string.IsNullOrWhiteSpace(retryRecord.errorCode)
+                                ? "OUTBOX_RETRY"
+                                : retryRecord.errorCode.Trim();
+                            row.lockedBy = string.Empty;
+                            row.lockedAtUtc = default;
+                            row.syncedAtUtc = default;
+                        }
+
+                        return true;
+                    }
+                    catch (Exception e)
+                    {
+                        error = e.Message;
+                        return false;
+                    }
+                }
             }
 
             public bool ForceOutboxPending(
@@ -628,8 +832,61 @@ namespace TheraplyCore.Firebase
                 out string error)
             {
                 rowsUpdated = 0;
-                error = "Outbox is not supported by NDJSON backend.";
-                return false;
+                error = string.Empty;
+                if (eventIds == null || eventIds.Count == 0)
+                {
+                    return true;
+                }
+
+                var nextAttempt = nextAttemptUtc == default
+                    ? DateTime.UtcNow
+                    : nextAttemptUtc;
+                if (nextAttempt.Kind != DateTimeKind.Utc)
+                {
+                    nextAttempt = nextAttempt.ToUniversalTime();
+                }
+
+                var safeReasonCode = string.IsNullOrWhiteSpace(reasonCode)
+                    ? "MANUAL_RESYNC"
+                    : reasonCode.Trim();
+
+                lock (_writeLock)
+                {
+                    try
+                    {
+                        for (var i = 0; i < eventIds.Count; i++)
+                        {
+                            var eventId = eventIds[i];
+                            if (string.IsNullOrWhiteSpace(eventId))
+                            {
+                                continue;
+                            }
+
+                            var safeEventId = eventId.Trim();
+                            if (!_recordsByEventId.TryGetValue(safeEventId, out var record) || record == null)
+                            {
+                                continue;
+                            }
+
+                            var row = EnsureOutboxRow(safeEventId, record.createdAtUtc);
+                            row.status = "PENDING";
+                            row.attemptCount = 0;
+                            row.nextAttemptUtc = nextAttempt;
+                            row.lastError = safeReasonCode;
+                            row.lockedBy = string.Empty;
+                            row.lockedAtUtc = default;
+                            row.syncedAtUtc = default;
+                            rowsUpdated++;
+                        }
+
+                        return true;
+                    }
+                    catch (Exception e)
+                    {
+                        error = e.Message;
+                        return false;
+                    }
+                }
             }
 
             public bool TryGetSessionSequenceIndex(
@@ -638,18 +895,266 @@ namespace TheraplyCore.Firebase
                 out string error)
             {
                 records = new List<SessionSequenceIndexRecord>();
-                error = "Sequence index is not supported by NDJSON backend.";
-                return false;
+                error = string.Empty;
+                if (string.IsNullOrWhiteSpace(sessionId))
+                {
+                    error = "Session id is required.";
+                    return false;
+                }
+
+                var normalizedSessionId = sessionId.Trim();
+
+                lock (_writeLock)
+                {
+                    try
+                    {
+                        foreach (var pair in _recordsByEventId)
+                        {
+                            var record = pair.Value;
+                            if (record == null)
+                            {
+                                continue;
+                            }
+
+                            if (!string.Equals(record.sessionId, normalizedSessionId, StringComparison.Ordinal))
+                            {
+                                continue;
+                            }
+
+                            var status = "UNKNOWN";
+                            if (_outboxByEventId.TryGetValue(record.eventId, out var row))
+                            {
+                                status = string.IsNullOrWhiteSpace(row.status) ? "UNKNOWN" : row.status;
+                            }
+
+                            records.Add(new SessionSequenceIndexRecord
+                            {
+                                eventId = record.eventId,
+                                sequence = record.sequence,
+                                outboxStatus = status,
+                            });
+                        }
+
+                        records.Sort((a, b) =>
+                        {
+                            var sequenceCompare = a.sequence.CompareTo(b.sequence);
+                            if (sequenceCompare != 0)
+                            {
+                                return sequenceCompare;
+                            }
+
+                            return string.CompareOrdinal(a.eventId, b.eventId);
+                        });
+
+                        return true;
+                    }
+                    catch (Exception e)
+                    {
+                        error = e.Message;
+                        return false;
+                    }
+                }
             }
 
             public SessionOutboxStatistics GetOutboxStatistics()
             {
-                return default;
+                lock (_writeLock)
+                {
+                    var stats = default(SessionOutboxStatistics);
+                    foreach (var pair in _outboxByEventId)
+                    {
+                        var row = pair.Value;
+                        if (row == null)
+                        {
+                            continue;
+                        }
+
+                        if (string.Equals(row.status, "PENDING", StringComparison.OrdinalIgnoreCase))
+                        {
+                            stats.pending++;
+                        }
+                        else if (string.Equals(row.status, "IN_FLIGHT", StringComparison.OrdinalIgnoreCase))
+                        {
+                            stats.inFlight++;
+                        }
+                        else if (string.Equals(row.status, "SYNCED", StringComparison.OrdinalIgnoreCase))
+                        {
+                            stats.synced++;
+                        }
+
+                        if (row.attemptCount > 1)
+                        {
+                            stats.retryCount += row.attemptCount - 1;
+                        }
+                    }
+
+                    return stats;
+                }
             }
 
             public void Dispose()
             {
                 // No-op
+            }
+
+            private void LoadExistingRecords()
+            {
+                if (!File.Exists(_jsonLinePath))
+                {
+                    return;
+                }
+
+                var loaded = 0;
+                var lines = File.ReadAllLines(_jsonLinePath);
+                for (var i = 0; i < lines.Length; i++)
+                {
+                    var line = lines[i];
+                    if (string.IsNullOrWhiteSpace(line))
+                    {
+                        continue;
+                    }
+
+                    DurableSessionEventRecord record;
+                    try
+                    {
+                        record = JsonUtility.FromJson<DurableSessionEventRecord>(line);
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+
+                    if (record == null || string.IsNullOrWhiteSpace(record.eventId))
+                    {
+                        continue;
+                    }
+
+                    if (record.sequence <= 0)
+                    {
+                        record.sequence = ResolveNextSequence(record.sessionId);
+                    }
+                    else
+                    {
+                        TrackSessionSequence(record.sessionId, record.sequence);
+                    }
+
+                    if (string.IsNullOrWhiteSpace(record.checksum))
+                    {
+                        record.checksum = ComputeChecksum(record);
+                    }
+
+                    if (_recordsByEventId.ContainsKey(record.eventId))
+                    {
+                        continue;
+                    }
+
+                    _recordsByEventId[record.eventId] = record;
+                    EnsureOutboxRow(record.eventId, record.createdAtUtc);
+                    loaded++;
+                }
+
+                if (_logVerbose && loaded > 0)
+                {
+                    Logger.Debug($"[SessionEventStore] NDJSON loaded {loaded} persisted events.");
+                }
+            }
+
+            private long ResolveNextSequence(string sessionId)
+            {
+                var normalizedSessionId = string.IsNullOrWhiteSpace(sessionId)
+                    ? "unknown_session"
+                    : sessionId.Trim();
+
+                if (_lastSequenceBySession.TryGetValue(normalizedSessionId, out var current))
+                {
+                    current++;
+                    _lastSequenceBySession[normalizedSessionId] = current;
+                    return current;
+                }
+
+                _lastSequenceBySession[normalizedSessionId] = 1;
+                return 1;
+            }
+
+            private void TrackSessionSequence(string sessionId, long sequence)
+            {
+                var normalizedSessionId = string.IsNullOrWhiteSpace(sessionId)
+                    ? "unknown_session"
+                    : sessionId.Trim();
+
+                if (_lastSequenceBySession.TryGetValue(normalizedSessionId, out var current))
+                {
+                    if (sequence > current)
+                    {
+                        _lastSequenceBySession[normalizedSessionId] = sequence;
+                    }
+
+                    return;
+                }
+
+                _lastSequenceBySession[normalizedSessionId] = Math.Max(0, sequence);
+            }
+
+            private JsonLineOutboxRow EnsureOutboxRow(string eventId, string createdAtUtcText)
+            {
+                if (_outboxByEventId.TryGetValue(eventId, out var existing) && existing != null)
+                {
+                    return existing;
+                }
+
+                var createdAtUtc = ParseUtcOrDefault(createdAtUtcText, DateTime.UtcNow);
+                var row = new JsonLineOutboxRow
+                {
+                    status = "PENDING",
+                    attemptCount = 0,
+                    nextAttemptUtc = createdAtUtc,
+                    lastAttemptUtc = default,
+                    lastError = string.Empty,
+                    lockedBy = string.Empty,
+                    lockedAtUtc = default,
+                    syncedAtUtc = default,
+                    createdAtUtc = createdAtUtc,
+                };
+
+                _outboxByEventId[eventId] = row;
+                return row;
+            }
+
+            private static DateTime ParseUtcOrDefault(string text, DateTime fallbackUtc)
+            {
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    return fallbackUtc;
+                }
+
+                if (DateTime.TryParse(
+                    text,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal,
+                    out var parsed))
+                {
+                    if (parsed.Kind != DateTimeKind.Utc)
+                    {
+                        parsed = parsed.ToUniversalTime();
+                    }
+
+                    return parsed;
+                }
+
+                return fallbackUtc;
+            }
+
+            private sealed class JsonLineOutboxRow
+            {
+                public string status;
+                public int attemptCount;
+                public DateTime nextAttemptUtc;
+                public DateTime lastAttemptUtc;
+                public string lastError;
+                public string lockedBy;
+                public DateTime lockedAtUtc;
+                public DateTime syncedAtUtc;
+                public DateTime createdAtUtc;
             }
         }
 
