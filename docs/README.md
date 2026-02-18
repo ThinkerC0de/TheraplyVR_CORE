@@ -17,6 +17,7 @@
 - [13-Content-Delivery-Contract.md](13-Content-Delivery-Contract.md)
 - [14-Compliance-Hardening-Checklist.md](14-Compliance-Hardening-Checklist.md)
 - [15-Dev-Testing-Without-Admin-Or-Bundles.md](15-Dev-Testing-Without-Admin-Or-Bundles.md)
+- [16-Project-Completion-Sprint-Plan.md](16-Project-Completion-Sprint-Plan.md)
 
 ## Usage Pattern
 1. Read roadmap.
