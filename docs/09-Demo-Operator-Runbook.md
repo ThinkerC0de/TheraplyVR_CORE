@@ -21,6 +21,7 @@ Quick checks:
 - `flutter analyze`
 - `flutter test`
 - `powershell -ExecutionPolicy Bypass -File .\scripts\unity_cli_validate.ps1 -Mode both`
+- `powershell -ExecutionPolicy Bypass -File .\scripts\unity_editor_mvp_smoke.ps1 -ValidationRuns 1 -ValidationGameIds demo_cube_clicker`
 
 ## 1) Start Order (1 min)
 
@@ -65,7 +66,15 @@ Expected behavior:
 
 ## 4) Firebase Resilience Check (1 min)
 
-Run:
+Fast lane (single command, includes stale `.utmp` cleanup):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\unity_editor_mvp_smoke.ps1 `
+  -ValidationRuns 1 `
+  -ValidationGameIds demo_cube_clicker
+```
+
+Direct Unity command (manual lane):
 
 ```powershell
 "C:\Program Files\Unity\Hub\Editor\6000.3.8f1\Editor\Unity.exe" `
@@ -82,6 +91,9 @@ PASS markers in log:
 - `[FirebaseNetworkValidation] Reconnect phase: ...`
 - `[FirebaseNetworkValidation] PASS: ...`
 
+Strict expected outcomes reference:
+- `docs/23-Unity-Firebase-Reconnect-Expected-Outcomes.md`
+
 ## 5) Fallback Actions (1 min)
 
 - If scanner cannot connect:
@@ -90,8 +102,7 @@ PASS markers in log:
 - If session gate blocks commands:
   - choose `Resume` or `Start New`
 - If Firebase validation fails with scene backup prompt:
-  - close stale Unity process and remove stale `.utmp` state
-  - rerun command
+  - rerun `scripts/unity_editor_mvp_smoke.ps1` (it performs `.utmp` cleanup before Unity batch run)
 - If no backend logs:
   - verify `_simulateFirebase = false`
   - verify endpoint urls in scene config

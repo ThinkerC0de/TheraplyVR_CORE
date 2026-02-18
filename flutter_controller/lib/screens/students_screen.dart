@@ -15,12 +15,18 @@ class StudentsScreen extends StatefulWidget {
 }
 
 class _StudentsScreenState extends State<StudentsScreen> {
+  String? _selectedStudentId;
+
   @override
   Widget build(BuildContext context) {
     final canManageStudents =
         EntitlementService.activeAccess?.role == EntitlementRole.therapist;
     final currentUser = FirebaseService.currentUser;
     final accountLabel = currentUser?.email ?? currentUser?.uid ?? 'unknown';
+    final role =
+        EntitlementService.activeAccess?.role ?? EntitlementRole.unknown;
+    final roleLabel = role.wireValue;
+    final isReadOnlyRole = role != EntitlementRole.therapist;
 
     return Scaffold(
       appBar: AppBar(
@@ -53,6 +59,37 @@ class _StudentsScreenState extends State<StudentsScreen> {
       ),
       body: Column(
         children: [
+          Container(
+            width: double.infinity,
+            color: Colors.blueGrey.shade50,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              children: [
+                Icon(
+                  isReadOnlyRole ? Icons.visibility : Icons.badge,
+                  size: 16,
+                  color: isReadOnlyRole
+                      ? Colors.orange.shade700
+                      : Colors.green.shade700,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isReadOnlyRole
+                        ? 'Role: $roleLabel (read-only access)'
+                        : 'Role: $roleLabel (manage + select students)',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: isReadOnlyRole
+                          ? Colors.orange.shade800
+                          : Colors.green.shade800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
           StreamBuilder<int>(
             stream: StudentService.watchPendingWritesCount(),
             builder: (context, snapshot) {
@@ -131,7 +168,10 @@ class _StudentsScreenState extends State<StudentsScreen> {
                     itemCount: students.length,
                     itemBuilder: (context, index) {
                       final student = students[index];
-                      return _buildStudentCard(student);
+                      return _buildStudentCard(
+                        student,
+                        isSelected: student.id == _selectedStudentId,
+                      );
                     },
                   ),
                 );
@@ -147,16 +187,24 @@ class _StudentsScreenState extends State<StudentsScreen> {
       ),
     );
   }
-  
-  Widget _buildStudentCard(Student student) {
+
+  Widget _buildStudentCard(Student student, {required bool isSelected}) {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: isSelected ? Colors.blue : Colors.transparent,
+          width: isSelected ? 1.5 : 1,
+        ),
+      ),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: Colors.blue,
+          backgroundColor: isSelected ? Colors.blue.shade700 : Colors.blue,
           child: Text(
             student.initials,
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.bold),
           ),
         ),
         title: Text(
@@ -170,55 +218,69 @@ class _StudentsScreenState extends State<StudentsScreen> {
                 overflow: TextOverflow.ellipsis,
               )
             : null,
-        trailing: PopupMenuButton<String>(
-          onSelected: EntitlementService.activeAccess?.role ==
-                  EntitlementRole.therapist
-              ? (value) {
-                  if (value == 'edit') {
-                    _showStudentDialog(context, student: student);
-                  } else if (value == 'delete') {
-                    _confirmDelete(student);
-                  }
-                }
-              : null,
-          itemBuilder: (context) => EntitlementService.activeAccess?.role ==
-                  EntitlementRole.therapist
-              ? [
-                  const PopupMenuItem(
-                    value: 'edit',
-                    child: Row(
-                      children: [
-                        Icon(Icons.edit, size: 20),
-                        SizedBox(width: 8),
-                        Text('Edit'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'delete',
-                    child: Row(
-                      children: [
-                        Icon(Icons.delete, size: 20, color: Colors.red),
-                        SizedBox(width: 8),
-                        Text('Delete', style: TextStyle(color: Colors.red)),
-                      ],
-                    ),
-                  ),
-                ]
-              : [
-                  const PopupMenuItem(
-                    enabled: false,
-                    value: 'readonly',
-                    child: Text('Read-only'),
-                  ),
-                ],
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isSelected)
+              const Padding(
+                padding: EdgeInsets.only(right: 4),
+                child: Icon(Icons.check_circle, color: Colors.blue, size: 18),
+              ),
+            PopupMenuButton<String>(
+              onSelected: EntitlementService.activeAccess?.role ==
+                      EntitlementRole.therapist
+                  ? (value) {
+                      if (value == 'edit') {
+                        _showStudentDialog(context, student: student);
+                      } else if (value == 'delete') {
+                        _confirmDelete(student);
+                      }
+                    }
+                  : null,
+              itemBuilder: (context) => EntitlementService.activeAccess?.role ==
+                      EntitlementRole.therapist
+                  ? [
+                      const PopupMenuItem(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit, size: 20),
+                            SizedBox(width: 8),
+                            Text('Edit'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete, size: 20, color: Colors.red),
+                            SizedBox(width: 8),
+                            Text('Delete', style: TextStyle(color: Colors.red)),
+                          ],
+                        ),
+                      ),
+                    ]
+                  : [
+                      const PopupMenuItem(
+                        enabled: false,
+                        value: 'readonly',
+                        child: Text('Read-only'),
+                      ),
+                    ],
+            ),
+          ],
         ),
         onTap: () => _selectStudent(student),
       ),
     );
   }
-  
+
   void _selectStudent(Student student) {
+    setState(() {
+      _selectedStudentId = student.id;
+    });
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -226,14 +288,17 @@ class _StudentsScreenState extends State<StudentsScreen> {
       ),
     );
   }
-  
+
   void _showStudentDialog(BuildContext context, {Student? student}) {
     final editingStudent = student;
     final isEditing = editingStudent != null;
-    final firstNameController = TextEditingController(text: editingStudent?.firstName ?? '');
-    final lastNameController = TextEditingController(text: editingStudent?.lastName ?? '');
-    final notesController = TextEditingController(text: editingStudent?.notes ?? '');
-    
+    final firstNameController =
+        TextEditingController(text: editingStudent?.firstName ?? '');
+    final lastNameController =
+        TextEditingController(text: editingStudent?.lastName ?? '');
+    final notesController =
+        TextEditingController(text: editingStudent?.notes ?? '');
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -281,7 +346,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
               final firstName = firstNameController.text.trim();
               final lastName = lastNameController.text.trim();
               final notes = notesController.text.trim();
-              
+
               if (firstName.isEmpty || lastName.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -291,7 +356,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
                 );
                 return;
               }
-              
+
               try {
                 if (editingStudent != null) {
                   final result = await StudentService.updateStudent(
@@ -300,7 +365,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
                     lastName: lastName,
                     notes: notes.isNotEmpty ? notes : null,
                   );
-                  
+
                   if (context.mounted) {
                     _showWriteResultSnackbar(
                       result,
@@ -313,7 +378,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
                     lastName: lastName,
                     notes: notes.isNotEmpty ? notes : null,
                   );
-                  
+
                   if (context.mounted) {
                     _showWriteResultSnackbar(
                       result,
@@ -321,7 +386,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
                     );
                   }
                 }
-                
+
                 if (context.mounted) {
                   Navigator.pop(context);
                 }
@@ -342,7 +407,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
       ),
     );
   }
-  
+
   void _confirmDelete(Student student) {
     showDialog(
       context: context,
@@ -358,7 +423,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
             onPressed: () async {
               try {
                 final result = await StudentService.deleteStudent(student.id);
-                
+
                 if (context.mounted) {
                   Navigator.pop(context);
                   _showWriteResultSnackbar(
@@ -388,7 +453,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
       ),
     );
   }
-  
+
   Future<void> _handleLogout() async {
     await StudentService.clearSessionState();
     EntitlementService.clearSessionAccess();

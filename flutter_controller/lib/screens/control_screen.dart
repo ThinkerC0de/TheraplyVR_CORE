@@ -1426,6 +1426,10 @@ class _ControlScreenState extends State<ControlScreen>
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
+          Text(
+            'Remote summary: session=${_sessionLifecycleState?.wireValue ?? 'UNKNOWN'}, runtime=${_runtimeStatus?.wireValue ?? 'unknown'}',
+            style: TextStyle(color: Colors.grey[700], fontSize: 12),
+          ),
           if (_remoteActiveGameId != null && _remoteActiveGameId!.isNotEmpty)
             Text(
               'Remote active game: $_remoteActiveGameId',
@@ -1558,9 +1562,8 @@ class _ControlScreenState extends State<ControlScreen>
 
   Widget _buildVersionChip(PurchasedContentState state) {
     final installedVersion = state.installedVersion ?? '-';
-    final targetVersion = state.targetVersion.trim().isEmpty
-        ? '-'
-        : state.targetVersion.trim();
+    final targetVersion =
+        state.targetVersion.trim().isEmpty ? '-' : state.targetVersion.trim();
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
@@ -1638,10 +1641,12 @@ class _ControlScreenState extends State<ControlScreen>
               final actionInFlight =
                   _contentActionsInFlight.contains(entry.gameId);
               final shouldInstallOrUpdate = contentState.owned &&
-                  (contentState.runtimeStatus == ContentRuntimeStatus.notInstalled ||
+                  (contentState.runtimeStatus ==
+                          ContentRuntimeStatus.notInstalled ||
                       contentState.runtimeStatus ==
                           ContentRuntimeStatus.updateRequired ||
-                      contentState.runtimeStatus == ContentRuntimeStatus.failed ||
+                      contentState.runtimeStatus ==
+                          ContentRuntimeStatus.failed ||
                       contentState.updateRequired);
 
               return Card(
@@ -1750,12 +1755,13 @@ class _ControlScreenState extends State<ControlScreen>
                         children: [
                           Expanded(
                             child: ElevatedButton.icon(
-                              onPressed:
-                                  !_isConnected || actionInFlight || !shouldInstallOrUpdate
-                                      ? null
-                                      : () => unawaited(
-                                            _requestInstallOrUpdate(contentState),
-                                          ),
+                              onPressed: !_isConnected ||
+                                      actionInFlight ||
+                                      !shouldInstallOrUpdate
+                                  ? null
+                                  : () => unawaited(
+                                        _requestInstallOrUpdate(contentState),
+                                      ),
                               icon: const Icon(Icons.download),
                               label: Text(
                                 contentState.runtimeStatus ==
@@ -1774,8 +1780,8 @@ class _ControlScreenState extends State<ControlScreen>
                               child: OutlinedButton.icon(
                                 onPressed: !_isConnected || actionInFlight
                                     ? null
-                                    : () =>
-                                        unawaited(_requestUninstall(contentState)),
+                                    : () => unawaited(
+                                        _requestUninstall(contentState)),
                                 icon: const Icon(Icons.delete_outline),
                                 label: const Text('Uninstall'),
                               ),
@@ -2112,8 +2118,9 @@ class _ControlScreenState extends State<ControlScreen>
       children: [
         Expanded(
           child: ElevatedButton.icon(
-            onPressed:
-                _isConnected && !_isPrimaryActionInFlight && _isSelectedGameLaunchable
+            onPressed: _isConnected &&
+                    !_isPrimaryActionInFlight &&
+                    _isSelectedGameLaunchable
                 ? () => unawaited(_startFromSetup(resumeFromSaved: false))
                 : null,
             icon: const Icon(Icons.play_arrow),
@@ -2124,8 +2131,9 @@ class _ControlScreenState extends State<ControlScreen>
         const SizedBox(width: 8),
         Expanded(
           child: ElevatedButton.icon(
-            onPressed:
-                _isConnected && !_isPrimaryActionInFlight && _isSelectedGameLaunchable
+            onPressed: _isConnected &&
+                    !_isPrimaryActionInFlight &&
+                    _isSelectedGameLaunchable
                 ? () => unawaited(_restartFromSetup())
                 : null,
             icon: const Icon(Icons.restart_alt),

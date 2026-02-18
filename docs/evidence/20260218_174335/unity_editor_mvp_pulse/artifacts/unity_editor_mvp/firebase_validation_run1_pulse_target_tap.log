@@ -1,0 +1,479 @@
+[Licensing::Module] Trying to connect to existing licensing client channel...
+Built from '6000.3/staging' branch; Version is '6000.3.8f1 (1c7db571dde0) revision 1867189'; Using compiler version '194234433'; Build Type 'Release'
+OS: 'Windows 11  (10.0.26200) Professional' Language: 'pl' Physical Memory: 32672 MB
+[Licensing::IpcConnector] Successfully connected to: "LicenseClient-licen" at "2026-02-18T16:58:52.8919076Z"
+BatchMode: 1, IsHumanControllingUs: 0, StartBugReporterOnCrash: 0, Is64bit: 1
+System  architecture: x64
+Process architecture: x64
+Date: 2026-02-18T16:58:52Z
+
+COMMAND LINE ARGUMENTS:
+C:\Program Files\Unity\Hub\Editor\6000.3.8f1\Editor\Unity.exe
+-batchmode
+-nographics
+-projectPath
+C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template
+-buildTarget
+Android
+-executeMethod
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation.RunFirebaseNetworkValidation
+-validationGameId=pulse_target_tap
+-logFile
+docs\evidence\20260218_174335\unity_editor_mvp_pulse\artifacts\unity_editor_mvp\firebase_validation_run1_pulse_target_tap.log
+Successfully changed project path to: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template
+C:/Users/licen/Projects/theraply-vr-framework/unity-quest-template
+DisplayDialog: Recovering Scene Backups Scene backups from a previous Editor session have been detected. Your scene might have been backed up when an Editor instance did not close correctly. 
+
+Do you want to copy and preserve these backups in Assets/_Recovery/?
+This should not be called in batch mode.
+[UnityMemory] Configuration Parameters - Can be set up in boot.config
+    "memorysetup-temp-allocator-size-nav-mesh-worker=65536"
+    "memorysetup-temp-allocator-size-audio-worker=65536"
+    "memorysetup-temp-allocator-size-gfx=262144"
+    "memorysetup-allocator-temp-initial-block-size-main=262144"
+    "memorysetup-allocator-temp-initial-block-size-worker=262144"
+    "memorysetup-temp-allocator-size-background-worker=32768"
+    "memorysetup-temp-allocator-size-job-worker=262144"
+    "memorysetup-temp-allocator-size-preload-manager=33554432"
+    "memorysetup-temp-allocator-size-gi-baking-worker=262144"
+    "memorysetup-temp-allocator-size-gi-baking-worker=262144"
+    "memorysetup-temp-allocator-size-gi-baking-worker=262144"
+    "memorysetup-temp-allocator-size-gi-baking-worker=262144"
+    "memorysetup-temp-allocator-size-gi-baking-worker=262144"
+    "memorysetup-bucket-allocator-granularity=16"
+    "memorysetup-bucket-allocator-bucket-count=8"
+    "memorysetup-bucket-allocator-block-size=33554432"
+    "memorysetup-bucket-allocator-block-count=8"
+    "memorysetup-main-allocator-block-size=16777216"
+    "memorysetup-thread-allocator-block-size=16777216"
+    "memorysetup-gfx-main-allocator-block-size=16777216"
+    "memorysetup-gfx-thread-allocator-block-size=16777216"
+    "memorysetup-cache-allocator-block-size=4194304"
+    "memorysetup-typetree-allocator-block-size=2097152"
+    "memorysetup-profiler-bucket-allocator-granularity=16"
+    "memorysetup-profiler-bucket-allocator-bucket-count=8"
+    "memorysetup-profiler-bucket-allocator-block-size=33554432"
+    "memorysetup-profiler-bucket-allocator-block-count=8"
+    "memorysetup-profiler-allocator-block-size=16777216"
+    "memorysetup-profiler-editor-allocator-block-size=1048576"
+    "memorysetup-temp-allocator-size-main=16777216"
+    "memorysetup-job-temp-allocator-block-size=2097152"
+    "memorysetup-job-temp-allocator-block-size-background=1048576"
+    "memorysetup-job-temp-allocator-reduction-small-platforms=262144"
+    "memorysetup-temp-allocator-size-cloud-worker=32768"
+Player connection [10884]  Target information:
+
+Player connection [10884]  * "[IP] 192.168.0.221 [Port] 55504 [Flags] 2 [Guid] 3289291861 [EditorId] 3289291861 [Version] 1048832 [Id] WindowsEditor(7,MARCIN_PC) [Debug] 1 [PackageName] WindowsEditor [ProjectName] Editor" 
+
+Player connection [10884]  * "[IP] 100.112.161.47 [Port] 55504 [Flags] 2 [Guid] 3289291861 [EditorId] 3289291861 [Version] 1048832 [Id] WindowsEditor(7,MARCIN_PC) [Debug] 1 [PackageName] WindowsEditor [ProjectName] Editor" 
+
+Player connection [10884] Host joined multi-casting on [225.0.0.222:54997]...
+Player connection [10884] Host joined alternative multi-casting on [225.0.0.222:34997]...
+Input System module state changed to: Initialized.
+[Physics::Module] Initialized fallback backend.
+[Physics::Module] Id: 0xdecafbad
+[Package Manager] Connected to IPC stream "Upm-21016" after 0.3 seconds.
+[Licensing::Module] Licensing is not yet initialized.
+[Licensing::Client] Handshaking with LicensingClient:
+  Version:                 1.17.4+4293ba1
+  Session Id:              c2517e6c408049cb879c10f8545fe5b4
+  Correlation Id:          476dbab06820b52ae49a155f5e59ced3
+  External correlation Id: 4034648500437805507
+  Machine Id:              vMwHPvfi1alxp1sT2fMsT3AqMw0=
+[Licensing::Module] Successfully connected to LicensingClient on channel: "LicenseClient-licen" (connect: 0.00s, validation: 0.00s, handshake: 0.73s)
+[Licensing::IpcConnector] Successfully connected to: "LicenseClient-licen-notifications" at "2026-02-18T16:58:53.6219969Z"
+[Licensing::Module] Error: Access token is unavailable; failed to update
+[Licensing::Client] Successfully resolved entitlement details
+[Licensing::Module] License group:
+  Id: 1374621094362-UnityPersXXXX
+  Product: Unity Personal
+  Type: Assigned
+  Expiration: Unlimited
+[Licensing::Client] Successfully updated license, isAsync: True, time: 0.00
+[Licensing::Client] Successfully resolved entitlement details
+[Licensing::Module] Licensing Background thread has ended after 0.73s
+[Licensing::Module] Licensing is initialized (took 0.33s).
+[Licensing::Client] Successfully resolved entitlement details
+Library Redirect Path: Library/
+[Physics::Module] Selected backend.
+[Physics::Module] Name: PhysX
+[Physics::Module] Id: 0xf2b8ea05
+[Physics::Module] SDK Version: 4.1.2
+[Physics::Module] Integration Version: 1.0.0
+[Physics::Module] Threading Mode: Multi-Threaded
+[Licensing::Client] Successfully resolved entitlement details
+Targeting platform: Android
+Refreshing native plugins compatible for Editor in 0.58 ms, found 0 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Initialize engine version: 6000.3.8f1 (1c7db571dde0)
+[Subsystems] Discovering subsystems at path C:/Program Files/Unity/Hub/Editor/6000.3.8f1/Editor/Data/Resources/UnitySubsystems
+[Subsystems] Discovering subsystems at path C:/Users/licen/Projects/theraply-vr-framework/unity-quest-template/Assets
+Forcing GfxDevice: Null
+GfxDevice: creating device client; kGfxThreadingModeNonThreaded
+NullGfxDevice:
+    Version:  NULL 1.0 [1.0]
+    Renderer: Null Device
+    Vendor:   Unity Technologies
+Initialize mono
+Mono path[0] = 'C:/Program Files/Unity/Hub/Editor/6000.3.8f1/Editor/Data/Managed'
+Mono path[1] = 'C:/Program Files/Unity/Hub/Editor/6000.3.8f1/Editor/Data/MonoBleedingEdge/lib/mono/unityjit-win32'
+Mono config path = 'C:/Program Files/Unity/Hub/Editor/6000.3.8f1/Editor/Data/MonoBleedingEdge/etc'
+Using monoOptions --debugger-agent=transport=dt_socket,embedding=1,server=y,suspend=n,address=127.0.0.1:56016
+Using cacheserver namespaces - metadata:defaultmetadata, artifacts:defaultartifacts
+Using cacheserver namespaces - metadata:defaultmetadata, artifacts:defaultartifacts
+ImportWorker Server TCP listen port: 0
+AcceleratorClientConnectionCallback - disconnected - :0
+Begin MonoManager ReloadAssembly
+Registering precompiled unity dll's ...
+Register platform support module: C:/Program Files/Unity/Hub/Editor/6000.3.8f1/Editor/Data/PlaybackEngines/WindowsStandaloneSupport/UnityEditor.WindowsStandalone.Extensions.dll
+Register platform support module: C:/Program Files/Unity/Hub/Editor/6000.3.8f1/Editor/Data/PlaybackEngines/AndroidPlayer/UnityEditor.Android.Extensions.dll
+Registered in 0.002063 seconds.
+- Loaded All Assemblies, in  0.333 seconds
+Native extension for Android target not found
+Android Extension - Scanning For ADB Devices 5176 ms
+Native extension for WindowsStandalone target not found
+ScheduleIndexationOnStartup MainProcess:False IndexOnStartup:True
+Mono: successfully reloaded assembly
+- Finished resetting the current domain, in  5.564 seconds
+Domain Reload Profiling: 5895ms
+	BeginReloadAssembly (93ms)
+		ExecutionOrderSort (0ms)
+		DisableScriptedObjects (0ms)
+		BackupInstance (0ms)
+		ReleaseScriptingObjects (0ms)
+		CreateAndSetChildDomain (13ms)
+	RebuildCommonClasses (34ms)
+	RebuildNativeTypeToScriptingClass (11ms)
+	initialDomainReloadingComplete (43ms)
+	LoadAllAssembliesAndSetupDomain (150ms)
+		LoadAssemblies (78ms)
+		RebuildTransferFunctionScriptingTraits (0ms)
+		AnalyzeDomain (147ms)
+			TypeCache.Refresh (145ms)
+				TypeCache.ScanAssembly (133ms)
+			BuildScriptInfoCaches (0ms)
+			ResolveRequiredComponents (0ms)
+	FinalizeReload (5565ms)
+		ReleaseScriptCaches (0ms)
+		RebuildScriptCaches (0ms)
+		SetupLoadedEditorAssemblies (5532ms)
+			LogAssemblyErrors (0ms)
+			InitializePlatformSupportModulesInManaged (5271ms)
+			SetLoadedEditorAssemblies (4ms)
+			BeforeProcessingInitializeOnLoad (70ms)
+			ProcessInitializeOnLoadAttributes (128ms)
+			ProcessInitializeOnLoadMethodAttributes (60ms)
+			AfterProcessingInitializeOnLoad (0ms)
+			EditorAssembliesLoaded (0ms)
+		ExecutionOrderSort2 (0ms)
+		AwakeInstancesAfterBackupRestoration (0ms)
+[Licensing::Client] Successfully resolved entitlement details
+[Licensing::Client] Successfully resolved entitlement details
+Application.AssetDatabase Initial Refresh Start
+Package Manager log level set to [2]
+[Package Manager] Restoring resolved packages state from cache
+[Licensing::Client] Successfully resolved entitlement details
+[Package Manager] Registered 41 packages:
+  Packages from [https://packages.unity.com]:
+    com.unity.webrtc@3.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.webrtc@9605a106619b)
+    com.unity.editorcoroutines@1.0.1 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.editorcoroutines@54394ed3283c)
+  Built-in packages:
+    com.unity.multiplayer.center@1.0.1 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.multiplayer.center@f01f4ba8d00a)
+    com.unity.modules.accessibility@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.accessibility)
+    com.unity.modules.adaptiveperformance@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.adaptiveperformance)
+    com.unity.modules.ai@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.ai)
+    com.unity.modules.androidjni@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.androidjni)
+    com.unity.modules.animation@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.animation)
+    com.unity.modules.assetbundle@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.assetbundle)
+    com.unity.modules.audio@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.audio)
+    com.unity.modules.cloth@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.cloth)
+    com.unity.modules.director@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.director)
+    com.unity.modules.imageconversion@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.imageconversion)
+    com.unity.modules.imgui@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.imgui)
+    com.unity.modules.jsonserialize@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.jsonserialize)
+    com.unity.modules.particlesystem@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.particlesystem)
+    com.unity.modules.physics@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.physics)
+    com.unity.modules.physics2d@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.physics2d)
+    com.unity.modules.screencapture@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.screencapture)
+    com.unity.modules.terrain@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.terrain)
+    com.unity.modules.terrainphysics@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.terrainphysics)
+    com.unity.modules.tilemap@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.tilemap)
+    com.unity.modules.ui@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.ui)
+    com.unity.modules.uielements@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.uielements)
+    com.unity.modules.umbra@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.umbra)
+    com.unity.modules.unityanalytics@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.unityanalytics)
+    com.unity.modules.unitywebrequest@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.unitywebrequest)
+    com.unity.modules.unitywebrequestassetbundle@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.unitywebrequestassetbundle)
+    com.unity.modules.unitywebrequestaudio@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.unitywebrequestaudio)
+    com.unity.modules.unitywebrequesttexture@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.unitywebrequesttexture)
+    com.unity.modules.unitywebrequestwww@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.unitywebrequestwww)
+    com.unity.modules.vectorgraphics@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.vectorgraphics)
+    com.unity.modules.vehicles@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.vehicles)
+    com.unity.modules.video@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.video)
+    com.unity.modules.vr@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.vr)
+    com.unity.modules.wind@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.wind)
+    com.unity.modules.xr@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.xr)
+    com.unity.modules.subsystems@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.subsystems)
+    com.unity.modules.hierarchycore@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.hierarchycore)
+  Git packages:
+    com.github-glitchenzo.nugetforunity@https://github.com/GlitchEnzo/NuGetForUnity.git?path=/src/NuGetForUnity (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.github-glitchenzo.nugetforunity@1c1553136be4)
+    jp.hadashikick.vcontainer@https://github.com/hadashiA/VContainer.git?path=VContainer/Assets/VContainer (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\jp.hadashikick.vcontainer@314ad69e1539)
+[Subsystems] No new subsystems found in resolved package list.
+[Package Manager] Done registering packages in 0.01 seconds
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://localhost:80
+info: Microsoft.Hosting.Lifetime[0]
+      Application started. Press Ctrl+C to shut down.
+info: Microsoft.Hosting.Lifetime[0]
+      Hosting environment: Production
+info: Microsoft.Hosting.Lifetime[0]
+      Content root path: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/2 POST http://ilpp/UnityILPP.PostProcessing/Ping application/grpc -
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]
+      Executing endpoint 'gRPC - /UnityILPP.PostProcessing/Ping'
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]
+      Executed endpoint 'gRPC - /UnityILPP.PostProcessing/Ping'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/2 POST http://ilpp/UnityILPP.PostProcessing/Ping application/grpc - - 200 - application/grpc 32.6943ms
+Starting: C:\Program Files\Unity\Hub\Editor\6000.3.8f1\Editor\Data\Tools\BuildPipeline\bee_backend.exe --ipc --defer-dag-verification --dagfile="Library/Bee/1300b0aE.dag" --continue-on-failure --profile="Library/Bee/backend1.traceevents" ScriptAssemblies
+WorkingDir: C:/Users/licen/Projects/theraply-vr-framework/unity-quest-template
+DisplayProgressbar: Compiling Scripts
+ExitCode: 0 Duration: 0s71ms
+*** Tundra build success (0.05 seconds), 0 items updated, 228 evaluated
+AssetDatabase: script compilation time: 0.383506s
+Begin MonoManager ReloadAssembly
+- Loaded All Assemblies, in  0.456 seconds
+Refreshing native plugins compatible for Editor in 1.23 ms, found 1 plugins.
+Native extension for Android target not found
+Native extension for WindowsStandalone target not found
+ScheduleIndexationOnStartup MainProcess:True IndexOnStartup:True
+Mono: successfully reloaded assembly
+- Finished resetting the current domain, in  0.488 seconds
+Domain Reload Profiling: 942ms
+	BeginReloadAssembly (254ms)
+		ExecutionOrderSort (0ms)
+		DisableScriptedObjects (12ms)
+		BackupInstance (0ms)
+		ReleaseScriptingObjects (0ms)
+		CreateAndSetChildDomain (152ms)
+	RebuildCommonClasses (31ms)
+	RebuildNativeTypeToScriptingClass (11ms)
+	initialDomainReloadingComplete (22ms)
+	LoadAllAssembliesAndSetupDomain (136ms)
+		LoadAssemblies (163ms)
+		RebuildTransferFunctionScriptingTraits (0ms)
+		AnalyzeDomain (34ms)
+			TypeCache.Refresh (28ms)
+				TypeCache.ScanAssembly (22ms)
+			BuildScriptInfoCaches (4ms)
+			ResolveRequiredComponents (1ms)
+	FinalizeReload (488ms)
+		ReleaseScriptCaches (0ms)
+		RebuildScriptCaches (0ms)
+		SetupLoadedEditorAssemblies (375ms)
+			LogAssemblyErrors (0ms)
+			InitializePlatformSupportModulesInManaged (30ms)
+			SetLoadedEditorAssemblies (3ms)
+			BeforeProcessingInitializeOnLoad (117ms)
+			ProcessInitializeOnLoadAttributes (188ms)
+			ProcessInitializeOnLoadMethodAttributes (32ms)
+			AfterProcessingInitializeOnLoad (5ms)
+			EditorAssembliesLoaded (0ms)
+		ExecutionOrderSort2 (0ms)
+		AwakeInstancesAfterBackupRestoration (7ms)
+Asset Pipeline Refresh (id=359457079d8b1964ca0409eaf072f83e): Total: 1.478 seconds - Initiated by InitialRefreshV2(ForceSynchronousImport)
+	Summary:
+		Imports: total=0 (actual=0, local cache=0, cache server=0)
+		Asset DB Process Time: managed=0 ms, native=599 ms
+		Asset DB Callback time: managed=11 ms, native=14 ms
+		Scripting: domain reloads=1, domain reload time=456 ms, compile time=385 ms, other=11 ms
+		Project Asset Count: scripts=206, non-scripts=137
+		Asset File Changes: new=0, changed=0, moved=0, deleted=0
+		Scan Filter Count: 0
+	InvokeCustomDependenciesCallbacks: 0.001ms
+	InvokePackagesCallback: 15.787ms
+	ApplyChangesToAssetFolders: 0.490ms
+	Scan: 32.322ms
+	OnSourceAssetsModified: 0.004ms
+	CategorizeAssetsWithTransientArtifact: 5.112ms
+	ProcessAssetsWithTransientArtifactChanges: 4.686ms
+	CategorizeAssets: 1.850ms
+	ImportOutOfDateAssets: 492.376ms (107.035ms without children)
+		CompileScripts: 385.019ms
+		ReloadNativeAssets: 0.000ms
+		UnloadImportedAssets: 0.104ms
+		EnsureUptoDateAssetsAreRegisteredWithGuidPM: 0.043ms
+		InitializingProgressBar: 0.000ms
+		PostProcessAllAssetNotificationsAddChangedAssets: 0.000ms
+		OnDemandSchedulerStart: 0.173ms
+	PostProcessAllAssets: 11.291ms
+	GatherAllCurrentPrimaryArtifactRevisions: 0.002ms
+	UnloadStreamsBegin: 0.951ms
+	PersistCurrentRevisions: 0.008ms
+	UnloadStreamsEnd: 0.002ms
+	GenerateScriptTypeHashes: 0.162ms
+	Untracked: 913.510ms
+
+Application.AssetDatabase Initial Refresh End
+Scanning for USB devices : 9.075ms
+Initializing Unity extensions:
+[MODES] ModeService[none].Initialize
+[MODES] ModeService[none].LoadModes
+[MODES] Loading mode Default (0) for mode-current-id-unity-quest-template
+Unloading 3 Unused Serialized files (Serialized files now loaded: 0)
+Unloading 351 unused Assets / (0.6 MB). Loaded Objects now: 940.
+Memory consumption went from 92.7 MB to 92.1 MB.
+Total: 4.875200 ms (FindLiveObjects: 0.069600 ms CreateObjectMapping: 0.015300 ms MarkObjects: 4.525000 ms  DeleteObjects: 0.264600 ms)
+
+Opening scene 'Assets/_Examples/Scenes/SessionResilienceTest.unity'
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+Loaded scene 'Assets/_Examples/Scenes/SessionResilienceTest.unity'
+	Deserialize:            4.337 ms
+	Integration:            6.360 ms
+	Integration of assets:  0.002 ms
+	Thread Wait Time:       0.006 ms
+	Total Operation Time:   10.705 ms
+Unloading 1 unused Assets / (0.5 KB). Loaded Objects now: 974.
+Memory consumption went from 90.2 MB to 90.2 MB.
+Total: 4.330300 ms (FindLiveObjects: 0.053100 ms CreateObjectMapping: 0.009600 ms MarkObjects: 4.255500 ms  DeleteObjects: 0.011500 ms)
+
+[FirebaseNetworkValidation] Local backend started on port 64485.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/LocalValidationBackend:StartAsync () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:639)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:94)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs Line: 639)
+
+<color=gray>17:59:02.458</color> <color=yellow>[WARN]</color> [SessionEventStore] SQLite WAL backend unavailable: The type initializer for 'Mono.Data.Sqlite.UnsafeNativeMethods' threw an exception.. Falling back to NDJSON.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:LogWarning (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:174)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Warning (string) (at Assets/_TheraplyCore/Logging/Logger.cs:102)
+TheraplyCore.Firebase.SessionEventStore:BuildBackend (string,string,bool,bool,bool) (at Assets/_TheraplyCore/Firebase/SessionEventStore.cs:380)
+TheraplyCore.Firebase.SessionEventStore:.ctor (bool,string,string,bool,bool,int,bool) (at Assets/_TheraplyCore/Firebase/SessionEventStore.cs:111)
+TheraplyCore.Firebase.FirebaseDataService:InitializeDurableStore () (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:2265)
+System.Reflection.RuntimeMethodInfo:Invoke (object,System.Reflection.BindingFlags,System.Reflection.Binder,object[],System.Globalization.CultureInfo)
+System.Reflection.MethodBase:Invoke (object,object[])
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:InvokeNonPublic (object,string) (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:533)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:98)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 102)
+
+<color=gray>17:59:02.483</color> <color=white>[INFO]</color> [GameRegistry] Loaded 0 game mappings.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Games.Runtime.GameRegistryService:RebuildRegistry () (at Assets/_TheraplyCore/Games/Runtime/GameRegistryService.cs:111)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:101)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+[FirebaseNetworkValidation] Auto-registered validation game 'demo_cube_clicker' using type 'TheraplyExamples.DemoCubeGameModule'.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:EnsureValidationGameRegistered (TheraplyCore.Games.Runtime.GameRegistryService) (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:281)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:102)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs Line: 281)
+
+<color=gray>17:59:02.640</color> <color=white>[INFO]</color> [SessionContext] Session created: firebase-net-20260218165902639 (patient=validation_patient, therapist=validation_therapist, state=CREATED)
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Games.Runtime.GameSessionContext:BeginSession (string,string,string) (at Assets/_TheraplyCore/Games/Runtime/GameSessionContext.cs:72)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:106)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+<color=gray>17:59:02.641</color> <color=white>[INFO]</color> [FirebaseData] Session ID set: firebase-net-20260218165902639
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Firebase.FirebaseDataService:SetSessionId (string) (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:368)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:107)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+[FirebaseNetworkValidation] Using validation gameId='pulse_target_tap'.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:110)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs Line: 110)
+
+<color=gray>17:59:02.642</color> <color=yellow>[WARN]</color> [GameRuntime] Game not found in registry: pulse_target_tap
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:LogWarning (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:174)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Warning (string) (at Assets/_TheraplyCore/Logging/Logger.cs:102)
+TheraplyCore.Games.Runtime.GameRuntimeService:SetActiveGame (string) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:250)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:112)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 102)
+

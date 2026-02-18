@@ -33,6 +33,8 @@ namespace TheraplyExamples
                 registry,
                 PulseTargetsGameConfig.DefaultGameId,
                 "PulseTargetsGameRuntime");
+
+            EnsureEditorDiagnosticsOverlay();
         }
 
         private static void EnsureRegistered<TModule>(
@@ -61,6 +63,17 @@ namespace TheraplyExamples
             }
 
             registry.RegisterRuntime(gameId, module);
+        }
+
+        private static void EnsureEditorDiagnosticsOverlay()
+        {
+            if (Object.FindFirstObjectByType<EditorRuntimeDiagnosticsOverlay>() != null)
+            {
+                return;
+            }
+
+            var host = new GameObject("EditorRuntimeDiagnosticsOverlay");
+            host.AddComponent<EditorRuntimeDiagnosticsOverlay>();
         }
     }
 }

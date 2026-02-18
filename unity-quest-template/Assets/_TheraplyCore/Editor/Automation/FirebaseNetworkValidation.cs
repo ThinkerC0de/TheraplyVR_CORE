@@ -99,7 +99,8 @@ namespace TheraplyCore.Editor.Automation
                 InvokeNonPublic(firebase, "RefreshSessionMetadataFromContext");
 
                 registry.RebuildRegistry();
-                EnsureValidationGameRegistered(registry);
+                var requestedGameId = ResolveCommandLineValue(ValidationGameIdArgument);
+                EnsureValidationGameRegistered(registry, requestedGameId);
                 InvokeNonPublic(runtime, "Awake");
 
                 var sessionId = $"firebase-net-{DateTime.UtcNow:yyyyMMddHHmmssfff}";
@@ -237,14 +238,27 @@ namespace TheraplyCore.Editor.Automation
                 $"Unable to resolve validation gameId. Pass '-{ValidationGameIdArgument}=<gameId>' to Unity CLI or configure a runtime default game.");
         }
 
-        private static void EnsureValidationGameRegistered(GameRegistryService registry)
+        private static void EnsureValidationGameRegistered(
+            GameRegistryService registry,
+            string preferredGameId)
         {
             if (registry == null)
             {
                 return;
             }
 
-            if (!string.IsNullOrWhiteSpace(ResolveFirstRegisteredGameId(registry)))
+            var normalizedPreferredGameId = string.IsNullOrWhiteSpace(preferredGameId)
+                ? string.Empty
+                : preferredGameId.Trim();
+
+            if (!string.IsNullOrWhiteSpace(normalizedPreferredGameId) &&
+                registry.TryResolve(normalizedPreferredGameId, out _))
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(normalizedPreferredGameId) &&
+                !string.IsNullOrWhiteSpace(ResolveFirstRegisteredGameId(registry)))
             {
                 return;
             }
@@ -264,6 +278,13 @@ namespace TheraplyCore.Editor.Automation
                 {
                     var behaviour = host.AddComponent(type) as MonoBehaviour;
                     if (!(behaviour is GameContracts.IGameModule module) || string.IsNullOrWhiteSpace(module.GameId))
+                    {
+                        UnityEngine.Object.DestroyImmediate(host);
+                        continue;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(normalizedPreferredGameId) &&
+                        !string.Equals(module.GameId, normalizedPreferredGameId, StringComparison.OrdinalIgnoreCase))
                     {
                         UnityEngine.Object.DestroyImmediate(host);
                         continue;

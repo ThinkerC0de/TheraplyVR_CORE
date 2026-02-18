@@ -9,25 +9,56 @@ class EntitlementService {
   static FirebaseFirestore? _firestoreOverride;
   static FirebaseFirestore get _firestore =>
       _firestoreOverride ?? FirebaseService.firestore;
-  static CollectionReference<Map<String, dynamic>> get _entitlementsCollection =>
-      _firestore.collection('user_entitlements');
+  static CollectionReference<Map<String, dynamic>>
+      get _entitlementsCollection => _firestore.collection('user_entitlements');
   static CollectionReference<Map<String, dynamic>> get _grantsCollection =>
       _firestore.collection('entitlement_grants');
-  static const bool _strictEntitlementGate = bool.fromEnvironment(
+  static const bool _strictEntitlementGateFlag = bool.fromEnvironment(
     'STRICT_ENTITLEMENT_GATE',
     defaultValue: false,
   );
-  static const bool _enableDevEntitlementBootstrap = bool.fromEnvironment(
+  static const bool _enableDevEntitlementBootstrapFlag = bool.fromEnvironment(
     'ENABLE_DEV_ENTITLEMENT_BOOTSTRAP',
     defaultValue: false,
   );
+  static bool? _strictEntitlementGateOverrideForTesting;
+  static bool? _enableDevEntitlementBootstrapOverrideForTesting;
 
   static EntitlementAccess? _activeAccess;
 
   static EntitlementAccess? get activeAccess => _activeAccess;
-  static bool get isStrictEntitlementGateEnabled => _strictEntitlementGate;
+  static bool get isStrictEntitlementGateEnabled =>
+      _strictEntitlementGateEnabled;
   static bool get isDevEntitlementBootstrapEnabled =>
-      _enableDevEntitlementBootstrap;
+      _devEntitlementBootstrapEnabled;
+
+  static bool get _strictEntitlementGateEnabled {
+    final override = _strictEntitlementGateOverrideForTesting;
+    if (override != null) {
+      return override;
+    }
+
+    // Release builds must never silently fallback to legacy entitlement mode.
+    if (kReleaseMode) {
+      return true;
+    }
+
+    return _strictEntitlementGateFlag;
+  }
+
+  static bool get _devEntitlementBootstrapEnabled {
+    final override = _enableDevEntitlementBootstrapOverrideForTesting;
+    if (override != null) {
+      return override;
+    }
+
+    // Development bootstrap is never allowed in release profile.
+    if (kReleaseMode) {
+      return false;
+    }
+
+    return _enableDevEntitlementBootstrapFlag;
+  }
 
   @visibleForTesting
   static void setFirestoreInstanceForTesting(FirebaseFirestore firestore) {
@@ -38,10 +69,22 @@ class EntitlementService {
   static void clearFirestoreInstanceForTesting() {
     _firestoreOverride = null;
     _activeAccess = null;
+    _strictEntitlementGateOverrideForTesting = null;
+    _enableDevEntitlementBootstrapOverrideForTesting = null;
+  }
+
+  @visibleForTesting
+  static void setGateFlagsForTesting({
+    bool? strictEntitlementGate,
+    bool? enableDevEntitlementBootstrap,
+  }) {
+    _strictEntitlementGateOverrideForTesting = strictEntitlementGate;
+    _enableDevEntitlementBootstrapOverrideForTesting =
+        enableDevEntitlementBootstrap;
   }
 
   static Future<bool> tryBootstrapDevelopmentEntitlement(User user) async {
-    if (!_enableDevEntitlementBootstrap) {
+    if (!_devEntitlementBootstrapEnabled) {
       return false;
     }
 
@@ -94,16 +137,18 @@ class EntitlementService {
   ) async {
     final normalizedUserId = userId.trim();
     if (normalizedUserId.isEmpty) {
-      if (_strictEntitlementGate) {
+      if (_strictEntitlementGateEnabled) {
         return _buildStrictDeniedDecision(
           reasonCode: 'ENTITLEMENT_RECORD_REQUIRED',
-          message: 'Entitlement profile is required and missing. Contact your administrator.',
+          message:
+              'Entitlement profile is required and missing. Contact your administrator.',
         );
       }
 
       final fallbackDecision = _buildLegacyFallbackDecision(
         reasonCode: 'LEGACY_FALLBACK_NO_RECORD',
-        message: 'No entitlement profile found. Legacy therapist access applied.',
+        message:
+            'No entitlement profile found. Legacy therapist access applied.',
       );
       _activeAccess = fallbackDecision.access;
       return fallbackDecision;
@@ -112,9 +157,10 @@ class EntitlementService {
     final nowUtc = DateTime.now().toUtc();
 
     try {
-      final docSnapshot = await _entitlementsCollection.doc(normalizedUserId).get();
+      final docSnapshot =
+          await _entitlementsCollection.doc(normalizedUserId).get();
       if (!docSnapshot.exists) {
-        if (_strictEntitlementGate) {
+        if (_strictEntitlementGateEnabled) {
           return _buildStrictDeniedDecision(
             reasonCode: 'ENTITLEMENT_RECORD_REQUIRED',
             message:
@@ -150,7 +196,7 @@ class EntitlementService {
       _activeAccess = decision.isAllowed ? effectiveAccess : null;
       return decision;
     } catch (e) {
-      if (_strictEntitlementGate) {
+      if (_strictEntitlementGateEnabled) {
         return _buildStrictDeniedDecision(
           reasonCode: 'ENTITLEMENT_BACKEND_UNAVAILABLE',
           message:
@@ -231,7 +277,8 @@ class EntitlementService {
 
     var role = baseAccess.role;
     var appLicense = baseAccess.appLicense;
-    final gameLicenses = Map<String, LicenseGrant>.from(baseAccess.gameLicenses);
+    final gameLicenses =
+        Map<String, LicenseGrant>.from(baseAccess.gameLicenses);
 
     for (final grant in grants) {
       if (grant.roleOverride != null) {
@@ -240,7 +287,8 @@ class EntitlementService {
 
       switch (grant.scope) {
         case EntitlementGrantScope.app:
-          if (!appLicense.isActiveAt(nowUtc) || grant.licenseGrant.isActiveAt(nowUtc)) {
+          if (!appLicense.isActiveAt(nowUtc) ||
+              grant.licenseGrant.isActiveAt(nowUtc)) {
             appLicense = grant.licenseGrant;
           }
           break;

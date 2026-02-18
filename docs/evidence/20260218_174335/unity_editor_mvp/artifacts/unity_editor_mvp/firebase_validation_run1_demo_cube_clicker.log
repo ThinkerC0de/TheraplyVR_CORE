@@ -1,0 +1,1450 @@
+[Licensing::Module] Trying to connect to existing licensing client channel...
+Built from '6000.3/staging' branch; Version is '6000.3.8f1 (1c7db571dde0) revision 1867189'; Using compiler version '194234433'; Build Type 'Release'
+OS: 'Windows 11  (10.0.26200) Professional' Language: 'pl' Physical Memory: 32672 MB
+[Licensing::IpcConnector] Successfully connected to: "LicenseClient-licen" at "2026-02-18T16:54:14.7870239Z"
+BatchMode: 1, IsHumanControllingUs: 0, StartBugReporterOnCrash: 0, Is64bit: 1
+System  architecture: x64
+Process architecture: x64
+Date: 2026-02-18T16:54:14Z
+
+COMMAND LINE ARGUMENTS:
+C:\Program Files\Unity\Hub\Editor\6000.3.8f1\Editor\Unity.exe
+-batchmode
+-nographics
+-quit
+-projectPath
+C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template
+-buildTarget
+Android
+-executeMethod
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation.RunFirebaseNetworkValidation
+-validationGameId=demo_cube_clicker
+-logFile
+docs\evidence\20260218_174335\unity_editor_mvp\artifacts\unity_editor_mvp\firebase_validation_run1_demo_cube_clicker.log
+Successfully changed project path to: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template
+C:/Users/licen/Projects/theraply-vr-framework/unity-quest-template
+DisplayDialog: Recovering Scene Backups Scene backups from a previous Editor session have been detected. Your scene might have been backed up when an Editor instance did not close correctly. 
+
+Do you want to copy and preserve these backups in Assets/_Recovery/?
+This should not be called in batch mode.
+[UnityMemory] Configuration Parameters - Can be set up in boot.config
+    "memorysetup-temp-allocator-size-nav-mesh-worker=65536"
+    "memorysetup-temp-allocator-size-audio-worker=65536"
+    "memorysetup-temp-allocator-size-gfx=262144"
+    "memorysetup-allocator-temp-initial-block-size-main=262144"
+    "memorysetup-allocator-temp-initial-block-size-worker=262144"
+    "memorysetup-temp-allocator-size-background-worker=32768"
+    "memorysetup-temp-allocator-size-job-worker=262144"
+    "memorysetup-temp-allocator-size-preload-manager=33554432"
+    "memorysetup-temp-allocator-size-gi-baking-worker=262144"
+    "memorysetup-temp-allocator-size-gi-baking-worker=262144"
+    "memorysetup-temp-allocator-size-gi-baking-worker=262144"
+    "memorysetup-temp-allocator-size-gi-baking-worker=262144"
+    "memorysetup-temp-allocator-size-gi-baking-worker=262144"
+    "memorysetup-bucket-allocator-granularity=16"
+    "memorysetup-bucket-allocator-bucket-count=8"
+    "memorysetup-bucket-allocator-block-size=33554432"
+    "memorysetup-bucket-allocator-block-count=8"
+    "memorysetup-main-allocator-block-size=16777216"
+    "memorysetup-thread-allocator-block-size=16777216"
+    "memorysetup-gfx-main-allocator-block-size=16777216"
+    "memorysetup-gfx-thread-allocator-block-size=16777216"
+    "memorysetup-cache-allocator-block-size=4194304"
+    "memorysetup-typetree-allocator-block-size=2097152"
+    "memorysetup-profiler-bucket-allocator-granularity=16"
+    "memorysetup-profiler-bucket-allocator-bucket-count=8"
+    "memorysetup-profiler-bucket-allocator-block-size=33554432"
+    "memorysetup-profiler-bucket-allocator-block-count=8"
+    "memorysetup-profiler-allocator-block-size=16777216"
+    "memorysetup-profiler-editor-allocator-block-size=1048576"
+    "memorysetup-temp-allocator-size-main=16777216"
+    "memorysetup-job-temp-allocator-block-size=2097152"
+    "memorysetup-job-temp-allocator-block-size-background=1048576"
+    "memorysetup-job-temp-allocator-reduction-small-platforms=262144"
+    "memorysetup-temp-allocator-size-cloud-worker=32768"
+Player connection [28384]  Target information:
+
+Player connection [28384]  * "[IP] 192.168.0.221 [Port] 55504 [Flags] 2 [Guid] 3777198095 [EditorId] 3777198095 [Version] 1048832 [Id] WindowsEditor(7,MARCIN_PC) [Debug] 1 [PackageName] WindowsEditor [ProjectName] Editor" 
+
+Player connection [28384]  * "[IP] 100.112.161.47 [Port] 55504 [Flags] 2 [Guid] 3777198095 [EditorId] 3777198095 [Version] 1048832 [Id] WindowsEditor(7,MARCIN_PC) [Debug] 1 [PackageName] WindowsEditor [ProjectName] Editor" 
+
+Player connection [28384] Host joined multi-casting on [225.0.0.222:54997]...
+Player connection [28384] Host joined alternative multi-casting on [225.0.0.222:34997]...
+Input System module state changed to: Initialized.
+[Physics::Module] Initialized fallback backend.
+[Physics::Module] Id: 0xdecafbad
+[Package Manager] Connected to IPC stream "Upm-5136" after 0.3 seconds.
+[Licensing::Module] Licensing is not yet initialized.
+[Licensing::Client] Handshaking with LicensingClient:
+  Version:                 1.17.4+4293ba1
+  Session Id:              64c1573cd138449b888286ccdae954e8
+  Correlation Id:          476dbab06820b52ae49a155f5e59ced3
+  External correlation Id: 6760441169453304628
+  Machine Id:              vMwHPvfi1alxp1sT2fMsT3AqMw0=
+[Licensing::Module] Successfully connected to LicensingClient on channel: "LicenseClient-licen" (connect: 0.00s, validation: 0.00s, handshake: 0.72s)
+[Licensing::IpcConnector] Successfully connected to: "LicenseClient-licen-notifications" at "2026-02-18T16:54:15.5121587Z"
+[Licensing::Module] Error: Access token is unavailable; failed to update
+[Licensing::Client] Successfully resolved entitlement details
+[Licensing::Module] License group:
+  Id: 1374621094362-UnityPersXXXX
+  Product: Unity Personal
+  Type: Assigned
+  Expiration: Unlimited
+[Licensing::Client] Successfully updated license, isAsync: True, time: 0.00
+[Licensing::Client] Successfully resolved entitlement details
+[Licensing::Module] Licensing Background thread has ended after 0.73s
+[Licensing::Module] Licensing is initialized (took 0.33s).
+[Licensing::Client] Successfully resolved entitlement details
+Library Redirect Path: Library/
+[Physics::Module] Selected backend.
+[Physics::Module] Name: PhysX
+[Physics::Module] Id: 0xf2b8ea05
+[Physics::Module] SDK Version: 4.1.2
+[Physics::Module] Integration Version: 1.0.0
+[Physics::Module] Threading Mode: Multi-Threaded
+[Licensing::Client] Successfully resolved entitlement details
+Targeting platform: Android
+Refreshing native plugins compatible for Editor in 0.52 ms, found 0 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Initialize engine version: 6000.3.8f1 (1c7db571dde0)
+[Subsystems] Discovering subsystems at path C:/Program Files/Unity/Hub/Editor/6000.3.8f1/Editor/Data/Resources/UnitySubsystems
+[Subsystems] Discovering subsystems at path C:/Users/licen/Projects/theraply-vr-framework/unity-quest-template/Assets
+Forcing GfxDevice: Null
+GfxDevice: creating device client; kGfxThreadingModeNonThreaded
+NullGfxDevice:
+    Version:  NULL 1.0 [1.0]
+    Renderer: Null Device
+    Vendor:   Unity Technologies
+Initialize mono
+Mono path[0] = 'C:/Program Files/Unity/Hub/Editor/6000.3.8f1/Editor/Data/Managed'
+Mono path[1] = 'C:/Program Files/Unity/Hub/Editor/6000.3.8f1/Editor/Data/MonoBleedingEdge/lib/mono/unityjit-win32'
+Mono config path = 'C:/Program Files/Unity/Hub/Editor/6000.3.8f1/Editor/Data/MonoBleedingEdge/etc'
+Using monoOptions --debugger-agent=transport=dt_socket,embedding=1,server=y,suspend=n,address=127.0.0.1:56136
+Using cacheserver namespaces - metadata:defaultmetadata, artifacts:defaultartifacts
+Using cacheserver namespaces - metadata:defaultmetadata, artifacts:defaultartifacts
+ImportWorker Server TCP listen port: 0
+AcceleratorClientConnectionCallback - disconnected - :0
+Begin MonoManager ReloadAssembly
+Registering precompiled unity dll's ...
+Register platform support module: C:/Program Files/Unity/Hub/Editor/6000.3.8f1/Editor/Data/PlaybackEngines/WindowsStandaloneSupport/UnityEditor.WindowsStandalone.Extensions.dll
+Register platform support module: C:/Program Files/Unity/Hub/Editor/6000.3.8f1/Editor/Data/PlaybackEngines/AndroidPlayer/UnityEditor.Android.Extensions.dll
+Registered in 0.002136 seconds.
+- Loaded All Assemblies, in  0.353 seconds
+Native extension for Android target not found
+Android Extension - Scanning For ADB Devices 5200 ms
+Native extension for WindowsStandalone target not found
+ScheduleIndexationOnStartup MainProcess:False IndexOnStartup:True
+Mono: successfully reloaded assembly
+- Finished resetting the current domain, in  5.589 seconds
+Domain Reload Profiling: 5940ms
+	BeginReloadAssembly (114ms)
+		ExecutionOrderSort (0ms)
+		DisableScriptedObjects (0ms)
+		BackupInstance (0ms)
+		ReleaseScriptingObjects (0ms)
+		CreateAndSetChildDomain (30ms)
+	RebuildCommonClasses (33ms)
+	RebuildNativeTypeToScriptingClass (11ms)
+	initialDomainReloadingComplete (42ms)
+	LoadAllAssembliesAndSetupDomain (151ms)
+		LoadAssemblies (82ms)
+		RebuildTransferFunctionScriptingTraits (0ms)
+		AnalyzeDomain (148ms)
+			TypeCache.Refresh (146ms)
+				TypeCache.ScanAssembly (134ms)
+			BuildScriptInfoCaches (0ms)
+			ResolveRequiredComponents (1ms)
+	FinalizeReload (5589ms)
+		ReleaseScriptCaches (0ms)
+		RebuildScriptCaches (0ms)
+		SetupLoadedEditorAssemblies (5556ms)
+			LogAssemblyErrors (0ms)
+			InitializePlatformSupportModulesInManaged (5294ms)
+			SetLoadedEditorAssemblies (3ms)
+			BeforeProcessingInitializeOnLoad (71ms)
+			ProcessInitializeOnLoadAttributes (127ms)
+			ProcessInitializeOnLoadMethodAttributes (60ms)
+			AfterProcessingInitializeOnLoad (0ms)
+			EditorAssembliesLoaded (0ms)
+		ExecutionOrderSort2 (0ms)
+		AwakeInstancesAfterBackupRestoration (0ms)
+[Licensing::Client] Successfully resolved entitlement details
+[Licensing::Client] Successfully resolved entitlement details
+Application.AssetDatabase Initial Refresh Start
+Package Manager log level set to [2]
+[Package Manager] Restoring resolved packages state from cache
+[Licensing::Client] Successfully resolved entitlement details
+[Package Manager] Registered 41 packages:
+  Packages from [https://packages.unity.com]:
+    com.unity.webrtc@3.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.webrtc@9605a106619b)
+    com.unity.editorcoroutines@1.0.1 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.editorcoroutines@54394ed3283c)
+  Built-in packages:
+    com.unity.multiplayer.center@1.0.1 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.multiplayer.center@f01f4ba8d00a)
+    com.unity.modules.accessibility@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.accessibility)
+    com.unity.modules.adaptiveperformance@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.adaptiveperformance)
+    com.unity.modules.ai@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.ai)
+    com.unity.modules.androidjni@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.androidjni)
+    com.unity.modules.animation@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.animation)
+    com.unity.modules.assetbundle@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.assetbundle)
+    com.unity.modules.audio@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.audio)
+    com.unity.modules.cloth@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.cloth)
+    com.unity.modules.director@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.director)
+    com.unity.modules.imageconversion@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.imageconversion)
+    com.unity.modules.imgui@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.imgui)
+    com.unity.modules.jsonserialize@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.jsonserialize)
+    com.unity.modules.particlesystem@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.particlesystem)
+    com.unity.modules.physics@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.physics)
+    com.unity.modules.physics2d@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.physics2d)
+    com.unity.modules.screencapture@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.screencapture)
+    com.unity.modules.terrain@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.terrain)
+    com.unity.modules.terrainphysics@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.terrainphysics)
+    com.unity.modules.tilemap@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.tilemap)
+    com.unity.modules.ui@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.ui)
+    com.unity.modules.uielements@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.uielements)
+    com.unity.modules.umbra@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.umbra)
+    com.unity.modules.unityanalytics@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.unityanalytics)
+    com.unity.modules.unitywebrequest@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.unitywebrequest)
+    com.unity.modules.unitywebrequestassetbundle@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.unitywebrequestassetbundle)
+    com.unity.modules.unitywebrequestaudio@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.unitywebrequestaudio)
+    com.unity.modules.unitywebrequesttexture@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.unitywebrequesttexture)
+    com.unity.modules.unitywebrequestwww@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.unitywebrequestwww)
+    com.unity.modules.vectorgraphics@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.vectorgraphics)
+    com.unity.modules.vehicles@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.vehicles)
+    com.unity.modules.video@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.video)
+    com.unity.modules.vr@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.vr)
+    com.unity.modules.wind@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.wind)
+    com.unity.modules.xr@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.xr)
+    com.unity.modules.subsystems@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.subsystems)
+    com.unity.modules.hierarchycore@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.hierarchycore)
+  Git packages:
+    com.github-glitchenzo.nugetforunity@https://github.com/GlitchEnzo/NuGetForUnity.git?path=/src/NuGetForUnity (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.github-glitchenzo.nugetforunity@1c1553136be4)
+    jp.hadashikick.vcontainer@https://github.com/hadashiA/VContainer.git?path=VContainer/Assets/VContainer (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\jp.hadashikick.vcontainer@314ad69e1539)
+[Subsystems] No new subsystems found in resolved package list.
+[Package Manager] Done registering packages in 0.02 seconds
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://localhost:80
+info: Microsoft.Hosting.Lifetime[0]
+      Application started. Press Ctrl+C to shut down.
+info: Microsoft.Hosting.Lifetime[0]
+      Hosting environment: Production
+info: Microsoft.Hosting.Lifetime[0]
+      Content root path: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/2 POST http://ilpp/UnityILPP.PostProcessing/Ping application/grpc -
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]
+      Executing endpoint 'gRPC - /UnityILPP.PostProcessing/Ping'
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]
+      Executed endpoint 'gRPC - /UnityILPP.PostProcessing/Ping'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/2 POST http://ilpp/UnityILPP.PostProcessing/Ping application/grpc - - 200 - application/grpc 32.9749ms
+Starting: C:\Program Files\Unity\Hub\Editor\6000.3.8f1\Editor\Data\Tools\BuildPipeline\bee_backend.exe --ipc --defer-dag-verification --dagfile="Library/Bee/1300b0aE.dag" --continue-on-failure --profile="Library/Bee/backend1.traceevents" ScriptAssemblies
+WorkingDir: C:/Users/licen/Projects/theraply-vr-framework/unity-quest-template
+DisplayProgressbar: Compiling Scripts
+ExitCode: 0 Duration: 0s73ms
+*** Tundra build success (0.05 seconds), 0 items updated, 228 evaluated
+AssetDatabase: script compilation time: 0.398266s
+Begin MonoManager ReloadAssembly
+- Loaded All Assemblies, in  0.476 seconds
+Refreshing native plugins compatible for Editor in 1.20 ms, found 1 plugins.
+Native extension for Android target not found
+Native extension for WindowsStandalone target not found
+ScheduleIndexationOnStartup MainProcess:True IndexOnStartup:True
+Mono: successfully reloaded assembly
+- Finished resetting the current domain, in  0.495 seconds
+Domain Reload Profiling: 968ms
+	BeginReloadAssembly (268ms)
+		ExecutionOrderSort (0ms)
+		DisableScriptedObjects (13ms)
+		BackupInstance (0ms)
+		ReleaseScriptingObjects (0ms)
+		CreateAndSetChildDomain (166ms)
+	RebuildCommonClasses (31ms)
+	RebuildNativeTypeToScriptingClass (11ms)
+	initialDomainReloadingComplete (22ms)
+	LoadAllAssembliesAndSetupDomain (141ms)
+		LoadAssemblies (166ms)
+		RebuildTransferFunctionScriptingTraits (0ms)
+		AnalyzeDomain (35ms)
+			TypeCache.Refresh (28ms)
+				TypeCache.ScanAssembly (23ms)
+			BuildScriptInfoCaches (4ms)
+			ResolveRequiredComponents (1ms)
+	FinalizeReload (495ms)
+		ReleaseScriptCaches (0ms)
+		RebuildScriptCaches (0ms)
+		SetupLoadedEditorAssemblies (379ms)
+			LogAssemblyErrors (0ms)
+			InitializePlatformSupportModulesInManaged (31ms)
+			SetLoadedEditorAssemblies (3ms)
+			BeforeProcessingInitializeOnLoad (117ms)
+			ProcessInitializeOnLoadAttributes (191ms)
+			ProcessInitializeOnLoadMethodAttributes (31ms)
+			AfterProcessingInitializeOnLoad (5ms)
+			EditorAssembliesLoaded (0ms)
+		ExecutionOrderSort2 (0ms)
+		AwakeInstancesAfterBackupRestoration (7ms)
+Asset Pipeline Refresh (id=ef059e522e5f5b24fbd955e868de536c): Total: 1.525 seconds - Initiated by InitialRefreshV2(ForceSynchronousImport)
+	Summary:
+		Imports: total=0 (actual=0, local cache=0, cache server=0)
+		Asset DB Process Time: managed=0 ms, native=600 ms
+		Asset DB Callback time: managed=11 ms, native=26 ms
+		Scripting: domain reloads=1, domain reload time=476 ms, compile time=400 ms, other=10 ms
+		Project Asset Count: scripts=206, non-scripts=137
+		Asset File Changes: new=0, changed=0, moved=0, deleted=0
+		Scan Filter Count: 0
+	InvokeCustomDependenciesCallbacks: 0.001ms
+	InvokePackagesCallback: 27.366ms
+	ApplyChangesToAssetFolders: 0.440ms
+	Scan: 27.423ms
+	OnSourceAssetsModified: 0.004ms
+	CategorizeAssetsWithTransientArtifact: 5.416ms
+	ProcessAssetsWithTransientArtifactChanges: 5.110ms
+	CategorizeAssets: 1.912ms
+	ImportOutOfDateAssets: 498.647ms (98.563ms without children)
+		CompileScripts: 399.808ms
+		ReloadNativeAssets: 0.000ms
+		UnloadImportedAssets: 0.097ms
+		EnsureUptoDateAssetsAreRegisteredWithGuidPM: 0.040ms
+		InitializingProgressBar: 0.000ms
+		PostProcessAllAssetNotificationsAddChangedAssets: 0.000ms
+		OnDemandSchedulerStart: 0.138ms
+	PostProcessAllAssets: 11.843ms
+	GatherAllCurrentPrimaryArtifactRevisions: 0.001ms
+	UnloadStreamsBegin: 1.004ms
+	PersistCurrentRevisions: 0.008ms
+	UnloadStreamsEnd: 0.001ms
+	GenerateScriptTypeHashes: 0.169ms
+	Untracked: 945.538ms
+
+Application.AssetDatabase Initial Refresh End
+Scanning for USB devices : 9.503ms
+Initializing Unity extensions:
+[MODES] ModeService[none].Initialize
+[MODES] ModeService[none].LoadModes
+[MODES] Loading mode Default (0) for mode-current-id-unity-quest-template
+Unloading 3 Unused Serialized files (Serialized files now loaded: 0)
+Unloading 351 unused Assets / (0.6 MB). Loaded Objects now: 940.
+Memory consumption went from 92.6 MB to 92.1 MB.
+Total: 5.424200 ms (FindLiveObjects: 0.066900 ms CreateObjectMapping: 0.013900 ms MarkObjects: 5.000200 ms  DeleteObjects: 0.342700 ms)
+
+Opening scene 'Assets/_Examples/Scenes/SessionResilienceTest.unity'
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+Loaded scene 'Assets/_Examples/Scenes/SessionResilienceTest.unity'
+	Deserialize:            5.093 ms
+	Integration:            5.590 ms
+	Integration of assets:  0.003 ms
+	Thread Wait Time:       0.005 ms
+	Total Operation Time:   10.691 ms
+Unloading 1 unused Assets / (0.5 KB). Loaded Objects now: 974.
+Memory consumption went from 90.2 MB to 90.2 MB.
+Total: 3.945000 ms (FindLiveObjects: 0.052900 ms CreateObjectMapping: 0.009300 ms MarkObjects: 3.874600 ms  DeleteObjects: 0.008000 ms)
+
+[FirebaseNetworkValidation] Local backend started on port 63579.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/LocalValidationBackend:StartAsync () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:639)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:94)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs Line: 639)
+
+<color=gray>17:54:24.472</color> <color=yellow>[WARN]</color> [SessionEventStore] SQLite WAL backend unavailable: The type initializer for 'Mono.Data.Sqlite.UnsafeNativeMethods' threw an exception.. Falling back to NDJSON.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:LogWarning (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:174)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Warning (string) (at Assets/_TheraplyCore/Logging/Logger.cs:102)
+TheraplyCore.Firebase.SessionEventStore:BuildBackend (string,string,bool,bool,bool) (at Assets/_TheraplyCore/Firebase/SessionEventStore.cs:380)
+TheraplyCore.Firebase.SessionEventStore:.ctor (bool,string,string,bool,bool,int,bool) (at Assets/_TheraplyCore/Firebase/SessionEventStore.cs:111)
+TheraplyCore.Firebase.FirebaseDataService:InitializeDurableStore () (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:2265)
+System.Reflection.RuntimeMethodInfo:Invoke (object,System.Reflection.BindingFlags,System.Reflection.Binder,object[],System.Globalization.CultureInfo)
+System.Reflection.MethodBase:Invoke (object,object[])
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:InvokeNonPublic (object,string) (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:533)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:98)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 102)
+
+<color=gray>17:54:24.497</color> <color=white>[INFO]</color> [GameRegistry] Loaded 0 game mappings.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Games.Runtime.GameRegistryService:RebuildRegistry () (at Assets/_TheraplyCore/Games/Runtime/GameRegistryService.cs:111)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:101)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+[FirebaseNetworkValidation] Auto-registered validation game 'demo_cube_clicker' using type 'TheraplyExamples.DemoCubeGameModule'.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:EnsureValidationGameRegistered (TheraplyCore.Games.Runtime.GameRegistryService) (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:281)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:102)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs Line: 281)
+
+<color=gray>17:54:24.663</color> <color=white>[INFO]</color> [SessionContext] Session created: firebase-net-20260218165424662 (patient=validation_patient, therapist=validation_therapist, state=CREATED)
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Games.Runtime.GameSessionContext:BeginSession (string,string,string) (at Assets/_TheraplyCore/Games/Runtime/GameSessionContext.cs:72)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:106)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+<color=gray>17:54:24.663</color> <color=white>[INFO]</color> [FirebaseData] Session ID set: firebase-net-20260218165424662
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Firebase.FirebaseDataService:SetSessionId (string) (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:368)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:107)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+[FirebaseNetworkValidation] Using validation gameId='demo_cube_clicker'.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:110)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs Line: 110)
+
+<color=gray>17:54:24.663</color> <color=white>[INFO]</color> [GameRuntime] Active game set: demo_cube_clicker
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Games.Runtime.GameRuntimeService:SetActiveGame (string) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:256)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:112)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+<color=gray>17:54:24.673</color> <color=white>[INFO]</color> [FirebaseData] Durable store enqueue: game_initialized (firebase-net-20260218165424662)
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Firebase.FirebaseDataService:TryPersistCriticalEventLocally (TheraplyCore.Games.GameDataPoint,string&) (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:2353)
+TheraplyCore.Firebase.FirebaseDataService:QueueDataPoint (TheraplyCore.Games.GameDataPoint) (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:318)
+TheraplyCore.Games.Runtime.GameTelemetryService:Track (string,System.Collections.Generic.IReadOnlyDictionary`2<string, object>,int) (at Assets/_TheraplyCore/Games/Runtime/GameTelemetryService.cs:72)
+TheraplyCore.Games.Runtime.GameModuleBase:TrackEvent (string,System.Collections.Generic.IReadOnlyDictionary`2<string, object>,int) (at Assets/_TheraplyCore/Games/Runtime/GameModuleBase.cs:176)
+TheraplyCore.Games.Runtime.GameModuleBase:Initialize (TheraplyCore.Games.Contracts.IGameConfig,TheraplyCore.Games.Contracts.IGameContext) (at Assets/_TheraplyCore/Games/Runtime/GameModuleBase.cs:37)
+TheraplyExamples.DemoCubeGameModule:Initialize (TheraplyCore.Games.Contracts.IGameConfig,TheraplyCore.Games.Contracts.IGameContext) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:145)
+TheraplyCore.Games.Runtime.GameRuntimeService:StartActiveGame () (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:343)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:117)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+<color=gray>17:54:24.673</color> <color=white>[INFO]</color> [FirebaseData] Durable store enqueue: demo_cube_config (firebase-net-20260218165424662)
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Firebase.FirebaseDataService:TryPersistCriticalEventLocally (TheraplyCore.Games.GameDataPoint,string&) (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:2353)
+TheraplyCore.Firebase.FirebaseDataService:QueueDataPoint (TheraplyCore.Games.GameDataPoint) (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:318)
+TheraplyCore.Games.Runtime.GameTelemetryService:Track (string,System.Collections.Generic.IReadOnlyDictionary`2<string, object>,int) (at Assets/_TheraplyCore/Games/Runtime/GameTelemetryService.cs:72)
+TheraplyCore.Games.Runtime.GameModuleBase:TrackEvent (string,System.Collections.Generic.IReadOnlyDictionary`2<string, object>,int) (at Assets/_TheraplyCore/Games/Runtime/GameModuleBase.cs:176)
+TheraplyExamples.DemoCubeGameModule:Initialize (TheraplyCore.Games.Contracts.IGameConfig,TheraplyCore.Games.Contracts.IGameContext) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:147)
+TheraplyCore.Games.Runtime.GameRuntimeService:StartActiveGame () (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:343)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:117)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+<color=gray>17:54:24.674</color> <color=white>[INFO]</color> [FirebaseData] Durable store enqueue: game_started (firebase-net-20260218165424662)
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Firebase.FirebaseDataService:TryPersistCriticalEventLocally (TheraplyCore.Games.GameDataPoint,string&) (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:2353)
+TheraplyCore.Firebase.FirebaseDataService:QueueDataPoint (TheraplyCore.Games.GameDataPoint) (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:318)
+TheraplyCore.Games.Runtime.GameTelemetryService:Track (string,System.Collections.Generic.IReadOnlyDictionary`2<string, object>,int) (at Assets/_TheraplyCore/Games/Runtime/GameTelemetryService.cs:72)
+TheraplyCore.Games.Runtime.GameModuleBase:TrackEvent (string,System.Collections.Generic.IReadOnlyDictionary`2<string, object>,int) (at Assets/_TheraplyCore/Games/Runtime/GameModuleBase.cs:176)
+TheraplyCore.Games.Runtime.GameModuleBase:StartGame () (at Assets/_TheraplyCore/Games/Runtime/GameModuleBase.cs:66)
+TheraplyExamples.DemoCubeGameModule:StartGame () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:167)
+TheraplyCore.Games.Runtime.GameRuntimeService:StartActiveGame () (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:346)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:117)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+Instantiating material due to calling renderer.material during edit mode. This will leak materials into the scene. You most likely want to use renderer.sharedMaterial instead.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.Renderer:GetMaterial ()
+UnityEngine.Renderer:get_material ()
+TheraplyExamples.DemoCubeGameModule:CreateCubeVisual (TheraplyExamples.DemoCubeGameModule/CubeRuntimeData) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:463)
+TheraplyExamples.DemoCubeGameModule:SpawnCube (TheraplyExamples.DemoCubeColor) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:406)
+TheraplyExamples.DemoCubeGameModule:SpawnInitialCubes () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:364)
+TheraplyExamples.DemoCubeGameModule:StartGame () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:178)
+TheraplyCore.Games.Runtime.GameRuntimeService:StartActiveGame () (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:346)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:117)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+[Assets/_Examples/Scripts/DemoCubeGameModule.cs line 463]
+
+Launched and connected shader compiler UnityShaderCompiler.exe after 0.01 seconds
+Instantiating material due to calling renderer.material during edit mode. This will leak materials into the scene. You most likely want to use renderer.sharedMaterial instead.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.Renderer:GetMaterial ()
+UnityEngine.Renderer:get_material ()
+TheraplyExamples.DemoCubeGameModule:CreateCubeVisual (TheraplyExamples.DemoCubeGameModule/CubeRuntimeData) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:463)
+TheraplyExamples.DemoCubeGameModule:SpawnCube (TheraplyExamples.DemoCubeColor) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:406)
+TheraplyExamples.DemoCubeGameModule:SpawnInitialCubes () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:364)
+TheraplyExamples.DemoCubeGameModule:StartGame () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:178)
+TheraplyCore.Games.Runtime.GameRuntimeService:StartActiveGame () (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:346)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:117)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+[Assets/_Examples/Scripts/DemoCubeGameModule.cs line 463]
+
+Instantiating material due to calling renderer.material during edit mode. This will leak materials into the scene. You most likely want to use renderer.sharedMaterial instead.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.Renderer:GetMaterial ()
+UnityEngine.Renderer:get_material ()
+TheraplyExamples.DemoCubeGameModule:CreateCubeVisual (TheraplyExamples.DemoCubeGameModule/CubeRuntimeData) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:463)
+TheraplyExamples.DemoCubeGameModule:SpawnCube (TheraplyExamples.DemoCubeColor) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:406)
+TheraplyExamples.DemoCubeGameModule:SpawnInitialCubes () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:364)
+TheraplyExamples.DemoCubeGameModule:StartGame () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:178)
+TheraplyCore.Games.Runtime.GameRuntimeService:StartActiveGame () (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:346)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:117)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+[Assets/_Examples/Scripts/DemoCubeGameModule.cs line 463]
+
+Instantiating material due to calling renderer.material during edit mode. This will leak materials into the scene. You most likely want to use renderer.sharedMaterial instead.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.Renderer:GetMaterial ()
+UnityEngine.Renderer:get_material ()
+TheraplyExamples.DemoCubeGameModule:CreateCubeVisual (TheraplyExamples.DemoCubeGameModule/CubeRuntimeData) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:463)
+TheraplyExamples.DemoCubeGameModule:SpawnCube (TheraplyExamples.DemoCubeColor) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:406)
+TheraplyExamples.DemoCubeGameModule:SpawnInitialCubes () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:364)
+TheraplyExamples.DemoCubeGameModule:StartGame () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:178)
+TheraplyCore.Games.Runtime.GameRuntimeService:StartActiveGame () (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:346)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:117)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+[Assets/_Examples/Scripts/DemoCubeGameModule.cs line 463]
+
+Instantiating material due to calling renderer.material during edit mode. This will leak materials into the scene. You most likely want to use renderer.sharedMaterial instead.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.Renderer:GetMaterial ()
+UnityEngine.Renderer:get_material ()
+TheraplyExamples.DemoCubeGameModule:CreateCubeVisual (TheraplyExamples.DemoCubeGameModule/CubeRuntimeData) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:463)
+TheraplyExamples.DemoCubeGameModule:SpawnCube (TheraplyExamples.DemoCubeColor) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:406)
+TheraplyExamples.DemoCubeGameModule:SpawnInitialCubes () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:364)
+TheraplyExamples.DemoCubeGameModule:StartGame () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:178)
+TheraplyCore.Games.Runtime.GameRuntimeService:StartActiveGame () (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:346)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:117)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+[Assets/_Examples/Scripts/DemoCubeGameModule.cs line 463]
+
+Instantiating material due to calling renderer.material during edit mode. This will leak materials into the scene. You most likely want to use renderer.sharedMaterial instead.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.Renderer:GetMaterial ()
+UnityEngine.Renderer:get_material ()
+TheraplyExamples.DemoCubeGameModule:CreateCubeVisual (TheraplyExamples.DemoCubeGameModule/CubeRuntimeData) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:463)
+TheraplyExamples.DemoCubeGameModule:SpawnCube (TheraplyExamples.DemoCubeColor) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:406)
+TheraplyExamples.DemoCubeGameModule:SpawnInitialCubes () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:364)
+TheraplyExamples.DemoCubeGameModule:StartGame () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:178)
+TheraplyCore.Games.Runtime.GameRuntimeService:StartActiveGame () (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:346)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:117)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+[Assets/_Examples/Scripts/DemoCubeGameModule.cs line 463]
+
+Instantiating material due to calling renderer.material during edit mode. This will leak materials into the scene. You most likely want to use renderer.sharedMaterial instead.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.Renderer:GetMaterial ()
+UnityEngine.Renderer:get_material ()
+TheraplyExamples.DemoCubeGameModule:CreateCubeVisual (TheraplyExamples.DemoCubeGameModule/CubeRuntimeData) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:463)
+TheraplyExamples.DemoCubeGameModule:SpawnCube (TheraplyExamples.DemoCubeColor) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:406)
+TheraplyExamples.DemoCubeGameModule:SpawnInitialCubes () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:364)
+TheraplyExamples.DemoCubeGameModule:StartGame () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:178)
+TheraplyCore.Games.Runtime.GameRuntimeService:StartActiveGame () (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:346)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:117)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+[Assets/_Examples/Scripts/DemoCubeGameModule.cs line 463]
+
+Instantiating material due to calling renderer.material during edit mode. This will leak materials into the scene. You most likely want to use renderer.sharedMaterial instead.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.Renderer:GetMaterial ()
+UnityEngine.Renderer:get_material ()
+TheraplyExamples.DemoCubeGameModule:CreateCubeVisual (TheraplyExamples.DemoCubeGameModule/CubeRuntimeData) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:463)
+TheraplyExamples.DemoCubeGameModule:SpawnCube (TheraplyExamples.DemoCubeColor) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:406)
+TheraplyExamples.DemoCubeGameModule:SpawnInitialCubes () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:364)
+TheraplyExamples.DemoCubeGameModule:StartGame () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:178)
+TheraplyCore.Games.Runtime.GameRuntimeService:StartActiveGame () (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:346)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:117)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+[Assets/_Examples/Scripts/DemoCubeGameModule.cs line 463]
+
+Instantiating material due to calling renderer.material during edit mode. This will leak materials into the scene. You most likely want to use renderer.sharedMaterial instead.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.Renderer:GetMaterial ()
+UnityEngine.Renderer:get_material ()
+TheraplyExamples.DemoCubeGameModule:CreateCubeVisual (TheraplyExamples.DemoCubeGameModule/CubeRuntimeData) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:463)
+TheraplyExamples.DemoCubeGameModule:SpawnCube (TheraplyExamples.DemoCubeColor) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:406)
+TheraplyExamples.DemoCubeGameModule:SpawnInitialCubes () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:364)
+TheraplyExamples.DemoCubeGameModule:StartGame () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:178)
+TheraplyCore.Games.Runtime.GameRuntimeService:StartActiveGame () (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:346)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:117)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+[Assets/_Examples/Scripts/DemoCubeGameModule.cs line 463]
+
+Instantiating material due to calling renderer.material during edit mode. This will leak materials into the scene. You most likely want to use renderer.sharedMaterial instead.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.Renderer:GetMaterial ()
+UnityEngine.Renderer:get_material ()
+TheraplyExamples.DemoCubeGameModule:CreateCubeVisual (TheraplyExamples.DemoCubeGameModule/CubeRuntimeData) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:463)
+TheraplyExamples.DemoCubeGameModule:SpawnCube (TheraplyExamples.DemoCubeColor) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:406)
+TheraplyExamples.DemoCubeGameModule:SpawnInitialCubes () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:364)
+TheraplyExamples.DemoCubeGameModule:StartGame () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:178)
+TheraplyCore.Games.Runtime.GameRuntimeService:StartActiveGame () (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:346)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:117)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+[Assets/_Examples/Scripts/DemoCubeGameModule.cs line 463]
+
+Instantiating material due to calling renderer.material during edit mode. This will leak materials into the scene. You most likely want to use renderer.sharedMaterial instead.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.Renderer:GetMaterial ()
+UnityEngine.Renderer:get_material ()
+TheraplyExamples.DemoCubeGameModule:CreateCubeVisual (TheraplyExamples.DemoCubeGameModule/CubeRuntimeData) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:463)
+TheraplyExamples.DemoCubeGameModule:SpawnCube (TheraplyExamples.DemoCubeColor) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:406)
+TheraplyExamples.DemoCubeGameModule:SpawnInitialCubes () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:364)
+TheraplyExamples.DemoCubeGameModule:StartGame () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:178)
+TheraplyCore.Games.Runtime.GameRuntimeService:StartActiveGame () (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:346)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:117)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+[Assets/_Examples/Scripts/DemoCubeGameModule.cs line 463]
+
+Instantiating material due to calling renderer.material during edit mode. This will leak materials into the scene. You most likely want to use renderer.sharedMaterial instead.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.Renderer:GetMaterial ()
+UnityEngine.Renderer:get_material ()
+TheraplyExamples.DemoCubeGameModule:CreateCubeVisual (TheraplyExamples.DemoCubeGameModule/CubeRuntimeData) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:463)
+TheraplyExamples.DemoCubeGameModule:SpawnCube (TheraplyExamples.DemoCubeColor) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:406)
+TheraplyExamples.DemoCubeGameModule:SpawnInitialCubes () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:364)
+TheraplyExamples.DemoCubeGameModule:StartGame () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:178)
+TheraplyCore.Games.Runtime.GameRuntimeService:StartActiveGame () (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:346)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:117)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+[Assets/_Examples/Scripts/DemoCubeGameModule.cs line 463]
+
+<color=gray>17:54:24.718</color> <color=white>[INFO]</color> [FirebaseData] Durable store enqueue: demo_cube_spawned (firebase-net-20260218165424662)
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Firebase.FirebaseDataService:TryPersistCriticalEventLocally (TheraplyCore.Games.GameDataPoint,string&) (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:2353)
+TheraplyCore.Firebase.FirebaseDataService:QueueDataPoint (TheraplyCore.Games.GameDataPoint) (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:318)
+TheraplyCore.Games.Runtime.GameTelemetryService:Track (string,System.Collections.Generic.IReadOnlyDictionary`2<string, object>,int) (at Assets/_TheraplyCore/Games/Runtime/GameTelemetryService.cs:72)
+TheraplyCore.Games.Runtime.GameModuleBase:TrackEvent (string,System.Collections.Generic.IReadOnlyDictionary`2<string, object>,int) (at Assets/_TheraplyCore/Games/Runtime/GameModuleBase.cs:176)
+TheraplyExamples.DemoCubeGameModule:SpawnInitialCubes () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:377)
+TheraplyExamples.DemoCubeGameModule:StartGame () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:178)
+TheraplyCore.Games.Runtime.GameRuntimeService:StartActiveGame () (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:346)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:117)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+<color=gray>17:54:24.724</color> <color=white>[INFO]</color> [SessionContext] State transition: CREATED -> IN_PROGRESS (session=firebase-net-20260218165424662, reason=START_GAME)
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Games.Runtime.GameSessionContext:TryTransitionTo (TheraplyCore.Games.Contracts.SessionLifecycleState,string) (at Assets/_TheraplyCore/Games/Runtime/GameSessionContext.cs:219)
+TheraplyCore.Games.Runtime.GameRuntimeService:TryTransitionSessionState (TheraplyCore.Games.Contracts.SessionLifecycleState,string) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:1073)
+TheraplyCore.Games.Runtime.GameRuntimeService:StartActiveGame () (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:347)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:117)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+<color=gray>17:54:24.724</color> <color=white>[INFO]</color> [FirebaseData] Durable store enqueue: game_start (firebase-net-20260218165424662)
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Firebase.FirebaseDataService:TryPersistCriticalEventLocally (TheraplyCore.Games.GameDataPoint,string&) (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:2353)
+TheraplyCore.Firebase.FirebaseDataService:QueueDataPoint (TheraplyCore.Games.GameDataPoint) (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:318)
+TheraplyCore.Games.Runtime.GameTelemetryService:Track (string,System.Collections.Generic.IReadOnlyDictionary`2<string, object>,int) (at Assets/_TheraplyCore/Games/Runtime/GameTelemetryService.cs:72)
+TheraplyCore.Games.Runtime.GameRuntimeService:TrackCriticalRuntimeEvent (string,System.Collections.Generic.IReadOnlyDictionary`2<string, object>) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:2021)
+TheraplyCore.Games.Runtime.GameRuntimeService:StartActiveGame () (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:348)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:117)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+<color=gray>17:54:24.724</color> <color=white>[INFO]</color> [FirebaseData] Durable store enqueue: session_start (firebase-net-20260218165424662)
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Firebase.FirebaseDataService:TryPersistCriticalEventLocally (TheraplyCore.Games.GameDataPoint,string&) (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:2353)
+TheraplyCore.Firebase.FirebaseDataService:QueueDataPoint (TheraplyCore.Games.GameDataPoint) (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:318)
+TheraplyCore.Games.Runtime.GameTelemetryService:Track (string,System.Collections.Generic.IReadOnlyDictionary`2<string, object>,int) (at Assets/_TheraplyCore/Games/Runtime/GameTelemetryService.cs:72)
+TheraplyCore.Games.Runtime.GameRuntimeService:TrackCriticalRuntimeEvent (string,System.Collections.Generic.IReadOnlyDictionary`2<string, object>) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:2021)
+TheraplyCore.Games.Runtime.GameRuntimeService:StartActiveGame () (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:355)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:117)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+<color=gray>17:54:24.725</color> <color=white>[INFO]</color> [FirebaseData] Durable store enqueue: game_paused (firebase-net-20260218165424662)
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Firebase.FirebaseDataService:TryPersistCriticalEventLocally (TheraplyCore.Games.GameDataPoint,string&) (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:2353)
+TheraplyCore.Firebase.FirebaseDataService:QueueDataPoint (TheraplyCore.Games.GameDataPoint) (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:318)
+TheraplyCore.Games.Runtime.GameTelemetryService:Track (string,System.Collections.Generic.IReadOnlyDictionary`2<string, object>,int) (at Assets/_TheraplyCore/Games/Runtime/GameTelemetryService.cs:72)
+TheraplyCore.Games.Runtime.GameModuleBase:TrackEvent (string,System.Collections.Generic.IReadOnlyDictionary`2<string, object>,int) (at Assets/_TheraplyCore/Games/Runtime/GameModuleBase.cs:176)
+TheraplyCore.Games.Runtime.GameModuleBase:PauseGame () (at Assets/_TheraplyCore/Games/Runtime/GameModuleBase.cs:79)
+TheraplyExamples.DemoCubeGameModule:PauseGame () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:189)
+TheraplyCore.Games.Runtime.GameRuntimeService:PauseActiveGame () (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:368)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:122)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+<color=gray>17:54:24.727</color> <color=white>[INFO]</color> [SessionContext] State transition: IN_PROGRESS -> PAUSED (session=firebase-net-20260218165424662, reason=PAUSE_GAME)
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Games.Runtime.GameSessionContext:TryTransitionTo (TheraplyCore.Games.Contracts.SessionLifecycleState,string) (at Assets/_TheraplyCore/Games/Runtime/GameSessionContext.cs:219)
+TheraplyCore.Games.Runtime.GameRuntimeService:TryTransitionSessionState (TheraplyCore.Games.Contracts.SessionLifecycleState,string) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:1073)
+TheraplyCore.Games.Runtime.GameRuntimeService:PauseActiveGame () (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:369)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:122)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+<color=gray>17:54:24.727</color> <color=white>[INFO]</color> [FirebaseData] Durable store enqueue: game_resumed (firebase-net-20260218165424662)
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Firebase.FirebaseDataService:TryPersistCriticalEventLocally (TheraplyCore.Games.GameDataPoint,string&) (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:2353)
+TheraplyCore.Firebase.FirebaseDataService:QueueDataPoint (TheraplyCore.Games.GameDataPoint) (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:318)
+TheraplyCore.Games.Runtime.GameTelemetryService:Track (string,System.Collections.Generic.IReadOnlyDictionary`2<string, object>,int) (at Assets/_TheraplyCore/Games/Runtime/GameTelemetryService.cs:72)
+TheraplyCore.Games.Runtime.GameModuleBase:TrackEvent (string,System.Collections.Generic.IReadOnlyDictionary`2<string, object>,int) (at Assets/_TheraplyCore/Games/Runtime/GameModuleBase.cs:176)
+TheraplyCore.Games.Runtime.GameModuleBase:StartGame () (at Assets/_TheraplyCore/Games/Runtime/GameModuleBase.cs:66)
+TheraplyExamples.DemoCubeGameModule:StartGame () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:167)
+TheraplyCore.Games.Runtime.GameModuleBase:ResumeGame () (at Assets/_TheraplyCore/Games/Runtime/GameModuleBase.cs:90)
+TheraplyExamples.DemoCubeGameModule:ResumeGame () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:200)
+TheraplyCore.Games.Runtime.GameRuntimeService:ResumeActiveGame () (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:376)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:123)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+<color=gray>17:54:24.729</color> <color=white>[INFO]</color> [SessionContext] State transition: PAUSED -> IN_PROGRESS (session=firebase-net-20260218165424662, reason=RESUME_GAME)
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Games.Runtime.GameSessionContext:TryTransitionTo (TheraplyCore.Games.Contracts.SessionLifecycleState,string) (at Assets/_TheraplyCore/Games/Runtime/GameSessionContext.cs:219)
+TheraplyCore.Games.Runtime.GameRuntimeService:TryTransitionSessionState (TheraplyCore.Games.Contracts.SessionLifecycleState,string) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:1073)
+TheraplyCore.Games.Runtime.GameRuntimeService:ResumeActiveGame () (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:377)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:123)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+<color=gray>17:54:24.730</color> <color=white>[INFO]</color> [FirebaseData] Durable store enqueue: game_stopped (firebase-net-20260218165424662)
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Firebase.FirebaseDataService:TryPersistCriticalEventLocally (TheraplyCore.Games.GameDataPoint,string&) (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:2353)
+TheraplyCore.Firebase.FirebaseDataService:QueueDataPoint (TheraplyCore.Games.GameDataPoint) (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:318)
+TheraplyCore.Games.Runtime.GameTelemetryService:Track (string,System.Collections.Generic.IReadOnlyDictionary`2<string, object>,int) (at Assets/_TheraplyCore/Games/Runtime/GameTelemetryService.cs:72)
+TheraplyCore.Games.Runtime.GameModuleBase:TrackEvent (string,System.Collections.Generic.IReadOnlyDictionary`2<string, object>,int) (at Assets/_TheraplyCore/Games/Runtime/GameModuleBase.cs:176)
+TheraplyCore.Games.Runtime.GameModuleBase:StopGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_TheraplyCore/Games/Runtime/GameModuleBase.cs:109)
+TheraplyExamples.DemoCubeGameModule:StopGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:224)
+TheraplyCore.Games.Runtime.GameRuntimeService:StopActiveGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:384)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:124)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+Destroy may not be called from edit mode! Use DestroyImmediate instead.
+Destroying an object in edit mode destroys it permanently.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.Object:Destroy (UnityEngine.Object,single)
+UnityEngine.Object:Destroy (UnityEngine.Object)
+TheraplyExamples.DemoCubeGameModule:ClearActiveCubes () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:1067)
+TheraplyExamples.DemoCubeGameModule:StopGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:225)
+TheraplyCore.Games.Runtime.GameRuntimeService:StopActiveGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:384)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:124)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+[Assets/_Examples/Scripts/DemoCubeGameModule.cs line 1067]
+
+Destroy may not be called from edit mode! Use DestroyImmediate instead.
+Destroying an object in edit mode destroys it permanently.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.Object:Destroy (UnityEngine.Object,single)
+UnityEngine.Object:Destroy (UnityEngine.Object)
+TheraplyExamples.DemoCubeGameModule:ClearActiveCubes () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:1067)
+TheraplyExamples.DemoCubeGameModule:StopGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:225)
+TheraplyCore.Games.Runtime.GameRuntimeService:StopActiveGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:384)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:124)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+[Assets/_Examples/Scripts/DemoCubeGameModule.cs line 1067]
+
+Destroy may not be called from edit mode! Use DestroyImmediate instead.
+Destroying an object in edit mode destroys it permanently.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.Object:Destroy (UnityEngine.Object,single)
+UnityEngine.Object:Destroy (UnityEngine.Object)
+TheraplyExamples.DemoCubeGameModule:ClearActiveCubes () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:1067)
+TheraplyExamples.DemoCubeGameModule:StopGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:225)
+TheraplyCore.Games.Runtime.GameRuntimeService:StopActiveGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:384)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:124)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+[Assets/_Examples/Scripts/DemoCubeGameModule.cs line 1067]
+
+Destroy may not be called from edit mode! Use DestroyImmediate instead.
+Destroying an object in edit mode destroys it permanently.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.Object:Destroy (UnityEngine.Object,single)
+UnityEngine.Object:Destroy (UnityEngine.Object)
+TheraplyExamples.DemoCubeGameModule:ClearActiveCubes () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:1067)
+TheraplyExamples.DemoCubeGameModule:StopGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:225)
+TheraplyCore.Games.Runtime.GameRuntimeService:StopActiveGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:384)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:124)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+[Assets/_Examples/Scripts/DemoCubeGameModule.cs line 1067]
+
+Destroy may not be called from edit mode! Use DestroyImmediate instead.
+Destroying an object in edit mode destroys it permanently.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.Object:Destroy (UnityEngine.Object,single)
+UnityEngine.Object:Destroy (UnityEngine.Object)
+TheraplyExamples.DemoCubeGameModule:ClearActiveCubes () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:1067)
+TheraplyExamples.DemoCubeGameModule:StopGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:225)
+TheraplyCore.Games.Runtime.GameRuntimeService:StopActiveGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:384)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:124)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+[Assets/_Examples/Scripts/DemoCubeGameModule.cs line 1067]
+
+Destroy may not be called from edit mode! Use DestroyImmediate instead.
+Destroying an object in edit mode destroys it permanently.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.Object:Destroy (UnityEngine.Object,single)
+UnityEngine.Object:Destroy (UnityEngine.Object)
+TheraplyExamples.DemoCubeGameModule:ClearActiveCubes () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:1067)
+TheraplyExamples.DemoCubeGameModule:StopGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:225)
+TheraplyCore.Games.Runtime.GameRuntimeService:StopActiveGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:384)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:124)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+[Assets/_Examples/Scripts/DemoCubeGameModule.cs line 1067]
+
+Destroy may not be called from edit mode! Use DestroyImmediate instead.
+Destroying an object in edit mode destroys it permanently.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.Object:Destroy (UnityEngine.Object,single)
+UnityEngine.Object:Destroy (UnityEngine.Object)
+TheraplyExamples.DemoCubeGameModule:ClearActiveCubes () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:1067)
+TheraplyExamples.DemoCubeGameModule:StopGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:225)
+TheraplyCore.Games.Runtime.GameRuntimeService:StopActiveGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:384)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:124)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+[Assets/_Examples/Scripts/DemoCubeGameModule.cs line 1067]
+
+Destroy may not be called from edit mode! Use DestroyImmediate instead.
+Destroying an object in edit mode destroys it permanently.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.Object:Destroy (UnityEngine.Object,single)
+UnityEngine.Object:Destroy (UnityEngine.Object)
+TheraplyExamples.DemoCubeGameModule:ClearActiveCubes () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:1067)
+TheraplyExamples.DemoCubeGameModule:StopGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:225)
+TheraplyCore.Games.Runtime.GameRuntimeService:StopActiveGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:384)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:124)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+[Assets/_Examples/Scripts/DemoCubeGameModule.cs line 1067]
+
+Destroy may not be called from edit mode! Use DestroyImmediate instead.
+Destroying an object in edit mode destroys it permanently.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.Object:Destroy (UnityEngine.Object,single)
+UnityEngine.Object:Destroy (UnityEngine.Object)
+TheraplyExamples.DemoCubeGameModule:ClearActiveCubes () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:1067)
+TheraplyExamples.DemoCubeGameModule:StopGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:225)
+TheraplyCore.Games.Runtime.GameRuntimeService:StopActiveGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:384)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:124)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+[Assets/_Examples/Scripts/DemoCubeGameModule.cs line 1067]
+
+Destroy may not be called from edit mode! Use DestroyImmediate instead.
+Destroying an object in edit mode destroys it permanently.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.Object:Destroy (UnityEngine.Object,single)
+UnityEngine.Object:Destroy (UnityEngine.Object)
+TheraplyExamples.DemoCubeGameModule:ClearActiveCubes () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:1067)
+TheraplyExamples.DemoCubeGameModule:StopGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:225)
+TheraplyCore.Games.Runtime.GameRuntimeService:StopActiveGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:384)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:124)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+[Assets/_Examples/Scripts/DemoCubeGameModule.cs line 1067]
+
+Destroy may not be called from edit mode! Use DestroyImmediate instead.
+Destroying an object in edit mode destroys it permanently.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.Object:Destroy (UnityEngine.Object,single)
+UnityEngine.Object:Destroy (UnityEngine.Object)
+TheraplyExamples.DemoCubeGameModule:ClearActiveCubes () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:1067)
+TheraplyExamples.DemoCubeGameModule:StopGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:225)
+TheraplyCore.Games.Runtime.GameRuntimeService:StopActiveGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:384)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:124)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+[Assets/_Examples/Scripts/DemoCubeGameModule.cs line 1067]
+
+Destroy may not be called from edit mode! Use DestroyImmediate instead.
+Destroying an object in edit mode destroys it permanently.
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.Object:Destroy (UnityEngine.Object,single)
+UnityEngine.Object:Destroy (UnityEngine.Object)
+TheraplyExamples.DemoCubeGameModule:ClearActiveCubes () (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:1067)
+TheraplyExamples.DemoCubeGameModule:StopGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_Examples/Scripts/DemoCubeGameModule.cs:225)
+TheraplyCore.Games.Runtime.GameRuntimeService:StopActiveGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:384)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:124)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+[Assets/_Examples/Scripts/DemoCubeGameModule.cs line 1067]
+
+<color=gray>17:54:24.731</color> <color=white>[INFO]</color> [SessionContext] State transition: IN_PROGRESS -> COMPLETED (session=firebase-net-20260218165424662, reason=STOP_GAME:Completed)
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Games.Runtime.GameSessionContext:TryTransitionTo (TheraplyCore.Games.Contracts.SessionLifecycleState,string) (at Assets/_TheraplyCore/Games/Runtime/GameSessionContext.cs:219)
+TheraplyCore.Games.Runtime.GameRuntimeService:TryTransitionSessionState (TheraplyCore.Games.Contracts.SessionLifecycleState,string) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:1073)
+TheraplyCore.Games.Runtime.GameRuntimeService:StopActiveGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:385)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:124)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+<color=gray>17:54:24.731</color> <color=white>[INFO]</color> [FirebaseData] Durable store enqueue: game_end (firebase-net-20260218165424662)
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Firebase.FirebaseDataService:TryPersistCriticalEventLocally (TheraplyCore.Games.GameDataPoint,string&) (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:2353)
+TheraplyCore.Firebase.FirebaseDataService:QueueDataPoint (TheraplyCore.Games.GameDataPoint) (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:318)
+TheraplyCore.Games.Runtime.GameTelemetryService:Track (string,System.Collections.Generic.IReadOnlyDictionary`2<string, object>,int) (at Assets/_TheraplyCore/Games/Runtime/GameTelemetryService.cs:72)
+TheraplyCore.Games.Runtime.GameRuntimeService:TrackCriticalRuntimeEvent (string,System.Collections.Generic.IReadOnlyDictionary`2<string, object>) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:2021)
+TheraplyCore.Games.Runtime.GameRuntimeService:StopActiveGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:386)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:124)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+<color=gray>17:54:24.734</color> <color=white>[INFO]</color> [FirebaseData] Batch written successfully (10 points)
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Firebase.FirebaseDataService/<TriggerBatchWrite>d__89:MoveNext () (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:903)
+System.Runtime.CompilerServices.AsyncVoidMethodBuilder:Start<TheraplyCore.Firebase.FirebaseDataService/<TriggerBatchWrite>d__89> (TheraplyCore.Firebase.FirebaseDataService/<TriggerBatchWrite>d__89&)
+TheraplyCore.Firebase.FirebaseDataService:TriggerBatchWrite ()
+TheraplyCore.Firebase.FirebaseDataService:QueueDataPoint (TheraplyCore.Games.GameDataPoint) (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:361)
+TheraplyCore.Games.Runtime.GameTelemetryService:Track (string,System.Collections.Generic.IReadOnlyDictionary`2<string, object>,int) (at Assets/_TheraplyCore/Games/Runtime/GameTelemetryService.cs:72)
+TheraplyCore.Games.Runtime.GameRuntimeService:TrackCriticalRuntimeEvent (string,System.Collections.Generic.IReadOnlyDictionary`2<string, object>) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:2021)
+TheraplyCore.Games.Runtime.GameRuntimeService:StopActiveGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:386)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:124)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+<color=gray>17:54:24.735</color> <color=white>[INFO]</color> [GameRuntime] Result: gameId=demo_cube_clicker, completed=True, durationSec=0,058, stopReason=Completed, metricCount=7
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Games.Runtime.GameRuntimeService:TryReportActiveGameResult (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:2045)
+TheraplyCore.Games.Runtime.GameRuntimeService:StopActiveGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:391)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:124)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+<color=gray>17:54:24.736</color> <color=white>[INFO]</color> [FirebaseData] Durable store enqueue: game_result (firebase-net-20260218165424662)
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Firebase.FirebaseDataService:TryPersistCriticalEventLocally (TheraplyCore.Games.GameDataPoint,string&) (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:2353)
+TheraplyCore.Firebase.FirebaseDataService:QueueDataPoint (TheraplyCore.Games.GameDataPoint) (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:318)
+TheraplyCore.Games.Runtime.GameTelemetryService:Track (string,System.Collections.Generic.IReadOnlyDictionary`2<string, object>,int) (at Assets/_TheraplyCore/Games/Runtime/GameTelemetryService.cs:72)
+TheraplyCore.Games.Runtime.GameRuntimeService:TrackCriticalRuntimeEvent (string,System.Collections.Generic.IReadOnlyDictionary`2<string, object>) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:2021)
+TheraplyCore.Games.Runtime.GameRuntimeService:TryReportActiveGameResult (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:2048)
+TheraplyCore.Games.Runtime.GameRuntimeService:StopActiveGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:391)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:124)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+<color=gray>17:54:24.736</color> <color=white>[INFO]</color> [FirebaseData] Durable store enqueue: session_stop (firebase-net-20260218165424662)
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Firebase.FirebaseDataService:TryPersistCriticalEventLocally (TheraplyCore.Games.GameDataPoint,string&) (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:2353)
+TheraplyCore.Firebase.FirebaseDataService:QueueDataPoint (TheraplyCore.Games.GameDataPoint) (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:318)
+TheraplyCore.Games.Runtime.GameTelemetryService:Track (string,System.Collections.Generic.IReadOnlyDictionary`2<string, object>,int) (at Assets/_TheraplyCore/Games/Runtime/GameTelemetryService.cs:72)
+TheraplyCore.Games.Runtime.GameRuntimeService:TrackCriticalRuntimeEvent (string,System.Collections.Generic.IReadOnlyDictionary`2<string, object>) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:2021)
+TheraplyCore.Games.Runtime.GameRuntimeService:StopActiveGame (TheraplyCore.Games.Contracts.GameStopReason) (at Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs:392)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:124)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+<color=gray>17:54:24.736</color> <color=white>[INFO]</color> [FirebaseData] Flushing all data (2 points)
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Firebase.FirebaseDataService:FlushAllData () (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:373)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:126)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+<color=gray>17:54:24.737</color> <color=white>[INFO]</color> [FirebaseData] All data flushed
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Firebase.FirebaseDataService:FlushAllData () (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:390)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5:MoveNext () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:126)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<string>:Start<TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5> (TheraplyCore.Editor.Automation.FirebaseNetworkValidation/<RunValidationAsync>d__5&)
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunValidationAsync ()
+TheraplyCore.Editor.Automation.FirebaseNetworkValidation:RunFirebaseNetworkValidation () (at Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs:36)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+<color=gray>17:54:24.752</color> <color=white>[INFO]</color> [FirebaseData] Backend SESSION_INGEST request -> http://127.0.0.1:63579/session-ingest (14864 bytes)
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Firebase.FirebaseDataService/<PostBackendJsonAsync>d__105:MoveNext () (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:1755)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<TheraplyCore.Firebase.FirebaseDataService/BackendPostResult>:Start<TheraplyCore.Firebase.FirebaseDataService/<PostBackendJsonAsync>d__105> (TheraplyCore.Firebase.FirebaseDataService/<PostBackendJsonAsync>d__105&)
+TheraplyCore.Firebase.FirebaseDataService:PostBackendJsonAsync (string,string,string)
+TheraplyCore.Firebase.FirebaseDataService/<SubmitSessionIngestBatchAsync>d__96:MoveNext () (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:1334)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<TheraplyCore.Firebase.FirebaseDataService/SessionIngestBatchResponse>:Start<TheraplyCore.Firebase.FirebaseDataService/<SubmitSessionIngestBatchAsync>d__96> (TheraplyCore.Firebase.FirebaseDataService/<SubmitSessionIngestBatchAsync>d__96&)
+TheraplyCore.Firebase.FirebaseDataService:SubmitSessionIngestBatchAsync (TheraplyCore.Firebase.FirebaseDataService/SessionIngestBatchRequest)
+TheraplyCore.Firebase.FirebaseDataService/<UploadOutboxBatchAsync>d__94:MoveNext () (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:1132)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<TheraplyCore.Firebase.FirebaseDataService/OutboxUploadResult>:Start<TheraplyCore.Firebase.FirebaseDataService/<UploadOutboxBatchAsync>d__94> (TheraplyCore.Firebase.FirebaseDataService/<UploadOutboxBatchAsync>d__94&)
+TheraplyCore.Firebase.FirebaseDataService:UploadOutboxBatchAsync (System.Collections.Generic.IReadOnlyList`1<TheraplyCore.Firebase.SessionOutboxBatchItem>)
+TheraplyCore.Firebase.FirebaseDataService/<TriggerOutboxSync>d__93:MoveNext () (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:1021)
+System.Runtime.CompilerServices.AsyncMethodBuilderCore/MoveNextRunner:InvokeMoveNext (object)
+System.Threading.ExecutionContext:RunInternal (System.Threading.ExecutionContext,System.Threading.ContextCallback,object,bool)
+System.Threading.ExecutionContext:Run (System.Threading.ExecutionContext,System.Threading.ContextCallback,object,bool)
+System.Runtime.CompilerServices.AsyncMethodBuilderCore/MoveNextRunner:Run ()
+System.Threading.Tasks.SynchronizationContextAwaitTaskContinuation/<>c:<.cctor>b__7_0 (object)
+UnityEngine.UnitySynchronizationContext/WorkRequest:Invoke ()
+UnityEngine.UnitySynchronizationContext:Exec ()
+UnityEngine.UnitySynchronizationContext:ExecutePendingTasks (long)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+<color=gray>17:54:24.809</color> <color=white>[INFO]</color> [FirebaseData] Backend SESSION_INGEST success (status=200, bytes=14864)
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Firebase.FirebaseDataService/<PostBackendJsonAsync>d__105:MoveNext () (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:1775)
+System.Runtime.CompilerServices.AsyncMethodBuilderCore/MoveNextRunner:InvokeMoveNext (object)
+System.Threading.ExecutionContext:RunInternal (System.Threading.ExecutionContext,System.Threading.ContextCallback,object,bool)
+System.Threading.ExecutionContext:Run (System.Threading.ExecutionContext,System.Threading.ContextCallback,object,bool)
+System.Runtime.CompilerServices.AsyncMethodBuilderCore/MoveNextRunner:Run ()
+System.Runtime.CompilerServices.YieldAwaitable/YieldAwaiter:RunAction (object)
+UnityEngine.UnitySynchronizationContext/WorkRequest:Invoke ()
+UnityEngine.UnitySynchronizationContext:Exec ()
+UnityEngine.UnitySynchronizationContext:ExecutePendingTasks (long)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+<color=gray>17:54:24.811</color> <color=white>[INFO]</color> [FirebaseData] SESSION_INGEST NETWORK success: attempted=32, accepted=32, duplicates=0, retry=0, endpoint=http://127.0.0.1:63579/session-ingest
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Firebase.FirebaseDataService:LogIngestResult (string,string,TheraplyCore.Firebase.FirebaseDataService/SessionIngestBatchResponse,int) (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:1871)
+TheraplyCore.Firebase.FirebaseDataService/<SubmitSessionIngestBatchAsync>d__96:MoveNext () (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:1378)
+System.Runtime.CompilerServices.AsyncMethodBuilderCore/MoveNextRunner:InvokeMoveNext (object)
+System.Threading.ExecutionContext:RunInternal (System.Threading.ExecutionContext,System.Threading.ContextCallback,object,bool)
+System.Threading.ExecutionContext:Run (System.Threading.ExecutionContext,System.Threading.ContextCallback,object,bool)
+System.Runtime.CompilerServices.AsyncMethodBuilderCore/MoveNextRunner:Run ()
+System.Threading.Tasks.AwaitTaskContinuation:InvokeAction (object)
+System.Threading.Tasks.AwaitTaskContinuation:RunCallback (System.Threading.ContextCallback,object,System.Threading.Tasks.Task&)
+System.Threading.Tasks.SynchronizationContextAwaitTaskContinuation:Run (System.Threading.Tasks.Task,bool)
+System.Threading.Tasks.Task:FinishContinuations ()
+System.Threading.Tasks.Task:FinishStageThree ()
+System.Threading.Tasks.Task`1<TheraplyCore.Firebase.FirebaseDataService/BackendPostResult>:TrySetResult (TheraplyCore.Firebase.FirebaseDataService/BackendPostResult)
+System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1<TheraplyCore.Firebase.FirebaseDataService/BackendPostResult>:SetResult (TheraplyCore.Firebase.FirebaseDataService/BackendPostResult)
+TheraplyCore.Firebase.FirebaseDataService/<PostBackendJsonAsync>d__105:MoveNext () (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:1810)
+System.Runtime.CompilerServices.AsyncMethodBuilderCore/MoveNextRunner:InvokeMoveNext (object)
+System.Threading.ExecutionContext:RunInternal (System.Threading.ExecutionContext,System.Threading.ContextCallback,object,bool)
+System.Threading.ExecutionContext:Run (System.Threading.ExecutionContext,System.Threading.ContextCallback,object,bool)
+System.Runtime.CompilerServices.AsyncMethodBuilderCore/MoveNextRunner:Run ()
+System.Runtime.CompilerServices.YieldAwaitable/YieldAwaiter:RunAction (object)
+UnityEngine.UnitySynchronizationContext/WorkRequest:Invoke ()
+UnityEngine.UnitySynchronizationContext:Exec ()
+UnityEngine.UnitySynchronizationContext:ExecutePendingTasks (long)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+<color=gray>17:54:24.813</color> <color=white>[INFO]</color> [FirebaseData] Outbox synced 32 events (duplicates acknowledged: 0).
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Firebase.FirebaseDataService/<TriggerOutboxSync>d__93:MoveNext () (at Assets/_TheraplyCore/Firebase/FirebaseDataService.cs:1064)
+System.Runtime.CompilerServices.AsyncMethodBuilderCore/MoveNextRunner:InvokeMoveNext (object)
+System.Threading.ExecutionContext:RunInternal (System.Threading.ExecutionContext,System.Threading.ContextCallback,object,bool)
+System.Threading.ExecutionContext:Run (System.Threading.ExecutionContext,System.Threading.ContextCallback,object,bool)
+System.Runtime.CompilerServices.AsyncMethodBuilderCore/MoveNextRunner:Run ()
+System.Threading.Tasks.SynchronizationContextAwaitTaskContinuation/<>c:<.cctor>b__7_0 (object)
+UnityEngine.UnitySynchronizationContext/WorkRequest:Invoke ()
+UnityEngine.UnitySynchronizationContext:Exec ()
+UnityEngine.UnitySynchronizationContext:ExecutePendingTasks (long)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+Batchmode quit successfully invoked - shutting down!
+Killing ADB server in 0,0667232 seconds.
+[Physics::Module] Cleanup current backend.
+[Physics::Module] Id: 0xf2b8ea05
+Input System module state changed to: ShutdownInProgress.
+Input System polling thread exited.
+Input System module state changed to: Shutdown.
+[Licensing::IpcConnector] LicenseClient-licen-notifications channel disconnected successfully.
+[Licensing::IpcConnector] LicenseClient-licen channel disconnected successfully.
+AcceleratorClientConnectionCallback - disconnected - :0
+Cleanup mono
+<color=gray>17:54:25.013</color> <color=orange>[ERROR]</color> [SessionEventStore] Writer loop crashed: Thread was being aborted.
+
+abort_threads: Failed aborting id: 00000000000048DC, mono_thread_manage will ignore it
+
+abort_threads: Failed aborting id: 0000000000001588, mono_thread_manage will ignore it
+
+abort_threads: Failed aborting id: 00000000000048DC, mono_thread_manage will ignore it
+
+abort_threads: Failed aborting id: 0000000000001588, mono_thread_manage will ignore it
+
+debugger-agent: Unable to listen on 3272
+Exiting batchmode successfully now!
+Exiting without the bug reporter. Application will terminate with return code 0

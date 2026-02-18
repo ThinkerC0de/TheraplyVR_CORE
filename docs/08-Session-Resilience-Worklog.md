@@ -147,18 +147,152 @@ Status legend:
 
 ## 10) Sprint 1 closeout and next execution queues (2026-02-18)
 
-- `READY` Sprint 1 closeout checklist:
+- `DONE` Sprint 1 closeout checklist:
   - `docs/18-Sprint-1-Closure-Checklist.md`
-- `READY` Mobile MVP completion queue:
+- `DONE` Mobile MVP completion queue:
   - `docs/19-Mobile-MVP-Completion-Tasklist.md`
-- `READY` Unity Editor MVP completion queue:
+- `DONE` Unity Editor MVP completion queue:
   - `docs/20-Unity-Editor-MVP-Completion-Tasklist.md`
-- `READY` Integrated validation + decision gate:
+- `DONE` Integrated validation + decision gate:
   - `docs/21-Integrated-Validation-And-GoNoGo.md`
 
-Execution order for next chat:
-1. Close Sprint 1 sign-off items from `docs/18`.
-2. Execute mobile MVP tasks from `docs/19`.
-3. Execute Unity Editor tasks from `docs/20`.
-4. Run integrated validation gate from `docs/21`.
-5. Make Go/No-Go decision and re-prioritize next sprint scope.
+## 11) Sprint 1 closure execution evidence (2026-02-18)
+
+- `OK` Firestore rules deployed to target project:
+  - command: `firebase.cmd deploy --only firestore:rules --project theraply-vr-demo`
+  - evidence: `docs/evidence/20260218_174335/commands/firebase_deploy_firestore_rules.log`
+- `OK` `admin_operator` claim verified:
+  - `scripts/set_admin_operator_claim.ps1` (test operator account),
+  - `scripts/check_admin_operator_claim.ps1` (final check),
+  - evidence: `docs/evidence/20260218_174335/commands/check_admin_operator_claim_final.log`
+- `OK` Grant/revoke smoke with next-login gate result:
+  - grant -> allow (`APP_LICENSE_ACTIVE`),
+  - revoke -> deny (`APP_LICENSE_INACTIVE`),
+  - app grant override -> allow (`APP_LICENSE_ACTIVE`),
+  - evidence: `docs/evidence/20260218_174335/commands/manual_smoke_grant_revoke_next_login.log`
+- `OK` Audit contract sample validated (`reason`, `correlationId`, actor fields):
+  - evidence: `docs/evidence/20260218_174335/commands/admin_audit_trail_contract_sample.log`
+- `OK` Validation commands rerun:
+  - `admin_console_web`: `flutter analyze`, `flutter test`,
+  - `flutter_controller`: `flutter analyze`, `flutter test`,
+  - evidence summary: `docs/evidence/20260218_174335/notes/sprint1_closure.md`
+
+## 12) Mobile MVP execution update (2026-02-18)
+
+- `OK` A1 release-profile gate hardening in `flutter_controller`:
+  - strict entitlement gate now enforced in release runtime,
+  - dev bootstrap explicitly disabled in release runtime,
+  - file: `flutter_controller/lib/services/entitlement_service.dart`
+- `OK` A2 explicit login denial UI states + actionable hints:
+  - dedicated error card for:
+    - missing profile,
+    - inactive app license,
+    - strict-mode backend unavailable,
+  - file: `flutter_controller/lib/screens/login_screen.dart`
+- `OK` A3 login gate regression matrix:
+  - active entitlement,
+  - revoked entitlement,
+  - app grant override,
+  - missing entitlement in strict mode,
+  - file: `flutter_controller/test/entitlement_login_gate_matrix_test.dart`
+- `OK` B2 consolidated smoke script in docs:
+  - file: `docs/22-Mobile-Session-Smoke-Script.md`
+- `OK` B3 visible diagnostics in control UI:
+  - active session id,
+  - connection state,
+  - explicit remote summary line (`Session` + `Runtime`),
+  - file: `flutter_controller/lib/screens/control_screen.dart`
+- `OK` C1/C2/C3 UX hardening:
+  - account-switch guard clears stale local state,
+  - selected student marker on list,
+  - role indicator (manage/read-only) in student screen,
+  - cleaner error copy with next-step hints,
+  - files:
+    - `flutter_controller/lib/screens/login_screen.dart`
+    - `flutter_controller/lib/screens/students_screen.dart`
+- `OK` Mobile validation rerun:
+  - `flutter analyze`
+  - `flutter test`
+  - evidence:
+    - `docs/evidence/20260218_174335/commands/flutter_controller_flutter_analyze_post_mobile.log`
+    - `docs/evidence/20260218_174335/commands/flutter_controller_flutter_test_post_mobile.log`
+
+## 13) Unity Editor MVP execution update (2026-02-18)
+
+- `OK` A1/A2 scene + bootstrap stability:
+  - canonical scene set remains explicit in Build Settings,
+  - deterministic example game registration on Editor startup remains in place,
+  - bootstrap now also ensures runtime diagnostics overlay host,
+  - files:
+    - `unity-quest-template/Assets/_Examples/Scripts/ExampleGameRuntimeBootstrap.cs`
+    - `unity-quest-template/ProjectSettings/EditorBuildSettings.asset`
+- `OK` A3 pre-run stale-state cleanup:
+  - added `scripts/cleanup_unity_utmp.ps1`,
+  - used before Unity batch validation runs to avoid scene recovery prompt.
+- `OK` B1/B2/B3 command/session parity and payload path:
+  - fixed Firebase validator to resolve/auto-register requested `validationGameId` (not only first discovered module),
+  - verified `demo_cube_clicker`, `pulse_target_tap`, `smoke_test_game` validation runs with PASS markers,
+  - added additional `demo_cube_clicker` runs for consecutive stability evidence,
+  - file:
+    - `unity-quest-template/Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs`
+- `OK` C1/C2 Firebase resilience path:
+  - network-backed path remains enabled in validation (`_simulateFirebase=false`),
+  - online/offline/reconnect PASS markers recorded for validated runs.
+- `OK` C3 strict reconnect outcomes documented:
+  - `docs/23-Unity-Firebase-Reconnect-Expected-Outcomes.md`
+- `OK` D1 single-command local smoke profile:
+  - `scripts/unity_editor_mvp_smoke.ps1`
+- `OK` D2 runtime diagnostics in scene HUD/log:
+  - added `EditorRuntimeDiagnosticsOverlay` with:
+    - session id,
+    - active game id,
+    - runtime status,
+    - backend sync health summary,
+  - files:
+    - `unity-quest-template/Assets/_Examples/Scripts/EditorRuntimeDiagnosticsOverlay.cs`
+    - `unity-quest-template/Assets/_Examples/Scripts/EditorRuntimeDiagnosticsOverlay.cs.meta`
+- `OK` D3 troubleshooting notes centralized:
+  - runbook updated with single-command lane + cleanup guidance,
+  - file: `docs/09-Demo-Operator-Runbook.md`
+- `OK` E1 definition-of-done evidence:
+  - Unity CLI compile/build PASS:
+    - `docs/evidence/20260218_174335/commands/unity_cli_validate_post_unity_mvp.log`
+  - Firebase validation PASS logs:
+    - `docs/evidence/20260218_174335/unity_editor_mvp_probe/artifacts/unity_editor_mvp/firebase_validation_run1_demo_cube_clicker.log`
+    - `docs/evidence/20260218_174335/unity_editor_mvp_runs/firebase_validation_pulse_run1.log`
+    - `docs/evidence/20260218_174335/unity_editor_mvp_runs/firebase_validation_smoke_run1.log`
+    - `docs/evidence/20260218_174335/unity_editor_mvp_runs/firebase_validation_demo_run2.log`
+    - `docs/evidence/20260218_174335/unity_editor_mvp_runs/firebase_validation_demo_run3.log`
+    - summary: `docs/evidence/20260218_174335/unity_editor_mvp_runs/SUMMARY.md`
+- `OK` post-step mobile validation rerun:
+  - `docs/evidence/20260218_174335/commands/flutter_controller_flutter_analyze_post_unity_mvp.log`
+  - `docs/evidence/20260218_174335/commands/flutter_controller_flutter_test_post_unity_mvp.log`
+
+## 14) Integrated validation + Go/No-Go decision (2026-02-18)
+
+- `OK` Lane A (admin control plane):
+  - rules deploy + admin claim verification + deterministic grant/revoke next-login decision:
+    - `docs/evidence/20260218_174335/notes/sprint1_closure.md`
+  - audit trail contract sample (`reason`, `correlationId`, actor fields) verified:
+    - `docs/evidence/20260218_174335/commands/admin_audit_trail_contract_sample.log`
+- `OK` Lane B (mobile MVP):
+  - `admin_console_web`: `flutter analyze`, `flutter test` PASS:
+    - `docs/evidence/20260218_174335/commands/admin_console_web_flutter_analyze_integrated.log`
+    - `docs/evidence/20260218_174335/commands/admin_console_web_flutter_test_integrated.log`
+  - `flutter_controller`: `flutter analyze`, `flutter test` PASS:
+    - `docs/evidence/20260218_174335/commands/flutter_controller_flutter_analyze_integrated.log`
+    - `docs/evidence/20260218_174335/commands/flutter_controller_flutter_test_integrated.log`
+- `OK` Lane C (Unity Editor MVP):
+  - Unity validation logs include PASS markers:
+    - `docs/evidence/20260218_174335/unity_editor_mvp_probe/artifacts/unity_editor_mvp/firebase_validation_run1_demo_cube_clicker.log`
+    - `docs/evidence/20260218_174335/unity_editor_mvp_runs/firebase_validation_pulse_run1.log`
+    - `docs/evidence/20260218_174335/unity_editor_mvp_runs/firebase_validation_smoke_run1.log`
+    - `docs/evidence/20260218_174335/unity_editor_mvp_runs/firebase_validation_demo_run2.log`
+    - `docs/evidence/20260218_174335/unity_editor_mvp_runs/firebase_validation_demo_run3.log`
+- `OK` Required operator note captured:
+  - `docs/evidence/20260218_174335/notes/integrated_operator_note.md`
+
+Go/No-Go decision:
+- `GO` for editor-first Sprint 1 scope.
+- Residual risk to track next:
+  - run one fully manual phone+Unity operator rehearsal (3x in a row) with explicit student selection and capture note per run.
