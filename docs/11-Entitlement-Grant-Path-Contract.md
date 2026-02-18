@@ -72,6 +72,9 @@ Fields:
   - upsert `user_entitlements/{uid}` (role + app license),
   - create grant (`entitlement_grants`),
   - revoke existing grant entries from live list.
+- Separate browser operator module is also available:
+  - `admin_console_web/` (Chrome, Firebase-authenticated)
+  - details: `docs/17-Admin-Console-Web.md`
 
 ## Deferred
 
