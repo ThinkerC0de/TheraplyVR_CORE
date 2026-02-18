@@ -125,7 +125,7 @@ $results.Add((Invoke-AdbLoggedCommand -Id "device_getprop_abi" -Arguments @("-s"
 $results.Add((Invoke-AdbLoggedCommand -Id "device_utc_date" -Arguments @("-s", $DeviceId, "shell", "date", "-u"))) | Out-Null
 $results.Add((Invoke-AdbLoggedCommand -Id "device_airplane_mode" -Arguments @("-s", $DeviceId, "shell", "settings", "get", "global", "airplane_mode_on"))) | Out-Null
 $results.Add((Invoke-AdbLoggedCommand -Id "device_wifi_status" -Arguments @("-s", $DeviceId, "shell", "cmd", "wifi", "status"))) | Out-Null
-$results.Add((Invoke-AdbLoggedCommand -Id "app_package_presence" -Arguments @("-s", $DeviceId, "shell", "pm", "list", "packages", $PackageName))) | Out-Null
+$results.Add((Invoke-AdbLoggedCommand -Id "app_package_path" -Arguments @("-s", $DeviceId, "shell", "pm", "path", $PackageName))) | Out-Null
 $results.Add((Invoke-AdbLoggedCommand -Id "app_package_dumpsys" -Arguments @("-s", $DeviceId, "shell", "dumpsys", "package", $PackageName))) | Out-Null
 
 if ($ClearAppData) {

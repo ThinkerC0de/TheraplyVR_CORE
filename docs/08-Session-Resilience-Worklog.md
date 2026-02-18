@@ -328,3 +328,29 @@ Go/No-Go decision:
 - `BLOCKED` Real-device preflight execution in current session:
   - no phone detected via `adb devices` (empty list),
   - evidence: `docs/evidence/20260218_183442/mobile_real_device_preflight/SUMMARY.md`.
+- `OK` Real-device preflight rerun after USB device attach:
+  - device: `RFCY9019KYF` (`SM_S938B`, Android API 36),
+  - status: `PASS`,
+  - evidence: `docs/evidence/20260218_184036/mobile_real_device_preflight/SUMMARY.md`.
+- `OK` Real-device clean-start preflight with app data reset:
+  - status: `PASS` with `-ClearAppData`,
+  - evidence: `docs/evidence/20260218_184202/mobile_real_device_preflight/SUMMARY.md`.
+- `OK` Preflight script stability fix:
+  - package check updated from `pm list packages` (false-negative prone) to `pm path`,
+  - file: `scripts/mobile_real_device_preflight.ps1`.
+- `OK` Manual real-device smoke executed after preflight PASS:
+  - operator confirmation: `done`,
+  - evidence pack:
+    - `docs/evidence/20260218_185045/mobile_real_device_smoke/notes/manual_real_device_smoke_report.md`
+    - `docs/evidence/20260218_185045/mobile_real_device_smoke/artifacts/connection_timeline.log`
+    - `docs/evidence/20260218_185045/mobile_real_device_smoke/artifacts/auth_timeline.log`
+  - log highlights:
+    - reconnect observed: `Reconnected on attempt 5`,
+    - command ACK flow observed for `PAUSE_GAME`, `STOP_GAME`, `START_GAME`, `END_SESSION`.
+- `OK` Post-step validation rerun:
+  - `admin_console_web`: `flutter analyze`, `flutter test` PASS:
+    - `docs/evidence/20260218_185045/mobile_real_device_smoke/commands/admin_console_web_flutter_analyze.log`
+    - `docs/evidence/20260218_185045/mobile_real_device_smoke/commands/admin_console_web_flutter_test.log`
+  - `flutter_controller`: `flutter analyze`, `flutter test` PASS:
+    - `docs/evidence/20260218_185045/mobile_real_device_smoke/commands/flutter_controller_flutter_analyze.log`
+    - `docs/evidence/20260218_185045/mobile_real_device_smoke/commands/flutter_controller_flutter_test.log`

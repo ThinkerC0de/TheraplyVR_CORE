@@ -1,0 +1,259 @@
+﻿02-18 18:42:35.651 D/FirebasePerformance(30482): Fetched value: 'true' for key: 'fpr_enabled' from Firebase Remote Config.
+02-18 18:42:35.651 D/FirebasePerformance(30482): Fetched value: '' for key: 'fpr_disabled_android_versions' from Firebase Remote Config.
+02-18 18:42:35.651 D/FirebasePerformance(30482): Fetched value: 'true' for key: 'fpr_enabled' from Firebase Remote Config.
+02-18 18:42:35.651 D/FirebasePerformance(30482): Fetched value: '' for key: 'fpr_disabled_android_versions' from Firebase Remote Config.
+02-18 18:42:35.651 D/FirebasePerformance(30482): Fetched value: '0.3435359986731282' for key: 'fpr_vc_network_request_sampling_rate' from Firebase Remote Config.
+02-18 18:42:35.651 I/FirebasePerformance(30482): Event dropped due to device sampling - network request trace: https://api.snrapi.com/v4/events/batch (responseCode: 202, responseTime: 193,137ms)
+02-18 18:42:36.873 I/TRuntime.CctTransportBackend(30482): Making request to: https://firebaselogging-pa.googleapis.com/v1/firelog/legacy/batchlog
+02-18 18:42:53.225 I/FirebaseApp(14698): Device unlocked: initializing all Firebase APIs for app [DEFAULT]
+02-18 18:42:53.228 I/FirebaseInitProvider(14698): FirebaseApp initialization successful
+02-18 18:42:53.264 I/FA      (14698):   adb shell setprop debug.firebase.analytics.app com.yourcompany.flutter_controller
+02-18 18:42:53.667 I/flutter (14698): [Firebase] ✅ Initialized successfully
+02-18 18:43:21.535 I/FirebaseAuth(14698): Logging in as szewczyk.marcin@pranasense.pl with empty reCAPTCHA token
+02-18 18:43:21.537 W/System  (14698): Ignoring header X-Firebase-Locale because its value was null.
+02-18 18:43:22.069 W/System  (14698): Ignoring header X-Firebase-Locale because its value was null.
+02-18 18:43:22.556 D/FirebaseAuth(14698): Notifying id token listeners about user ( UsZT9GBsomX93jQPuJPB8DtLNgO2 ).
+02-18 18:43:22.556 D/FirebaseAuth(14698): Notifying auth state listeners about user ( UsZT9GBsomX93jQPuJPB8DtLNgO2 ).
+02-18 18:43:22.567 I/flutter (14698): [Firebase] ✅ Signed in: szewczyk.marcin@pranasense.pl
+02-18 18:43:22.604 D/ConnectivityManager(14698): StackLog: [android.net.ConnectivityManager.sendRequestForNetwork(ConnectivityManager.java:4736)] [android.net.ConnectivityManager.registerDefaultNetworkCallbackForUid(ConnectivityManager.java:5461)] [android.net.ConnectivityManager.registerDefaultNetworkCallback(ConnectivityManager.java:5428)] [android.net.ConnectivityManager.registerDefaultNetworkCallback(ConnectivityManager.java:5402)] [com.google.firebase.firestore.remote.AndroidConnectivityMonitor.configureNetworkMonitoring(AndroidConnectivityMonitor.java:87)] [com.google.firebase.firestore.remote.AndroidConnectivityMonitor.<init>(AndroidConnectivityMonitor.java:64)] [com.google.firebase.firestore.remote.RemoteComponenetProvider.createConnectivityMonitor(RemoteComponenetProvider.java:94)] [com.google.firebase.firestore.remote.RemoteComponenetProvider.initialize(RemoteComponenetProvider.java:41)] [com.google.firebase.firestore.core.ComponentProvider.initialize(ComponentProvider.java:158)] [com.google.firebase.firestore.core.FirestoreClient.initialize(FirestoreClient.java:284)] [com.google.firebase.firestore.core.FirestoreClient.lambda$new$0$com-google-firebase-firestore-core-FirestoreClient(FirestoreClient.java:109)] [com.google.firebase.firestore.core.FirestoreClient$$ExternalSyntheticLambda10.run(D8$$SyntheticClass:0)] [com.google.firebase.firestore.util.AsyncQueue.lambda$enqueue$2(AsyncQueue.java:445)] [com.google.firebase.firestore.util.AsyncQueue$$ExternalSyntheticLambda4.call(D8$$SyntheticClass:0)] [com.google.firebase.firestore.util.AsyncQueue$SynchronizedShutdownAwareExecutor.lambda$executeAndReportResult$1(AsyncQueue.java:330)] [com.google.firebase.firestore.util.AsyncQueue$SynchronizedShutdownAwareExecutor$$ExternalSyntheticLambda2.run(D8$$SyntheticClass:0)] [java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:524)] [java.util.concurrent.FutureTask.run(FutureTask.java:317)] [java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:348)] [java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1156)] [java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:651)] [com.google.firebase.firestore.util.AsyncQueue$SynchronizedShutdownAwareExecutor$DelayedStartFactory.run(AsyncQueue.java:235)] [java.lang.Thread.run(Thread.java:1119)]
+02-18 18:43:22.662 D/ConnectivityManager(14698): StackLog: [android.net.ConnectivityManager.sendRequestForNetwork(ConnectivityManager.java:4736)] [android.net.ConnectivityManager.registerDefaultNetworkCallbackForUid(ConnectivityManager.java:5461)] [android.net.ConnectivityManager.registerDefaultNetworkCallback(ConnectivityManager.java:5428)] [android.net.ConnectivityManager.registerDefaultNetworkCallback(ConnectivityManager.java:5402)] [io.grpc.android.AndroidChannelBuilder$AndroidChannel.configureNetworkMonitoring(AndroidChannelBuilder.java:217)] [io.grpc.android.AndroidChannelBuilder$AndroidChannel.<init>(AndroidChannelBuilder.java:198)] [io.grpc.android.AndroidChannelBuilder.build(AndroidChannelBuilder.java:169)] [com.google.firebase.firestore.remote.GrpcCallProvider.initChannel(GrpcCallProvider.java:116)] [com.google.firebase.firestore.remote.GrpcCallProvider.lambda$initChannelTask$6$com-google-firebase-firestore-remote-GrpcCallProvider(GrpcCallProvider.java:242)] [com.google.firebase.firestore.remote.GrpcCallProvider$$ExternalSyntheticLambda4.call(D8$$SyntheticClass:0)] [com.google.android.gms.tasks.zzz.run(com.google.android.gms:play-services-tasks@@18.1.0:1)] [com.google.firebase.firestore.util.ThrottledForwardingExecutor.lambda$execute$0$com-google-firebase-firestore-util-ThrottledForwardingExecutor(ThrottledForwardingExecutor.java:54)] [com.google.firebase.firestore.util.ThrottledForwardingExecutor$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)] [java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1156)] [java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:651)] [java.lang.Thread.run(Thread.java:1119)]
+02-18 18:43:49.562 D/FirebaseAuth(14698): Notifying id token listeners about a sign-out event.
+02-18 18:43:49.562 D/FirebaseAuth(14698): Notifying auth state listeners about a sign-out event.
+02-18 18:43:49.562 I/flutter (14698): [Firebase] ✅ Signed out
+02-18 18:43:53.969 I/FirebaseApp(15255): Device unlocked: initializing all Firebase APIs for app [DEFAULT]
+02-18 18:43:53.972 I/FirebaseInitProvider(15255): FirebaseApp initialization successful
+02-18 18:43:54.012 I/FA      (15255):   adb shell setprop debug.firebase.analytics.app com.yourcompany.flutter_controller
+02-18 18:43:54.227 I/flutter (15255): [Firebase] ✅ Initialized successfully
+02-18 18:45:35.788 E/BasicMessageChannel#dev.flutter.pigeon.firebase_auth_platform_interface.FirebaseAuthHostApi.signInWithEmaiFailed to handle message
+02-18 18:45:35.788 E/BasicMessageChannel#dev.flutter.pigeon.firebase_auth_platform_interface.FirebaseAuthHostApi.signInWithEmaijava.lang.IllegalArgumentException: Given String is empty or null
+02-18 18:45:35.788 E/BasicMessageChannel#dev.flutter.pigeon.firebase_auth_platform_interface.FirebaseAuthHostApi.signInWithEmai	at com.google.android.gms.common.internal.Preconditions.checkNotEmpty(com.google.android.gms:play-services-basement@@18.5.0:2)
+02-18 18:45:35.788 E/BasicMessageChannel#dev.flutter.pigeon.firebase_auth_platform_interface.FirebaseAuthHostApi.signInWithEmai	at com.google.firebase.auth.FirebaseAuth.signInWithEmailAndPassword(com.google.firebase:firebase-auth@@23.2.1:173)
+02-18 18:45:35.788 E/BasicMessageChannel#dev.flutter.pigeon.firebase_auth_platform_interface.FirebaseAuthHostApi.signInWithEmai	at io.flutter.plugins.firebase.auth.FlutterFirebaseAuthPlugin.signInWithEmailAndPassword(FlutterFirebaseAuthPlugin.java:376)
+02-18 18:45:35.788 E/BasicMessageChannel#dev.flutter.pigeon.firebase_auth_platform_interface.FirebaseAuthHostApi.signInWithEmai	at io.flutter.plugins.firebase.auth.GeneratedAndroidFirebaseAuth$FirebaseAuthHostApi.lambda$setUp$10(GeneratedAndroidFirebaseAuth.java:3026)
+02-18 18:45:35.788 E/BasicMessageChannel#dev.flutter.pigeon.firebase_auth_platform_interface.FirebaseAuthHostApi.signInWithEmai	at io.flutter.plugins.firebase.auth.GeneratedAndroidFirebaseAuth$FirebaseAuthHostApi$$ExternalSyntheticLambda11.onMessage(D8$$SyntheticClass:0)
+02-18 18:45:35.788 E/BasicMessageChannel#dev.flutter.pigeon.firebase_auth_platform_interface.FirebaseAuthHostApi.signInWithEmai	at io.flutter.plugin.common.BasicMessageChannel$IncomingMessageHandler.onMessage(BasicMessageChannel.java:261)
+02-18 18:45:35.788 E/BasicMessageChannel#dev.flutter.pigeon.firebase_auth_platform_interface.FirebaseAuthHostApi.signInWithEmai	at io.flutter.embedding.engine.dart.DartMessenger.invokeHandler(DartMessenger.java:292)
+02-18 18:45:35.788 E/BasicMessageChannel#dev.flutter.pigeon.firebase_auth_platform_interface.FirebaseAuthHostApi.signInWithEmai	at io.flutter.embedding.engine.dart.DartMessenger.lambda$dispatchMessageToQueue$0$io-flutter-embedding-engine-dart-DartMessenger(DartMessenger.java:319)
+02-18 18:45:35.788 E/BasicMessageChannel#dev.flutter.pigeon.firebase_auth_platform_interface.FirebaseAuthHostApi.signInWithEmai	at io.flutter.embedding.engine.dart.DartMessenger$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+02-18 18:45:35.788 E/BasicMessageChannel#dev.flutter.pigeon.firebase_auth_platform_interface.FirebaseAuthHostApi.signInWithEmai	at android.os.Handler.handleCallback(Handler.java:995)
+02-18 18:45:35.788 E/BasicMessageChannel#dev.flutter.pigeon.firebase_auth_platform_interface.FirebaseAuthHostApi.signInWithEmai	at android.os.Handler.dispatchMessage(Handler.java:103)
+02-18 18:45:35.788 E/BasicMessageChannel#dev.flutter.pigeon.firebase_auth_platform_interface.FirebaseAuthHostApi.signInWithEmai	at android.os.Looper.loopOnce(Looper.java:273)
+02-18 18:45:35.788 E/BasicMessageChannel#dev.flutter.pigeon.firebase_auth_platform_interface.FirebaseAuthHostApi.signInWithEmai	at android.os.Looper.loop(Looper.java:363)
+02-18 18:45:35.788 E/BasicMessageChannel#dev.flutter.pigeon.firebase_auth_platform_interface.FirebaseAuthHostApi.signInWithEmai	at android.app.ActivityThread.main(ActivityThread.java:10060)
+02-18 18:45:35.788 E/BasicMessageChannel#dev.flutter.pigeon.firebase_auth_platform_interface.FirebaseAuthHostApi.signInWithEmai	at java.lang.reflect.Method.invoke(Native Method)
+02-18 18:45:35.788 E/BasicMessageChannel#dev.flutter.pigeon.firebase_auth_platform_interface.FirebaseAuthHostApi.signInWithEmai	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:632)
+02-18 18:45:35.788 E/BasicMessageChannel#dev.flutter.pigeon.firebase_auth_platform_interface.FirebaseAuthHostApi.signInWithEmai	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:975)
+02-18 18:45:35.790 I/flutter (15255): [Firebase] ❌ Sign in failed: [firebase_auth/channel-error] "dev.flutter.pigeon.firebase_auth_platform_interface.FirebaseAuthHostApi.signInWithEmailAndPassword".
+02-18 18:45:47.920 I/FirebaseAuth(15255): Logging in as szewczyk.marcin@pranasense.pl with empty reCAPTCHA token
+02-18 18:45:47.923 W/System  (15255): Ignoring header X-Firebase-Locale because its value was null.
+02-18 18:45:48.401 W/System  (15255): Ignoring header X-Firebase-Locale because its value was null.
+02-18 18:45:48.744 D/FirebaseAuth(15255): Notifying id token listeners about user ( UsZT9GBsomX93jQPuJPB8DtLNgO2 ).
+02-18 18:45:48.744 D/FirebaseAuth(15255): Notifying auth state listeners about user ( UsZT9GBsomX93jQPuJPB8DtLNgO2 ).
+02-18 18:45:48.753 I/flutter (15255): [Firebase] ✅ Signed in: szewczyk.marcin@pranasense.pl
+02-18 18:45:48.785 D/ConnectivityManager(15255): StackLog: [android.net.ConnectivityManager.sendRequestForNetwork(ConnectivityManager.java:4736)] [android.net.ConnectivityManager.registerDefaultNetworkCallbackForUid(ConnectivityManager.java:5461)] [android.net.ConnectivityManager.registerDefaultNetworkCallback(ConnectivityManager.java:5428)] [android.net.ConnectivityManager.registerDefaultNetworkCallback(ConnectivityManager.java:5402)] [com.google.firebase.firestore.remote.AndroidConnectivityMonitor.configureNetworkMonitoring(AndroidConnectivityMonitor.java:87)] [com.google.firebase.firestore.remote.AndroidConnectivityMonitor.<init>(AndroidConnectivityMonitor.java:64)] [com.google.firebase.firestore.remote.RemoteComponenetProvider.createConnectivityMonitor(RemoteComponenetProvider.java:94)] [com.google.firebase.firestore.remote.RemoteComponenetProvider.initialize(RemoteComponenetProvider.java:41)] [com.google.firebase.firestore.core.ComponentProvider.initialize(ComponentProvider.java:158)] [com.google.firebase.firestore.core.FirestoreClient.initialize(FirestoreClient.java:284)] [com.google.firebase.firestore.core.FirestoreClient.lambda$new$0$com-google-firebase-firestore-core-FirestoreClient(FirestoreClient.java:109)] [com.google.firebase.firestore.core.FirestoreClient$$ExternalSyntheticLambda10.run(D8$$SyntheticClass:0)] [com.google.firebase.firestore.util.AsyncQueue.lambda$enqueue$2(AsyncQueue.java:445)] [com.google.firebase.firestore.util.AsyncQueue$$ExternalSyntheticLambda4.call(D8$$SyntheticClass:0)] [com.google.firebase.firestore.util.AsyncQueue$SynchronizedShutdownAwareExecutor.lambda$executeAndReportResult$1(AsyncQueue.java:330)] [com.google.firebase.firestore.util.AsyncQueue$SynchronizedShutdownAwareExecutor$$ExternalSyntheticLambda2.run(D8$$SyntheticClass:0)] [java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:524)] [java.util.concurrent.FutureTask.run(FutureTask.java:317)] [java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:348)] [java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1156)] [java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:651)] [com.google.firebase.firestore.util.AsyncQueue$SynchronizedShutdownAwareExecutor$DelayedStartFactory.run(AsyncQueue.java:235)] [java.lang.Thread.run(Thread.java:1119)]
+02-18 18:45:48.846 D/ConnectivityManager(15255): StackLog: [android.net.ConnectivityManager.sendRequestForNetwork(ConnectivityManager.java:4736)] [android.net.ConnectivityManager.registerDefaultNetworkCallbackForUid(ConnectivityManager.java:5461)] [android.net.ConnectivityManager.registerDefaultNetworkCallback(ConnectivityManager.java:5428)] [android.net.ConnectivityManager.registerDefaultNetworkCallback(ConnectivityManager.java:5402)] [io.grpc.android.AndroidChannelBuilder$AndroidChannel.configureNetworkMonitoring(AndroidChannelBuilder.java:217)] [io.grpc.android.AndroidChannelBuilder$AndroidChannel.<init>(AndroidChannelBuilder.java:198)] [io.grpc.android.AndroidChannelBuilder.build(AndroidChannelBuilder.java:169)] [com.google.firebase.firestore.remote.GrpcCallProvider.initChannel(GrpcCallProvider.java:116)] [com.google.firebase.firestore.remote.GrpcCallProvider.lambda$initChannelTask$6$com-google-firebase-firestore-remote-GrpcCallProvider(GrpcCallProvider.java:242)] [com.google.firebase.firestore.remote.GrpcCallProvider$$ExternalSyntheticLambda4.call(D8$$SyntheticClass:0)] [com.google.android.gms.tasks.zzz.run(com.google.android.gms:play-services-tasks@@18.1.0:1)] [com.google.firebase.firestore.util.ThrottledForwardingExecutor.lambda$execute$0$com-google-firebase-firestore-util-ThrottledForwardingExecutor(ThrottledForwardingExecutor.java:54)] [com.google.firebase.firestore.util.ThrottledForwardingExecutor$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)] [java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1156)] [java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:651)] [java.lang.Thread.run(Thread.java:1119)]
+02-18 18:45:49.236 D/FirebaseAuth(15255): Notifying id token listeners about a sign-out event.
+02-18 18:45:49.236 D/FirebaseAuth(15255): Notifying auth state listeners about a sign-out event.
+02-18 18:45:49.237 I/flutter (15255): [Firebase] ✅ Signed out
+02-18 18:45:56.148 I/FirebaseAuth(15255): Logging in as szewczyk.marcin@pranasense.pl with empty reCAPTCHA token
+02-18 18:45:56.149 W/System  (15255): Ignoring header X-Firebase-Locale because its value was null.
+02-18 18:45:56.696 W/System  (15255): Ignoring header X-Firebase-Locale because its value was null.
+02-18 18:45:57.006 D/FirebaseAuth(15255): Notifying id token listeners about user ( UsZT9GBsomX93jQPuJPB8DtLNgO2 ).
+02-18 18:45:57.006 D/FirebaseAuth(15255): Notifying auth state listeners about user ( UsZT9GBsomX93jQPuJPB8DtLNgO2 ).
+02-18 18:45:57.021 I/flutter (15255): [Firebase] ✅ Signed in: szewczyk.marcin@pranasense.pl
+02-18 18:47:13.894 I/flutter (15255): [Connection] 🔌 Connecting to 192.168.0.221:8080
+02-18 18:47:14.086 I/flutter (15255): [Connection] ✅ Connected successfully
+02-18 18:47:14.092 I/flutter (15255): [Connection] 📤 Sent: SYNC_CATALOG (232 bytes)
+02-18 18:47:14.096 I/flutter (15255): [Connection] 📥 Received: RUNTIME_STATUS_UPDATE
+02-18 18:47:14.096 I/flutter (15255): [Connection] 📥 Received: GAME_INSTALL_STATUS
+02-18 18:47:14.096 I/flutter (15255): [Connection] 📥 Received: GAME_INSTALL_STATUS
+02-18 18:47:14.097 I/flutter (15255): [Connection] 📥 Received: GAME_INSTALL_STATUS
+02-18 18:47:14.097 I/flutter (15255): [Connection] 📥 Received: SESSION_WATCHDOG_HEARTBEAT
+02-18 18:47:14.104 I/flutter (15255): [Connection] 📥 Received: WEBRTC_OFFER
+02-18 18:47:14.142 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.142 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.142 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.142 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.142 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.142 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.142 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.148 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.152 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.186 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.187 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.187 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.187 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.187 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.203 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.203 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.221 I/flutter (15255): [Connection] 📥 Received: GAME_INSTALL_STATUS
+02-18 18:47:14.246 I/flutter (15255): [Connection] 📥 Received: GAME_INSTALL_STATUS
+02-18 18:47:14.246 I/flutter (15255): [Connection] 📥 Received: GAME_INSTALL_STATUS
+02-18 18:47:14.246 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.246 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.247 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.247 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.257 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.258 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.270 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.271 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.278 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.284 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.291 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.297 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.303 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:14.310 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:47:16.184 I/flutter (15255): [Connection] 📤 Sent: WEBRTC_ANSWER (4705 bytes)
+02-18 18:47:16.185 I/flutter (15255): [Connection] 📤 Sent: WEBRTC_ICE_CANDIDATE (324 bytes)
+02-18 18:47:16.186 I/flutter (15255): [Connection] 📤 Sent: WEBRTC_ICE_CANDIDATE (324 bytes)
+02-18 18:47:16.186 I/flutter (15255): [Connection] 📤 Sent: WEBRTC_ICE_CANDIDATE (296 bytes)
+02-18 18:47:16.186 I/flutter (15255): [Connection] 📤 Sent: WEBRTC_ICE_CANDIDATE (356 bytes)
+02-18 18:47:16.186 I/flutter (15255): [Connection] 📤 Sent: WEBRTC_ICE_CANDIDATE (288 bytes)
+02-18 18:47:16.190 I/flutter (15255): [Connection] 📥 Received: SESSION_WATCHDOG_HEARTBEAT
+02-18 18:47:16.238 I/flutter (15255): [Connection] 📤 Sent: WEBRTC_ICE_CANDIDATE (368 bytes)
+02-18 18:47:18.058 I/flutter (15255): [Connection] 📥 Received: SESSION_WATCHDOG_HEARTBEAT
+02-18 18:47:20.053 I/flutter (15255): [Connection] 📥 Received: SESSION_WATCHDOG_HEARTBEAT
+02-18 18:47:22.056 I/flutter (15255): [Connection] 📥 Received: SESSION_WATCHDOG_HEARTBEAT
+02-18 18:47:22.683 I/flutter (15255): [Connection] 📤 Sent: END_SESSION (571 bytes)
+02-18 18:47:22.700 I/flutter (15255): [Connection] 📥 Received: SESSION_STATE_UPDATE
+02-18 18:47:22.706 I/flutter (15255): [Connection] 📥 Received: COMMAND_ACK
+02-18 18:47:34.971 I/flutter (15255): [Connection] 📤 Sent: INSTALL_GAME (280 bytes)
+02-18 18:47:35.012 I/flutter (15255): [Connection] 📥 Received: GAME_INSTALL_STATUS
+02-18 18:47:36.191 I/flutter (15255): [Connection] 📥 Received: GAME_INSTALL_STATUS
+02-18 18:48:17.803 I/flutter (15255): [Connection] 📤 Sent: PAUSE_GAME (606 bytes)
+02-18 18:48:17.816 I/flutter (15255): [Connection] 📥 Received: COMMAND_ACK
+02-18 18:48:20.582 I/flutter (15255): [Connection] 📤 Sent: STOP_GAME (641 bytes)
+02-18 18:48:20.614 I/flutter (15255): [Connection] 📥 Received: COMMAND_ACK
+02-18 18:48:20.615 I/flutter (15255): [Connection] 📤 Sent: START_GAME (850 bytes)
+02-18 18:48:20.679 I/flutter (15255): [Connection] 📥 Received: COMMAND_ACK
+02-18 18:48:31.503 I/flutter (15255): [Connection] ❌ Error: SocketException: Software caused connection abort (OS Error: Software caused connection abort, errno = 103), address = 192.168.0.221, port = 39342
+02-18 18:48:31.504 I/flutter (15255): [Connection] 🔌 Socket closed (onDone) - peer or app closed connection
+02-18 18:48:31.556 I/flutter (15255): [Connection] 🔌 Disconnected
+02-18 18:48:38.394 I/flutter (15255): [Connection] 🔌 Connecting to 192.168.0.221:8080
+02-18 18:48:43.400 I/flutter (15255): [Connection] ❌ Failed to connect: SocketException: Connection timed out, host: 192.168.0.221, port: 8080 (OS Error: Connection timed out, errno = 110)
+02-18 18:48:43.701 I/flutter (15255): [Connection] 🔌 Connecting to 192.168.0.221:8080
+02-18 18:48:48.703 I/flutter (15255): [Connection] ❌ Failed to connect: SocketException: Connection timed out, host: 192.168.0.221, port: 8080 (OS Error: Connection timed out, errno = 110)
+02-18 18:48:49.305 I/flutter (15255): [Connection] 🔌 Connecting to 192.168.0.221:8080
+02-18 18:48:54.309 I/flutter (15255): [Connection] ❌ Failed to connect: SocketException: Connection timed out, host: 192.168.0.221, port: 8080 (OS Error: Connection timed out, errno = 110)
+02-18 18:48:55.210 I/flutter (15255): [Connection] 🔌 Connecting to 192.168.0.221:8080
+02-18 18:49:00.213 I/flutter (15255): [Connection] ❌ Failed to connect: SocketException: Connection timed out, host: 192.168.0.221, port: 8080 (OS Error: Connection timed out, errno = 110)
+02-18 18:49:01.414 I/flutter (15255): [Connection] 🔌 Connecting to 192.168.0.221:8080
+02-18 18:49:01.438 I/flutter (15255): [Connection] ✅ Connected successfully
+02-18 18:49:01.438 I/flutter (15255): [Connection] ✅ Reconnected on attempt 5
+02-18 18:49:01.439 I/flutter (15255): [Connection] 📤 Sent: SYNC_CATALOG (232 bytes)
+02-18 18:49:01.501 I/flutter (15255): [Connection] ❌ Error: SocketException: Connection reset by peer (OS Error: Connection reset by peer, errno = 104), address = 192.168.0.221, port = 59096
+02-18 18:49:01.501 I/flutter (15255): [Connection] 🔌 Socket closed (onDone) - peer or app closed connection
+02-18 18:49:01.575 I/flutter (15255): [Connection] 🔌 Disconnected
+02-18 18:49:35.025 I/flutter (15255): [Connection] 🔌 Connecting to 192.168.0.221:8080
+02-18 18:49:35.116 I/flutter (15255): [Connection] ✅ Connected successfully
+02-18 18:49:35.117 I/flutter (15255): [Connection] 📤 Sent: SYNC_CATALOG (232 bytes)
+02-18 18:49:35.121 I/flutter (15255): [Connection] 📥 Received: RUNTIME_STATUS_UPDATE
+02-18 18:49:35.131 I/flutter (15255): [Connection] 📥 Received: GAME_INSTALL_STATUS
+02-18 18:49:35.146 I/flutter (15255): [Connection] 📥 Received: GAME_INSTALL_STATUS
+02-18 18:49:35.149 I/flutter (15255): [Connection] 📥 Received: GAME_INSTALL_STATUS
+02-18 18:49:35.156 I/flutter (15255): [Connection] 📥 Received: GAME_INSTALL_STATUS
+02-18 18:49:35.164 I/flutter (15255): [Connection] 📥 Received: GAME_INSTALL_STATUS
+02-18 18:49:35.170 I/flutter (15255): [Connection] 📥 Received: GAME_INSTALL_STATUS
+02-18 18:49:35.178 I/flutter (15255): [Connection] 📥 Received: WEBRTC_OFFER
+02-18 18:49:35.203 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.203 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.203 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.211 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.228 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.228 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.228 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.285 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.285 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.285 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.285 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.285 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.285 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.285 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.294 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.295 I/flutter (15255): [Connection] 📤 Sent: WEBRTC_ANSWER (4705 bytes)
+02-18 18:49:35.297 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.302 I/flutter (15255): [Connection] 📤 Sent: WEBRTC_ICE_CANDIDATE (324 bytes)
+02-18 18:49:35.302 I/flutter (15255): [Connection] 📤 Sent: WEBRTC_ICE_CANDIDATE (324 bytes)
+02-18 18:49:35.302 I/flutter (15255): [Connection] 📤 Sent: WEBRTC_ICE_CANDIDATE (296 bytes)
+02-18 18:49:35.303 I/flutter (15255): [Connection] 📤 Sent: WEBRTC_ICE_CANDIDATE (356 bytes)
+02-18 18:49:35.303 I/flutter (15255): [Connection] 📤 Sent: WEBRTC_ICE_CANDIDATE (288 bytes)
+02-18 18:49:35.306 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.317 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.324 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.339 I/flutter (15255): [Connection] 📤 Sent: WEBRTC_ICE_CANDIDATE (368 bytes)
+02-18 18:49:35.339 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.339 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.340 I/flutter (15255): [Connection] 📤 Sent: WEBRTC_ICE_CANDIDATE (436 bytes)
+02-18 18:49:35.346 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.353 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.360 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.368 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.374 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.383 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.392 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.399 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:35.406 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:38.062 I/flutter (15255): [Connection] 📤 Sent: START_GAME (594 bytes)
+02-18 18:49:38.084 I/flutter (15255): [Connection] 📥 Received: COMMAND_ACK
+02-18 18:49:58.322 I/flutter (15255): [Connection] 🔌 Disconnected
+02-18 18:49:58.329 I/flutter (15255): [Connection] 🔌 Socket closed (onDone) - peer or app closed connection
+02-18 18:49:59.592 I/flutter (15255): [Connection] 🔌 Connecting to 192.168.0.221:8080
+02-18 18:49:59.663 I/flutter (15255): [Connection] ✅ Connected successfully
+02-18 18:49:59.664 I/flutter (15255): [Connection] 📤 Sent: SYNC_CATALOG (232 bytes)
+02-18 18:49:59.678 I/flutter (15255): [Connection] 📥 Received: RUNTIME_STATUS_UPDATE
+02-18 18:49:59.686 I/flutter (15255): [Connection] 📥 Received: GAME_INSTALL_STATUS
+02-18 18:49:59.697 I/flutter (15255): [Connection] 📥 Received: GAME_INSTALL_STATUS
+02-18 18:49:59.704 I/flutter (15255): [Connection] 📥 Received: GAME_INSTALL_STATUS
+02-18 18:49:59.711 I/flutter (15255): [Connection] 📥 Received: GAME_INSTALL_STATUS
+02-18 18:49:59.717 I/flutter (15255): [Connection] 📥 Received: GAME_INSTALL_STATUS
+02-18 18:49:59.725 I/flutter (15255): [Connection] 📥 Received: GAME_INSTALL_STATUS
+02-18 18:49:59.750 I/flutter (15255): [Connection] 📥 Received: WEBRTC_OFFER
+02-18 18:49:59.750 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.750 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.755 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.764 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.790 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.790 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.790 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.793 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.862 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.862 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.862 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.863 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.863 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.863 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.863 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.863 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.863 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.863 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.873 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.873 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.874 I/flutter (15255): [Connection] 📤 Sent: WEBRTC_ANSWER (4705 bytes)
+02-18 18:49:59.877 I/flutter (15255): [Connection] 📤 Sent: WEBRTC_ICE_CANDIDATE (324 bytes)
+02-18 18:49:59.878 I/flutter (15255): [Connection] 📤 Sent: WEBRTC_ICE_CANDIDATE (324 bytes)
+02-18 18:49:59.878 I/flutter (15255): [Connection] 📤 Sent: WEBRTC_ICE_CANDIDATE (296 bytes)
+02-18 18:49:59.878 I/flutter (15255): [Connection] 📤 Sent: WEBRTC_ICE_CANDIDATE (356 bytes)
+02-18 18:49:59.878 I/flutter (15255): [Connection] 📤 Sent: WEBRTC_ICE_CANDIDATE (288 bytes)
+02-18 18:49:59.880 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.892 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.897 I/flutter (15255): [Connection] 📤 Sent: WEBRTC_ICE_CANDIDATE (368 bytes)
+02-18 18:49:59.904 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.904 I/flutter (15255): [Connection] 📤 Sent: WEBRTC_ICE_CANDIDATE (364 bytes)
+02-18 18:49:59.906 I/flutter (15255): [Connection] 📤 Sent: WEBRTC_ICE_CANDIDATE (436 bytes)
+02-18 18:49:59.908 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.914 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.928 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.935 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.943 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.950 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:49:59.957 I/flutter (15255): [Connection] 📥 Received: WEBRTC_ICE_CANDIDATE
+02-18 18:50:02.868 I/flutter (15255): [Connection] 📤 Sent: END_SESSION (571 bytes)
+02-18 18:50:02.889 I/flutter (15255): [Connection] 📥 Received: COMMAND_ACK
+02-18 18:50:14.299 I/flutter (15255): [Connection] 📤 Sent: START_GAME (850 bytes)
+02-18 18:50:14.330 I/flutter (15255): [Connection] 📥 Received: COMMAND_ACK
+02-18 18:50:15.688 I/flutter (15255): [Connection] 📤 Sent: START_GAME (850 bytes)
+02-18 18:50:15.721 I/flutter (15255): [Connection] 📥 Received: COMMAND_ACK
+02-18 18:50:16.358 I/flutter (15255): [Connection] 📤 Sent: START_GAME (850 bytes)
+02-18 18:50:16.387 I/flutter (15255): [Connection] 📥 Received: COMMAND_ACK
+02-18 18:50:16.911 I/flutter (15255): [Connection] 📤 Sent: START_GAME (850 bytes)
+02-18 18:50:16.941 I/flutter (15255): [Connection] 📥 Received: COMMAND_ACK
