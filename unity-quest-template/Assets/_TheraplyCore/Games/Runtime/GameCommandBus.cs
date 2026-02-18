@@ -564,6 +564,10 @@ namespace TheraplyCore.Games.Runtime
             SetCommandIdMapping(typeof(SessionWatchdogHeartbeatCommand), GameCommandIds.SessionWatchdogHeartbeat);
             SetCommandIdMapping(typeof(ManualResyncCommand), GameCommandIds.ManualResync);
             SetCommandIdMapping(typeof(ManualResyncReportCommand), GameCommandIds.ManualResyncReport);
+            SetCommandIdMapping(typeof(SyncCatalogCommand), GameCommandIds.SyncCatalog);
+            SetCommandIdMapping(typeof(InstallGameCommand), GameCommandIds.InstallGame);
+            SetCommandIdMapping(typeof(UninstallGameCommand), GameCommandIds.UninstallGame);
+            SetCommandIdMapping(typeof(GameInstallStatusCommand), GameCommandIds.GameInstallStatus);
         }
 
         private static class AckReasonCodes

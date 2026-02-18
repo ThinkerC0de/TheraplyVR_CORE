@@ -95,15 +95,15 @@ Status legend:
   - app-wide license,
   - per-game license,
   - grant validity windows (`fromUtc` -> `toUtc`) and perpetual grants (contract level).
-- `PARTIAL` `LIC-002` - Admin/system grant path contract added (`entitlement_grants` + `entitlement_grant_requests`) and entitlement login gate now overlays active grants; admin UI/backend policy still TODO.
-- `TODO` `CAT-001` - Add purchased-content state contract for mobile + Quest:
+- `PARTIAL` `LIC-002` - Admin/system grant path contract added (`entitlement_grants` + `entitlement_grant_requests`) and entitlement login gate now overlays active grants; admin UI/backend policy still TODO (temporary dev bootstrap option for missing `user_entitlements` is available in Flutter via `ENABLE_DEV_ENTITLEMENT_BOOTSTRAP=true`).
+- `PARTIAL` `CAT-001` - Purchased-content state contract drafted and wired in Flutter (`GAME_INSTALL_STATUS` payload + runtime enum + request builders):
   - what user owns,
   - what is installed,
   - target version vs installed version,
   - update required/optional flags.
-- `TODO` `CAT-002` - Add install/update orchestration flow for mobile + VR bundles with deterministic status reporting (`NOT_INSTALLED`, `INSTALLING`, `READY`, `UPDATE_REQUIRED`, `FAILED`).
+- `PARTIAL` `CAT-002` - Install/update orchestration flow added in Flutter catalog/setup path (`SYNC_CATALOG`, `INSTALL_GAME`, `UNINSTALL_GAME`) with deterministic status reporting (`NOT_INSTALLED`, `INSTALLING`, `READY`, `UPDATE_REQUIRED`, `FAILED`) and launch gating; Quest has dev simulator for this lifecycle (no real download bundles yet), while production installer lifecycle/backend authorization policy still TODO.
 - `PARTIAL` `SEC-001` - Data minimization and pseudonymization payload contracts drafted for clinical/research mode:
   - separate identity store from telemetry/session metrics,
   - irreversible or strongly controlled pseudonymous IDs in analytics pipelines,
   - no direct patient identifiers in gameplay telemetry payloads (runtime guard now blocks forbidden keys/values before dispatch; crypto/KMS still TODO).
-- `TODO` `SEC-002` - Add compliance hardening checklist (access control, retention, encryption, audit trail, breach-response posture) before medical-study rollout.
+- `PARTIAL` `SEC-002` - Compliance hardening checklist drafted (`docs/14-Compliance-Hardening-Checklist.md`) covering access control, retention, encryption, audit trail, breach-response posture; implementation/audit evidence still TODO before medical-study rollout.

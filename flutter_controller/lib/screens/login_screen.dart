@@ -36,6 +36,8 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       
       if (user != null) {
+        final didBootstrapEntitlement =
+            await EntitlementService.tryBootstrapDevelopmentEntitlement(user);
         final gateDecision = await EntitlementService.evaluateLoginGate(user);
 
         if (!mounted) {
@@ -56,6 +58,17 @@ class _LoginScreenState extends State<LoginScreen> {
               content: Text(
                 '${gateDecision.message} (${gateDecision.reasonCode})',
               ),
+            ),
+          );
+        }
+
+        if (didBootstrapEntitlement) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Development entitlement profile bootstrap created for this user.',
+              ),
+              duration: Duration(seconds: 2),
             ),
           );
         }

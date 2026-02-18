@@ -20,6 +20,10 @@ namespace TheraplyCore.Games.Contracts
         public const string SessionWatchdogHeartbeat = "SESSION_WATCHDOG_HEARTBEAT";
         public const string ManualResync = "MANUAL_RESYNC";
         public const string ManualResyncReport = "MANUAL_RESYNC_REPORT";
+        public const string SyncCatalog = "SYNC_CATALOG";
+        public const string InstallGame = "INSTALL_GAME";
+        public const string UninstallGame = "UNINSTALL_GAME";
+        public const string GameInstallStatus = "GAME_INSTALL_STATUS";
     }
 
     public static class CriticalCommandIds
@@ -53,6 +57,10 @@ namespace TheraplyCore.Games.Contracts
     {
         public string correlationId;
         public string gameId;
+        public bool resumeFromSaved;
+        public string gameConfigType;
+        public int gameConfigVersion;
+        public string gameConfigJson;
 
         public string CorrelationId => correlationId;
     }
@@ -71,6 +79,7 @@ namespace TheraplyCore.Games.Contracts
     {
         public string correlationId;
         public string gameId;
+        public bool resumeFromSaved;
 
         public string CorrelationId => correlationId;
     }
@@ -204,6 +213,66 @@ namespace TheraplyCore.Games.Contracts
         public int afterOutboxPending;
         public string targetedSequencePreview;
         public string details;
+
+        public string CorrelationId => correlationId;
+    }
+
+    public static class ContentRuntimeStatusValues
+    {
+        public const string NotInstalled = "NOT_INSTALLED";
+        public const string Installing = "INSTALLING";
+        public const string Ready = "READY";
+        public const string UpdateRequired = "UPDATE_REQUIRED";
+        public const string Failed = "FAILED";
+    }
+
+    [Serializable]
+    public sealed class SyncCatalogCommand : IGameCommand
+    {
+        public string correlationId;
+        public string actorId;
+        public string role;
+        public string issuedAtUtc;
+
+        public string CorrelationId => correlationId;
+    }
+
+    [Serializable]
+    public sealed class InstallGameCommand : IGameCommand
+    {
+        public string correlationId;
+        public string actorId;
+        public string gameId;
+        public string targetVersion;
+        public string issuedAtUtc;
+
+        public string CorrelationId => correlationId;
+    }
+
+    [Serializable]
+    public sealed class UninstallGameCommand : IGameCommand
+    {
+        public string correlationId;
+        public string actorId;
+        public string gameId;
+        public string issuedAtUtc;
+
+        public string CorrelationId => correlationId;
+    }
+
+    [Serializable]
+    public sealed class GameInstallStatusCommand : IGameCommand
+    {
+        public string correlationId;
+        public string gameId;
+        public bool owned;
+        public string installedVersion;
+        public string targetVersion;
+        public bool updateRequired;
+        public bool updateOptional;
+        public string runtimeStatus;
+        public string lastError;
+        public string updatedAtUtc;
 
         public string CorrelationId => correlationId;
     }

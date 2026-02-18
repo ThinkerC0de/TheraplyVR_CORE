@@ -55,6 +55,13 @@ Fields:
   - optional role override from grant,
   - app or game-specific grant activation by validity window.
 
+## Testing mode without admin panel
+
+- Existing legacy fallback still allows login when entitlement backend is missing and strict gate is disabled.
+- Optional dev bootstrap path can auto-create missing `user_entitlements/{uid}` document on login:
+  - build flag: `ENABLE_DEV_ENTITLEMENT_BOOTSTRAP=true`
+  - intended for local/test environments only.
+
 ## Deferred
 
 - No admin UI yet.

@@ -17,11 +17,52 @@ class EntitlementService {
     'STRICT_ENTITLEMENT_GATE',
     defaultValue: false,
   );
+  static const bool _enableDevEntitlementBootstrap = bool.fromEnvironment(
+    'ENABLE_DEV_ENTITLEMENT_BOOTSTRAP',
+    defaultValue: false,
+  );
 
   static EntitlementAccess? _activeAccess;
 
   static EntitlementAccess? get activeAccess => _activeAccess;
   static bool get isStrictEntitlementGateEnabled => _strictEntitlementGate;
+  static bool get isDevEntitlementBootstrapEnabled =>
+      _enableDevEntitlementBootstrap;
+
+  static Future<bool> tryBootstrapDevelopmentEntitlement(User user) async {
+    if (!_enableDevEntitlementBootstrap) {
+      return false;
+    }
+
+    try {
+      final docRef = _entitlementsCollection.doc(user.uid);
+      final snapshot = await docRef.get();
+      if (snapshot.exists) {
+        return false;
+      }
+
+      final nowUtc = DateTime.now().toUtc();
+      await docRef.set(
+        <String, dynamic>{
+          'role': EntitlementRole.therapist.wireValue,
+          'appLicense': <String, dynamic>{
+            'status': LicenseStatus.active.wireValue,
+            'fromUtc': nowUtc.toIso8601String(),
+            'toUtc': null,
+            'perpetual': true,
+          },
+          'gameLicenses': <String, dynamic>{},
+          'policyVersion': 'dev-bootstrap-v1',
+          'updatedAtUtc': nowUtc.toIso8601String(),
+          'updatedBy': 'dev-bootstrap:${user.uid}',
+        },
+      );
+
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   static Future<EntitlementGateDecision> evaluateLoginGate(User user) async {
     final nowUtc = DateTime.now().toUtc();
