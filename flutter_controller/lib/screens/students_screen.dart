@@ -5,6 +5,7 @@ import 'package:flutter_controller/models/student_roster_sync.dart';
 import 'package:flutter_controller/services/student_service.dart';
 import 'package:flutter_controller/services/firebase_service.dart';
 import 'package:flutter_controller/services/entitlement_service.dart';
+import 'package:flutter_controller/screens/entitlement_ops_screen.dart';
 import 'package:flutter_controller/screens/scanner_screen.dart';
 
 class StudentsScreen extends StatefulWidget {
@@ -15,6 +16,11 @@ class StudentsScreen extends StatefulWidget {
 }
 
 class _StudentsScreenState extends State<StudentsScreen> {
+  static const bool _enableEntitlementOpsPanel = bool.fromEnvironment(
+    'ENABLE_ENTITLEMENT_OPS_PANEL',
+    defaultValue: false,
+  );
+
   @override
   Widget build(BuildContext context) {
     final canManageStudents =
@@ -29,6 +35,12 @@ class _StudentsScreenState extends State<StudentsScreen> {
             onPressed: _runReconciliation,
             tooltip: 'Reconcile pending writes',
           ),
+          if (_enableEntitlementOpsPanel)
+            IconButton(
+              icon: const Icon(Icons.admin_panel_settings),
+              onPressed: _openEntitlementOpsPanel,
+              tooltip: 'Entitlement Ops',
+            ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: _handleLogout,
@@ -404,6 +416,15 @@ class _StudentsScreenState extends State<StudentsScreen> {
   Future<void> _refreshFromServer() async {
     await StudentService.refreshStudentsFromServer();
     await _runReconciliation();
+  }
+
+  void _openEntitlementOpsPanel() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const EntitlementOpsScreen(),
+      ),
+    );
   }
 
   void _showWriteResultSnackbar(

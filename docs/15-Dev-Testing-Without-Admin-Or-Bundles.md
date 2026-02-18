@@ -22,6 +22,12 @@ Option B (explicit dev bootstrap):
 - Build Flutter with `ENABLE_DEV_ENTITLEMENT_BOOTSTRAP=true`.
 - On first login, app creates missing `user_entitlements/{uid}` with therapist active license profile.
 
+Option C (operator panel in app):
+- Build Flutter with `ENABLE_ENTITLEMENT_OPS_PANEL=true`.
+- In students screen app bar, open `Entitlement Ops` to edit:
+  - `user_entitlements`
+  - `entitlement_grants` (create/revoke)
+
 ## Content delivery testing path (no real bundles)
 
 - Quest runtime includes dev simulator for:
