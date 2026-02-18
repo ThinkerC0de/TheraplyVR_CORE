@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_controller/services/discovery_service.dart';
-import 'package:flutter_controller/services/firebase_service.dart';
 import 'package:flutter_controller/models/device_info.dart';
 import 'package:flutter_controller/models/student.dart';
 import 'package:flutter_controller/screens/control_screen.dart';
@@ -87,13 +86,6 @@ class _ScannerScreenState extends State<ScannerScreen> {
     // Discovery will auto-resume when connection is lost
   }
   
-  Future<void> _handleLogout() async {
-    await FirebaseService.signOut();
-    if (mounted) {
-      Navigator.pop(context);
-    }
-  }
-  
   @override
   void dispose() {
     _discovery.dispose();
@@ -107,13 +99,6 @@ class _ScannerScreenState extends State<ScannerScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Scan for ${widget.student.firstName}\'s Device'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: _handleLogout,
-            tooltip: 'Logout',
-          ),
-        ],
       ),
       body: Column(
         children: [

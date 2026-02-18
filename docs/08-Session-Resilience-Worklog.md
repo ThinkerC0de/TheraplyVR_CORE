@@ -415,3 +415,85 @@ Go/No-Go decision:
   - phone + Unity run to confirm self-finish cube flow updates mobile without manual refresh,
   - verify `Wroc` from setup unloads active game scene in live run,
   - verify reconnect continuity targets same active session after temporary network flap.
+
+## 18) Mobile operator UX/IA iteration 1 (2026-02-18)
+
+- `OK` UX/IA target spec added (short + implementable):
+  - `docs/26-Mobile-Operator-UX-IA-Spec.md`
+- `OK` Login screen IA refreshed (`flutter_controller/lib/screens/login_screen.dart`):
+  - sections clarified: brand, restore status, credentials, primary CTA, support hint,
+  - explicit empty credential validation before auth call,
+  - entitlement error-card next-step guidance retained.
+- `OK` Students workspace IA refreshed (`flutter_controller/lib/screens/students_screen.dart`):
+  - operator workspace context card (account + role + access mode),
+  - stronger `loading` / `empty` / `error` / `offline` states,
+  - clearer roster header + tap-to-control affordance on student cards,
+  - role guard behavior preserved (`therapist` manage actions only).
+- `OK` Control screen IA refreshed (`flutter_controller/lib/screens/control_screen.dart`):
+  - session header now exposes compact state pills (link/session/runtime/game/selected readiness),
+  - game catalog step now surfaces explicit state banners (offline, active runtime lock, readiness),
+  - setup step now surfaces explicit state banners and runtime controls section,
+  - setup action bar clarified (`Start new`, `Restart`, `Back`) and save-resume path surfaced via `Resume from saved state` when supported,
+  - runtime command guard semantics preserved (no regression in lock rules / command gating).
+- `OK` Validation after each major batch (Flutter mobile only):
+  - batch A (`login` + `students`):
+    - `flutter analyze` PASS -> `docs/evidence/20260218_201049/mobile_operator_ux_iteration1/commands/flutter_controller_flutter_analyze_post_login_students.log`
+    - `flutter test` PASS -> `docs/evidence/20260218_201049/mobile_operator_ux_iteration1/commands/flutter_controller_flutter_test_post_login_students.log`
+  - batch B (`control`):
+    - `flutter analyze` PASS -> `docs/evidence/20260218_201049/mobile_operator_ux_iteration1/commands/flutter_controller_flutter_analyze_post_control_iteration1.log`
+    - `flutter test` PASS -> `docs/evidence/20260218_201049/mobile_operator_ux_iteration1/commands/flutter_controller_flutter_test_post_control_iteration1.log`
+  - summary note:
+    - `docs/evidence/20260218_201049/mobile_operator_ux_iteration1/notes/SUMMARY.md`
+- `TODO` Manual operator validation remains intentionally deferred for next lane:
+  - no phone + Unity manual pass executed in this iteration.
+
+## 19) Mobile operator UX/IA iteration 2 (2026-02-18)
+
+- `OK` Students screen cleanup (`flutter_controller/lib/screens/students_screen.dart`):
+  - logout is now only available on Students,
+  - logout now requires therapist confirmation and always navigates to `LoginScreen` via route reset (no black screen fallback),
+  - therapist account + role moved into a compact expandable section,
+  - roster copy updated from `Student roster` to `Your students`,
+  - reconcile action kept but moved to low-noise placement (`Refresh and reconcile` in expandable context and subtle sync icon near roster header).
+- `OK` Scanner screen cleanup (`flutter_controller/lib/screens/scanner_screen.dart`):
+  - logout action removed.
+- `OK` Control UX split into two logical screens (`flutter_controller/lib/screens/control_screen.dart`):
+  - Screen A (catalog): game selection + install/update + readiness status only,
+  - Screen A hides runtime/session technical diagnostics and no longer shows active unfinished-session banner in main UI,
+  - Screen A keeps VR preview as collapsible panel and removes previous large top-gap layout,
+  - Screen A adds explicit operator hint for requesting additional licensed games (`Need more games?` + `How to add`),
+  - Screen B (game session): dedicated view with preview panel, game settings, and controls (`Start`, `Pause/Resume`, `Restart`, `End Game`),
+  - Screen B bottom action changed from student-navigation CTA to `End Session` flow.
+- `OK` Runtime safety and command gating preserved:
+  - command guard path in `_sendCommand` remains intact (`_requiresSessionDecision`, session-bound critical payloads),
+  - active-runtime setup lock behavior remains enforced in settings widgets.
+- `OK` Validation after each major mobile batch (`flutter_controller`):
+  - batch A (`students` + `scanner`):
+    - `flutter analyze` PASS -> `docs/evidence/20260218_205006/mobile_operator_ux_iteration2/commands/flutter_controller_flutter_analyze_post_students_scanner.log`
+    - `flutter test` PASS -> `docs/evidence/20260218_205006/mobile_operator_ux_iteration2/commands/flutter_controller_flutter_test_post_students_scanner.log`
+  - batch B (`control` split):
+    - `flutter analyze` PASS -> `docs/evidence/20260218_205006/mobile_operator_ux_iteration2/commands/flutter_controller_flutter_analyze_post_control_split.log`
+    - `flutter test` PASS -> `docs/evidence/20260218_205006/mobile_operator_ux_iteration2/commands/flutter_controller_flutter_test_post_control_split.log`
+  - summary note:
+    - `docs/evidence/20260218_205006/mobile_operator_ux_iteration2/notes/SUMMARY.md`
+- `TODO` Manual phone + Unity validation remains deferred in this iteration by design.
+
+## 20) Mobile media preview toggle hotfix (2026-02-18)
+
+- `OK` Reproduced regression from operator feedback:
+  - first expand of VR preview works,
+  - collapse + re-expand can produce black preview surface.
+- `OK` Root cause identified in mobile widget lifecycle:
+  - preview collapse removed `MediaStreamWidget` from tree,
+  - widget `dispose()` closed WebRTC peer/signaling state,
+  - Unity-side renegotiation was not guaranteed on every re-expand, leaving stale black view.
+- `OK` Fix implemented in `flutter_controller/lib/screens/control_screen.dart`:
+  - preview panel now keeps `MediaStreamWidget` mounted and hides it via `Offstage` instead of conditional removal,
+  - this preserves WebRTC renderer + signaling lifecycle across collapse/expand interactions.
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260218_211250/mobile_operator_ux_iteration2_preview_toggle_fix/commands/flutter_controller_flutter_analyze.log`
+  - `flutter test` PASS -> `docs/evidence/20260218_211250/mobile_operator_ux_iteration2_preview_toggle_fix/commands/flutter_controller_flutter_test.log`
+  - summary:
+    - `docs/evidence/20260218_211250/mobile_operator_ux_iteration2_preview_toggle_fix/notes/SUMMARY.md`
+- `TODO` Manual phone + Unity confirmation still required for this specific regression:
+  - perform repeated preview expand/collapse cycles in both catalog and game-session screens.

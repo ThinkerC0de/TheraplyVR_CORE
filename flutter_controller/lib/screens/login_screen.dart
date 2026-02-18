@@ -89,6 +89,17 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleLogin() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
+      setState(() {
+        _error = 'Email and password are required.';
+        _entitlementReasonCode = null;
+      });
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _error = null;
@@ -96,13 +107,10 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final user = await FirebaseService.signIn(
-        _emailController.text.trim(),
-        _passwordController.text,
-      );
+      final user = await FirebaseService.signIn(email, password);
 
       if (user != null) {
-        await _persistLastLoginEmail(_emailController.text);
+        await _persistLastLoginEmail(email);
         await _handleAccountSwitchIfNeeded(user.uid);
         final didBootstrapEntitlement =
             await EntitlementService.tryBootstrapDevelopmentEntitlement(user);
@@ -165,82 +173,162 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final busy = _isLoading || _isRestoring;
+    final cachedEmail = _emailController.text.trim();
+    final restorationLabel = _isRestoring
+        ? 'Restoring last login email...'
+        : (cachedEmail.isEmpty
+            ? 'No cached email on this device yet.'
+            : 'Cached email: $cachedEmail');
+
     return Scaffold(
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Icon(
-                Icons.psychology,
-                size: 80,
-                color: Colors.blue,
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Theraply VR',
-                style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Controller App',
-                style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 48),
-              TextField(
-                controller: _emailController,
-                decoration: const InputDecoration(
-                  labelText: 'Email',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.email),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.blue.shade100),
+                  ),
+                  child: const Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Icon(
+                        Icons.psychology,
+                        size: 60,
+                        color: Colors.blue,
+                      ),
+                      SizedBox(height: 12),
+                      Text(
+                        'Theraply VR',
+                        style: TextStyle(
+                          fontSize: 30,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      SizedBox(height: 6),
+                      Text(
+                        'Controller App',
+                        style: TextStyle(fontSize: 16),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
                 ),
-                keyboardType: TextInputType.emailAddress,
-                enabled: !_isLoading && !_isRestoring,
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _passwordController,
-                decoration: const InputDecoration(
-                  labelText: 'Password',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.lock),
+                const SizedBox(height: 12),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _isRestoring ? Icons.autorenew : Icons.history,
+                        size: 18,
+                        color: Colors.grey.shade700,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          restorationLabel,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade700,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                obscureText: true,
-                enabled: !_isLoading && !_isRestoring,
-                onSubmitted: (_) => _handleLogin(),
-              ),
-              const SizedBox(height: 24),
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: _buildErrorCard(),
+                if (_isRestoring) ...[
+                  const SizedBox(height: 8),
+                  const LinearProgressIndicator(minHeight: 3),
+                ],
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Operator login',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _emailController,
+                        decoration: const InputDecoration(
+                          labelText: 'Email',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.email),
+                        ),
+                        keyboardType: TextInputType.emailAddress,
+                        enabled: !busy,
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _passwordController,
+                        decoration: const InputDecoration(
+                          labelText: 'Password',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.lock),
+                        ),
+                        obscureText: true,
+                        enabled: !busy,
+                        onSubmitted: (_) => _handleLogin(),
+                      ),
+                    ],
+                  ),
                 ),
-              ElevatedButton(
-                onPressed: (_isLoading || _isRestoring) ? null : _handleLogin,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                const SizedBox(height: 12),
+                if (_error != null) ...[
+                  _buildErrorCard(),
+                  const SizedBox(height: 12),
+                ],
+                SizedBox(
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: busy ? null : _handleLogin,
+                    icon: _isLoading
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.login),
+                    label: Text(
+                      _isLoading ? 'Signing in...' : 'Login',
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  ),
                 ),
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Login', style: TextStyle(fontSize: 16)),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                _isRestoring
-                    ? 'Restoring last login email...'
-                    : 'Last used email is remembered on this device',
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                textAlign: TextAlign.center,
-              ),
-            ],
+                const SizedBox(height: 10),
+                Text(
+                  'Entitlement checks run after authentication. If access is denied, follow the next-step hint below the error.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
           ),
         ),
       ),
