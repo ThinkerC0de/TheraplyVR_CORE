@@ -296,3 +296,35 @@ Go/No-Go decision:
 - `GO` for editor-first Sprint 1 scope.
 - Residual risk to track next:
   - run one fully manual phone+Unity operator rehearsal (3x in a row) with explicit student selection and capture note per run.
+
+## 15) Evidence footprint control + real-device delta preflight (2026-02-18)
+
+- `OK` Evidence footprint tooling added:
+  - `scripts/report_evidence_footprint.ps1`
+  - `scripts/cleanup_evidence_artifacts.ps1`
+  - policy doc: `docs/24-Evidence-Footprint-Guardrails.md`
+- `OK` Evidence collection defaults hardened (text-first):
+  - `scripts/collect_validation_evidence.ps1` now skips binary artifacts and zip unless explicitly requested:
+    - `-IncludeBinaryArtifacts`
+    - `-IncludeZip`
+- `OK` Local evidence cleanup executed:
+  - pre-cleanup footprint report:
+    - `docs/evidence/_footprint/20260218_pre_cleanup.md`
+    - total `docs/evidence` size: `1930.44 MB`
+  - cleanup command:
+    - `powershell -ExecutionPolicy Bypass -File .\scripts\cleanup_evidence_artifacts.ps1 -RemoveEvidenceZips -Apply`
+  - post-cleanup footprint report:
+    - `docs/evidence/_footprint/20260218_post_cleanup.md`
+    - total `docs/evidence` size: `2.82 MB`
+  - reclaimed local workspace size: `~2102.14 MB`
+- `OK` Git hygiene guardrails updated:
+  - `.gitignore` now excludes evidence zip and binary artifact folders under `docs/evidence`.
+  - historical blob size is still visible in git object stats (`176.61 MiB` pre-GC), because old blobs remain in commit history.
+- `OK` Real-device environment delta workflow added:
+  - script: `scripts/mobile_real_device_preflight.ps1`
+  - checklist doc: `docs/25-Mobile-Real-Device-Login-Reconnect-Delta-Checklist.md`
+  - runbook preflight hook:
+    - `docs/09-Demo-Operator-Runbook.md`
+- `BLOCKED` Real-device preflight execution in current session:
+  - no phone detected via `adb devices` (empty list),
+  - evidence: `docs/evidence/20260218_183442/mobile_real_device_preflight/SUMMARY.md`.

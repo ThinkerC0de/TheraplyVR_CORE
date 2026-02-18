@@ -6,6 +6,8 @@ param(
     [string]$UnityExe = $env:UNITY_EDITOR_PATH,
     [switch]$AllowUnityWhenEditorRunning,
     [switch]$IncludeAdbLogcat,
+    [switch]$IncludeBinaryArtifacts,
+    [switch]$IncludeZip,
     [switch]$NoZip
 )
 
@@ -268,6 +270,13 @@ Ensure-Directory $artifactsDir
 
 $script:commandResults = New-Object 'System.Collections.Generic.List[object]'
 $notes = New-Object 'System.Collections.Generic.List[string]'
+$shouldZip = $IncludeZip -and -not $NoZip
+if ($IncludeZip -and $NoZip) {
+    $notes.Add("Zip packaging disabled because -NoZip was provided.") | Out-Null
+}
+if (-not $IncludeZip) {
+    $notes.Add("Zip packaging skipped by default. Use -IncludeZip to produce archive output.") | Out-Null
+}
 
 Write-Host "Evidence output directory: $OutputDirectory"
 Write-Host "Preset: $Preset"
@@ -436,9 +445,14 @@ if ($IncludeAdbLogcat) {
 
 # Collect useful artifacts even if commands were not executed in this run.
 Copy-ArtifactIfExists -Source (Join-Path $unityProjectRoot "Temp\CliValidation\logs") -RelativeDestination "unity_cli_logs"
-Copy-ArtifactIfExists -Source (Join-Path $unityProjectRoot "Temp\CliValidation\build\TheraplyCliValidation.apk") -RelativeDestination "unity_build\TheraplyCliValidation.apk"
 Copy-ArtifactIfExists -Source (Join-Path $unityProjectRoot "Temp\CliValidation\firebase_network_validation_result.txt") -RelativeDestination "unity_cli_logs\firebase_network_validation_result.txt"
-Copy-ArtifactIfExists -Source (Join-Path $flutterRoot "build\app\outputs\flutter-apk\app-debug.apk") -RelativeDestination "flutter_build\app-debug.apk"
+if ($IncludeBinaryArtifacts) {
+    Copy-ArtifactIfExists -Source (Join-Path $unityProjectRoot "Temp\CliValidation\build\TheraplyCliValidation.apk") -RelativeDestination "unity_build\TheraplyCliValidation.apk"
+    Copy-ArtifactIfExists -Source (Join-Path $flutterRoot "build\app\outputs\flutter-apk\app-debug.apk") -RelativeDestination "flutter_build\app-debug.apk"
+}
+else {
+    $notes.Add("Binary artifacts skipped by default. Use -IncludeBinaryArtifacts to capture APK files.") | Out-Null
+}
 
 $passCount = @($commandResults | Where-Object { $_.status -eq "PASS" }).Count
 $failCount = @($commandResults | Where-Object { $_.status -eq "FAIL" }).Count
@@ -453,6 +467,8 @@ $summaryLines = @(
     "- branch: $gitBranchText",
     "- head: $gitHeadText",
     "- outputDirectory: $OutputDirectory",
+    "- includeBinaryArtifacts: $IncludeBinaryArtifacts",
+    "- includeZip: $shouldZip",
     "",
     "## Command Results",
     "",
@@ -489,7 +505,7 @@ $resultsJsonPath = Join-Path $OutputDirectory "results.json"
 $commandResults | ConvertTo-Json -Depth 5 | Set-Content -Path $resultsJsonPath -Encoding UTF8
 
 $zipPath = ""
-if (-not $NoZip) {
+if ($shouldZip) {
     $zipPath = $OutputDirectory.TrimEnd("\") + ".zip"
     if (Test-Path -Path $zipPath) {
         Remove-Item -Path $zipPath -Force

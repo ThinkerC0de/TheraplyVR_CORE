@@ -21,6 +21,11 @@ sysinfo.txt
 *.unitypackage
 *.app
 
+# Evidence artifacts (keep logs/summary in git; keep binaries/zips local)
+docs/evidence/**/*.zip
+docs/evidence/**/artifacts/flutter_build/
+docs/evidence/**/artifacts/unity_build/
+
 # Crashlytics generated file
 crashlytics-build.properties
 

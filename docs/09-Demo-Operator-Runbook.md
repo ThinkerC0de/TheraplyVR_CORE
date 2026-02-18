@@ -22,6 +22,7 @@ Quick checks:
 - `flutter test`
 - `powershell -ExecutionPolicy Bypass -File .\scripts\unity_cli_validate.ps1 -Mode both`
 - `powershell -ExecutionPolicy Bypass -File .\scripts\unity_editor_mvp_smoke.ps1 -ValidationRuns 1 -ValidationGameIds demo_cube_clicker`
+- `powershell -ExecutionPolicy Bypass -File .\scripts\mobile_real_device_preflight.ps1`
 
 ## 1) Start Order (1 min)
 

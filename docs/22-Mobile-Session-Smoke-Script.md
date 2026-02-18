@@ -9,6 +9,7 @@ Scope: Flutter controller session flow against Unity Editor runtime.
 - Scene in Play Mode: `Assets/_Examples/Scenes/DemoCubeScene.unity`.
 - Mobile app installed from `flutter_controller/build/app/outputs/flutter-apk/app-debug.apk`.
 - Therapist account has active entitlement (`APP` access).
+- For release-lane validation, remember strict entitlement gate is always enforced.
 
 ## Step-by-step smoke path
 

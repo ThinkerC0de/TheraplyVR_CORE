@@ -23,6 +23,10 @@
 - [19-Mobile-MVP-Completion-Tasklist.md](19-Mobile-MVP-Completion-Tasklist.md)
 - [20-Unity-Editor-MVP-Completion-Tasklist.md](20-Unity-Editor-MVP-Completion-Tasklist.md)
 - [21-Integrated-Validation-And-GoNoGo.md](21-Integrated-Validation-And-GoNoGo.md)
+- [22-Mobile-Session-Smoke-Script.md](22-Mobile-Session-Smoke-Script.md)
+- [23-Unity-Firebase-Reconnect-Expected-Outcomes.md](23-Unity-Firebase-Reconnect-Expected-Outcomes.md)
+- [24-Evidence-Footprint-Guardrails.md](24-Evidence-Footprint-Guardrails.md)
+- [25-Mobile-Real-Device-Login-Reconnect-Delta-Checklist.md](25-Mobile-Real-Device-Login-Reconnect-Delta-Checklist.md)
 
 ## Usage Pattern
 1. Read roadmap.
