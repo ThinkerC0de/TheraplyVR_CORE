@@ -13,7 +13,7 @@ class SessionRecoveryPolicy {
     }
 
     if (remoteState != null) {
-      return !isTerminalState(remoteState);
+      return shouldGateBySessionState(remoteState);
     }
 
     switch (remoteRuntimeStatus) {
@@ -24,6 +24,20 @@ class SessionRecoveryPolicy {
         return true;
       case TherapistRuntimeStatus.connected:
       case null:
+        return false;
+    }
+  }
+
+  static bool shouldGateBySessionState(SessionLifecycleState state) {
+    switch (state) {
+      case SessionLifecycleState.inProgress:
+      case SessionLifecycleState.paused:
+      case SessionLifecycleState.interrupted:
+        return true;
+      case SessionLifecycleState.created:
+      case SessionLifecycleState.completed:
+      case SessionLifecycleState.abortedByTherapist:
+      case SessionLifecycleState.failedTechnical:
         return false;
     }
   }

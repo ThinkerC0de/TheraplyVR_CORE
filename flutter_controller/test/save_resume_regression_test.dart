@@ -15,7 +15,6 @@ void main() {
   group('save/resume regression policy matrix', () {
     test('different remote non-terminal states always require decision', () {
       const nonTerminalStates = <SessionLifecycleState>[
-        SessionLifecycleState.created,
         SessionLifecycleState.inProgress,
         SessionLifecycleState.paused,
         SessionLifecycleState.interrupted,
@@ -35,6 +34,17 @@ void main() {
           reason: 'Expected decision gate for non-terminal state ${state.name}',
         );
       }
+    });
+
+    test('created remote state does not require decision', () {
+      final requiresDecision = SessionRecoveryPolicy.shouldRequireDecision(
+        localSessionId: 'local-session',
+        remoteSessionId: 'quest-session',
+        remoteState: SessionLifecycleState.created,
+        remoteRuntimeStatus: TherapistRuntimeStatus.connected,
+      );
+
+      expect(requiresDecision, isFalse);
     });
 
     test('terminal remote states never require decision', () {

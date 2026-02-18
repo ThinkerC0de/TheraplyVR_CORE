@@ -370,3 +370,48 @@ Go/No-Go decision:
 - `TODO` Manual verification rerun on physical phone:
   - confirm session continuity without extra operator clicks after Wi-Fi flap,
   - confirm commands after auto-reconnect still target same remote session.
+
+## 17) Game flow hardening: mobile lock rules + Unity terminal sync (2026-02-18)
+
+- `OK` Session decision gate no longer triggers for remote `CREATED` state:
+  - reason: fresh install / auto-bootstrap `CREATED` should not be treated as unfinished in-progress session,
+  - files:
+    - `flutter_controller/lib/models/session_recovery_policy.dart`
+    - `flutter_controller/test/session_recovery_policy_test.dart`
+    - `flutter_controller/test/save_resume_regression_test.dart`
+- `OK` Mobile setup/runtime UX hardened to prevent operator chaos:
+  - setup sliders/dropdowns are now locked while runtime is active,
+  - `Start` is disabled while runtime is active,
+  - `Restart` is enabled only while runtime is active,
+  - `PAUSE/RESUME/STOP` availability now follows runtime/session state,
+  - terminal session update (`COMPLETED` etc.) now shows explicit snackbar feedback to operator,
+  - file:
+    - `flutter_controller/lib/screens/control_screen.dart`
+- `OK` `STOP_GAME` payload reason updated:
+  - default reason switched from `TherapistStop` to `UserExit` (game stop treated as interruption, not full therapist session abort),
+  - file:
+    - `flutter_controller/lib/screens/control_screen.dart`
+- `OK` Unity runtime now clears active game selection after stop/end and auto-syncs terminal game state:
+  - `StopActiveGame(...)` now clears active game binding (prevents stale active game id),
+  - watchdog now reconciles module terminal state (`Completed`/`Failed`) into session lifecycle and emits status updates,
+  - this enables mobile to receive completion state when game self-finishes (e.g. cube clicker),
+  - files:
+    - `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs`
+    - `unity-quest-template/Assets/_Examples/Scripts/ExampleAdditiveSceneRouter.cs`
+- `OK` Scene unload behavior aligned with expected return-to-catalog flow:
+  - additive router now unloads game scene when no active game is selected,
+  - file:
+    - `unity-quest-template/Assets/_Examples/Scripts/ExampleAdditiveSceneRouter.cs`
+- `OK` Validation rerun:
+  - `flutter_controller`: `flutter analyze`, `flutter test` PASS,
+  - `admin_console_web`: `flutter analyze`, `flutter test` PASS,
+  - evidence:
+    - `docs/evidence/20260218_200034/game_runtime_flow_hardening/commands/flutter_controller_flutter_analyze.log`
+    - `docs/evidence/20260218_200034/game_runtime_flow_hardening/commands/flutter_controller_flutter_test.log`
+    - `docs/evidence/20260218_200034/game_runtime_flow_hardening/commands/admin_console_web_flutter_analyze.log`
+    - `docs/evidence/20260218_200034/game_runtime_flow_hardening/commands/admin_console_web_flutter_test.log`
+    - `docs/evidence/20260218_200034/game_runtime_flow_hardening/notes/SUMMARY.md`
+- `TODO` Manual operator confirmation still required:
+  - phone + Unity run to confirm self-finish cube flow updates mobile without manual refresh,
+  - verify `Wroc` from setup unloads active game scene in live run,
+  - verify reconnect continuity targets same active session after temporary network flap.

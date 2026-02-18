@@ -16,6 +16,17 @@ void main() {
       expect(requiresDecision, isFalse);
     });
 
+    test('does not require decision for created remote session state', () {
+      final requiresDecision = SessionRecoveryPolicy.shouldRequireDecision(
+        localSessionId: 'local-session',
+        remoteSessionId: 'quest-session',
+        remoteState: SessionLifecycleState.created,
+        remoteRuntimeStatus: TherapistRuntimeStatus.connected,
+      );
+
+      expect(requiresDecision, isFalse);
+    });
+
     test('requires decision for different non-terminal remote session state',
         () {
       final requiresDecision = SessionRecoveryPolicy.shouldRequireDecision(

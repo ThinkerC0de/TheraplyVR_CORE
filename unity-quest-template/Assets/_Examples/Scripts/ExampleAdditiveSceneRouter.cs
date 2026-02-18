@@ -22,7 +22,7 @@ namespace TheraplyExamples
     public sealed class ExampleAdditiveSceneRouter : MonoBehaviour
     {
         [SerializeField] private GameRuntimeService _runtimeService;
-        [SerializeField] private bool _unloadWhenNoGameScene = false;
+        [SerializeField] private bool _unloadWhenNoGameScene = true;
         [SerializeField] private bool _logSceneSwitches = true;
         [SerializeField] private List<ExampleGameSceneBinding> _sceneBindings =
             new List<ExampleGameSceneBinding>();

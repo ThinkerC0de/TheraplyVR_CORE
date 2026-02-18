@@ -195,6 +195,7 @@ class _ControlScreenState extends State<ControlScreen>
     });
 
     _messageSubscription = _connection.messages.listen((message) {
+      final previousSessionState = _sessionLifecycleState;
       final sessionUpdate = SessionStateUpdateSignal.tryFromNetworkMessage(
         message,
       );
@@ -232,6 +233,11 @@ class _ControlScreenState extends State<ControlScreen>
         });
 
         _handlePotentialSessionDecisionGate(sessionUpdate, runtimeUpdate);
+        _handleSessionTerminalStateFeedback(
+          previousState: previousSessionState,
+          sessionUpdate: sessionUpdate,
+          runtimeUpdate: runtimeUpdate,
+        );
       }
 
       if (mounted && manualResyncReport != null) {
@@ -368,6 +374,8 @@ class _ControlScreenState extends State<ControlScreen>
         _sessionLifecycleState == SessionLifecycleState.inProgress ||
         _sessionLifecycleState == SessionLifecycleState.paused;
   }
+
+  bool get _isSetupLockedByRuntime => _isGameRuntimeActive;
 
   PurchasedContentState get _selectedContentState {
     return _contentStateForGame(_selectedGameId);
@@ -653,10 +661,61 @@ class _ControlScreenState extends State<ControlScreen>
       return;
     }
 
-    if (!_requiresSessionDecision && remoteSessionId != _activeSessionId) {
-      setState(() {
+    final shouldUpdateActiveSession = remoteSessionId != _activeSessionId;
+    final shouldClearDecisionState = _requiresSessionDecision;
+
+    if (!shouldUpdateActiveSession && !shouldClearDecisionState) {
+      return;
+    }
+
+    setState(() {
+      if (shouldUpdateActiveSession) {
         _activeSessionId = remoteSessionId;
-      });
+      }
+      if (shouldClearDecisionState) {
+        _requiresSessionDecision = false;
+        _remoteSessionIdPendingDecision = null;
+      }
+    });
+  }
+
+  void _handleSessionTerminalStateFeedback({
+    required SessionLifecycleState? previousState,
+    required SessionStateUpdateSignal? sessionUpdate,
+    required RuntimeStatusUpdateSignal? runtimeUpdate,
+  }) {
+    if (!mounted || sessionUpdate == null) {
+      return;
+    }
+
+    final state = sessionUpdate.state;
+    final isTerminal = SessionRecoveryPolicy.isTerminalState(state);
+    final wasTerminal = previousState != null &&
+        SessionRecoveryPolicy.isTerminalState(previousState);
+
+    if (!isTerminal || wasTerminal) {
+      return;
+    }
+
+    final runtime = runtimeUpdate?.status;
+    if (state == SessionLifecycleState.completed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Gra zakonczona. Mozesz zmienic ustawienia i uruchomic nowa runde.',
+          ),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Sesja zakonczona (${state.wireValue}${runtime == null ? '' : ', runtime=${runtime.wireValue}'}).',
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -1119,7 +1178,7 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     if (command == CriticalCommandIds.stopGame) {
-      payload['reason'] = 'TherapistStop';
+      payload['reason'] = 'UserExit';
     } else if (command == CriticalCommandIds.endSession) {
       payload['reason'] = 'TherapistEndedSession';
     }
@@ -1152,6 +1211,22 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   Future<void> _startFromSetup({required bool resumeFromSaved}) async {
+    if (_isGameRuntimeActive) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Gra jest aktywna. Najpierw zatrzymaj lub zakoncz sesje, aby zmienic ustawienia.',
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     final selectedContentState = _selectedContentState;
     if (!_isLaunchableContentState(selectedContentState)) {
       if (!mounted) {
@@ -1183,6 +1258,22 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   Future<void> _restartFromSetup() async {
+    if (!_isGameRuntimeActive) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Restart jest dostepny tylko podczas aktywnej gry.',
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     await _runPrimaryAction(() async {
       _resumeFromSavedPreference = false;
       await _sendCommand(
@@ -1863,6 +1954,7 @@ class _ControlScreenState extends State<ControlScreen>
   Widget _buildGameSetupStep() {
     final entry = _selectedGameEntry;
     final contentState = _selectedContentState;
+    final setupLockedByRuntime = _isSetupLockedByRuntime;
 
     return ListView(
       children: [
@@ -1921,21 +2013,26 @@ class _ControlScreenState extends State<ControlScreen>
           ),
         ),
         const SizedBox(height: 8),
-        if (_isDemoCubeGameSelected) _buildDemoCubeSettings(),
-        if (_isPulseTargetGameSelected) _buildPulseTargetsSettings(),
+        if (_isDemoCubeGameSelected)
+          _buildDemoCubeSettings(lockedByRuntime: setupLockedByRuntime),
+        if (_isPulseTargetGameSelected)
+          _buildPulseTargetsSettings(lockedByRuntime: setupLockedByRuntime),
         if (!_isDemoCubeGameSelected && !_isPulseTargetGameSelected)
-          _buildGenericGameSettings(entry),
+          _buildGenericGameSettings(
+            entry,
+            lockedByRuntime: setupLockedByRuntime,
+          ),
         const SizedBox(height: 8),
         _buildSetupPreviewCard(entry),
         const SizedBox(height: 8),
-        _buildSetupActionBar(entry),
+        _buildSetupActionBar(),
         const SizedBox(height: 8),
         _buildRuntimeActionRows(),
       ],
     );
   }
 
-  Widget _buildDemoCubeSettings() {
+  Widget _buildDemoCubeSettings({required bool lockedByRuntime}) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -1953,6 +2050,18 @@ class _ControlScreenState extends State<ControlScreen>
               fontWeight: FontWeight.w700,
             ),
           ),
+          if (lockedByRuntime)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'Ustawienia zablokowane podczas aktywnej gry. Dostepne akcje: Pause, Stop, Restart, End Session.',
+                style: TextStyle(
+                  color: Colors.orange[800],
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           const SizedBox(height: 8),
           Text(
             'Ilosc cubey: $_demoCubeCount',
@@ -1964,11 +2073,13 @@ class _ControlScreenState extends State<ControlScreen>
             max: 40,
             divisions: 36,
             label: _demoCubeCount.toString(),
-            onChanged: (value) {
-              setState(() {
-                _demoCubeCount = value.round();
-              });
-            },
+            onChanged: lockedByRuntime
+                ? null
+                : (value) {
+                    setState(() {
+                      _demoCubeCount = value.round();
+                    });
+                  },
           ),
           Text(
             'Predkosc: ${_demoCubeSpeed.toStringAsFixed(2)}',
@@ -1980,11 +2091,13 @@ class _ControlScreenState extends State<ControlScreen>
             max: 2.2,
             divisions: 20,
             label: _demoCubeSpeed.toStringAsFixed(2),
-            onChanged: (value) {
-              setState(() {
-                _demoCubeSpeed = value;
-              });
-            },
+            onChanged: lockedByRuntime
+                ? null
+                : (value) {
+                    setState(() {
+                      _demoCubeSpeed = value;
+                    });
+                  },
           ),
           DropdownButtonFormField<String>(
             initialValue: _demoLevelMode,
@@ -2006,22 +2119,27 @@ class _ControlScreenState extends State<ControlScreen>
                   ),
                 )
                 .toList(),
-            onChanged: (value) {
-              if (value == null) {
-                return;
-              }
+            onChanged: lockedByRuntime
+                ? null
+                : (value) {
+                    if (value == null) {
+                      return;
+                    }
 
-              setState(() {
-                _demoLevelMode = value;
-              });
-            },
+                    setState(() {
+                      _demoLevelMode = value;
+                    });
+                  },
           ),
         ],
       ),
     );
   }
 
-  Widget _buildGenericGameSettings(_GameCatalogEntry entry) {
+  Widget _buildGenericGameSettings(
+    _GameCatalogEntry entry, {
+    required bool lockedByRuntime,
+  }) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -2029,14 +2147,16 @@ class _ControlScreenState extends State<ControlScreen>
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
-        'Gra `${entry.title}` nie ma dedykowanego panelu ustawien po stronie mobilki. '
-        'Uzywamy domyslnej konfiguracji runtime.',
+        lockedByRuntime
+            ? 'Gra aktywna: zmiana konfiguracji jest chwilowo zablokowana. Zatrzymaj lub zakoncz sesje, aby edytowac ustawienia.'
+            : 'Gra `${entry.title}` nie ma dedykowanego panelu ustawien po stronie mobilki. '
+                'Uzywamy domyslnej konfiguracji runtime.',
         style: TextStyle(color: Colors.grey[700], fontSize: 12),
       ),
     );
   }
 
-  Widget _buildPulseTargetsSettings() {
+  Widget _buildPulseTargetsSettings({required bool lockedByRuntime}) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -2054,6 +2174,18 @@ class _ControlScreenState extends State<ControlScreen>
               fontWeight: FontWeight.w700,
             ),
           ),
+          if (lockedByRuntime)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Ustawienia zablokowane podczas aktywnej gry. Dostepne akcje: Pause, Stop, Restart, End Session.',
+                style: TextStyle(
+                  color: Colors.orange[800],
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           const SizedBox(height: 8),
           Text(
             'Ilosc celow: $_pulseTargetCount',
@@ -2065,11 +2197,13 @@ class _ControlScreenState extends State<ControlScreen>
             max: 32,
             divisions: 29,
             label: _pulseTargetCount.toString(),
-            onChanged: (value) {
-              setState(() {
-                _pulseTargetCount = value.round();
-              });
-            },
+            onChanged: lockedByRuntime
+                ? null
+                : (value) {
+                    setState(() {
+                      _pulseTargetCount = value.round();
+                    });
+                  },
           ),
           Text(
             'Predkosc celu: ${_pulseTargetSpeed.toStringAsFixed(2)}',
@@ -2081,11 +2215,13 @@ class _ControlScreenState extends State<ControlScreen>
             max: 2.2,
             divisions: 20,
             label: _pulseTargetSpeed.toStringAsFixed(2),
-            onChanged: (value) {
-              setState(() {
-                _pulseTargetSpeed = value;
-              });
-            },
+            onChanged: lockedByRuntime
+                ? null
+                : (value) {
+                    setState(() {
+                      _pulseTargetSpeed = value;
+                    });
+                  },
           ),
           Text(
             'Skala celu: ${_pulseTargetScale.toStringAsFixed(2)}',
@@ -2097,11 +2233,13 @@ class _ControlScreenState extends State<ControlScreen>
             max: 1.0,
             divisions: 22,
             label: _pulseTargetScale.toStringAsFixed(2),
-            onChanged: (value) {
-              setState(() {
-                _pulseTargetScale = value;
-              });
-            },
+            onChanged: lockedByRuntime
+                ? null
+                : (value) {
+                    setState(() {
+                      _pulseTargetScale = value;
+                    });
+                  },
           ),
         ],
       ),
@@ -2154,14 +2292,15 @@ class _ControlScreenState extends State<ControlScreen>
     );
   }
 
-  Widget _buildSetupActionBar(_GameCatalogEntry entry) {
+  Widget _buildSetupActionBar() {
     return Row(
       children: [
         Expanded(
           child: ElevatedButton.icon(
             onPressed: _isConnected &&
                     !_isPrimaryActionInFlight &&
-                    _isSelectedGameLaunchable
+                    _isSelectedGameLaunchable &&
+                    !_isGameRuntimeActive
                 ? () => unawaited(_startFromSetup(resumeFromSaved: false))
                 : null,
             icon: const Icon(Icons.play_arrow),
@@ -2174,7 +2313,8 @@ class _ControlScreenState extends State<ControlScreen>
           child: ElevatedButton.icon(
             onPressed: _isConnected &&
                     !_isPrimaryActionInFlight &&
-                    _isSelectedGameLaunchable
+                    _isSelectedGameLaunchable &&
+                    _isGameRuntimeActive
                 ? () => unawaited(_restartFromSetup())
                 : null,
             icon: const Icon(Icons.restart_alt),
@@ -2208,6 +2348,9 @@ class _ControlScreenState extends State<ControlScreen>
                 label: 'PAUSE',
                 color: Colors.orange,
                 command: CriticalCommandIds.pauseGame,
+                enabledOverride: _isGameRuntimeActive &&
+                    _runtimeStatus != TherapistRuntimeStatus.paused &&
+                    _sessionLifecycleState != SessionLifecycleState.paused,
               ),
             ),
             const SizedBox(width: 8),
@@ -2217,6 +2360,9 @@ class _ControlScreenState extends State<ControlScreen>
                 label: 'RESUME',
                 color: Colors.teal,
                 command: CriticalCommandIds.resumeGame,
+                enabledOverride:
+                    _runtimeStatus == TherapistRuntimeStatus.paused ||
+                        _sessionLifecycleState == SessionLifecycleState.paused,
               ),
             ),
             const SizedBox(width: 8),
@@ -2226,6 +2372,7 @@ class _ControlScreenState extends State<ControlScreen>
                 label: 'STOP',
                 color: Colors.red,
                 command: CriticalCommandIds.stopGame,
+                enabledOverride: _isGameRuntimeActive,
               ),
             ),
           ],
@@ -2288,11 +2435,13 @@ class _ControlScreenState extends State<ControlScreen>
     required String label,
     required Color color,
     required String command,
+    bool enabledOverride = true,
   }) {
+    final enabledBySessionDecision =
+        !_requiresSessionDecision || command == CriticalCommandIds.endSession;
+
     return ElevatedButton(
-      onPressed: _isConnected &&
-              (!_requiresSessionDecision ||
-                  command == CriticalCommandIds.endSession)
+      onPressed: _isConnected && enabledBySessionDecision && enabledOverride
           ? () => unawaited(_sendCommand(command))
           : null,
       style: ElevatedButton.styleFrom(

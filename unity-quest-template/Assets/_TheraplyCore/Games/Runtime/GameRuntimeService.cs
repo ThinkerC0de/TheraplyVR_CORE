@@ -381,17 +381,19 @@ namespace TheraplyCore.Games.Runtime
         public bool StopActiveGame(GameContracts.GameStopReason reason)
         {
             if (!EnsureActiveGame()) return false;
+            var stoppedGameId = _activeGameId ?? string.Empty;
             _activeGame.StopGame(reason);
             TryTransitionSessionState(MapStopReasonToSessionState(reason), $"STOP_GAME:{reason}");
             TrackCriticalRuntimeEvent("game_end", new Dictionary<string, object>
             {
-                { "gameId", _activeGameId ?? string.Empty },
+                { "gameId", stoppedGameId },
                 { "reason", reason.ToString() },
             });
             TryReportActiveGameResult(reason);
+            ClearActiveGameSelection($"STOP_GAME:{reason}");
             TrackCriticalRuntimeEvent("session_stop", new Dictionary<string, object>
             {
-                { "gameId", _activeGameId ?? string.Empty },
+                { "gameId", stoppedGameId },
                 { "reason", reason.ToString() },
             });
             return true;
@@ -1590,6 +1592,7 @@ namespace TheraplyCore.Games.Runtime
 
             var hasActiveGame = _activeGame != null;
             var activeGameState = hasActiveGame ? _activeGame.State : GameContracts.GameState.NotInitialized;
+            ReconcileTerminalGameStateWithSession(ref sessionState, ref hasActiveGame, ref activeGameState);
             var isHealthy = EvaluateWatchdogHealth(sessionState, hasActiveGame, activeGameState, out var healthCode);
 
             if (isHealthy)
@@ -1635,6 +1638,85 @@ namespace TheraplyCore.Games.Runtime
                 activeGameState,
                 healthCode,
                 isHealthy);
+        }
+
+        private void ReconcileTerminalGameStateWithSession(
+            ref GameContracts.SessionLifecycleState sessionState,
+            ref bool hasActiveGame,
+            ref GameContracts.GameState activeGameState)
+        {
+            if (!hasActiveGame)
+            {
+                return;
+            }
+
+            if (!TryResolveAutoTerminalSync(
+                    sessionState,
+                    activeGameState,
+                    out var stopReason,
+                    out var targetSessionState,
+                    out var reasonCode))
+            {
+                return;
+            }
+
+            if (!TryTransitionSessionState(targetSessionState, reasonCode))
+            {
+                return;
+            }
+
+            var stoppedGameId = _activeGameId ?? string.Empty;
+            TrackCriticalRuntimeEvent("game_end", new Dictionary<string, object>
+            {
+                { "gameId", stoppedGameId },
+                { "reason", stopReason.ToString() },
+            });
+            TryReportActiveGameResult(stopReason);
+            ClearActiveGameSelection(reasonCode);
+            TrackCriticalRuntimeEvent("session_stop", new Dictionary<string, object>
+            {
+                { "gameId", stoppedGameId },
+                { "reason", reasonCode },
+            });
+
+            sessionState = _sessionContext == null
+                ? targetSessionState
+                : _sessionContext.SessionState;
+            hasActiveGame = _activeGame != null;
+            activeGameState = hasActiveGame ? _activeGame.State : GameContracts.GameState.NotInitialized;
+        }
+
+        private static bool TryResolveAutoTerminalSync(
+            GameContracts.SessionLifecycleState sessionState,
+            GameContracts.GameState activeGameState,
+            out GameContracts.GameStopReason stopReason,
+            out GameContracts.SessionLifecycleState targetSessionState,
+            out string reasonCode)
+        {
+            stopReason = GameContracts.GameStopReason.Error;
+            targetSessionState = GameContracts.SessionLifecycleState.FAILED_TECHNICAL;
+            reasonCode = string.Empty;
+
+            if (activeGameState == GameContracts.GameState.Completed &&
+                sessionState == GameContracts.SessionLifecycleState.IN_PROGRESS)
+            {
+                stopReason = GameContracts.GameStopReason.Completed;
+                targetSessionState = GameContracts.SessionLifecycleState.COMPLETED;
+                reasonCode = "ACTIVE_GAME_COMPLETED";
+                return true;
+            }
+
+            if (activeGameState == GameContracts.GameState.Failed &&
+                (sessionState == GameContracts.SessionLifecycleState.IN_PROGRESS ||
+                 sessionState == GameContracts.SessionLifecycleState.PAUSED))
+            {
+                stopReason = GameContracts.GameStopReason.Error;
+                targetSessionState = GameContracts.SessionLifecycleState.FAILED_TECHNICAL;
+                reasonCode = "ACTIVE_GAME_FAILED";
+                return true;
+            }
+
+            return false;
         }
 
         private void TrackWatchdogEvent(
@@ -2058,6 +2140,19 @@ namespace TheraplyCore.Games.Runtime
             {
                 Logger.Warning($"[GameRuntime] Failed to build/report game result: {e.Message}");
             }
+        }
+
+        private void ClearActiveGameSelection(string reasonCode)
+        {
+            if (_activeGame == null && string.IsNullOrWhiteSpace(_activeGameId))
+            {
+                return;
+            }
+
+            Logger.Info(
+                $"[GameRuntime] Active game cleared: {_activeGameId ?? string.Empty} (reason={reasonCode ?? "unspecified"})");
+            _activeGame = null;
+            _activeGameId = string.Empty;
         }
 
         private static GameContracts.SessionLifecycleState MapStopReasonToSessionState(GameContracts.GameStopReason reason)
