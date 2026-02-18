@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_controller/models/entitlement_access.dart';
 import 'package:flutter_controller/models/student.dart';
+import 'package:flutter_controller/models/student_roster_sync.dart';
 import 'package:flutter_controller/services/student_service.dart';
 import 'package:flutter_controller/services/firebase_service.dart';
+import 'package:flutter_controller/services/entitlement_service.dart';
 import 'package:flutter_controller/screens/scanner_screen.dart';
 
 class StudentsScreen extends StatefulWidget {
@@ -14,10 +17,18 @@ class StudentsScreen extends StatefulWidget {
 class _StudentsScreenState extends State<StudentsScreen> {
   @override
   Widget build(BuildContext context) {
+    final canManageStudents =
+        EntitlementService.activeAccess?.role == EntitlementRole.therapist;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Students'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.sync),
+            onPressed: _runReconciliation,
+            tooltip: 'Reconcile pending writes',
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: _handleLogout,
@@ -25,62 +36,97 @@ class _StudentsScreenState extends State<StudentsScreen> {
           ),
         ],
       ),
-      body: StreamBuilder<List<Student>>(
-        stream: StudentService.getStudents(),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                  const SizedBox(height: 16),
-                  Text('Error: ${snapshot.error}'),
-                ],
-              ),
-            );
-          }
-          
-          if (!snapshot.hasData) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
-          }
-          
-          final students = snapshot.data!;
-          
-          if (students.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.school_outlined, size: 64, color: Colors.grey[400]),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'No students yet',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+      body: Column(
+        children: [
+          StreamBuilder<int>(
+            stream: StudentService.watchPendingWritesCount(),
+            builder: (context, snapshot) {
+              final pendingWrites = snapshot.data ?? 0;
+              if (pendingWrites <= 0) {
+                return const SizedBox.shrink();
+              }
+
+              return Container(
+                width: double.infinity,
+                color: Colors.amber.shade50,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Text(
+                  '$pendingWrites pending write(s). Tap sync to reconcile.',
+                  style: TextStyle(
+                    color: Colors.amber.shade900,
+                    fontWeight: FontWeight.w600,
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Tap + to add your first student',
-                    style: TextStyle(color: Colors.grey[600]),
-                  ),
-                ],
-              ),
-            );
-          }
-          
-          return ListView.builder(
-            itemCount: students.length,
-            itemBuilder: (context, index) {
-              final student = students[index];
-              return _buildStudentCard(student);
+                ),
+              );
             },
-          );
-        },
+          ),
+          Expanded(
+            child: StreamBuilder<List<Student>>(
+              stream: StudentService.getStudents(),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error_outline,
+                            size: 64, color: Colors.red),
+                        const SizedBox(height: 16),
+                        Text('Error: ${snapshot.error}'),
+                      ],
+                    ),
+                  );
+                }
+
+                if (!snapshot.hasData) {
+                  return const Center(
+                    child: CircularProgressIndicator(),
+                  );
+                }
+
+                final students = snapshot.data!;
+
+                if (students.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.school_outlined,
+                            size: 64, color: Colors.grey[400]),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'No students yet',
+                          style: TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.w500),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Tap + to add your first student',
+                          style: TextStyle(color: Colors.grey[600]),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return RefreshIndicator(
+                  onRefresh: _refreshFromServer,
+                  child: ListView.builder(
+                    itemCount: students.length,
+                    itemBuilder: (context, index) {
+                      final student = students[index];
+                      return _buildStudentCard(student);
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showStudentDialog(context),
+        onPressed: canManageStudents ? () => _showStudentDialog(context) : null,
         tooltip: 'Add Student',
         child: const Icon(Icons.add),
       ),
@@ -110,35 +156,47 @@ class _StudentsScreenState extends State<StudentsScreen> {
               )
             : null,
         trailing: PopupMenuButton<String>(
-          onSelected: (value) {
-            if (value == 'edit') {
-              _showStudentDialog(context, student: student);
-            } else if (value == 'delete') {
-              _confirmDelete(student);
-            }
-          },
-          itemBuilder: (context) => [
-            const PopupMenuItem(
-              value: 'edit',
-              child: Row(
-                children: [
-                  Icon(Icons.edit, size: 20),
-                  SizedBox(width: 8),
-                  Text('Edit'),
+          onSelected: EntitlementService.activeAccess?.role ==
+                  EntitlementRole.therapist
+              ? (value) {
+                  if (value == 'edit') {
+                    _showStudentDialog(context, student: student);
+                  } else if (value == 'delete') {
+                    _confirmDelete(student);
+                  }
+                }
+              : null,
+          itemBuilder: (context) => EntitlementService.activeAccess?.role ==
+                  EntitlementRole.therapist
+              ? [
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit, size: 20),
+                        SizedBox(width: 8),
+                        Text('Edit'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete, size: 20, color: Colors.red),
+                        SizedBox(width: 8),
+                        Text('Delete', style: TextStyle(color: Colors.red)),
+                      ],
+                    ),
+                  ),
+                ]
+              : [
+                  const PopupMenuItem(
+                    enabled: false,
+                    value: 'readonly',
+                    child: Text('Read-only'),
+                  ),
                 ],
-              ),
-            ),
-            const PopupMenuItem(
-              value: 'delete',
-              child: Row(
-                children: [
-                  Icon(Icons.delete, size: 20, color: Colors.red),
-                  SizedBox(width: 8),
-                  Text('Delete', style: TextStyle(color: Colors.red)),
-                ],
-              ),
-            ),
-          ],
         ),
         onTap: () => _selectStudent(student),
       ),
@@ -221,7 +279,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
               
               try {
                 if (editingStudent != null) {
-                  await StudentService.updateStudent(
+                  final result = await StudentService.updateStudent(
                     studentId: editingStudent.id,
                     firstName: firstName,
                     lastName: lastName,
@@ -229,20 +287,22 @@ class _StudentsScreenState extends State<StudentsScreen> {
                   );
                   
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Student updated')),
+                    _showWriteResultSnackbar(
+                      result,
+                      committedMessage: 'Student updated',
                     );
                   }
                 } else {
-                  await StudentService.addStudent(
+                  final result = await StudentService.addStudent(
                     firstName: firstName,
                     lastName: lastName,
                     notes: notes.isNotEmpty ? notes : null,
                   );
                   
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Student added')),
+                    _showWriteResultSnackbar(
+                      result,
+                      committedMessage: 'Student added',
                     );
                   }
                 }
@@ -282,12 +342,13 @@ class _StudentsScreenState extends State<StudentsScreen> {
           ElevatedButton(
             onPressed: () async {
               try {
-                await StudentService.deleteStudent(student.id);
+                final result = await StudentService.deleteStudent(student.id);
                 
                 if (context.mounted) {
                   Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Student deleted')),
+                  _showWriteResultSnackbar(
+                    result,
+                    committedMessage: 'Student deleted',
                   );
                 }
               } catch (e) {
@@ -314,9 +375,53 @@ class _StudentsScreenState extends State<StudentsScreen> {
   }
   
   Future<void> _handleLogout() async {
+    await StudentService.clearSessionState();
+    EntitlementService.clearSessionAccess();
     await FirebaseService.signOut();
     if (mounted) {
       Navigator.pop(context);
     }
+  }
+
+  Future<void> _runReconciliation() async {
+    final report = await StudentService.reconcilePendingWrites();
+    if (!mounted) {
+      return;
+    }
+
+    final message =
+        'Reconcile: processed=${report.processed}, failed=${report.failed}, deferred=${report.deferred}, pending=${report.pendingAfter}';
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor:
+            report.failed > 0 ? Colors.orange.shade700 : Colors.green.shade700,
+      ),
+    );
+  }
+
+  Future<void> _refreshFromServer() async {
+    await StudentService.refreshStudentsFromServer();
+    await _runReconciliation();
+  }
+
+  void _showWriteResultSnackbar(
+    StudentWriteResult result, {
+    required String committedMessage,
+  }) {
+    final isQueued = result.queuedForRetry;
+    final message = isQueued
+        ? 'Write queued (${result.pendingWrites} pending): ${result.statusMessage}'
+        : (result.committed ? committedMessage : result.statusMessage);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isQueued
+            ? Colors.orange.shade700
+            : (result.committed ? null : Colors.red.shade700),
+      ),
+    );
   }
 }

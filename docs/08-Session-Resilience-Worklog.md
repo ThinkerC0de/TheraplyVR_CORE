@@ -79,31 +79,31 @@ Status legend:
 
 ## 8) Product/Data Backlog (discussion 2026-02-18)
 
-- `TODO` `DATA-001` - Add login-time entitlement gate (role + license status) before entering student flow (`THERAPIST`, `PARENT`, future roles).
-- `TODO` `DATA-002` - Define shared child/student access model for multi-parent/multi-guardian accounts (same child visible on multiple devices/accounts by relation binding, not local-only ownership).
-- `TODO` `DATA-003` - Implement local-first student roster cache with sync policy:
+- `PARTIAL` `DATA-001` - Login-time entitlement gate (role + app license status) added in Flutter before entering student flow (`THERAPIST`, `PARENT`, future roles), with legacy fallback and optional strict mode (`STRICT_ENTITLEMENT_GATE=true`) that blocks missing/unavailable entitlement backend.
+- `PARTIAL` `DATA-002` - Shared child/student access model defined and wired in Flutter (`student_access_bindings`: relation binding + owner/write separation + merged visibility from ownership and bindings; role-level permissions matrix still TODO).
+- `PARTIAL` `DATA-003` - Local-first student roster cache implemented with sync policy:
   - initial hydrate from server,
   - offline edits in pending queue,
-  - write-confirm-then-commit locally for create/update/delete,
-  - periodic/manual reconciliation.
-- `TODO` `DATA-004` - Minimize Firebase traffic in Flutter:
-  - snapshot listener scope reduction,
-  - delta sync instead of full-list refresh,
-  - cooldown/debounce for repeated writes,
-  - explicit refresh only on selected UI boundaries.
-- `TODO` `LIC-001` - Define entitlement model:
+  - write-confirm-then-commit locally for create/update/delete (+ basic revision conflict guard),
+  - manual and periodic auto-reconciliation with retry backoff (`merge/conflict policy` still TODO).
+- `PARTIAL` `DATA-004` - Firebase traffic minimization in Flutter:
+  - snapshot listener kept in therapist scope,
+  - delta apply on `docChanges` instead of full-list remap in listener,
+  - cooldown for repeated identical updates,
+  - explicit refresh on selected UI boundaries (`TODO`: wider debounce policy + server-side query/index tuning).
+- `PARTIAL` `LIC-001` - Minimal entitlement model defined:
   - app-wide license,
   - per-game license,
-  - grant validity windows (`fromUtc` -> `toUtc`) and perpetual grants.
-- `TODO` `LIC-002` - Add admin/system grant path for remote entitlement assignment (single game or full app, temporary or permanent).
+  - grant validity windows (`fromUtc` -> `toUtc`) and perpetual grants (contract level).
+- `PARTIAL` `LIC-002` - Admin/system grant path contract added (`entitlement_grants` + `entitlement_grant_requests`) and entitlement login gate now overlays active grants; admin UI/backend policy still TODO.
 - `TODO` `CAT-001` - Add purchased-content state contract for mobile + Quest:
   - what user owns,
   - what is installed,
   - target version vs installed version,
   - update required/optional flags.
 - `TODO` `CAT-002` - Add install/update orchestration flow for mobile + VR bundles with deterministic status reporting (`NOT_INSTALLED`, `INSTALLING`, `READY`, `UPDATE_REQUIRED`, `FAILED`).
-- `TODO` `SEC-001` - Add data minimization and pseudonymization design for clinical/research mode:
+- `PARTIAL` `SEC-001` - Data minimization and pseudonymization payload contracts drafted for clinical/research mode:
   - separate identity store from telemetry/session metrics,
   - irreversible or strongly controlled pseudonymous IDs in analytics pipelines,
-  - no direct patient identifiers in gameplay telemetry payloads.
+  - no direct patient identifiers in gameplay telemetry payloads (runtime guard now blocks forbidden keys/values before dispatch; crypto/KMS still TODO).
 - `TODO` `SEC-002` - Add compliance hardening checklist (access control, retention, encryption, audit trail, breach-response posture) before medical-study rollout.

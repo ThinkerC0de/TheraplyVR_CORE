@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_controller/services/firebase_service.dart';
+import 'package:flutter_controller/services/entitlement_service.dart';
 import 'package:flutter_controller/screens/students_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -34,7 +35,31 @@ class _LoginScreenState extends State<LoginScreen> {
         _passwordController.text,
       );
       
-      if (user != null && mounted) {
+      if (user != null) {
+        final gateDecision = await EntitlementService.evaluateLoginGate(user);
+
+        if (!mounted) {
+          return;
+        }
+
+        if (!gateDecision.isAllowed) {
+          await FirebaseService.signOut();
+          setState(() {
+            _error = gateDecision.message;
+          });
+          return;
+        }
+
+        if (gateDecision.usedLegacyFallback) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '${gateDecision.message} (${gateDecision.reasonCode})',
+              ),
+            ),
+          );
+        }
+
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const StudentsScreen()),

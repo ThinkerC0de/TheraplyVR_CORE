@@ -6,6 +6,8 @@ class Student {
   final String lastName;
   final String? notes;
   final DateTime createdAt;
+  final DateTime updatedAt;
+  final int revision;
   final String therapistId;
   
   Student({
@@ -14,6 +16,8 @@ class Student {
     required this.lastName,
     this.notes,
     required this.createdAt,
+    required this.updatedAt,
+    required this.revision,
     required this.therapistId,
   });
   
@@ -30,14 +34,31 @@ class Student {
   /// Create from Firestore document
   factory Student.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+    final createdAt = _readDateTime(data['createdAt']) ?? DateTime.now().toUtc();
     
     return Student(
       id: doc.id,
       firstName: data['firstName'] ?? '',
       lastName: data['lastName'] ?? '',
       notes: data['notes'],
-      createdAt: (data['createdAt'] as Timestamp).toDate(),
+      createdAt: createdAt,
+      updatedAt: _readDateTime(data['updatedAt']) ?? createdAt,
+      revision: data['revision'] as int? ?? 0,
       therapistId: data['therapistId'] ?? '',
+    );
+  }
+
+  factory Student.fromJson(Map<String, dynamic> json) {
+    final createdAt = _readDateTime(json['createdAt']) ?? DateTime.now().toUtc();
+    return Student(
+      id: json['id'] as String? ?? '',
+      firstName: json['firstName'] as String? ?? '',
+      lastName: json['lastName'] as String? ?? '',
+      notes: json['notes'] as String?,
+      createdAt: createdAt,
+      updatedAt: _readDateTime(json['updatedAt']) ?? createdAt,
+      revision: json['revision'] as int? ?? 0,
+      therapistId: json['therapistId'] as String? ?? '',
     );
   }
   
@@ -47,7 +68,22 @@ class Student {
       'firstName': firstName,
       'lastName': lastName,
       'notes': notes,
-      'createdAt': Timestamp.fromDate(createdAt),
+      'createdAt': Timestamp.fromDate(createdAt.toUtc()),
+      'updatedAt': Timestamp.fromDate(updatedAt.toUtc()),
+      'revision': revision,
+      'therapistId': therapistId,
+    };
+  }
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'id': id,
+      'firstName': firstName,
+      'lastName': lastName,
+      'notes': notes,
+      'createdAt': createdAt.toUtc().toIso8601String(),
+      'updatedAt': updatedAt.toUtc().toIso8601String(),
+      'revision': revision,
       'therapistId': therapistId,
     };
   }
@@ -57,17 +93,39 @@ class Student {
     String? id,
     String? firstName,
     String? lastName,
-    String? notes,
+    Object? notes = _notesSentinel,
     DateTime? createdAt,
+    DateTime? updatedAt,
+    int? revision,
     String? therapistId,
   }) {
     return Student(
       id: id ?? this.id,
       firstName: firstName ?? this.firstName,
       lastName: lastName ?? this.lastName,
-      notes: notes ?? this.notes,
+      notes: identical(notes, _notesSentinel) ? this.notes : notes as String?,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      revision: revision ?? this.revision,
       therapistId: therapistId ?? this.therapistId,
     );
   }
+
+  static DateTime? _readDateTime(dynamic value) {
+    if (value is Timestamp) {
+      return value.toDate().toUtc();
+    }
+
+    if (value is DateTime) {
+      return value.toUtc();
+    }
+
+    if (value is String) {
+      return DateTime.tryParse(value)?.toUtc();
+    }
+
+    return null;
+  }
 }
+
+const Object _notesSentinel = Object();
