@@ -103,13 +103,14 @@ class _ControlScreenState extends State<ControlScreen>
 
   bool _isConnected = false;
   String _statusMessage = 'Connecting...';
-  bool _isReconnecting = false;
   bool _requiresSessionDecision = false;
   bool _isSessionDecisionDialogOpen = false;
   bool _manualResyncInFlight = false;
   bool _isPrimaryActionInFlight = false;
   bool _allowSystemPop = false;
   bool _contentSyncInFlight = false;
+  bool _autoReconnectLoopActive = false;
+  bool _autoReconnectEnabled = true;
 
   SessionLifecycleState? _sessionLifecycleState;
   TherapistRuntimeStatus? _runtimeStatus;
@@ -165,6 +166,7 @@ class _ControlScreenState extends State<ControlScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _autoReconnectEnabled = false;
     _connectionSubscription?.cancel();
     _messageSubscription?.cancel();
     _heartbeatUiTimer?.cancel();
@@ -187,6 +189,8 @@ class _ControlScreenState extends State<ControlScreen>
 
       if (connected) {
         unawaited(_syncContentCatalog(silent: true));
+      } else {
+        _startAutoReconnectLoop(reason: 'connection_lost');
       }
     });
 
@@ -262,6 +266,7 @@ class _ControlScreenState extends State<ControlScreen>
     );
 
     if (!success && mounted) {
+      _autoReconnectEnabled = false;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Failed to connect to device'),
@@ -274,35 +279,70 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   Future<void> _recoverConnectionAfterResume() async {
-    if (!mounted || _isReconnecting || _connection.isConnected) {
+    if (!mounted || _connection.isConnected) {
+      return;
+    }
+    _startAutoReconnectLoop(reason: 'app_resumed');
+  }
+
+  void _startAutoReconnectLoop({required String reason}) {
+    if (!mounted ||
+        !_autoReconnectEnabled ||
+        _allowSystemPop ||
+        _connection.isConnected ||
+        _autoReconnectLoopActive) {
       return;
     }
 
-    _isReconnecting = true;
-    setState(() {
-      _statusMessage = 'Reconnecting...';
-    });
+    _autoReconnectLoopActive = true;
+    unawaited(_runAutoReconnectLoop(reason: reason));
+  }
 
-    final ok = await _connection.reconnect();
-    if (!mounted) {
-      return;
-    }
+  Future<void> _runAutoReconnectLoop({required String reason}) async {
+    var cycle = 0;
 
-    setState(() {
-      _isConnected = ok;
-      _statusMessage = ok ? 'Connected' : 'Disconnected';
-    });
+    while (mounted &&
+        _autoReconnectEnabled &&
+        !_allowSystemPop &&
+        !_connection.isConnected) {
+      cycle += 1;
+      if (mounted) {
+        setState(() {
+          _statusMessage = 'Reconnecting...';
+        });
+      }
 
-    if (!ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Connection lost. Reconnect failed.'),
-          backgroundColor: Colors.red,
-        ),
+      final ok = await _connection.reconnect(
+        maxAttempts: 4,
+        baseDelay: const Duration(milliseconds: 350),
       );
+
+      if (!mounted || !_autoReconnectEnabled || _allowSystemPop) {
+        break;
+      }
+
+      if (ok) {
+        if (mounted) {
+          setState(() {
+            _isConnected = true;
+            _statusMessage = 'Connected';
+          });
+        }
+        break;
+      }
+
+      if (mounted) {
+        setState(() {
+          _isConnected = false;
+          _statusMessage = 'Disconnected (auto-retry $cycle)';
+        });
+      }
+
+      await Future<void>.delayed(const Duration(seconds: 2));
     }
 
-    _isReconnecting = false;
+    _autoReconnectLoopActive = false;
+    debugPrint('[ControlScreen] Auto reconnect loop stopped ($reason)');
   }
 
   String _buildLocalSessionId() {
@@ -1258,6 +1298,8 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   Future<void> _disconnectAndPop() async {
+    _autoReconnectEnabled = false;
+    _allowSystemPop = true;
     unawaited(ForegroundServiceBridge.stop());
     await _connection.disconnect();
 
@@ -1265,7 +1307,6 @@ class _ControlScreenState extends State<ControlScreen>
       return;
     }
 
-    _allowSystemPop = true;
     Navigator.pop(context);
   }
 

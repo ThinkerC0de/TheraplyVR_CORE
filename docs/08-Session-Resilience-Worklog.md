@@ -354,3 +354,19 @@ Go/No-Go decision:
   - `flutter_controller`: `flutter analyze`, `flutter test` PASS:
     - `docs/evidence/20260218_185045/mobile_real_device_smoke/commands/flutter_controller_flutter_analyze.log`
     - `docs/evidence/20260218_185045/mobile_real_device_smoke/commands/flutter_controller_flutter_test.log`
+
+## 16) Auto-reconnect continuity hardening (2026-02-18)
+
+- `OK` `ControlScreen` reconnect policy hardened:
+  - reconnect loop is now triggered automatically on connection loss (not only on app resume),
+  - reconnect retries continue in background until connected or screen exit flow begins,
+  - intentional exit/disconnect now disables auto-reconnect to avoid reconnect while leaving screen,
+  - file: `flutter_controller/lib/screens/control_screen.dart`.
+- `OK` Status UX for reconnect attempts:
+  - disconnected state now surfaces `Disconnected (auto-retry N)` while loop is active.
+- `OK` Validation after reconnect hardening:
+  - `flutter_controller`: `flutter analyze`, `flutter test` PASS.
+  - `admin_console_web`: `flutter analyze`, `flutter test` PASS.
+- `TODO` Manual verification rerun on physical phone:
+  - confirm session continuity without extra operator clicks after Wi-Fi flap,
+  - confirm commands after auto-reconnect still target same remote session.
