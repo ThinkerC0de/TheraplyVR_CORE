@@ -62,22 +62,18 @@ Fields:
   - build flag: `ENABLE_DEV_ENTITLEMENT_BOOTSTRAP=true`
   - intended for local/test environments only.
 
-## Minimal operator panel (current)
+## Operator panel (current)
 
-- Flutter includes a lightweight operator panel for entitlement/grant operations:
-  - screen: `flutter_controller/lib/screens/entitlement_ops_screen.dart`
-  - entry point: students app bar (only when build flag is enabled)
-  - build flag: `ENABLE_ENTITLEMENT_OPS_PANEL=true`
+- Entitlement/grant operator flow is handled in a separate browser module:
+  - `admin_console_web/` (Chrome, Firebase-authenticated)
+  - details: `docs/17-Admin-Console-Web.md`
 - Supported actions:
   - upsert `user_entitlements/{uid}` (role + app license),
   - create grant (`entitlement_grants`),
   - revoke existing grant entries from live list.
-- Separate browser operator module is also available:
-  - `admin_console_web/` (Chrome, Firebase-authenticated)
-  - details: `docs/17-Admin-Console-Web.md`
 
 ## Deferred
 
-- No admin UI yet.
+- No production-grade admin workflow yet (approval/audit/policy enforcement).
 - No backend policy/rules enforcement in this session.
 - No revocation propagation SLA (eventing/push) defined yet.

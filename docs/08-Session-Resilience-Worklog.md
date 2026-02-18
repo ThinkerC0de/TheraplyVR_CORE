@@ -95,7 +95,7 @@ Status legend:
   - app-wide license,
   - per-game license,
   - grant validity windows (`fromUtc` -> `toUtc`) and perpetual grants (contract level).
-- `PARTIAL` `LIC-002` - Admin/system grant path contract added (`entitlement_grants` + `entitlement_grant_requests`) and entitlement login gate now overlays active grants; minimal operator tooling exists both as in-app panel (`ENABLE_ENTITLEMENT_OPS_PANEL=true`) and as separate browser module (`admin_console_web`), but full admin workflow/backend policy is still TODO (temporary dev bootstrap option for missing `user_entitlements` is available via `ENABLE_DEV_ENTITLEMENT_BOOTSTRAP=true`).
+- `PARTIAL` `LIC-002` - Admin/system grant path contract added (`entitlement_grants` + `entitlement_grant_requests`) and entitlement login gate now overlays active grants; operator tooling is provided as separate browser module (`admin_console_web`), while production admin workflow/backend policy is still TODO (temporary dev bootstrap option for missing `user_entitlements` is available via `ENABLE_DEV_ENTITLEMENT_BOOTSTRAP=true`).
 - `PARTIAL` `CAT-001` - Purchased-content state contract drafted and wired in Flutter (`GAME_INSTALL_STATUS` payload + runtime enum + request builders):
   - what user owns,
   - what is installed,

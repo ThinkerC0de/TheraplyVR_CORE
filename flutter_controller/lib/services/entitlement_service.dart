@@ -10,9 +10,6 @@ class EntitlementService {
       FirebaseService.firestore.collection('user_entitlements');
   static final CollectionReference<Map<String, dynamic>> _grantsCollection =
       FirebaseService.firestore.collection('entitlement_grants');
-  static final CollectionReference<Map<String, dynamic>>
-      _grantRequestsCollection =
-      FirebaseService.firestore.collection('entitlement_grant_requests');
   static const bool _strictEntitlementGate = bool.fromEnvironment(
     'STRICT_ENTITLEMENT_GATE',
     defaultValue: false,
@@ -28,81 +25,6 @@ class EntitlementService {
   static bool get isStrictEntitlementGateEnabled => _strictEntitlementGate;
   static bool get isDevEntitlementBootstrapEnabled =>
       _enableDevEntitlementBootstrap;
-
-  static Future<void> upsertUserEntitlement({
-    required String userId,
-    required EntitlementRole role,
-    required LicenseGrant appLicense,
-    Map<String, LicenseGrant> gameLicenses = const <String, LicenseGrant>{},
-    String? policyVersion,
-    String? updatedBy,
-  }) async {
-    final normalizedUserId = userId.trim();
-    if (normalizedUserId.isEmpty) {
-      throw ArgumentError('userId is required');
-    }
-
-    final nowUtc = DateTime.now().toUtc();
-    final gameLicensesWire = gameLicenses.map(
-      (key, value) => MapEntry(key, value.toMap()),
-    );
-    final actor = updatedBy ?? FirebaseAuth.instance.currentUser?.uid ?? 'ops-panel';
-
-    await _entitlementsCollection.doc(normalizedUserId).set(
-      <String, dynamic>{
-        'role': role.wireValue,
-        'appLicense': appLicense.toMap(),
-        'gameLicenses': gameLicensesWire,
-        'policyVersion': policyVersion ?? 'ops-panel-v1',
-        'updatedAtUtc': nowUtc.toIso8601String(),
-        'updatedBy': actor,
-      },
-      SetOptions(merge: true),
-    );
-  }
-
-  static Stream<EntitlementAccess?> watchEntitlementProfile(String userId) {
-    final normalizedUserId = userId.trim();
-    if (normalizedUserId.isEmpty) {
-      return Stream<EntitlementAccess?>.value(null);
-    }
-
-    return _entitlementsCollection.doc(normalizedUserId).snapshots().map(
-      (docSnapshot) {
-        if (!docSnapshot.exists) {
-          return null;
-        }
-
-        final payload = docSnapshot.data() ?? <String, dynamic>{};
-        return EntitlementAccess.fromBackend(
-          data: payload,
-          sourceTag: 'firestore:user_entitlements/$normalizedUserId',
-        );
-      },
-    );
-  }
-
-  static Stream<List<EntitlementGrantAssignment>> watchGrantAssignmentsForUser(
-    String userId,
-  ) {
-    final normalizedUserId = userId.trim();
-    if (normalizedUserId.isEmpty) {
-      return Stream<List<EntitlementGrantAssignment>>.value(
-        <EntitlementGrantAssignment>[],
-      );
-    }
-
-    return _grantsCollection
-        .where('granteeUserId', isEqualTo: normalizedUserId)
-        .snapshots()
-        .map((querySnapshot) {
-      final grants = querySnapshot.docs
-          .map(EntitlementGrantAssignment.fromFirestore)
-          .toList();
-      grants.sort((a, b) => b.assignedAtUtc.compareTo(a.assignedAtUtc));
-      return grants;
-    });
-  }
 
   static Future<bool> tryBootstrapDevelopmentEntitlement(User user) async {
     if (!_enableDevEntitlementBootstrap) {
@@ -291,24 +213,6 @@ class EntitlementService {
       sourceTag: '${baseAccess.sourceTag}+grants',
       policyVersion: baseAccess.policyVersion,
     );
-  }
-
-  static Future<String> submitGrantRequest({
-    required EntitlementGrantRequest request,
-  }) async {
-    final requestId =
-        request.requestId.isNotEmpty ? request.requestId : _grantRequestsCollection.doc().id;
-    await _grantRequestsCollection.doc(requestId).set(request.toFirestore());
-    return requestId;
-  }
-
-  static Future<String> upsertGrantAssignment({
-    required EntitlementGrantAssignment assignment,
-  }) async {
-    final grantId =
-        assignment.grantId.isNotEmpty ? assignment.grantId : _grantsCollection.doc().id;
-    await _grantsCollection.doc(grantId).set(assignment.toFirestore());
-    return grantId;
   }
 
   static EntitlementGateDecision _buildLegacyFallbackDecision({

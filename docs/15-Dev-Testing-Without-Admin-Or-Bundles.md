@@ -1,18 +1,18 @@
-# Dev Testing Without Admin Panel Or Downloadable Bundles
+# Dev Testing Without Full Admin Backend Or Downloadable Bundles
 
 Date: 2026-02-18  
 Status: active development testing guide.
 
 ## Problem
 
-- No admin panel for managing Firebase entitlements/grants.
+- No production-grade admin backend workflow for entitlements/grants yet.
 - No production content pipeline for downloadable Quest bundles yet.
 
 ## Goal
 
 Keep product work moving with end-to-end testability.
 
-## Entitlement testing path (no admin UI)
+## Entitlement testing path
 
 Option A (default):
 - Keep `STRICT_ENTITLEMENT_GATE=false`.
@@ -22,9 +22,9 @@ Option B (explicit dev bootstrap):
 - Build Flutter with `ENABLE_DEV_ENTITLEMENT_BOOTSTRAP=true`.
 - On first login, app creates missing `user_entitlements/{uid}` with therapist active license profile.
 
-Option C (operator panel in app):
-- Build Flutter with `ENABLE_ENTITLEMENT_OPS_PANEL=true`.
-- In students screen app bar, open `Entitlement Ops` to edit:
+Option C (browser admin console):
+- Run `admin_console_web` in Chrome.
+- Use ops dashboard to edit:
   - `user_entitlements`
   - `entitlement_grants` (create/revoke)
 
