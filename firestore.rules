@@ -1,0 +1,71 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdminOperator() {
+      return isSignedIn() && (
+        request.auth.token.admin_operator == true ||
+        request.auth.token.role == 'admin_operator'
+      );
+    }
+
+    match /user_entitlements/{userId} {
+      allow read: if isSignedIn() && (
+        isAdminOperator() || request.auth.uid == userId
+      );
+      allow create, update, delete: if isAdminOperator();
+    }
+
+    match /entitlement_grants/{grantId} {
+      allow read: if isSignedIn() && (
+        isAdminOperator() || resource.data.granteeUserId == request.auth.uid
+      );
+      allow create, update, delete: if isAdminOperator();
+    }
+
+    match /entitlement_grant_requests/{requestId} {
+      allow read: if isSignedIn() && (
+        isAdminOperator() || resource.data.requestedForUserId == request.auth.uid
+      );
+      allow create, update, delete: if isAdminOperator();
+    }
+
+    // Keep existing mobile student flow stable while allowing admin directory views.
+    match /students/{studentId} {
+      allow read: if isSignedIn();
+      allow create: if isAdminOperator() || (
+        isSignedIn() && request.resource.data.therapistId == request.auth.uid
+      );
+      allow update, delete: if isAdminOperator() || (
+        isSignedIn() && resource.data.therapistId == request.auth.uid
+      );
+    }
+
+    match /student_access_bindings/{bindingId} {
+      allow read: if isSignedIn();
+      allow create: if isAdminOperator() || (
+        isSignedIn() && request.resource.data.grantedBy == request.auth.uid
+      );
+      allow update, delete: if isAdminOperator() || (
+        isSignedIn() && resource.data.grantedBy == request.auth.uid
+      );
+    }
+
+    match /admin_audit_trail/{auditId} {
+      allow read: if isAdminOperator();
+      allow create: if isAdminOperator() &&
+        request.resource.data.actorUid == request.auth.uid &&
+        request.resource.data.actorRole == 'admin_operator' &&
+        request.resource.data.reason is string &&
+        request.resource.data.correlationId is string;
+      allow update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

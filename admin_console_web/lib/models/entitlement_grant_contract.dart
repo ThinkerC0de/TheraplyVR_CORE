@@ -66,6 +66,8 @@ class EntitlementGrantAssignment {
   final DateTime? revokedAtUtc;
   final EntitlementRole? roleOverride;
   final String? note;
+  final String? reason;
+  final String? correlationId;
 
   const EntitlementGrantAssignment({
     required this.grantId,
@@ -80,6 +82,8 @@ class EntitlementGrantAssignment {
     required this.revokedAtUtc,
     required this.roleOverride,
     required this.note,
+    required this.reason,
+    required this.correlationId,
   });
 
   factory EntitlementGrantAssignment.fromFirestore(
@@ -102,6 +106,8 @@ class EntitlementGrantAssignment {
       revokedAtUtc: _toUtcDateTime(data['revokedAtUtc']),
       roleOverride: _parseRoleOrNull(data['role'] as String?),
       note: data['note'] as String?,
+      reason: data['reason'] as String?,
+      correlationId: data['correlationId'] as String?,
     );
   }
 
@@ -118,6 +124,8 @@ class EntitlementGrantAssignment {
       'revokedAtUtc': revokedAtUtc?.toUtc().toIso8601String(),
       'role': roleOverride?.wireValue,
       'note': note,
+      'reason': reason,
+      'correlationId': correlationId,
     };
   }
 

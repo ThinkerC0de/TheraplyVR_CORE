@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_controller/services/firebase_service.dart';
 import 'package:flutter_controller/services/entitlement_service.dart';
 import 'package:flutter_controller/screens/students_screen.dart';
@@ -11,11 +12,52 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _emailController = TextEditingController(text: 'therapist@test.com');
-  final _passwordController = TextEditingController(text: 'Test123!');
+  static const String _lastLoginEmailKey = 'last_login_email_v1';
+
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _isRestoring = true;
   String? _error;
-  
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreLastLoginEmail();
+  }
+
+  Future<void> _restoreLastLoginEmail() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastEmail = prefs.getString(_lastLoginEmailKey);
+      if (!mounted) {
+        return;
+      }
+
+      if (lastEmail != null && lastEmail.trim().isNotEmpty) {
+        _emailController.text = lastEmail.trim();
+      }
+    } catch (_) {
+      // Ignore local cache restore errors, login can still continue manually.
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isRestoring = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _persistLastLoginEmail(String email) async {
+    final normalized = email.trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_lastLoginEmailKey, normalized);
+  }
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -36,6 +78,7 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       
       if (user != null) {
+        await _persistLastLoginEmail(_emailController.text);
         final didBootstrapEntitlement =
             await EntitlementService.tryBootstrapDevelopmentEntitlement(user);
         final gateDecision = await EntitlementService.evaluateLoginGate(user);
@@ -122,30 +165,30 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 48),
               
-              TextField(
-                controller: _emailController,
-                decoration: const InputDecoration(
-                  labelText: 'Email',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.email),
-                ),
-                keyboardType: TextInputType.emailAddress,
-                enabled: !_isLoading,
-              ),
-              const SizedBox(height: 16),
-              
-              TextField(
-                controller: _passwordController,
+               TextField(
+                 controller: _emailController,
+                 decoration: const InputDecoration(
+                   labelText: 'Email',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.email),
+                  ),
+                  keyboardType: TextInputType.emailAddress,
+                 enabled: !_isLoading && !_isRestoring,
+               ),
+               const SizedBox(height: 16),
+               
+               TextField(
+                 controller: _passwordController,
                 decoration: const InputDecoration(
                   labelText: 'Password',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.lock),
-                ),
-                obscureText: true,
-                enabled: !_isLoading,
-                onSubmitted: (_) => _handleLogin(),
-              ),
-              const SizedBox(height: 24),
+                 ),
+                 obscureText: true,
+                 enabled: !_isLoading && !_isRestoring,
+                 onSubmitted: (_) => _handleLogin(),
+               ),
+               const SizedBox(height: 24),
               
               if (_error != null)
                 Padding(
@@ -157,26 +200,28 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
               
-              ElevatedButton(
-                onPressed: _isLoading ? null : _handleLogin,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: _isLoading
-                    ? const SizedBox(
+               ElevatedButton(
+                 onPressed: (_isLoading || _isRestoring) ? null : _handleLogin,
+                 style: ElevatedButton.styleFrom(
+                   padding: const EdgeInsets.symmetric(vertical: 16),
+                 ),
+                 child: _isLoading
+                     ? const SizedBox(
                         height: 20,
                         width: 20,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Text('Login', style: TextStyle(fontSize: 16)),
               ),
-              
-              const SizedBox(height: 16),
-              Text(
-                'Default credentials pre-filled for testing',
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                textAlign: TextAlign.center,
-              ),
+               
+               const SizedBox(height: 16),
+               Text(
+                 _isRestoring
+                     ? 'Restoring last login email...'
+                     : 'Last used email is remembered on this device',
+                 style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                 textAlign: TextAlign.center,
+               ),
             ],
           ),
         ),

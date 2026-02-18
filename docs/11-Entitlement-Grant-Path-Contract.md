@@ -1,7 +1,7 @@
 # Entitlement Grant Path Contract (Draft)
 
 Date: 2026-02-18
-Status: draft, Flutter-side contract + Firestore path only.
+Status: draft, Flutter-side contract + minimal admin rules/audit path.
 
 ## Purpose
 
@@ -30,6 +30,8 @@ Fields:
 - `revokedAtUtc`
 - `role` (optional role override: `THERAPIST` / `PARENT`)
 - `note`
+- `reason` (required in admin operator flow)
+- `correlationId` (required in admin operator flow)
 
 ### `entitlement_grant_requests`
 
@@ -60,7 +62,8 @@ Fields:
 - Existing legacy fallback still allows login when entitlement backend is missing and strict gate is disabled.
 - Optional dev bootstrap path can auto-create missing `user_entitlements/{uid}` document on login:
   - build flag: `ENABLE_DEV_ENTITLEMENT_BOOTSTRAP=true`
-  - intended for local/test environments only.
+  - intended for local/test environments only,
+  - bootstrap write now requires `admin_operator` claim.
 
 ## Operator panel (current)
 
@@ -71,9 +74,33 @@ Fields:
   - upsert `user_entitlements/{uid}` (role + app license),
   - create grant (`entitlement_grants`),
   - revoke existing grant entries from live list.
+- Operator payload requirements:
+  - `reason` (required),
+  - `correlationId` (required, generated in UI and reusable per operation batch).
+
+## Audit trail contract (`admin_audit_trail`)
+
+One immutable document per admin operation.
+
+Fields:
+- `actorUid`
+- `actorEmail`
+- `actorRole` (`admin_operator`)
+- `action` (`UPSERT_USER_ENTITLEMENT`, `UPSERT_GRANT_ASSIGNMENT`, `REVOKE_GRANT_ASSIGNMENT`)
+- `targetCollection`
+- `targetDocumentId`
+- `targetUserId`
+- `occurredAtUtc`
+- `reason`
+- `correlationId`
+- `payloadSummary` (minimal operation summary)
+
+Rules:
+- create/read only for `admin_operator`,
+- no update/delete (append-only audit stream).
 
 ## Deferred
 
-- No production-grade admin workflow yet (approval/audit/policy enforcement).
-- No backend policy/rules enforcement in this session.
+- No production-grade admin workflow yet (approval workflow and secondary reviewer path).
+- Minimal backend policy/rules enforcement implemented; full production policy set still TODO.
 - No revocation propagation SLA (eventing/push) defined yet.

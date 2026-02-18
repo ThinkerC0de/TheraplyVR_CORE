@@ -1,15 +1,18 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_controller/models/entitlement_access.dart';
 import 'package:flutter_controller/models/entitlement_grant_contract.dart';
 import 'package:flutter_controller/services/firebase_service.dart';
 
 class EntitlementService {
-  static final CollectionReference<Map<String, dynamic>>
-      _entitlementsCollection =
-      FirebaseService.firestore.collection('user_entitlements');
-  static final CollectionReference<Map<String, dynamic>> _grantsCollection =
-      FirebaseService.firestore.collection('entitlement_grants');
+  static FirebaseFirestore? _firestoreOverride;
+  static FirebaseFirestore get _firestore =>
+      _firestoreOverride ?? FirebaseService.firestore;
+  static CollectionReference<Map<String, dynamic>> get _entitlementsCollection =>
+      _firestore.collection('user_entitlements');
+  static CollectionReference<Map<String, dynamic>> get _grantsCollection =>
+      _firestore.collection('entitlement_grants');
   static const bool _strictEntitlementGate = bool.fromEnvironment(
     'STRICT_ENTITLEMENT_GATE',
     defaultValue: false,
@@ -26,8 +29,28 @@ class EntitlementService {
   static bool get isDevEntitlementBootstrapEnabled =>
       _enableDevEntitlementBootstrap;
 
+  @visibleForTesting
+  static void setFirestoreInstanceForTesting(FirebaseFirestore firestore) {
+    _firestoreOverride = firestore;
+  }
+
+  @visibleForTesting
+  static void clearFirestoreInstanceForTesting() {
+    _firestoreOverride = null;
+    _activeAccess = null;
+  }
+
   static Future<bool> tryBootstrapDevelopmentEntitlement(User user) async {
     if (!_enableDevEntitlementBootstrap) {
+      return false;
+    }
+
+    final tokenResult = await user.getIdTokenResult();
+    final claims = tokenResult.claims ?? const <String, dynamic>{};
+    final role = (claims['role'] as String?)?.trim().toLowerCase();
+    final isAdminOperator =
+        claims['admin_operator'] == true || role == 'admin_operator';
+    if (!isAdminOperator) {
       return false;
     }
 
@@ -62,10 +85,34 @@ class EntitlementService {
   }
 
   static Future<EntitlementGateDecision> evaluateLoginGate(User user) async {
+    return evaluateLoginGateForUserId(user.uid);
+  }
+
+  @visibleForTesting
+  static Future<EntitlementGateDecision> evaluateLoginGateForUserId(
+    String userId,
+  ) async {
+    final normalizedUserId = userId.trim();
+    if (normalizedUserId.isEmpty) {
+      if (_strictEntitlementGate) {
+        return _buildStrictDeniedDecision(
+          reasonCode: 'ENTITLEMENT_RECORD_REQUIRED',
+          message: 'Entitlement profile is required and missing. Contact your administrator.',
+        );
+      }
+
+      final fallbackDecision = _buildLegacyFallbackDecision(
+        reasonCode: 'LEGACY_FALLBACK_NO_RECORD',
+        message: 'No entitlement profile found. Legacy therapist access applied.',
+      );
+      _activeAccess = fallbackDecision.access;
+      return fallbackDecision;
+    }
+
     final nowUtc = DateTime.now().toUtc();
 
     try {
-      final docSnapshot = await _entitlementsCollection.doc(user.uid).get();
+      final docSnapshot = await _entitlementsCollection.doc(normalizedUserId).get();
       if (!docSnapshot.exists) {
         if (_strictEntitlementGate) {
           return _buildStrictDeniedDecision(
@@ -87,10 +134,10 @@ class EntitlementService {
       final payload = docSnapshot.data() ?? <String, dynamic>{};
       final access = EntitlementAccess.fromBackend(
         data: payload,
-        sourceTag: 'firestore:user_entitlements/${user.uid}',
+        sourceTag: 'firestore:user_entitlements/$normalizedUserId',
       );
       final grants = await _fetchEffectiveGrantsForUser(
-        userId: user.uid,
+        userId: normalizedUserId,
         atUtc: nowUtc,
       );
       final effectiveAccess = _applyGrantsToAccess(

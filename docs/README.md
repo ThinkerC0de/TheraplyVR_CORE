@@ -19,6 +19,10 @@
 - [15-Dev-Testing-Without-Admin-Or-Bundles.md](15-Dev-Testing-Without-Admin-Or-Bundles.md)
 - [16-Project-Completion-Sprint-Plan.md](16-Project-Completion-Sprint-Plan.md)
 - [17-Admin-Console-Web.md](17-Admin-Console-Web.md)
+- [18-Sprint-1-Closure-Checklist.md](18-Sprint-1-Closure-Checklist.md)
+- [19-Mobile-MVP-Completion-Tasklist.md](19-Mobile-MVP-Completion-Tasklist.md)
+- [20-Unity-Editor-MVP-Completion-Tasklist.md](20-Unity-Editor-MVP-Completion-Tasklist.md)
+- [21-Integrated-Validation-And-GoNoGo.md](21-Integrated-Validation-And-GoNoGo.md)
 
 ## Usage Pattern
 1. Read roadmap.

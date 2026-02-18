@@ -15,6 +15,14 @@ class FirebaseService {
       String.fromEnvironment('FIREBASE_STORAGE_BUCKET', defaultValue: '');
   static const String _measurementId =
       String.fromEnvironment('FIREBASE_MEASUREMENT_ID', defaultValue: '');
+  static const FirebaseOptions _defaultDemoWebOptions = FirebaseOptions(
+    apiKey: 'AIzaSyDTF1GYeGpf37zYZoXuQNZzCWql9lXpPCQ',
+    appId: '1:573413948719:web:4ded2a1b942e7265d435da',
+    messagingSenderId: '573413948719',
+    projectId: 'theraply-vr-demo',
+    authDomain: 'theraply-vr-demo.firebaseapp.com',
+    storageBucket: 'theraply-vr-demo.firebasestorage.app',
+  );
 
   static bool get hasWebOptions {
     return _apiKey.isNotEmpty &&
@@ -25,24 +33,26 @@ class FirebaseService {
 
   static Future<void> initialize() async {
     try {
-      if (kIsWeb && hasWebOptions) {
-        await Firebase.initializeApp(
-          options: FirebaseOptions(
-            apiKey: _apiKey,
-            appId: _appId,
-            messagingSenderId: _messagingSenderId,
-            projectId: _projectId,
-            authDomain: _authDomain.isEmpty ? null : _authDomain,
-            storageBucket: _storageBucket.isEmpty ? null : _storageBucket,
-            measurementId: _measurementId.isEmpty ? null : _measurementId,
-          ),
-        );
+      if (kIsWeb) {
+        final options = hasWebOptions
+            ? FirebaseOptions(
+                apiKey: _apiKey,
+                appId: _appId,
+                messagingSenderId: _messagingSenderId,
+                projectId: _projectId,
+                authDomain: _authDomain.isEmpty ? null : _authDomain,
+                storageBucket: _storageBucket.isEmpty ? null : _storageBucket,
+                measurementId: _measurementId.isEmpty ? null : _measurementId,
+              )
+            : _defaultDemoWebOptions;
+        await Firebase.initializeApp(options: options);
       } else {
         await Firebase.initializeApp();
       }
     } catch (e) {
       throw Exception(
-        'Firebase init failed. For web pass dart-defines FIREBASE_API_KEY/FIREBASE_APP_ID/'
+        'Firebase init failed. For web either use fallback demo project '
+        '(theraply-vr-demo) or pass dart-defines FIREBASE_API_KEY/FIREBASE_APP_ID/'
         'FIREBASE_MESSAGING_SENDER_ID/FIREBASE_PROJECT_ID. Details: $e',
       );
     }
@@ -65,4 +75,20 @@ class FirebaseService {
 
   static Stream<User?> authStateChanges() => auth.authStateChanges();
   static User? get currentUser => auth.currentUser;
+
+  static Future<bool> isCurrentUserAdminOperator({
+    bool forceRefresh = false,
+  }) async {
+    final user = currentUser;
+    if (user == null) {
+      return false;
+    }
+
+    final tokenResult = await user.getIdTokenResult(forceRefresh);
+    final claims = tokenResult.claims ?? const <String, dynamic>{};
+    final role = (claims['role'] as String?)?.trim().toLowerCase();
+    final adminOperatorFlag = claims['admin_operator'] == true;
+
+    return adminOperatorFlag || role == 'admin_operator';
+  }
 }

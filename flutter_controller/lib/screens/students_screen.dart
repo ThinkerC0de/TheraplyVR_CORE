@@ -19,11 +19,26 @@ class _StudentsScreenState extends State<StudentsScreen> {
   Widget build(BuildContext context) {
     final canManageStudents =
         EntitlementService.activeAccess?.role == EntitlementRole.therapist;
+    final currentUser = FirebaseService.currentUser;
+    final accountLabel = currentUser?.email ?? currentUser?.uid ?? 'unknown';
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Students'),
         actions: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 220),
+                child: Text(
+                  accountLabel,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.sync),
             onPressed: _runReconciliation,

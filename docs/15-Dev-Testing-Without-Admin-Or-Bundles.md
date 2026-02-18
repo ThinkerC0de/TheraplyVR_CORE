@@ -21,12 +21,14 @@ Option A (default):
 Option B (explicit dev bootstrap):
 - Build Flutter with `ENABLE_DEV_ENTITLEMENT_BOOTSTRAP=true`.
 - On first login, app creates missing `user_entitlements/{uid}` with therapist active license profile.
+- Note: with hardened `firestore.rules`, this write is denied unless account has `admin_operator`.
 
 Option C (browser admin console):
 - Run `admin_console_web` in Chrome.
 - Use ops dashboard to edit:
   - `user_entitlements`
   - `entitlement_grants` (create/revoke)
+  - include `reason` + `correlationId` for each operation
 
 ## Content delivery testing path (no real bundles)
 

@@ -95,7 +95,13 @@ Status legend:
   - app-wide license,
   - per-game license,
   - grant validity windows (`fromUtc` -> `toUtc`) and perpetual grants (contract level).
-- `PARTIAL` `LIC-002` - Admin/system grant path contract added (`entitlement_grants` + `entitlement_grant_requests`) and entitlement login gate now overlays active grants; operator tooling is provided as separate browser module (`admin_console_web`), while production admin workflow/backend policy is still TODO (temporary dev bootstrap option for missing `user_entitlements` is available via `ENABLE_DEV_ENTITLEMENT_BOOTSTRAP=true`).
+- `PARTIAL` `LIC-002` - Admin/system grant path now includes:
+  - minimal backend policy in `firestore.rules` (`user_entitlements` + `entitlement_grants` write only for `admin_operator`),
+  - role gate in `admin_console_web` (`role=admin_operator` or `admin_operator=true` claim),
+  - immutable admin audit stream (`admin_audit_trail`) with required `reason` + `correlationId`,
+  - mobile dev bootstrap write path now requires `admin_operator` claim (no therapist/operatorless write),
+  - mobile-side smoke coverage for "web entitlement change -> next login decision" (`flutter_controller/test/entitlement_admin_e2e_smoke_test.dart`);
+  full production workflow (approval chain, retention policy, claim provisioning runbook) remains TODO.
 - `PARTIAL` `CAT-001` - Purchased-content state contract drafted and wired in Flutter (`GAME_INSTALL_STATUS` payload + runtime enum + request builders):
   - what user owns,
   - what is installed,
@@ -107,3 +113,52 @@ Status legend:
   - irreversible or strongly controlled pseudonymous IDs in analytics pipelines,
   - no direct patient identifiers in gameplay telemetry payloads (runtime guard now blocks forbidden keys/values before dispatch; crypto/KMS still TODO).
 - `PARTIAL` `SEC-002` - Compliance hardening checklist drafted (`docs/14-Compliance-Hardening-Checklist.md`) covering access control, retention, encryption, audit trail, breach-response posture; implementation/audit evidence still TODO before medical-study rollout.
+
+## 9) Sprint update: Admin entitlement hardening (2026-02-18)
+
+- `OK` Implemented minimal Firestore rules + role enforcement:
+  - `firestore.rules`,
+  - `firebase.json`,
+  - `admin_console_web` claim gate before dashboard access.
+- `OK` Added audit trail for admin operations:
+  - payload contract update with `reason` and `correlationId`,
+  - append-only `admin_audit_trail` writes in admin service,
+  - service tests in `admin_console_web/test/entitlement_admin_service_test.dart`.
+- `OK` Added CMS-lite testing UX in web admin panel:
+  - quick action buttons (`grant app access`, `revoke app access`),
+  - `Use my UID` helper,
+  - fallback `reason` auto-fill to reduce operator friction in manual testing.
+- `OK` Reduced web startup friction for test env:
+  - `admin_console_web` now has built-in Firebase web fallback config for `theraply-vr-demo`,
+  - panel can run with plain `flutter run -d chrome` (still supports project override via `dart-define`).
+- `OK` Added E2E smoke coverage (web write contract -> mobile login gate effect):
+  - `flutter_controller/test/entitlement_admin_e2e_smoke_test.dart`.
+- `OK` Improved mobile login testability to avoid false revoke results:
+  - `flutter_controller` login now remembers last used email locally (no hardcoded therapist default on restart),
+  - `Students` screen app bar now shows active signed-in account (email/uid) for quick verification.
+- `OK` Expanded admin web panel from raw form to tabbed operator directory:
+  - `Operations` (existing entitlement/grant actions),
+  - `Therapists/Parents` list (from `user_entitlements`),
+  - `Children` list (from `students`),
+  - `Games` list (known catalog + GAME grant statistics from `entitlement_grants`).
+- `OK` Validation commands (local):
+  - `admin_console_web`: `flutter analyze`, `flutter test`,
+  - `flutter_controller`: `flutter analyze`, `flutter test`.
+
+## 10) Sprint 1 closeout and next execution queues (2026-02-18)
+
+- `READY` Sprint 1 closeout checklist:
+  - `docs/18-Sprint-1-Closure-Checklist.md`
+- `READY` Mobile MVP completion queue:
+  - `docs/19-Mobile-MVP-Completion-Tasklist.md`
+- `READY` Unity Editor MVP completion queue:
+  - `docs/20-Unity-Editor-MVP-Completion-Tasklist.md`
+- `READY` Integrated validation + decision gate:
+  - `docs/21-Integrated-Validation-And-GoNoGo.md`
+
+Execution order for next chat:
+1. Close Sprint 1 sign-off items from `docs/18`.
+2. Execute mobile MVP tasks from `docs/19`.
+3. Execute Unity Editor tasks from `docs/20`.
+4. Run integrated validation gate from `docs/21`.
+5. Make Go/No-Go decision and re-prioritize next sprint scope.
