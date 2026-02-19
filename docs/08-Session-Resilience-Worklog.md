@@ -367,9 +367,10 @@ Go/No-Go decision:
 - `OK` Validation after reconnect hardening:
   - `flutter_controller`: `flutter analyze`, `flutter test` PASS.
   - `admin_console_web`: `flutter analyze`, `flutter test` PASS.
-- `TODO` Manual verification rerun on physical phone:
-  - confirm session continuity without extra operator clicks after Wi-Fi flap,
-  - confirm commands after auto-reconnect still target same remote session.
+- `OK` Manual verification rerun on physical phone completed (operator note captured 2026-02-19):
+  - during active game, phone internet was disabled for ~10 seconds and restored,
+  - mobile reconnected automatically and stream recovered without extra operator flow resets,
+  - evidence: `docs/evidence/20260219_104215/manual_phone_unity_validation/notes/SUMMARY.md`.
 
 ## 17) Game flow hardening: mobile lock rules + Unity terminal sync (2026-02-18)
 
@@ -411,10 +412,12 @@ Go/No-Go decision:
     - `docs/evidence/20260218_200034/game_runtime_flow_hardening/commands/admin_console_web_flutter_analyze.log`
     - `docs/evidence/20260218_200034/game_runtime_flow_hardening/commands/admin_console_web_flutter_test.log`
     - `docs/evidence/20260218_200034/game_runtime_flow_hardening/notes/SUMMARY.md`
-- `TODO` Manual operator confirmation still required:
-  - phone + Unity run to confirm self-finish cube flow updates mobile without manual refresh,
-  - verify `Wroc` from setup unloads active game scene in live run,
-  - verify reconnect continuity targets same active session after temporary network flap.
+- `PARTIAL` Manual operator confirmation update (2026-02-19):
+  - reconnect continuity in live phone+Unity run was re-confirmed (temporary network drop + auto-recover),
+  - evidence: `docs/evidence/20260219_104215/manual_phone_unity_validation/notes/SUMMARY.md`.
+- `TODO` Remaining manual checks for this lane:
+  - explicitly capture self-finish cube flow -> mobile terminal state update without manual refresh,
+  - explicitly capture `Wroc` from setup -> active game scene unload in live run.
 
 ## 18) Mobile operator UX/IA iteration 1 (2026-02-18)
 
@@ -444,8 +447,9 @@ Go/No-Go decision:
     - `flutter test` PASS -> `docs/evidence/20260218_201049/mobile_operator_ux_iteration1/commands/flutter_controller_flutter_test_post_control_iteration1.log`
   - summary note:
     - `docs/evidence/20260218_201049/mobile_operator_ux_iteration1/notes/SUMMARY.md`
-- `TODO` Manual operator validation remains intentionally deferred for next lane:
-  - no phone + Unity manual pass executed in this iteration.
+- `OK` Manual operator validation executed in later follow-up lane (2026-02-19):
+  - reconnect and preview stability checks captured on live phone+Unity path,
+  - evidence: `docs/evidence/20260219_104215/manual_phone_unity_validation/notes/SUMMARY.md`.
 
 ## 19) Mobile operator UX/IA iteration 2 (2026-02-18)
 
@@ -476,7 +480,9 @@ Go/No-Go decision:
     - `flutter test` PASS -> `docs/evidence/20260218_205006/mobile_operator_ux_iteration2/commands/flutter_controller_flutter_test_post_control_split.log`
   - summary note:
     - `docs/evidence/20260218_205006/mobile_operator_ux_iteration2/notes/SUMMARY.md`
-- `TODO` Manual phone + Unity validation remains deferred in this iteration by design.
+- `OK` Manual phone + Unity validation executed post-iteration (2026-02-19 follow-up):
+  - active session reconnect + stream recovery observed in operator run,
+  - evidence: `docs/evidence/20260219_104215/manual_phone_unity_validation/notes/SUMMARY.md`.
 
 ## 20) Mobile media preview toggle hotfix (2026-02-18)
 
@@ -495,5 +501,6 @@ Go/No-Go decision:
   - `flutter test` PASS -> `docs/evidence/20260218_211250/mobile_operator_ux_iteration2_preview_toggle_fix/commands/flutter_controller_flutter_test.log`
   - summary:
     - `docs/evidence/20260218_211250/mobile_operator_ux_iteration2_preview_toggle_fix/notes/SUMMARY.md`
-- `TODO` Manual phone + Unity confirmation still required for this specific regression:
-  - perform repeated preview expand/collapse cycles in both catalog and game-session screens.
+- `OK` Manual confirmation for preview-toggle regression completed:
+  - repeated preview collapse/expand stayed stable in operator run (no black preview recurrence),
+  - evidence: `docs/evidence/20260219_104215/manual_phone_unity_validation/notes/SUMMARY.md`.
