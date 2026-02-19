@@ -91,6 +91,9 @@ class _ControlScreenState extends State<ControlScreen>
 
   static const String _demoCubeGameId = 'demo_cube_clicker';
   static const String _pulseTargetGameId = 'pulse_target_tap';
+  static const Duration _recentlyEndedSessionTtl = Duration(seconds: 20);
+  static final Map<String, DateTime> _recentlyEndedSessionIds =
+      <String, DateTime>{};
   static const List<String> _demoLevelModes = <String>[
     'basic',
     'alternate_colors',
@@ -109,6 +112,8 @@ class _ControlScreenState extends State<ControlScreen>
   bool _autoReconnectLoopActive = false;
   bool _autoReconnectEnabled = true;
   bool _isVideoPreviewExpanded = false;
+  bool _optimisticRuntimeActive = false;
+  bool _optimisticRuntimePaused = false;
 
   SessionLifecycleState? _sessionLifecycleState;
   TherapistRuntimeStatus? _runtimeStatus;
@@ -123,6 +128,8 @@ class _ControlScreenState extends State<ControlScreen>
   late String _selectedGameId;
   String? _remoteSessionIdPendingDecision;
   String? _remoteActiveGameId;
+  String? _lastSessionStateUpdateSessionId;
+  String? _lastRuntimeStatusSessionId;
 
   _WorkflowStep _workflowStep = _WorkflowStep.gameCatalog;
   bool _resumeFromSavedPreference = false;
@@ -196,6 +203,9 @@ class _ControlScreenState extends State<ControlScreen>
       );
       final watchdogHeartbeat =
           SessionWatchdogHeartbeatSignal.tryFromNetworkMessage(message);
+      final watchdogSessionState = SessionLifecycleState.tryParse(
+        watchdogHeartbeat?.sessionState,
+      );
       final contentStatusSignal =
           ContentInstallStatusSignal.tryFromNetworkMessage(message);
 
@@ -205,22 +215,94 @@ class _ControlScreenState extends State<ControlScreen>
               watchdogHeartbeat != null)) {
         setState(() {
           if (sessionUpdate != null) {
+            _lastSessionStateUpdateSessionId = sessionUpdate.sessionId;
             _sessionLifecycleState = sessionUpdate.state;
+            if (SessionRecoveryPolicy.isTerminalState(sessionUpdate.state)) {
+              _optimisticRuntimeActive = false;
+              _optimisticRuntimePaused = false;
+              _remoteActiveGameId = null;
+            } else if (sessionUpdate.state ==
+                SessionLifecycleState.inProgress) {
+              _optimisticRuntimeActive = true;
+              _optimisticRuntimePaused = false;
+            } else if (sessionUpdate.state == SessionLifecycleState.paused) {
+              _optimisticRuntimeActive = true;
+              _optimisticRuntimePaused = true;
+            } else if (sessionUpdate.state ==
+                SessionLifecycleState.interrupted) {
+              _optimisticRuntimeActive = true;
+            }
           }
 
           if (runtimeUpdate != null) {
+            _lastRuntimeStatusSessionId = runtimeUpdate.sessionId;
             _runtimeStatus = runtimeUpdate.status;
+            switch (runtimeUpdate.status) {
+              case TherapistRuntimeStatus.playing:
+                _optimisticRuntimeActive = true;
+                _optimisticRuntimePaused = false;
+                break;
+              case TherapistRuntimeStatus.paused:
+                _optimisticRuntimeActive = true;
+                _optimisticRuntimePaused = true;
+                break;
+              case TherapistRuntimeStatus.interrupted:
+              case TherapistRuntimeStatus.syncPending:
+                _optimisticRuntimeActive = true;
+                break;
+              case TherapistRuntimeStatus.connected:
+                _optimisticRuntimePaused = false;
+                break;
+            }
           }
 
           if (watchdogHeartbeat != null) {
             final activeGameId = watchdogHeartbeat.activeGameId.trim();
             if (activeGameId.isNotEmpty) {
               _remoteActiveGameId = activeGameId;
+              _optimisticRuntimeActive = true;
+            } else {
+              _remoteActiveGameId = null;
+              if (sessionUpdate == null && runtimeUpdate == null) {
+                _optimisticRuntimeActive = false;
+                _optimisticRuntimePaused = false;
+              }
+            }
+
+            final activeGameState =
+                watchdogHeartbeat.activeGameState.trim().toUpperCase();
+            if (activeGameState == 'PAUSED') {
+              _optimisticRuntimePaused = true;
+            } else if (activeGameState == 'PLAYING' ||
+                activeGameState == 'RUNNING' ||
+                activeGameState == 'IN_PROGRESS') {
+              _optimisticRuntimePaused = false;
+            }
+
+            if (watchdogSessionState != null &&
+                SessionRecoveryPolicy.isTerminalState(watchdogSessionState)) {
+              _optimisticRuntimeActive = false;
+              _optimisticRuntimePaused = false;
+              _remoteActiveGameId = null;
             }
           }
         });
 
-        _handlePotentialSessionDecisionGate(sessionUpdate, runtimeUpdate);
+        if (sessionUpdate != null &&
+            SessionRecoveryPolicy.isTerminalState(sessionUpdate.state)) {
+          _markSessionAsRecentlyEnded(sessionUpdate.sessionId);
+        }
+        if (watchdogHeartbeat != null &&
+            watchdogSessionState != null &&
+            SessionRecoveryPolicy.isTerminalState(watchdogSessionState)) {
+          _markSessionAsRecentlyEnded(watchdogHeartbeat.sessionId);
+        }
+
+        _handlePotentialSessionDecisionGate(
+          sessionUpdate,
+          runtimeUpdate,
+          watchdogHeartbeat,
+        );
         _handleSessionTerminalStateFeedback(
           previousState: previousSessionState,
           sessionUpdate: sessionUpdate,
@@ -313,6 +395,47 @@ class _ControlScreenState extends State<ControlScreen>
     return 'mobile-${widget.student.id}-${DateTime.now().toUtc().millisecondsSinceEpoch}';
   }
 
+  void _pruneRecentlyEndedSessions() {
+    final nowUtc = DateTime.now().toUtc();
+    final staleIds = <String>[];
+    _recentlyEndedSessionIds.forEach((sessionId, endedAtUtc) {
+      if (nowUtc.difference(endedAtUtc) > _recentlyEndedSessionTtl) {
+        staleIds.add(sessionId);
+      }
+    });
+    for (final sessionId in staleIds) {
+      _recentlyEndedSessionIds.remove(sessionId);
+    }
+  }
+
+  void _markSessionAsRecentlyEnded(String? sessionId) {
+    final normalizedSessionId = sessionId?.trim() ?? '';
+    if (normalizedSessionId.isEmpty) {
+      return;
+    }
+
+    _pruneRecentlyEndedSessions();
+    _recentlyEndedSessionIds[normalizedSessionId] = DateTime.now().toUtc();
+  }
+
+  bool _wasSessionRecentlyEnded(String sessionId) {
+    _pruneRecentlyEndedSessions();
+    return _recentlyEndedSessionIds.containsKey(sessionId);
+  }
+
+  bool _isRuntimeStatusNonTerminal(TherapistRuntimeStatus? status) {
+    switch (status) {
+      case TherapistRuntimeStatus.playing:
+      case TherapistRuntimeStatus.paused:
+      case TherapistRuntimeStatus.interrupted:
+      case TherapistRuntimeStatus.syncPending:
+        return true;
+      case TherapistRuntimeStatus.connected:
+      case null:
+        return false;
+    }
+  }
+
   _GameCatalogEntry get _selectedGameEntry {
     for (final entry in _gameCatalog) {
       if (entry.gameId == _selectedGameId) {
@@ -327,10 +450,21 @@ class _ControlScreenState extends State<ControlScreen>
   bool get _isPulseTargetGameSelected => _selectedGameId == _pulseTargetGameId;
 
   bool get _isGameRuntimeActive {
+    final activeGameId = _remoteActiveGameId?.trim() ?? '';
+    final inferredFromHeartbeat = activeGameId.isNotEmpty;
+
     return _runtimeStatus == TherapistRuntimeStatus.playing ||
         _runtimeStatus == TherapistRuntimeStatus.paused ||
         _sessionLifecycleState == SessionLifecycleState.inProgress ||
-        _sessionLifecycleState == SessionLifecycleState.paused;
+        _sessionLifecycleState == SessionLifecycleState.paused ||
+        inferredFromHeartbeat ||
+        _optimisticRuntimeActive;
+  }
+
+  bool get _isGameRuntimePaused {
+    return _runtimeStatus == TherapistRuntimeStatus.paused ||
+        _sessionLifecycleState == SessionLifecycleState.paused ||
+        _optimisticRuntimePaused;
   }
 
   bool get _isSetupLockedByRuntime => _isGameRuntimeActive;
@@ -596,15 +730,64 @@ class _ControlScreenState extends State<ControlScreen>
   void _handlePotentialSessionDecisionGate(
     SessionStateUpdateSignal? sessionUpdate,
     RuntimeStatusUpdateSignal? runtimeUpdate,
+    SessionWatchdogHeartbeatSignal? watchdogHeartbeat,
   ) {
-    final remoteSessionId =
-        _resolveRemoteSessionId(sessionUpdate, runtimeUpdate);
+    final remoteSessionId = _resolveRemoteSessionId(
+        sessionUpdate, runtimeUpdate, watchdogHeartbeat);
     if (remoteSessionId == null || remoteSessionId.isEmpty) {
       return;
     }
 
-    final remoteState = sessionUpdate?.state ?? _sessionLifecycleState;
-    final remoteRuntime = runtimeUpdate?.status ?? _runtimeStatus;
+    final heartbeatState = SessionLifecycleState.tryParse(
+      watchdogHeartbeat?.sessionState,
+    );
+    SessionLifecycleState? remoteState = sessionUpdate?.state ?? heartbeatState;
+    if (remoteState == null &&
+        _lastSessionStateUpdateSessionId == remoteSessionId) {
+      remoteState = _sessionLifecycleState;
+    }
+
+    TherapistRuntimeStatus? remoteRuntime =
+        runtimeUpdate?.status ?? watchdogHeartbeat?.runtimeStatus;
+    if (remoteRuntime == null &&
+        _lastRuntimeStatusSessionId == remoteSessionId) {
+      remoteRuntime = _runtimeStatus;
+    }
+
+    final hasStrongNonTerminalState = remoteState != null &&
+        SessionRecoveryPolicy.shouldGateBySessionState(remoteState);
+    final hasStrongNonTerminalRuntime =
+        _isRuntimeStatusNonTerminal(remoteRuntime);
+
+    if (_wasSessionRecentlyEnded(remoteSessionId) &&
+        !hasStrongNonTerminalState &&
+        !hasStrongNonTerminalRuntime) {
+      if (_requiresSessionDecision && mounted) {
+        setState(() {
+          _requiresSessionDecision = false;
+          _remoteSessionIdPendingDecision = null;
+        });
+      }
+      return;
+    }
+    if (_wasSessionRecentlyEnded(remoteSessionId) &&
+        (hasStrongNonTerminalState || hasStrongNonTerminalRuntime)) {
+      _recentlyEndedSessionIds.remove(remoteSessionId);
+    }
+
+    final isRemoteTerminal = remoteState != null &&
+        SessionRecoveryPolicy.isTerminalState(remoteState);
+    if (isRemoteTerminal) {
+      _markSessionAsRecentlyEnded(remoteSessionId);
+      if (_requiresSessionDecision && mounted) {
+        setState(() {
+          _requiresSessionDecision = false;
+          _remoteSessionIdPendingDecision = null;
+        });
+      }
+      return;
+    }
+
     final needsDecision = SessionRecoveryPolicy.shouldRequireDecision(
       localSessionId: _activeSessionId,
       remoteSessionId: remoteSessionId,
@@ -619,7 +802,9 @@ class _ControlScreenState extends State<ControlScreen>
       return;
     }
 
-    final shouldUpdateActiveSession = remoteSessionId != _activeSessionId;
+    final shouldUpdateActiveSession =
+        remoteState == SessionLifecycleState.created &&
+            remoteSessionId != _activeSessionId;
     final shouldClearDecisionState = _requiresSessionDecision;
 
     if (!shouldUpdateActiveSession && !shouldClearDecisionState) {
@@ -680,6 +865,7 @@ class _ControlScreenState extends State<ControlScreen>
   String? _resolveRemoteSessionId(
     SessionStateUpdateSignal? sessionUpdate,
     RuntimeStatusUpdateSignal? runtimeUpdate,
+    SessionWatchdogHeartbeatSignal? watchdogHeartbeat,
   ) {
     final fromSessionState = sessionUpdate?.sessionId ?? '';
     if (fromSessionState.isNotEmpty) {
@@ -689,6 +875,11 @@ class _ControlScreenState extends State<ControlScreen>
     final fromRuntimeStatus = runtimeUpdate?.sessionId ?? '';
     if (fromRuntimeStatus.isNotEmpty) {
       return fromRuntimeStatus;
+    }
+
+    final fromWatchdogHeartbeat = watchdogHeartbeat?.sessionId ?? '';
+    if (fromWatchdogHeartbeat.isNotEmpty) {
+      return fromWatchdogHeartbeat;
     }
 
     return null;
@@ -712,7 +903,9 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     final remoteSessionId = _remoteSessionIdPendingDecision;
-    if (remoteSessionId == null || remoteSessionId.isEmpty) {
+    if (remoteSessionId == null ||
+        remoteSessionId.isEmpty ||
+        !_requiresSessionDecision) {
       _isSessionDecisionDialogOpen = false;
       return;
     }
@@ -908,6 +1101,7 @@ class _ControlScreenState extends State<ControlScreen>
         payload: _buildCriticalPayload(CriticalCommandIds.endSession),
         expiresAtUtc: DateTime.now().toUtc().add(const Duration(seconds: 30)),
       );
+      _markSessionAsRecentlyEnded(remoteSessionId);
 
       if (!mounted) {
         return;
@@ -938,7 +1132,7 @@ class _ControlScreenState extends State<ControlScreen>
     }
   }
 
-  Future<void> _sendCommand(
+  Future<bool> _sendCommand(
     String command, {
     Map<String, dynamic>? extraPayload,
     bool showSuccessSnack = true,
@@ -946,7 +1140,7 @@ class _ControlScreenState extends State<ControlScreen>
     if (_gameScopedCriticalCommands.contains(command) &&
         _selectedGameId.trim().isEmpty) {
       if (!mounted) {
-        return;
+        return false;
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -955,12 +1149,12 @@ class _ControlScreenState extends State<ControlScreen>
           backgroundColor: Colors.orange,
         ),
       );
-      return;
+      return false;
     }
 
     if (_requiresSessionDecision && command != CriticalCommandIds.endSession) {
       if (!mounted) {
-        return;
+        return false;
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -970,7 +1164,7 @@ class _ControlScreenState extends State<ControlScreen>
         ),
       );
       _promptSessionDecisionIfNeeded();
-      return;
+      return false;
     }
 
     try {
@@ -985,8 +1179,26 @@ class _ControlScreenState extends State<ControlScreen>
         await _connection.sendCommand(command, null);
       }
 
+      if (mounted) {
+        setState(() {
+          if (command == CriticalCommandIds.startGame ||
+              command == CriticalCommandIds.resumeGame) {
+            _optimisticRuntimeActive = true;
+            _optimisticRuntimePaused = false;
+          } else if (command == CriticalCommandIds.pauseGame) {
+            _optimisticRuntimeActive = true;
+            _optimisticRuntimePaused = true;
+          } else if (command == CriticalCommandIds.stopGame ||
+              command == CriticalCommandIds.endSession) {
+            _optimisticRuntimeActive = false;
+            _optimisticRuntimePaused = false;
+            _remoteActiveGameId = null;
+          }
+        });
+      }
+
       if (!mounted || !showSuccessSnack) {
-        return;
+        return true;
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -995,9 +1207,10 @@ class _ControlScreenState extends State<ControlScreen>
           duration: const Duration(seconds: 1),
         ),
       );
+      return true;
     } catch (e) {
       if (!mounted) {
-        return;
+        return false;
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1006,6 +1219,7 @@ class _ControlScreenState extends State<ControlScreen>
           backgroundColor: Colors.red,
         ),
       );
+      return false;
     }
   }
 
@@ -1142,12 +1356,43 @@ class _ControlScreenState extends State<ControlScreen>
       return;
     }
 
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: const Text('Restart game?'),
+              content: const Text(
+                'Current round will be stopped and started from the beginning. Continue?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Restart'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+
+    if (!confirmed) {
+      return;
+    }
+
     await _runPrimaryAction(() async {
       _resumeFromSavedPreference = false;
-      await _sendCommand(
+      final stopSent = await _sendCommand(
         CriticalCommandIds.stopGame,
         showSuccessSnack: false,
       );
+      if (!stopSent) {
+        return;
+      }
+
       await _sendCommand(
         CriticalCommandIds.startGame,
         extraPayload: const <String, dynamic>{
@@ -1209,6 +1454,24 @@ class _ControlScreenState extends State<ControlScreen>
     });
   }
 
+  Future<bool> _sendEndSessionWithConfirmation() async {
+    if (!_isConnected) {
+      return true;
+    }
+
+    final sessionIdToEnd = _activeSessionId;
+    final ended = await _sendCommand(
+      CriticalCommandIds.endSession,
+      showSuccessSnack: false,
+    );
+    if (!ended) {
+      return false;
+    }
+
+    _markSessionAsRecentlyEnded(sessionIdToEnd);
+    return true;
+  }
+
   Future<bool> _handleSystemBackPressed() async {
     if (_allowSystemPop) {
       return true;
@@ -1247,10 +1510,10 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     if (choice == _ExitChoice.endSession) {
-      await _sendCommand(
-        CriticalCommandIds.endSession,
-        showSuccessSnack: false,
-      );
+      final ended = await _sendEndSessionWithConfirmation();
+      if (!ended) {
+        return false;
+      }
     }
 
     await _disconnectAndPop();
@@ -1610,11 +1873,9 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     await _runPrimaryAction(() async {
-      if (_isConnected) {
-        await _sendCommand(
-          CriticalCommandIds.endSession,
-          showSuccessSnack: false,
-        );
+      final ended = await _sendEndSessionWithConfirmation();
+      if (!ended) {
+        return;
       }
 
       await _disconnectAndPop();
@@ -1636,15 +1897,13 @@ class _ControlScreenState extends State<ControlScreen>
     final canPause = _isConnected &&
         !_isPrimaryActionInFlight &&
         _isGameRuntimeActive &&
-        _runtimeStatus != TherapistRuntimeStatus.paused &&
-        _sessionLifecycleState != SessionLifecycleState.paused;
+        !_isGameRuntimePaused;
     final canResume = _isConnected &&
         !_isPrimaryActionInFlight &&
-        (_runtimeStatus == TherapistRuntimeStatus.paused ||
-            _sessionLifecycleState == SessionLifecycleState.paused);
-    final canEndGame = _isConnected &&
-        !_isPrimaryActionInFlight &&
-        _isGameRuntimeActive;
+        _isGameRuntimeActive &&
+        _isGameRuntimePaused;
+    final canEndGame =
+        _isConnected && !_isPrimaryActionInFlight && _isGameRuntimeActive;
     final canResumeFromSaved = _isConnected &&
         !_isPrimaryActionInFlight &&
         _isLaunchableContentState(contentState) &&
@@ -1686,11 +1945,13 @@ class _ControlScreenState extends State<ControlScreen>
                 child: ElevatedButton.icon(
                   onPressed: canPause || canResume
                       ? () => unawaited(
-                            _sendCommand(
-                              canResume
-                                  ? CriticalCommandIds.resumeGame
-                                  : CriticalCommandIds.pauseGame,
-                            ),
+                            _runPrimaryAction(() async {
+                              await _sendCommand(
+                                canResume
+                                    ? CriticalCommandIds.resumeGame
+                                    : CriticalCommandIds.pauseGame,
+                              );
+                            }),
                           )
                       : null,
                   icon: Icon(canResume ? Icons.play_circle : Icons.pause),
@@ -1704,7 +1965,8 @@ class _ControlScreenState extends State<ControlScreen>
               const SizedBox(width: 8),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: canRestart ? () => unawaited(_restartFromSetup()) : null,
+                  onPressed:
+                      canRestart ? () => unawaited(_restartFromSetup()) : null,
                   icon: const Icon(Icons.restart_alt),
                   label: const Text('Restart'),
                   style:
@@ -2096,7 +2358,8 @@ class _ControlScreenState extends State<ControlScreen>
               if (_isDemoCubeGameSelected)
                 _buildDemoCubeSettings(lockedByRuntime: setupLockedByRuntime),
               if (_isPulseTargetGameSelected)
-                _buildPulseTargetsSettings(lockedByRuntime: setupLockedByRuntime),
+                _buildPulseTargetsSettings(
+                    lockedByRuntime: setupLockedByRuntime),
               if (!_isDemoCubeGameSelected && !_isPulseTargetGameSelected)
                 _buildGenericGameSettings(
                   entry,
@@ -2340,7 +2603,6 @@ class _ControlScreenState extends State<ControlScreen>
       ),
     );
   }
-
 }
 
 class _GameCatalogEntry {

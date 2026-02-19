@@ -415,6 +415,9 @@ Go/No-Go decision:
 - `PARTIAL` Manual operator confirmation update (2026-02-19):
   - reconnect continuity in live phone+Unity run was re-confirmed (temporary network drop + auto-recover),
   - evidence: `docs/evidence/20260219_104215/manual_phone_unity_validation/notes/SUMMARY.md`.
+- `OK` Operator checklist + evidence template prepared for final section-17 closure:
+  - checklist: `docs/27-Manual-SelfFinish-Unload-Checklist.md`,
+  - template: `docs/evidence/_templates/manual_self_finish_unload_summary_template.md`.
 - `TODO` Remaining manual checks for this lane:
   - explicitly capture self-finish cube flow -> mobile terminal state update without manual refresh,
   - explicitly capture `Wroc` from setup -> active game scene unload in live run.
@@ -504,3 +507,60 @@ Go/No-Go decision:
 - `OK` Manual confirmation for preview-toggle regression completed:
   - repeated preview collapse/expand stayed stable in operator run (no black preview recurrence),
   - evidence: `docs/evidence/20260219_104215/manual_phone_unity_validation/notes/SUMMARY.md`.
+
+## 21) Runtime control gating hotfix after manual run feedback (2026-02-19)
+
+- `OK` Manual feedback captured from live Demo Cube run:
+  - `Start` remained active after game launch,
+  - runtime controls (`Pause`, `Restart`, `End Game`) remained disabled in that state,
+  - repeated `Start` taps could retrigger start flow.
+- `OK` Mobile-side gating hotfix implemented in `flutter_controller/lib/screens/control_screen.dart`:
+  - added optimistic runtime-active lock to prevent control drift when runtime/session signals lag,
+  - `_isGameRuntimeActive` now also infers active state from heartbeat `activeGameId` and optimistic lock,
+  - heartbeat handling now clears stale `remoteActiveGameId` when empty and aligns optimistic lock,
+  - `_sendCommand` now returns success/failure and updates optimistic runtime lock for start/resume/stop/end,
+  - restart flow now requires successful STOP before sending START.
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260219_110302/control_runtime_gating_hotfix/commands/flutter_controller_flutter_analyze.log`
+  - `flutter test` PASS -> `docs/evidence/20260219_110302/control_runtime_gating_hotfix/commands/flutter_controller_flutter_test.log`
+  - summary:
+    - `docs/evidence/20260219_110302/control_runtime_gating_hotfix/notes/SUMMARY.md`
+- `TODO` Manual confirmation still required after this hotfix:
+  - re-run live phone+Unity check to verify immediate control-state transitions (`Start` disabled after launch, runtime controls enabled),
+  - capture Unity lines for self-finish -> terminal mobile update and scene unload (`Wroc`) to close section 17 fully.
+
+## 22) Pause/Resume toggle + Restart confirm + handoff/end-session hardening (2026-02-19)
+
+- `OK` Pause control behavior aligned with operator expectation in `flutter_controller/lib/screens/control_screen.dart`:
+  - pause action now sets optimistic paused state immediately,
+  - button remains active and flips label/action to `Resume`,
+  - resume action flips back to `Pause` without waiting for delayed runtime signal.
+- `OK` Restart flow now requires explicit confirmation:
+  - added confirmation dialog before stop+start restart sequence.
+- `OK` End Session flow hardened to avoid false unfinished sessions:
+  - on game-screen end session and system-back end-session path, app no longer disconnects when `END_SESSION` fails,
+  - disconnect/navigation now happens only after successful `END_SESSION` send.
+- `OK` Session handoff gate improved:
+  - decision logic now also uses watchdog heartbeat `sessionId` + parsed `sessionState`,
+  - this reduces false `Session handoff needed` prompts when runtime fallback is stale but heartbeat reports terminal state.
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260219_112314/pause_restart_handoff_fix/commands/flutter_controller_flutter_analyze.log`
+  - `flutter test` PASS -> `docs/evidence/20260219_112314/pause_restart_handoff_fix/commands/flutter_controller_flutter_test.log`
+  - summary:
+    - `docs/evidence/20260219_112314/pause_restart_handoff_fix/notes/SUMMARY.md`
+
+## 23) End-session handoff follow-up fix after live retest feedback (2026-02-19)
+
+- `OK` Root cause narrowed from operator report:
+  - `END_SESSION` send path could close screen before terminal state was observed on signal layer,
+  - reconnect shortly after could still see stale unfinished-session indicators and trigger handoff dialog.
+- `OK` Follow-up hardening in `flutter_controller/lib/screens/control_screen.dart`:
+  - end-session flow now waits for terminal confirmation (`SESSION_STATE_UPDATE` or watchdog `sessionState`) before disconnect/pop,
+  - added short-lived cache of recently ended session ids to suppress immediate false handoff prompts after clean end,
+  - session decision gate fallback now only reuses cached state/runtime when `sessionId` matches (prevents cross-session stale fallback),
+  - automatic `_activeSessionId` attach is now limited to remote `CREATED` state (no implicit attach to terminal/stale session ids).
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260219_113723/end_session_handoff_followup_fix/commands/flutter_controller_flutter_analyze.log`
+  - `flutter test` PASS -> `docs/evidence/20260219_113723/end_session_handoff_followup_fix/commands/flutter_controller_flutter_test.log`
+  - summary:
+    - `docs/evidence/20260219_113723/end_session_handoff_followup_fix/notes/SUMMARY.md`
