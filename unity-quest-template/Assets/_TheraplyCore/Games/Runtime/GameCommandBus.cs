@@ -13,14 +13,13 @@ namespace TheraplyCore.Games.Runtime
 {
     /// <summary>
     /// Typed command bus implementation backed by TCP network messaging.
-    /// Supports both TCPServerService (Quest host) and TCPConnectionService (client mode).
+    /// Uses TCPServerService (Quest acts as TCP server).
     /// </summary>
     [DisallowMultipleComponent]
     public class GameCommandBus : MonoBehaviour, GameContracts.ICommandBus
     {
         [Header("Dependencies")]
         [SerializeField] private TCPServerService _tcpServerService;
-        [SerializeField] private TCPConnectionService _tcpConnectionService;
         [SerializeField] private GameSessionContext _sessionContext;
 
         [Header("Debug")]
@@ -39,11 +38,6 @@ namespace TheraplyCore.Games.Runtime
                 _tcpServerService = FindFirstObjectByType<TCPServerService>();
             }
 
-            if (_tcpConnectionService == null)
-            {
-                _tcpConnectionService = FindFirstObjectByType<TCPConnectionService>();
-            }
-
             if (_sessionContext == null)
             {
                 _sessionContext = FindFirstObjectByType<GameSessionContext>();
@@ -58,11 +52,6 @@ namespace TheraplyCore.Games.Runtime
             {
                 _tcpServerService.OnMessageReceived += HandleIncomingMessage;
             }
-
-            if (_tcpConnectionService != null)
-            {
-                _tcpConnectionService.OnMessageReceived += HandleIncomingMessage;
-            }
         }
 
         private void OnDisable()
@@ -70,11 +59,6 @@ namespace TheraplyCore.Games.Runtime
             if (_tcpServerService != null)
             {
                 _tcpServerService.OnMessageReceived -= HandleIncomingMessage;
-            }
-
-            if (_tcpConnectionService != null)
-            {
-                _tcpConnectionService.OnMessageReceived -= HandleIncomingMessage;
             }
         }
 
@@ -160,11 +144,6 @@ namespace TheraplyCore.Games.Runtime
             if (_tcpServerService != null && _tcpServerService.HasClient)
             {
                 return await _tcpServerService.SendMessageAsync(message);
-            }
-
-            if (_tcpConnectionService != null && _tcpConnectionService.IsConnected)
-            {
-                return await _tcpConnectionService.SendMessageAsync(message);
             }
 
             Logger.Warning("[GameCommandBus] Cannot send command. No active TCP route.");

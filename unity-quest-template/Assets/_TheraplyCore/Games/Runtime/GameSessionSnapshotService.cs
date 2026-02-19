@@ -496,6 +496,13 @@ namespace TheraplyCore.Games.Runtime
                 return sourceState;
             }
 
+            // CREATED sessions never started; recover them as CREATED rather than
+            // INTERRUPTED so Flutter does not show a false "session handoff" dialog.
+            if (sourceState == GameContracts.SessionLifecycleState.CREATED)
+            {
+                return sourceState;
+            }
+
             return GameContracts.SessionLifecycleState.INTERRUPTED;
         }
 

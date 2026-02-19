@@ -487,7 +487,7 @@ namespace TheraplyCore.Games.Runtime
 
         private void HandleEndSessionCommand(EndSessionCommand command)
         {
-            if (_activeGame != null || EnsureActiveGame())
+            if (_activeGame != null)
             {
                 if (!StopActiveGame(GameContracts.GameStopReason.TherapistStop))
                 {
@@ -498,7 +498,9 @@ namespace TheraplyCore.Games.Runtime
 
             if (!TryTransitionSessionState(GameContracts.SessionLifecycleState.ABORTED_BY_THERAPIST, "END_SESSION"))
             {
-                throw new InvalidOperationException("END_SESSION_TRANSITION_FAILED");
+                // Session is already terminal (e.g. COMPLETED after auto-complete). Not an error.
+                Logger.Warning("[GameRuntime] END_SESSION: session already terminal or context missing.");
+                return;
             }
 
             TrackCriticalRuntimeEvent("session_stop", new Dictionary<string, object>
@@ -1102,6 +1104,13 @@ namespace TheraplyCore.Games.Runtime
             if (IsSessionActiveNonTerminal(currentState))
             {
                 _watchdogLastHealthyUtc = DateTime.UtcNow;
+            }
+            else
+            {
+                // Terminal state reached: immediately begin a fresh CREATED session so the
+                // next game start has a valid CREATED → IN_PROGRESS transition path and
+                // Flutter sees the new session via SESSION_STATE_UPDATE(CREATED).
+                _sessionContext.BeginSession(_sessionContext.PatientId, _sessionContext.TherapistId);
             }
 
             _watchdogHangReported = false;
