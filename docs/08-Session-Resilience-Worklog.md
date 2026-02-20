@@ -720,3 +720,25 @@ Go/No-Go decision:
   - disconnect headset mid-game -> reconnect -> confirm automatic attach to the same mobile session,
   - confirm no control command is accepted before attach sync completes,
   - confirm `End Session` + reconnect same student no longer triggers false handoff prompt.
+
+## 30) Live hotfix: SESSION_ATTACH conflict during active game (2026-02-20)
+
+- `OK` Root cause confirmed from live logs:
+  - Unity threw `SESSION_ATTACH_ACTIVE_GAME_CONFLICT` when mobile attempted attach with a different `sessionId` while a game was already active.
+  - this prevented stable attach ack flow and correlated with repeated `END_SESSION` retries/timeouts.
+- `OK` Mobile hotfix in `flutter_controller/lib/screens/control_screen.dart`:
+  - `_resolveAttachTargetSessionId()` now prioritizes latest runtime-reported ids:
+    - `_lastSessionStateUpdateSessionId`,
+    - `_lastRuntimeStatusSessionId`,
+  - removed eager attach call in persisted handoff-pending branch (no forced attach before therapist decision).
+- `OK` Unity hotfix in `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs`:
+  - `SESSION_ATTACH` no longer throws on active-game conflict,
+  - runtime now keeps current session, updates participant ids, logs warning + telemetry (`mode=active_game_conflict_reused_current`), and returns cleanly.
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260220_114420/flutter_analyze.log`
+  - `flutter test` PASS -> `docs/evidence/20260220_114420/flutter_test.log`
+  - summary -> `docs/evidence/20260220_114420/notes/SUMMARY.md`
+- `TODO` Manual re-test required immediately:
+  - scenario from operator logs: active game + reconnect + `End Session`,
+  - confirm no Unity handler exception for `SESSION_ATTACH`,
+  - confirm `END_SESSION` reaches ACK path and flow exits cleanly to student selection.

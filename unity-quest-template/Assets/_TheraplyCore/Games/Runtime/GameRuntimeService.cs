@@ -460,7 +460,19 @@ namespace TheraplyCore.Games.Runtime
 
             if (_activeGame != null && !sameSession)
             {
-                throw new InvalidOperationException("SESSION_ATTACH_ACTIVE_GAME_CONFLICT");
+                _sessionContext.UpdateParticipantIds(patientId, therapistId);
+                TrackCriticalRuntimeEvent("session_attach", new Dictionary<string, object>
+                {
+                    { "sessionId", currentSessionId },
+                    { "requestedSessionId", requestedSessionId },
+                    { "patientId", patientId },
+                    { "therapistId", therapistId },
+                    { "reasonCode", reasonCode },
+                    { "mode", "active_game_conflict_reused_current" },
+                });
+                Logger.Warning(
+                    $"[GameRuntime] SESSION_ATTACH conflict during active game. Keeping current session={currentSessionId}, requested={requestedSessionId}.");
+                return;
             }
 
             if (sameSession)

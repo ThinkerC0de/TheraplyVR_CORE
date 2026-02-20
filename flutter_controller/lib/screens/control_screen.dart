@@ -424,6 +424,16 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   String _resolveAttachTargetSessionId() {
+    final runtimeSessionId = _lastSessionStateUpdateSessionId?.trim() ?? '';
+    if (runtimeSessionId.isNotEmpty) {
+      return runtimeSessionId;
+    }
+
+    final runtimeStatusSessionId = _lastRuntimeStatusSessionId?.trim() ?? '';
+    if (runtimeStatusSessionId.isNotEmpty) {
+      return runtimeStatusSessionId;
+    }
+
     final pendingDecisionId = _remoteSessionIdPendingDecision?.trim() ?? '';
     if (pendingDecisionId.isNotEmpty) {
       return pendingDecisionId;
@@ -729,12 +739,6 @@ class _ControlScreenState extends State<ControlScreen>
           _sessionAttachReady = false;
         });
       }
-      unawaited(
-        _ensureSessionAttached(
-          reasonCode: 'HANDOFF_PENDING',
-          force: true,
-        ),
-      );
       _promptSessionDecisionIfNeeded();
       return true;
     }
