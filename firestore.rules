@@ -12,6 +12,26 @@ service cloud.firestore {
       );
     }
 
+    function isTherapySessionOwnerByRequest() {
+      return isSignedIn() &&
+        request.resource != null &&
+        request.resource.data.therapistId == request.auth.uid;
+    }
+
+    function isTherapySessionOwnerByResource() {
+      return isSignedIn() &&
+        resource != null &&
+        resource.data.therapistId == request.auth.uid;
+    }
+
+    function canReadTherapySession(sessionId) {
+      return isAdminOperator() || (
+        isSignedIn() &&
+        exists(/databases/$(database)/documents/therapy_sessions/$(sessionId)) &&
+        get(/databases/$(database)/documents/therapy_sessions/$(sessionId)).data.therapistId == request.auth.uid
+      );
+    }
+
     match /user_entitlements/{userId} {
       allow read: if isSignedIn() && (
         isAdminOperator() || request.auth.uid == userId
@@ -62,6 +82,22 @@ service cloud.firestore {
         request.resource.data.reason is string &&
         request.resource.data.correlationId is string;
       allow update, delete: if false;
+    }
+
+    match /therapy_sessions/{sessionId} {
+      allow read: if isAdminOperator() || isTherapySessionOwnerByResource();
+      allow create: if isAdminOperator() || isTherapySessionOwnerByRequest();
+      allow update, delete: if isAdminOperator() || isTherapySessionOwnerByResource();
+
+      match /events/{eventId} {
+        allow read: if canReadTherapySession(sessionId);
+        allow create: if isAdminOperator() || (
+          canReadTherapySession(sessionId) &&
+          request.resource != null &&
+          request.resource.data.therapistId == request.auth.uid
+        );
+        allow update, delete: if false;
+      }
     }
 
     match /{document=**} {

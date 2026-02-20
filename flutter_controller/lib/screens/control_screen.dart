@@ -11,7 +11,10 @@ import 'package:flutter_controller/models/session_recovery_policy.dart';
 import 'package:flutter_controller/models/student.dart';
 import 'package:flutter_controller/services/connection_service.dart';
 import 'package:flutter_controller/services/discovery_service.dart';
+import 'package:flutter_controller/services/firebase_service.dart';
 import 'package:flutter_controller/services/foreground_service_bridge.dart';
+import 'package:flutter_controller/services/session_journal_service.dart';
+import 'package:flutter_controller/models/therapy_session_record.dart';
 import 'package:flutter_controller/widgets/media_stream_widget.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -41,20 +44,9 @@ class ControlScreen extends StatefulWidget {
 
 class _ControlScreenState extends State<ControlScreen>
     with WidgetsBindingObserver {
+  static final bool _contentDeliveryEnabled = false;
+  static final bool _serverAuthoritativeHandoffGate = true;
   static const List<_GameCatalogEntry> _gameCatalog = <_GameCatalogEntry>[
-    _GameCatalogEntry(
-      gameId: 'smoke_test_game',
-      title: 'Smoke Test Game',
-      description:
-          'Szybki test komend START/PAUSE/RESUME/STOP i stabilnosci polaczenia.',
-      targetContentVersion: '1.0.0',
-      supportsSaveResume: false,
-      previewLines: <String>[
-        'Minimalna gra diagnostyczna.',
-        'Dobra do sprawdzenia mobile -> Unity Editor.',
-        'Wynik konczy sie po STOP lub auto-complete.',
-      ],
-    ),
     _GameCatalogEntry(
       gameId: 'demo_cube_clicker',
       title: 'Demo Cube Clicker',
@@ -66,18 +58,6 @@ class _ControlScreenState extends State<ControlScreen>
         'Poziom basic: dowolny kolor.',
         'Poziom alternation: kolory na zmiane.',
         'Poziom random target: aktywny kolor celu zmienia sie dynamicznie.',
-      ],
-    ),
-    _GameCatalogEntry(
-      gameId: 'pulse_target_tap',
-      title: 'Pulse Target Tap',
-      description: 'Prosta gra pokazowa: klikaj kolejne poruszajace sie cele.',
-      targetContentVersion: '1.0.0',
-      supportsSaveResume: false,
-      previewLines: <String>[
-        'Kolejne cele pojawiaja sie pojedynczo.',
-        'Kazdy cel porusza sie po ekranie.',
-        'Dobra do pokazu flow i telemetry per hit.',
       ],
     ),
   ];
@@ -130,6 +110,8 @@ class _ControlScreenState extends State<ControlScreen>
   String? _remoteActiveGameId;
   String? _lastSessionStateUpdateSessionId;
   String? _lastRuntimeStatusSessionId;
+  TherapySessionRecord? _latestPersistedSession;
+  bool _persistedSessionRefreshInFlight = false;
 
   _WorkflowStep _workflowStep = _WorkflowStep.gameCatalog;
   bool _resumeFromSavedPreference = false;
@@ -154,6 +136,7 @@ class _ControlScreenState extends State<ControlScreen>
     _setupConnectionListeners();
     unawaited(ForegroundServiceBridge.start());
     unawaited(WakelockPlus.enable());
+    unawaited(_refreshPersistedSessionSnapshot(triggerPrompt: true));
     unawaited(_connect());
   }
 
@@ -187,7 +170,10 @@ class _ControlScreenState extends State<ControlScreen>
       });
 
       if (connected) {
-        unawaited(_syncContentCatalog(silent: true));
+        if (_contentDeliveryEnabled) {
+          unawaited(_syncContentCatalog(silent: true));
+        }
+        unawaited(_refreshPersistedSessionSnapshot(triggerPrompt: true));
       } else {
         _startAutoReconnectLoop(reason: 'connection_lost');
       }
@@ -247,8 +233,10 @@ class _ControlScreenState extends State<ControlScreen>
                 _optimisticRuntimePaused = true;
                 break;
               case TherapistRuntimeStatus.interrupted:
-              case TherapistRuntimeStatus.syncPending:
                 _optimisticRuntimeActive = true;
+                break;
+              case TherapistRuntimeStatus.syncPending:
+                // Sync backlog is not evidence of an unfinished in-progress game.
                 break;
               case TherapistRuntimeStatus.connected:
                 _optimisticRuntimePaused = false;
@@ -296,6 +284,9 @@ class _ControlScreenState extends State<ControlScreen>
             watchdogSessionState != null &&
             SessionRecoveryPolicy.isTerminalState(watchdogSessionState)) {
           _markSessionAsRecentlyEnded(watchdogHeartbeat.sessionId);
+        }
+        if (sessionUpdate != null) {
+          unawaited(_persistRuntimeSessionState(sessionUpdate));
         }
 
         _handlePotentialSessionDecisionGate(
@@ -428,11 +419,318 @@ class _ControlScreenState extends State<ControlScreen>
       case TherapistRuntimeStatus.playing:
       case TherapistRuntimeStatus.paused:
       case TherapistRuntimeStatus.interrupted:
-      case TherapistRuntimeStatus.syncPending:
         return true;
+      case TherapistRuntimeStatus.syncPending:
       case TherapistRuntimeStatus.connected:
       case null:
         return false;
+    }
+  }
+
+  String _resolveActorTherapistId() {
+    final currentUserId = FirebaseService.currentUser?.uid.trim() ?? '';
+    if (currentUserId.isNotEmpty) {
+      return currentUserId;
+    }
+    final studentOwner = widget.student.therapistId.trim();
+    if (studentOwner.isNotEmpty) {
+      return studentOwner;
+    }
+    return 'unknown_therapist';
+  }
+
+  bool _isKnownGameId(String gameId) {
+    final normalizedGameId = gameId.trim();
+    if (normalizedGameId.isEmpty) {
+      return false;
+    }
+    for (final entry in _gameCatalog) {
+      if (entry.gameId == normalizedGameId) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Map<String, dynamic> _buildSelectedGameConfigSnapshot() {
+    if (_isDemoCubeGameSelected) {
+      return <String, dynamic>{
+        'gameConfigType': 'demo_cube_config_v1',
+        'gameConfigVersion': 1,
+        'cubeCount': _demoCubeCount,
+        'cubeSpeed': double.parse(_demoCubeSpeed.toStringAsFixed(2)),
+        'levelMode': _demoLevelMode,
+      };
+    }
+
+    if (_isPulseTargetGameSelected) {
+      return <String, dynamic>{
+        'gameConfigType': 'pulse_targets_config_v1',
+        'gameConfigVersion': 1,
+        'targetCount': _pulseTargetCount,
+        'targetSpeed': double.parse(_pulseTargetSpeed.toStringAsFixed(2)),
+        'targetScale': double.parse(_pulseTargetScale.toStringAsFixed(2)),
+      };
+    }
+
+    return <String, dynamic>{};
+  }
+
+  Future<void> _refreshPersistedSessionSnapshot({
+    required bool triggerPrompt,
+  }) async {
+    if (_persistedSessionRefreshInFlight) {
+      return;
+    }
+
+    _persistedSessionRefreshInFlight = true;
+    try {
+      final latest = await SessionJournalService.fetchLatestForStudent(
+        studentId: widget.student.id,
+      );
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _latestPersistedSession = latest;
+      });
+
+      if (triggerPrompt) {
+        _applyPersistedSessionDecisionGate();
+      }
+    } catch (e) {
+      debugPrint(
+        '[ControlScreen] Persisted session snapshot refresh failed: $e',
+      );
+    } finally {
+      _persistedSessionRefreshInFlight = false;
+    }
+  }
+
+  bool _applyPersistedSessionDecisionGate() {
+    final persisted = _latestPersistedSession;
+    if (persisted == null) {
+      return false;
+    }
+
+    final persistedSessionId = persisted.sessionId.trim();
+    if (persistedSessionId.isEmpty) {
+      return false;
+    }
+
+    if (persisted.requiresHandoffDecision &&
+        persistedSessionId != _activeSessionId &&
+        !_wasSessionRecentlyEnded(persistedSessionId)) {
+      if (_isKnownGameId(persisted.latestGameId) &&
+          persisted.latestGameId != _selectedGameId) {
+        setState(() {
+          _selectedGameId = persisted.latestGameId;
+        });
+      }
+
+      _remoteSessionIdPendingDecision = persistedSessionId;
+      _requiresSessionDecision = true;
+      _promptSessionDecisionIfNeeded();
+      return true;
+    }
+
+    if (!persisted.requiresHandoffDecision &&
+        _requiresSessionDecision &&
+        _remoteSessionIdPendingDecision == persistedSessionId) {
+      setState(() {
+        _requiresSessionDecision = false;
+        _remoteSessionIdPendingDecision = null;
+      });
+      return true;
+    }
+
+    return false;
+  }
+
+  Future<void> _persistRuntimeSessionState(
+    SessionStateUpdateSignal sessionUpdate,
+  ) async {
+    final sessionId = sessionUpdate.sessionId.trim();
+    if (sessionId.isEmpty) {
+      return;
+    }
+
+    try {
+      await SessionJournalService.upsertSessionState(
+        sessionId: sessionId,
+        studentId: widget.student.id,
+        therapistId: _resolveActorTherapistId(),
+        state: sessionUpdate.state,
+        latestGameId: _selectedGameId,
+        reasonCode: sessionUpdate.reasonCode,
+        metadata: <String, dynamic>{
+          'origin': 'runtime_signal',
+          'previousState': sessionUpdate.previousState?.wireValue ?? '',
+        },
+      );
+
+      await SessionJournalService.appendSessionEvent(
+        sessionId: sessionId,
+        studentId: widget.student.id,
+        therapistId: _resolveActorTherapistId(),
+        eventType: 'RUNTIME_SESSION_STATE_UPDATE',
+        gameId: _selectedGameId,
+        details: <String, dynamic>{
+          'state': sessionUpdate.state.wireValue,
+          'previousState': sessionUpdate.previousState?.wireValue ?? '',
+          'reasonCode': sessionUpdate.reasonCode,
+        },
+      );
+
+      await _refreshPersistedSessionSnapshot(triggerPrompt: true);
+    } catch (e) {
+      debugPrint(
+        '[ControlScreen] Persist runtime session state failed: session=$sessionId, error=$e',
+      );
+    }
+  }
+
+  Future<void> _persistCommandSideEffects(
+    String command, {
+    String? sessionIdOverride,
+    Map<String, dynamic>? extraPayload,
+  }) async {
+    final sessionId = (sessionIdOverride ?? _activeSessionId).trim();
+    if (sessionId.isEmpty) {
+      return;
+    }
+
+    final therapistId = _resolveActorTherapistId();
+    final selectedGameId = _selectedGameId;
+
+    try {
+      if (command == CriticalCommandIds.startGame ||
+          command == CriticalCommandIds.resumeGame) {
+        await SessionJournalService.upsertSessionState(
+          sessionId: sessionId,
+          studentId: widget.student.id,
+          therapistId: therapistId,
+          state: SessionLifecycleState.inProgress,
+          latestGameId: selectedGameId,
+          reasonCode: command,
+          metadata: <String, dynamic>{
+            'origin': 'mobile_command',
+            'resumeFromSaved': _resumeFromSavedPreference,
+          },
+        );
+        await SessionJournalService.appendSessionEvent(
+          sessionId: sessionId,
+          studentId: widget.student.id,
+          therapistId: therapistId,
+          eventType: command == CriticalCommandIds.resumeGame
+              ? 'GAME_RESUMED'
+              : 'GAME_STARTED',
+          gameId: selectedGameId,
+          details: <String, dynamic>{
+            'resumeFromSaved': _resumeFromSavedPreference,
+            'config': _buildSelectedGameConfigSnapshot(),
+          },
+        );
+      } else if (command == CriticalCommandIds.pauseGame) {
+        await SessionJournalService.upsertSessionState(
+          sessionId: sessionId,
+          studentId: widget.student.id,
+          therapistId: therapistId,
+          state: SessionLifecycleState.paused,
+          latestGameId: selectedGameId,
+          reasonCode: command,
+          metadata: const <String, dynamic>{'origin': 'mobile_command'},
+        );
+        await SessionJournalService.appendSessionEvent(
+          sessionId: sessionId,
+          studentId: widget.student.id,
+          therapistId: therapistId,
+          eventType: 'GAME_PAUSED',
+          gameId: selectedGameId,
+        );
+      } else if (command == CriticalCommandIds.stopGame) {
+        await SessionJournalService.upsertSessionState(
+          sessionId: sessionId,
+          studentId: widget.student.id,
+          therapistId: therapistId,
+          state: SessionLifecycleState.interrupted,
+          latestGameId: selectedGameId,
+          reasonCode: extraPayload?['reason'] as String? ?? 'USER_EXIT',
+          metadata: const <String, dynamic>{'origin': 'mobile_command'},
+        );
+        await SessionJournalService.appendSessionEvent(
+          sessionId: sessionId,
+          studentId: widget.student.id,
+          therapistId: therapistId,
+          eventType: 'GAME_ENDED',
+          gameId: selectedGameId,
+          details: <String, dynamic>{
+            'reason': extraPayload?['reason'] as String? ?? 'USER_EXIT',
+          },
+        );
+      } else if (command == CriticalCommandIds.endSession) {
+        await SessionJournalService.markSessionCompletedByTherapist(
+          sessionId: sessionId,
+          studentId: widget.student.id,
+          therapistId: therapistId,
+          latestGameId: selectedGameId,
+          reasonCode: 'THERAPIST_CONFIRMED_END',
+          metadata: const <String, dynamic>{'origin': 'mobile_command'},
+        );
+        await SessionJournalService.appendSessionEvent(
+          sessionId: sessionId,
+          studentId: widget.student.id,
+          therapistId: therapistId,
+          eventType: 'SESSION_ENDED',
+          gameId: selectedGameId,
+          details: const <String, dynamic>{
+            'reason': 'THERAPIST_CONFIRMED_END',
+          },
+        );
+      }
+    } catch (e) {
+      debugPrint(
+        '[ControlScreen] Persist command side effects failed: command=$command, error=$e',
+      );
+    } finally {
+      await _refreshPersistedSessionSnapshot(triggerPrompt: true);
+    }
+  }
+
+  Future<void> _persistStartNewDecisionOutcome(String remoteSessionId) async {
+    final normalizedSessionId = remoteSessionId.trim();
+    if (normalizedSessionId.isEmpty) {
+      return;
+    }
+
+    final therapistId = _resolveActorTherapistId();
+    try {
+      await SessionJournalService.markSessionCompletedByTherapist(
+        sessionId: normalizedSessionId,
+        studentId: widget.student.id,
+        therapistId: therapistId,
+        latestGameId: _selectedGameId,
+        reasonCode: 'THERAPIST_START_NEW_DECISION',
+        metadata: const <String, dynamic>{'origin': 'mobile_decision_gate'},
+      );
+      await SessionJournalService.appendSessionEvent(
+        sessionId: normalizedSessionId,
+        studentId: widget.student.id,
+        therapistId: therapistId,
+        eventType: 'SESSION_ENDED_BY_DECISION',
+        gameId: _selectedGameId,
+        details: const <String, dynamic>{
+          'decision': 'START_NEW',
+          'reason': 'THERAPIST_START_NEW_DECISION',
+        },
+      );
+    } catch (e) {
+      debugPrint(
+        '[ControlScreen] Persist start-new decision outcome failed: session=$normalizedSessionId, error=$e',
+      );
+    } finally {
+      await _refreshPersistedSessionSnapshot(triggerPrompt: true);
     }
   }
 
@@ -529,6 +827,9 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   bool _isLaunchableContentState(PurchasedContentState state) {
+    if (!_contentDeliveryEnabled) {
+      return state.owned;
+    }
     return state.owned &&
         state.runtimeStatus == ContentRuntimeStatus.ready &&
         !state.updateRequired;
@@ -550,6 +851,10 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   Future<void> _syncContentCatalog({bool silent = false}) async {
+    if (!_contentDeliveryEnabled) {
+      return;
+    }
+
     if (!_isConnected || _contentSyncInFlight) {
       return;
     }
@@ -598,6 +903,10 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   Future<void> _requestInstallOrUpdate(PurchasedContentState state) async {
+    if (!_contentDeliveryEnabled) {
+      return;
+    }
+
     if (!_isConnected || _contentActionsInFlight.contains(state.gameId)) {
       return;
     }
@@ -661,6 +970,10 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   Future<void> _requestUninstall(PurchasedContentState state) async {
+    if (!_contentDeliveryEnabled) {
+      return;
+    }
+
     if (!_isConnected || _contentActionsInFlight.contains(state.gameId)) {
       return;
     }
@@ -732,6 +1045,15 @@ class _ControlScreenState extends State<ControlScreen>
     RuntimeStatusUpdateSignal? runtimeUpdate,
     SessionWatchdogHeartbeatSignal? watchdogHeartbeat,
   ) {
+    final handledByPersisted = _applyPersistedSessionDecisionGate();
+    if (handledByPersisted) {
+      return;
+    }
+
+    if (_serverAuthoritativeHandoffGate) {
+      return;
+    }
+
     final remoteSessionId = _resolveRemoteSessionId(
         sessionUpdate, runtimeUpdate, watchdogHeartbeat);
     if (remoteSessionId == null || remoteSessionId.isEmpty) {
@@ -885,6 +1207,48 @@ class _ControlScreenState extends State<ControlScreen>
     return null;
   }
 
+  String _resolveSessionIdForCriticalCommand(String command) {
+    final activeSessionId = _activeSessionId.trim();
+    final pendingDecisionSessionId = _requiresSessionDecision
+        ? (_remoteSessionIdPendingDecision?.trim() ?? '')
+        : '';
+    final lastSessionSignalId = _lastSessionStateUpdateSessionId?.trim() ?? '';
+    final lastRuntimeSignalId = _lastRuntimeStatusSessionId?.trim() ?? '';
+    final persistedSessionId = _latestPersistedSession?.sessionId.trim() ?? '';
+
+    if (command == CriticalCommandIds.endSession) {
+      for (final candidate in <String>[
+        lastSessionSignalId,
+        lastRuntimeSignalId,
+        pendingDecisionSessionId,
+        activeSessionId,
+      ]) {
+        if (candidate.isNotEmpty) {
+          return candidate;
+        }
+      }
+
+      if (persistedSessionId.isNotEmpty) {
+        return persistedSessionId;
+      }
+      return activeSessionId;
+    }
+
+    if (_gameScopedCriticalCommands.contains(command)) {
+      for (final candidate in <String>[
+        lastSessionSignalId,
+        lastRuntimeSignalId,
+        activeSessionId,
+      ]) {
+        if (candidate.isNotEmpty) {
+          return candidate;
+        }
+      }
+    }
+
+    return activeSessionId;
+  }
+
   void _promptSessionDecisionIfNeeded() {
     if (!mounted || !_requiresSessionDecision || _isSessionDecisionDialogOpen) {
       return;
@@ -964,6 +1328,7 @@ class _ControlScreenState extends State<ControlScreen>
     setState(() {
       _activeSessionId = remoteSessionId;
       _requiresSessionDecision = false;
+      _remoteSessionIdPendingDecision = null;
       _workflowStep = _WorkflowStep.gameSetup;
       _isVideoPreviewExpanded = true;
       if (resolvedGameId != null) {
@@ -1102,6 +1467,7 @@ class _ControlScreenState extends State<ControlScreen>
         expiresAtUtc: DateTime.now().toUtc().add(const Duration(seconds: 30)),
       );
       _markSessionAsRecentlyEnded(remoteSessionId);
+      await _persistStartNewDecisionOutcome(remoteSessionId);
 
       if (!mounted) {
         return;
@@ -1110,6 +1476,7 @@ class _ControlScreenState extends State<ControlScreen>
       setState(() {
         _activeSessionId = _buildLocalSessionId();
         _requiresSessionDecision = false;
+        _remoteSessionIdPendingDecision = null;
         _workflowStep = _WorkflowStep.gameCatalog;
         _isVideoPreviewExpanded = false;
       });
@@ -1167,11 +1534,29 @@ class _ControlScreenState extends State<ControlScreen>
       return false;
     }
 
+    final commandSessionId = CriticalCommandIds.isCritical(command)
+        ? _resolveSessionIdForCriticalCommand(command)
+        : _activeSessionId;
+    if (CriticalCommandIds.isCritical(command) &&
+        commandSessionId.trim().isEmpty) {
+      if (!mounted) {
+        return false;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot resolve active session id for this command.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return false;
+    }
+
     try {
       if (CriticalCommandIds.isCritical(command)) {
         await _connection.sendCriticalCommand(
           commandId: command,
-          sessionId: _activeSessionId,
+          sessionId: commandSessionId,
           payload: _buildCriticalPayload(command, extraPayload: extraPayload),
           expiresAtUtc: DateTime.now().toUtc().add(const Duration(seconds: 30)),
         );
@@ -1195,6 +1580,20 @@ class _ControlScreenState extends State<ControlScreen>
             _remoteActiveGameId = null;
           }
         });
+      }
+
+      if (command == CriticalCommandIds.startGame ||
+          command == CriticalCommandIds.pauseGame ||
+          command == CriticalCommandIds.resumeGame ||
+          command == CriticalCommandIds.stopGame ||
+          command == CriticalCommandIds.endSession) {
+        unawaited(
+          _persistCommandSideEffects(
+            command,
+            sessionIdOverride: commandSessionId,
+            extraPayload: extraPayload,
+          ),
+        );
       }
 
       if (!mounted || !showSuccessSnack) {
@@ -1456,10 +1855,22 @@ class _ControlScreenState extends State<ControlScreen>
 
   Future<bool> _sendEndSessionWithConfirmation() async {
     if (!_isConnected) {
-      return true;
+      if (!mounted) {
+        return false;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Device disconnected. Reconnect before ending session.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return false;
     }
 
-    final sessionIdToEnd = _activeSessionId;
+    final sessionIdToEnd = _resolveSessionIdForCriticalCommand(
+      CriticalCommandIds.endSession,
+    );
     final ended = await _sendCommand(
       CriticalCommandIds.endSession,
       showSuccessSnack: false,
@@ -1469,6 +1880,17 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     _markSessionAsRecentlyEnded(sessionIdToEnd);
+    _markSessionAsRecentlyEnded(_lastSessionStateUpdateSessionId);
+    _markSessionAsRecentlyEnded(_lastRuntimeStatusSessionId);
+    _markSessionAsRecentlyEnded(_remoteSessionIdPendingDecision);
+    _markSessionAsRecentlyEnded(_latestPersistedSession?.sessionId);
+
+    if (mounted) {
+      setState(() {
+        _requiresSessionDecision = false;
+        _remoteSessionIdPendingDecision = null;
+      });
+    }
     return true;
   }
 
@@ -1516,11 +1938,14 @@ class _ControlScreenState extends State<ControlScreen>
       }
     }
 
-    await _disconnectAndPop();
+    await _disconnectAndPop(
+      returnToStudentSelection: choice == _ExitChoice.endSession,
+    );
     return false;
   }
 
-  Future<void> _disconnectAndPop() async {
+  Future<void> _disconnectAndPop(
+      {bool returnToStudentSelection = false}) async {
     _autoReconnectEnabled = false;
     _allowSystemPop = true;
     unawaited(ForegroundServiceBridge.stop());
@@ -1530,7 +1955,7 @@ class _ControlScreenState extends State<ControlScreen>
       return;
     }
 
-    Navigator.pop(context);
+    Navigator.pop(context, returnToStudentSelection);
   }
 
   @override
@@ -1878,7 +2303,7 @@ class _ControlScreenState extends State<ControlScreen>
         return;
       }
 
-      await _disconnectAndPop();
+      await _disconnectAndPop(returnToStudentSelection: true);
     });
   }
 
@@ -2024,23 +2449,26 @@ class _ControlScreenState extends State<ControlScreen>
                 ),
               ),
             ),
-            TextButton.icon(
-              onPressed: _isConnected && !_contentSyncInFlight
-                  ? () => unawaited(_syncContentCatalog())
-                  : null,
-              icon: _contentSyncInFlight
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.sync, size: 16),
-              label: Text(_contentSyncInFlight ? 'Syncing...' : 'Refresh'),
-            ),
+            if (_contentDeliveryEnabled)
+              TextButton.icon(
+                onPressed: _isConnected && !_contentSyncInFlight
+                    ? () => unawaited(_syncContentCatalog())
+                    : null,
+                icon: _contentSyncInFlight
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.sync, size: 16),
+                label: Text(_contentSyncInFlight ? 'Syncing...' : 'Refresh'),
+              ),
           ],
         ),
         Text(
-          'Choose a game, ensure it is ready, then open the game session screen.',
+          _contentDeliveryEnabled
+              ? 'Choose a game, ensure it is ready, then open the game session screen.'
+              : 'Choose a game and open the game session screen.',
           style: TextStyle(
             color: Colors.grey[700],
             fontSize: 12,
@@ -2051,8 +2479,9 @@ class _ControlScreenState extends State<ControlScreen>
           _buildStateBanner(
             icon: Icons.wifi_off,
             color: Colors.red.shade700,
-            text:
-                'Headset is offline. Install/update actions will stay disabled until reconnect.',
+            text: _contentDeliveryEnabled
+                ? 'Headset is offline. Install/update actions will stay disabled until reconnect.'
+                : 'Headset is offline. Reconnect to continue.',
           ),
           const SizedBox(height: 6),
         ],
@@ -2063,7 +2492,7 @@ class _ControlScreenState extends State<ControlScreen>
             text: 'Selected game `${selectedEntry.title}` is ready to open.',
           ),
           const SizedBox(height: 6),
-        ] else ...[
+        ] else if (_contentDeliveryEnabled) ...[
           _buildStateBanner(
             icon: Icons.warning_amber_rounded,
             color: Colors.orange.shade800,
@@ -2206,46 +2635,53 @@ class _ControlScreenState extends State<ControlScreen>
                             ),
                           Padding(
                             padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: ElevatedButton.icon(
-                                    onPressed: !_isConnected ||
-                                            actionInFlight ||
-                                            !shouldInstallOrUpdate
-                                        ? null
-                                        : () => unawaited(
-                                              _requestInstallOrUpdate(
-                                                  contentState),
-                                            ),
-                                    icon: const Icon(Icons.download),
-                                    label: Text(
-                                      contentState.runtimeStatus ==
-                                              ContentRuntimeStatus
-                                                  .updateRequired
-                                          ? 'Update'
-                                          : contentState.runtimeStatus ==
-                                                  ContentRuntimeStatus.failed
-                                              ? 'Retry install'
-                                              : 'Install',
-                                    ),
-                                  ),
-                                ),
-                                if (contentState.isInstalled) ...[
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      onPressed: !_isConnected || actionInFlight
-                                          ? null
-                                          : () => unawaited(
-                                              _requestUninstall(contentState)),
-                                      icon: const Icon(Icons.delete_outline),
-                                      label: const Text('Uninstall'),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
+                            child: _contentDeliveryEnabled
+                                ? Row(
+                                    children: [
+                                      Expanded(
+                                        child: ElevatedButton.icon(
+                                          onPressed: !_isConnected ||
+                                                  actionInFlight ||
+                                                  !shouldInstallOrUpdate
+                                              ? null
+                                              : () => unawaited(
+                                                    _requestInstallOrUpdate(
+                                                        contentState),
+                                                  ),
+                                          icon: const Icon(Icons.download),
+                                          label: Text(
+                                            contentState.runtimeStatus ==
+                                                    ContentRuntimeStatus
+                                                        .updateRequired
+                                                ? 'Update'
+                                                : contentState.runtimeStatus ==
+                                                        ContentRuntimeStatus
+                                                            .failed
+                                                    ? 'Retry install'
+                                                    : 'Install',
+                                          ),
+                                        ),
+                                      ),
+                                      if (contentState.isInstalled) ...[
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: OutlinedButton.icon(
+                                            onPressed:
+                                                !_isConnected || actionInFlight
+                                                    ? null
+                                                    : () => unawaited(
+                                                          _requestUninstall(
+                                                              contentState),
+                                                        ),
+                                            icon: const Icon(
+                                                Icons.delete_outline),
+                                            label: const Text('Uninstall'),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  )
+                                : const SizedBox.shrink(),
                           ),
                         ],
                       ),
@@ -2269,7 +2705,9 @@ class _ControlScreenState extends State<ControlScreen>
           label: Text(
             _isSelectedGameLaunchable
                 ? 'Open game session'
-                : 'Install or update selected game first',
+                : _contentDeliveryEnabled
+                    ? 'Install or update selected game first'
+                    : 'Select available game first',
           ),
           style: ElevatedButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 12),

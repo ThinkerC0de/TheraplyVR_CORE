@@ -56,8 +56,8 @@ namespace TheraplyCore.Games.Runtime
         [SerializeField] private float _syncStatusPollIntervalSeconds = 1f;
 
         [Header("Content Delivery (Dev Simulator)")]
-        [SerializeField] private bool _enableContentDeliverySimulation = true;
-        [SerializeField] private bool _publishContentCatalogOnClientConnect = true;
+        [SerializeField] private bool _enableContentDeliverySimulation = false;
+        [SerializeField] private bool _publishContentCatalogOnClientConnect = false;
         [SerializeField] private float _simulatedInstallDurationSeconds = 1.2f;
         [SerializeField] private string _defaultSimulatedContentVersion = "1.0.0";
         [SerializeField] private List<SimulatedContentCatalogEntry> _simulatedContentCatalog =
@@ -65,26 +65,10 @@ namespace TheraplyCore.Games.Runtime
             {
                 new SimulatedContentCatalogEntry
                 {
-                    gameId = "smoke_test_game",
-                    owned = true,
-                    installedVersion = "1.0.0",
-                    targetVersion = "1.0.0",
-                    updateOptional = false,
-                },
-                new SimulatedContentCatalogEntry
-                {
                     gameId = "demo_cube_clicker",
                     owned = true,
                     installedVersion = "1.1.0",
                     targetVersion = "1.2.0",
-                    updateOptional = false,
-                },
-                new SimulatedContentCatalogEntry
-                {
-                    gameId = "pulse_target_tap",
-                    owned = true,
-                    installedVersion = "",
-                    targetVersion = "1.0.0",
                     updateOptional = false,
                 },
             };
@@ -229,6 +213,35 @@ namespace TheraplyCore.Games.Runtime
         private void Update()
         {
             DrainPendingCrashSignals();
+            ReconcileTerminalGameStateOutsideWatchdog();
+        }
+
+        private void ReconcileTerminalGameStateOutsideWatchdog()
+        {
+            if (_activeGame == null)
+            {
+                return;
+            }
+
+            if (_sessionContext == null)
+            {
+                _sessionContext = ResolveSessionContext();
+            }
+
+            if (_sessionContext == null)
+            {
+                return;
+            }
+
+            var sessionState = _sessionContext.SessionState;
+            var hasActiveGame = _activeGame != null;
+            if (!hasActiveGame)
+            {
+                return;
+            }
+
+            var activeGameState = _activeGame.State;
+            ReconcileTerminalGameStateWithSession(ref sessionState, ref hasActiveGame, ref activeGameState);
         }
 
         public bool SetActiveGame(string gameId)

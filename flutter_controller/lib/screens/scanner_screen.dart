@@ -7,7 +7,7 @@ import 'dart:async';
 
 class ScannerScreen extends StatefulWidget {
   final Student student;
-  
+
   const ScannerScreen({super.key, required this.student});
 
   @override
@@ -16,24 +16,25 @@ class ScannerScreen extends StatefulWidget {
 
 class _ScannerScreenState extends State<ScannerScreen> {
   final DiscoveryService _discovery = DiscoveryService();
-  final Map<String, DeviceInfo> _devices = {}; // Changed to Map for easier updates
+  final Map<String, DeviceInfo> _devices =
+      {}; // Changed to Map for easier updates
   final Map<String, DateTime> _lastSeen = {}; // Track when device was last seen
   bool _isScanning = false;
   StreamSubscription<DeviceInfo>? _deviceSubscription;
   Timer? _cleanupTimer;
-  
+
   @override
   void initState() {
     super.initState();
     _startScanning();
   }
-  
+
   void _startScanning() {
     setState(() {
       _isScanning = true;
       // DON'T clear devices - keep them in list!
     });
-    
+
     // Listen for device updates
     _deviceSubscription = _discovery.devices.listen((device) {
       setState(() {
@@ -42,20 +43,20 @@ class _ScannerScreenState extends State<ScannerScreen> {
         _lastSeen[device.ip] = DateTime.now();
       });
     });
-    
+
     // Cleanup old devices every 5 seconds
     _cleanupTimer?.cancel();
     _cleanupTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
       final now = DateTime.now();
       final toRemove = <String>[];
-      
+
       _lastSeen.forEach((ip, lastSeenTime) {
         // Remove if not seen in last 15 seconds
         if (now.difference(lastSeenTime).inSeconds > 15) {
           toRemove.add(ip);
         }
       });
-      
+
       if (toRemove.isNotEmpty) {
         setState(() {
           for (var ip in toRemove) {
@@ -66,14 +67,14 @@ class _ScannerScreenState extends State<ScannerScreen> {
         print('[Scanner] Removed ${toRemove.length} stale device(s)');
       }
     });
-    
+
     _discovery.startScanning();
   }
-  
-  void _connectToDevice(DeviceInfo device) {
+
+  Future<void> _connectToDevice(DeviceInfo device) async {
     // Don't stop scanning - let ControlScreen pause it automatically
-    
-    Navigator.push(
+
+    final shouldReturnToStudents = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (context) => ControlScreen(
@@ -84,8 +85,15 @@ class _ScannerScreenState extends State<ScannerScreen> {
       ),
     );
     // Discovery will auto-resume when connection is lost
+    if (!mounted) {
+      return;
+    }
+
+    if (shouldReturnToStudents == true) {
+      Navigator.pop(context);
+    }
   }
-  
+
   @override
   void dispose() {
     _discovery.dispose();
@@ -93,7 +101,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
     _cleanupTimer?.cancel();
     super.dispose();
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -111,7 +119,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
                     _isScanning
                         ? 'Scanning for devices... (${_devices.length} found)'
                         : '${_devices.length} device(s) found',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w500),
                   ),
                 ),
                 if (_isScanning)
@@ -129,9 +138,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
               ],
             ),
           ),
-          
           const Divider(height: 1),
-          
           Expanded(
             child: _devices.isEmpty
                 ? Center(
@@ -142,7 +149,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
                         const SizedBox(height: 16),
                         const Text(
                           'No devices found',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+                          style: TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.w500),
                         ),
                         const SizedBox(height: 8),
                         Text(
@@ -164,9 +172,11 @@ class _ScannerScreenState extends State<ScannerScreen> {
                     itemBuilder: (context, index) {
                       final device = _devices.values.toList()[index];
                       return Card(
-                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        margin: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
                         child: ListTile(
-                          leading: const Icon(Icons.headset_mic, size: 40, color: Colors.blue),
+                          leading: const Icon(Icons.headset_mic,
+                              size: 40, color: Colors.blue),
                           title: Text(
                             device.deviceName,
                             style: const TextStyle(fontWeight: FontWeight.bold),

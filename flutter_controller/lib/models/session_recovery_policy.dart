@@ -20,8 +20,8 @@ class SessionRecoveryPolicy {
       case TherapistRuntimeStatus.playing:
       case TherapistRuntimeStatus.paused:
       case TherapistRuntimeStatus.interrupted:
-      case TherapistRuntimeStatus.syncPending:
         return true;
+      case TherapistRuntimeStatus.syncPending:
       case TherapistRuntimeStatus.connected:
       case null:
         return false;

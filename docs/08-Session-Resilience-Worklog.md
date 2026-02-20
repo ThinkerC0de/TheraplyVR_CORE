@@ -564,3 +564,117 @@ Go/No-Go decision:
   - `flutter test` PASS -> `docs/evidence/20260219_113723/end_session_handoff_followup_fix/commands/flutter_controller_flutter_test.log`
   - summary:
     - `docs/evidence/20260219_113723/end_session_handoff_followup_fix/notes/SUMMARY.md`
+
+## 24) Session source-of-truth Pack A (2026-02-19)
+
+- `OK` Session data contract draft added:
+  - `docs/28-Session-Data-Contract.md`
+  - defines `Session + GameAttempt + Event` boundaries and handoff gate rules.
+- `OK` New persisted session model and storage adapter added (`flutter_controller`):
+  - model: `flutter_controller/lib/models/therapy_session_record.dart`
+  - service: `flutter_controller/lib/services/session_journal_service.dart`
+  - Firestore layout (mobile source of truth):
+    - `therapy_sessions/{sessionId}`
+    - `therapy_sessions/{sessionId}/events/{eventId}`
+- `OK` `ControlScreen` integration started with persisted-session preference:
+  - latest persisted session snapshot is refreshed on screen start and reconnect,
+  - handoff decision gate now checks persisted session snapshot first, with runtime signal fallback,
+  - critical command success path now persists session state/event side-effects,
+  - runtime `SESSION_STATE_UPDATE` is mirrored to persisted session state to reduce drift.
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260219_210203/session_source_of_truth_pack_a/commands/flutter_controller_flutter_analyze.log`
+  - `flutter test` PASS -> `docs/evidence/20260219_210203/session_source_of_truth_pack_a/commands/flutter_controller_flutter_test.log`
+  - summary:
+    - `docs/evidence/20260219_210203/session_source_of_truth_pack_a/notes/SUMMARY.md`
+- `TODO` Next pack (B) still required:
+  - Unity self-finish must consistently emit terminal state so mobile can auto-drop `End Game` action,
+  - extend persistence from session-level records to full per-game attempt lifecycle replay rules.
+
+## 25) Pack A stabilization + Unity auto-finish follow-up (2026-02-19)
+
+- `OK` Persisted latest-session lookup hardened (`flutter_controller/lib/services/session_journal_service.dart`):
+  - `fetchLatestForStudent` now prefers ordered query by `updatedAtUnixMs DESC LIMIT 1`,
+  - fallback path keeps backward compatibility when index is not ready.
+- `OK` Critical command session binding hardened (`flutter_controller/lib/screens/control_screen.dart`):
+  - added `_resolveSessionIdForCriticalCommand(...)` to select runtime-bound `sessionId` for critical commands,
+  - `END_SESSION` and game commands now persist side-effects under the same resolved `sessionId` (no local/remote drift in journal),
+  - explicit guard added: offline `End Session` no longer returns success; operator gets reconnect warning.
+- `OK` End-session navigation aligned with operator flow:
+  - `End Session` from game screen now returns to student selection (Control -> Scanner -> Students),
+  - implemented via pop result from `ControlScreen` + handling in `flutter_controller/lib/screens/scanner_screen.dart`.
+- `OK` Unity runtime auto-finish reconciliation hardened (`unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs`):
+  - terminal game-state reconciliation is now also checked in `Update()` (`ReconcileTerminalGameStateOutsideWatchdog`),
+  - self-finish no longer depends only on watchdog heartbeat timing/config.
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260219_211045/flutter_analyze.log`
+  - `flutter test` PASS -> `docs/evidence/20260219_211045/flutter_test.log`
+  - summary -> `docs/evidence/20260219_211045/notes/SUMMARY.md`
+- `TODO` Manual live verification still required (phone + Unity Editor):
+  - confirm Cube self-finish always disables `End Game` without manual tap,
+  - confirm `End Session` returns to students and no stale handoff prompt appears for the same student.
+
+## 26) Handoff regression hotfix: stale pending decision session id (2026-02-19)
+
+- `OK` Root-cause fix in `flutter_controller/lib/screens/control_screen.dart`:
+  - stale `_remoteSessionIdPendingDecision` is now cleared after both decision paths (`Continue`, `Start new`),
+  - `END_SESSION` session-id resolution now prioritizes live runtime/session signals (`_lastSessionStateUpdateSessionId`, `_lastRuntimeStatusSessionId`) before pending decision id,
+  - pending decision session id is considered only while decision gate is actually active.
+- `OK` Expected effect:
+  - post-decision `End Session` should no longer target obsolete pre-decision session ids,
+  - reduces false immediate `Session handoff needed` after clean close/reconnect flow for same student.
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260219_212543/flutter_analyze.log`
+  - `flutter test` PASS -> `docs/evidence/20260219_212543/flutter_test.log`
+  - summary -> `docs/evidence/20260219_212543/notes/SUMMARY.md`
+- `TODO` Manual confirmation still required:
+  - rerun exact scenario from operator report to confirm handoff prompt no longer appears after `Start new` -> game run -> `End Session` -> reconnect same student.
+
+## 27) Firestore permission fix + sync-pending gate hardening (2026-02-19)
+
+- `OK` Root cause confirmed from live feedback:
+  - `therapy_sessions` was not covered by Firestore rules, so mobile journal writes/reads were denied.
+- `OK` Firestore rules updated (`firestore.rules`):
+  - added access policy for `therapy_sessions/{sessionId}` and nested `events/{eventId}`,
+  - owner therapist (matching `therapistId`) + admin operator access paths enabled.
+- `OK` Firestore rules deployed to project:
+  - project: `theraply-vr-demo`,
+  - deploy log: `docs/evidence/20260219_214923/firebase/firestore_rules_deploy.log`.
+- `OK` Handoff false-positive gate hardened:
+  - `sync_pending` no longer triggers session-handoff decision fallback,
+  - updated in:
+    - `flutter_controller/lib/models/session_recovery_policy.dart`
+    - `flutter_controller/lib/screens/control_screen.dart`
+  - regression expectation aligned:
+    - `flutter_controller/test/save_resume_regression_test.dart`
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260219_214923/flutter_analyze.log`
+  - `flutter test` PASS -> `docs/evidence/20260219_214923/flutter_test.log`
+  - summary -> `docs/evidence/20260219_214923/notes/SUMMARY.md`
+- `TODO` Manual operator re-test required now (same scenario):
+  - connect student -> if no unfinished session, no handoff prompt,
+  - run game -> `End Session` -> reconnect same student -> no immediate `Session handoff needed`.
+
+## 28) Cube-only mode + server-authoritative handoff gate (2026-02-20)
+
+- `OK` Mobile catalog simplified to one game (`demo_cube_clicker`) in:
+  - `flutter_controller/lib/screens/control_screen.dart`
+  - removed `smoke_test_game` and `pulse_target_tap` entries from operator catalog.
+- `OK` Content-delivery simulation path disabled for current phase:
+  - mobile side:
+    - content sync/install/uninstall actions are now disabled by feature flag (`_contentDeliveryEnabled = false`),
+    - catalog messaging adjusted for direct open flow (no install/update prerequisite in this mode),
+  - Unity side:
+    - `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs`
+    - `_enableContentDeliverySimulation = false`,
+    - `_publishContentCatalogOnClientConnect = false`,
+    - simulated catalog reduced to `demo_cube_clicker`.
+- `OK` Session handoff gate changed to mobile-server authority:
+  - in `flutter_controller/lib/screens/control_screen.dart`,
+  - popup decision path now prioritizes persisted Firestore snapshot (`therapy_sessions`) and skips runtime fallback decision when server-authoritative mode is active.
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260220_102207/flutter_analyze.log`
+  - `flutter test` PASS -> `docs/evidence/20260220_102207/flutter_test.log`
+  - summary -> `docs/evidence/20260220_102207/notes/SUMMARY.md`
+- `TODO` Manual operator verification required:
+  - reconnect same student after clean `End Session` and confirm no handoff popup when latest persisted server session is terminal,
+  - confirm only Cube Clicker is visible in mobile catalog and no install/uninstall actions are exposed.

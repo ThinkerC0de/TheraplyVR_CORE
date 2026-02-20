@@ -77,7 +77,7 @@ void main() {
         TherapistRuntimeStatus.playing: true,
         TherapistRuntimeStatus.paused: true,
         TherapistRuntimeStatus.interrupted: true,
-        TherapistRuntimeStatus.syncPending: true,
+        TherapistRuntimeStatus.syncPending: false,
         TherapistRuntimeStatus.connected: false,
         null: false,
       };
