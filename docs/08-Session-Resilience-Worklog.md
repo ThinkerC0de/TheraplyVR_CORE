@@ -678,3 +678,45 @@ Go/No-Go decision:
 - `TODO` Manual operator verification required:
   - reconnect same student after clean `End Session` and confirm no handoff popup when latest persisted server session is terminal,
   - confirm only Cube Clicker is visible in mobile catalog and no install/uninstall actions are exposed.
+
+## 29) SESSION_ATTACH handshake + reconnect binding gate (2026-02-20)
+
+- `OK` Added explicit runtime attach command to shared critical command contract:
+  - Flutter constant: `flutter_controller/lib/models/critical_command_envelope.dart`
+    - new critical command id: `SESSION_ATTACH`
+  - Unity contract: `unity-quest-template/Assets/_TheraplyCore/Games/Contracts/GameCommands.cs`
+    - new `GameCommandIds.SessionAttach`,
+    - new `SessionAttachCommand` payload model,
+    - `SESSION_ATTACH` included in Unity critical command list.
+- `OK` Unity command bus/session-lock update:
+  - `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameCommandBus.cs`
+  - `SESSION_ATTACH` bypasses active-session lock conflict checks (intended attach override path).
+- `OK` Unity runtime attach handler implemented:
+  - `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs`
+  - subscribes/unsubscribes `SessionAttachCommand`,
+  - validates `sessionId`,
+  - updates participant ids on same session,
+  - restores/forces session context to requested mobile session when needed,
+  - emits `session_attach` telemetry event,
+  - rejects attach if a different active game is already running (`SESSION_ATTACH_ACTIVE_GAME_CONFLICT`).
+- `OK` Mobile reconnect/session binding hardening:
+  - `flutter_controller/lib/screens/control_screen.dart`
+  - added `_ensureSessionAttached(...)` critical handshake call after connect/reconnect and handoff branch changes,
+  - critical gameplay commands are now blocked until attach ACK (`_sessionAttachReady` gate),
+  - game catalog/open action and in-game controls are disabled while attach sync is pending,
+  - handoff decision flows (`Continue` / `Start new`) now force re-attach to chosen/new session id.
+- `OK` Session journal lifecycle enrichment:
+  - `flutter_controller/lib/screens/control_screen.dart`
+  - persisted connection lifecycle events:
+    - `CONTROLLER_CONNECTED`,
+    - `CONTROLLER_RECONNECTED`,
+    - `CONTROLLER_DISCONNECTED`,
+    - `SESSION_ATTACH_ACK`.
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260220_110203/flutter_analyze.log`
+  - `flutter test` PASS -> `docs/evidence/20260220_110203/flutter_test.log`
+  - summary -> `docs/evidence/20260220_110203/notes/SUMMARY.md`
+- `TODO` Manual verification still required (phone + Unity Editor):
+  - disconnect headset mid-game -> reconnect -> confirm automatic attach to the same mobile session,
+  - confirm no control command is accepted before attach sync completes,
+  - confirm `End Session` + reconnect same student no longer triggers false handoff prompt.

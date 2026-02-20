@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 
 class CriticalCommandIds {
+  static const String sessionAttach = 'SESSION_ATTACH';
   static const String startGame = 'START_GAME';
   static const String pauseGame = 'PAUSE_GAME';
   static const String resumeGame = 'RESUME_GAME';
@@ -9,6 +10,7 @@ class CriticalCommandIds {
   static const String endSession = 'END_SESSION';
 
   static const Set<String> values = <String>{
+    sessionAttach,
     startGame,
     pauseGame,
     resumeGame,

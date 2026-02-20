@@ -94,6 +94,9 @@ class _ControlScreenState extends State<ControlScreen>
   bool _isVideoPreviewExpanded = false;
   bool _optimisticRuntimeActive = false;
   bool _optimisticRuntimePaused = false;
+  bool _sessionAttachInFlight = false;
+  bool _sessionAttachReady = false;
+  bool _hasConnectedAtLeastOnce = false;
 
   SessionLifecycleState? _sessionLifecycleState;
   TherapistRuntimeStatus? _runtimeStatus;
@@ -165,16 +168,49 @@ class _ControlScreenState extends State<ControlScreen>
         return;
       }
 
+      final wasConnected = _isConnected;
       setState(() {
         _isConnected = connected;
+        if (!connected) {
+          _sessionAttachReady = false;
+        }
       });
 
       if (connected) {
+        final attachReason =
+            _hasConnectedAtLeastOnce ? 'AUTO_RECONNECT' : 'INITIAL_CONNECT';
+        _hasConnectedAtLeastOnce = true;
+
         if (_contentDeliveryEnabled) {
           unawaited(_syncContentCatalog(silent: true));
         }
         unawaited(_refreshPersistedSessionSnapshot(triggerPrompt: true));
+        if (!wasConnected) {
+          final connectionEventType = attachReason == 'INITIAL_CONNECT'
+              ? 'CONTROLLER_CONNECTED'
+              : 'CONTROLLER_RECONNECTED';
+          unawaited(
+            _recordConnectionLifecycleEvent(
+              eventType: connectionEventType,
+              reasonCode: attachReason,
+            ),
+          );
+          unawaited(
+            _ensureSessionAttached(
+              reasonCode: attachReason,
+              force: true,
+            ),
+          );
+        }
       } else {
+        if (wasConnected) {
+          unawaited(
+            _recordConnectionLifecycleEvent(
+              eventType: 'CONTROLLER_DISCONNECTED',
+              reasonCode: 'TCP_LINK_LOST',
+            ),
+          );
+        }
         _startAutoReconnectLoop(reason: 'connection_lost');
       }
     });
@@ -364,6 +400,7 @@ class _ControlScreenState extends State<ControlScreen>
         if (mounted) {
           setState(() {
             _isConnected = true;
+            _sessionAttachReady = false;
           });
         }
         break;
@@ -384,6 +421,162 @@ class _ControlScreenState extends State<ControlScreen>
 
   String _buildLocalSessionId() {
     return 'mobile-${widget.student.id}-${DateTime.now().toUtc().millisecondsSinceEpoch}';
+  }
+
+  String _resolveAttachTargetSessionId() {
+    final pendingDecisionId = _remoteSessionIdPendingDecision?.trim() ?? '';
+    if (pendingDecisionId.isNotEmpty) {
+      return pendingDecisionId;
+    }
+
+    final persisted = _latestPersistedSession;
+    if (persisted != null && persisted.requiresHandoffDecision) {
+      final persistedSessionId = persisted.sessionId.trim();
+      if (persistedSessionId.isNotEmpty &&
+          !_wasSessionRecentlyEnded(persistedSessionId)) {
+        return persistedSessionId;
+      }
+    }
+
+    final activeSessionId = _activeSessionId.trim();
+    if (activeSessionId.isNotEmpty) {
+      return activeSessionId;
+    }
+
+    final generatedSessionId = _buildLocalSessionId();
+    _activeSessionId = generatedSessionId;
+    return generatedSessionId;
+  }
+
+  Future<void> _ensureSessionAttached({
+    required String reasonCode,
+    bool force = false,
+  }) async {
+    if (!mounted || !_isConnected || _allowSystemPop) {
+      return;
+    }
+    if (_sessionAttachInFlight) {
+      return;
+    }
+    if (_sessionAttachReady && !force) {
+      return;
+    }
+
+    final targetSessionId = _resolveAttachTargetSessionId().trim();
+    if (targetSessionId.isEmpty) {
+      return;
+    }
+
+    final therapistId = _resolveActorTherapistId();
+    _sessionAttachInFlight = true;
+    if (mounted) {
+      setState(() {});
+    }
+
+    try {
+      await _connection.sendCriticalCommand(
+        commandId: CriticalCommandIds.sessionAttach,
+        sessionId: targetSessionId,
+        payload: <String, dynamic>{
+          'sessionId': targetSessionId,
+          'studentId': widget.student.id,
+          'patientId': widget.student.id,
+          'therapistId': therapistId,
+          'reasonCode': reasonCode,
+          'origin': 'mobile_controller',
+        },
+        expiresAtUtc: DateTime.now().toUtc().add(const Duration(seconds: 30)),
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _sessionAttachReady = true;
+        _activeSessionId = targetSessionId;
+      });
+
+      await _recordConnectionLifecycleEvent(
+        eventType: 'SESSION_ATTACH_ACK',
+        reasonCode: reasonCode,
+        sessionIdOverride: targetSessionId,
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _sessionAttachReady = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Session attach failed ($reasonCode): $e'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    } finally {
+      _sessionAttachInFlight = false;
+      if (mounted) {
+        setState(() {});
+      }
+    }
+  }
+
+  Future<void> _recordConnectionLifecycleEvent({
+    required String eventType,
+    required String reasonCode,
+    String? sessionIdOverride,
+  }) async {
+    final sessionId =
+        (sessionIdOverride ?? _resolveAttachTargetSessionId()).trim();
+    if (sessionId.isEmpty) {
+      return;
+    }
+
+    final therapistId = _resolveActorTherapistId();
+    final latestPersistedId = _latestPersistedSession?.sessionId.trim() ?? '';
+    final requiresHandoff =
+        _latestPersistedSession?.requiresHandoffDecision ?? false;
+    final shouldSeedCreatedState = (eventType == 'CONTROLLER_CONNECTED' ||
+            eventType == 'CONTROLLER_RECONNECTED') &&
+        sessionId.startsWith('mobile-') &&
+        !requiresHandoff &&
+        latestPersistedId != sessionId;
+
+    try {
+      if (shouldSeedCreatedState) {
+        await SessionJournalService.upsertSessionState(
+          sessionId: sessionId,
+          studentId: widget.student.id,
+          therapistId: therapistId,
+          state: SessionLifecycleState.created,
+          latestGameId: _selectedGameId,
+          reasonCode: reasonCode,
+          metadata: <String, dynamic>{
+            'origin': 'mobile_connection',
+            'eventType': eventType,
+          },
+        );
+      }
+
+      await SessionJournalService.appendSessionEvent(
+        sessionId: sessionId,
+        studentId: widget.student.id,
+        therapistId: therapistId,
+        eventType: eventType,
+        gameId: _selectedGameId,
+        details: <String, dynamic>{
+          'reasonCode': reasonCode,
+          'transportConnected': _isConnected,
+        },
+      );
+    } catch (e) {
+      debugPrint(
+        '[ControlScreen] Connection lifecycle event persist failed: event=$eventType, reason=$reasonCode, error=$e',
+      );
+    }
   }
 
   void _pruneRecentlyEndedSessions() {
@@ -531,6 +724,17 @@ class _ControlScreenState extends State<ControlScreen>
 
       _remoteSessionIdPendingDecision = persistedSessionId;
       _requiresSessionDecision = true;
+      if (_sessionAttachReady && mounted) {
+        setState(() {
+          _sessionAttachReady = false;
+        });
+      }
+      unawaited(
+        _ensureSessionAttached(
+          reasonCode: 'HANDOFF_PENDING',
+          force: true,
+        ),
+      );
       _promptSessionDecisionIfNeeded();
       return true;
     }
@@ -542,6 +746,12 @@ class _ControlScreenState extends State<ControlScreen>
         _requiresSessionDecision = false;
         _remoteSessionIdPendingDecision = null;
       });
+      unawaited(
+        _ensureSessionAttached(
+          reasonCode: 'HANDOFF_GATE_CLEARED',
+          force: true,
+        ),
+      );
       return true;
     }
 
@@ -1329,12 +1539,20 @@ class _ControlScreenState extends State<ControlScreen>
       _activeSessionId = remoteSessionId;
       _requiresSessionDecision = false;
       _remoteSessionIdPendingDecision = null;
+      _sessionAttachReady = false;
       _workflowStep = _WorkflowStep.gameSetup;
       _isVideoPreviewExpanded = true;
       if (resolvedGameId != null) {
         _selectedGameId = resolvedGameId;
       }
     });
+    await _ensureSessionAttached(
+      reasonCode: 'HANDOFF_RESUME',
+      force: true,
+    );
+    if (!mounted || !_sessionAttachReady) {
+      return;
+    }
 
     final strategy = await _showResumeStrategyDialog(_selectedGameEntry);
     if (!mounted || strategy == null) {
@@ -1477,9 +1695,17 @@ class _ControlScreenState extends State<ControlScreen>
         _activeSessionId = _buildLocalSessionId();
         _requiresSessionDecision = false;
         _remoteSessionIdPendingDecision = null;
+        _sessionAttachReady = false;
         _workflowStep = _WorkflowStep.gameCatalog;
         _isVideoPreviewExpanded = false;
       });
+      await _ensureSessionAttached(
+        reasonCode: 'HANDOFF_START_NEW',
+        force: true,
+      );
+      if (!mounted || !_sessionAttachReady) {
+        return;
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1532,6 +1758,27 @@ class _ControlScreenState extends State<ControlScreen>
       );
       _promptSessionDecisionIfNeeded();
       return false;
+    }
+
+    if (CriticalCommandIds.isCritical(command) &&
+        command != CriticalCommandIds.sessionAttach &&
+        !_sessionAttachReady) {
+      await _ensureSessionAttached(
+        reasonCode: 'COMMAND_PRECONDITION',
+        force: true,
+      );
+      if (!_sessionAttachReady) {
+        if (!mounted) {
+          return false;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Waiting for session sync. Try again in a moment.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return false;
+      }
     }
 
     final commandSessionId = CriticalCommandIds.isCritical(command)
@@ -1628,7 +1875,7 @@ class _ControlScreenState extends State<ControlScreen>
   }) {
     final payload = <String, dynamic>{
       'studentId': widget.student.id,
-      'therapistId': widget.student.therapistId,
+      'therapistId': _resolveActorTherapistId(),
     };
 
     if (_gameScopedCriticalCommands.contains(command)) {
@@ -2311,25 +2558,26 @@ class _ControlScreenState extends State<ControlScreen>
     required _GameCatalogEntry entry,
     required PurchasedContentState contentState,
   }) {
-    final canStart = _isConnected &&
+    final controlsReady = _isConnected && _sessionAttachReady;
+    final canStart = controlsReady &&
         !_isPrimaryActionInFlight &&
         _isLaunchableContentState(contentState) &&
         !_isGameRuntimeActive;
-    final canRestart = _isConnected &&
+    final canRestart = controlsReady &&
         !_isPrimaryActionInFlight &&
         _isLaunchableContentState(contentState) &&
         _isGameRuntimeActive;
-    final canPause = _isConnected &&
+    final canPause = controlsReady &&
         !_isPrimaryActionInFlight &&
         _isGameRuntimeActive &&
         !_isGameRuntimePaused;
-    final canResume = _isConnected &&
+    final canResume = controlsReady &&
         !_isPrimaryActionInFlight &&
         _isGameRuntimeActive &&
         _isGameRuntimePaused;
     final canEndGame =
-        _isConnected && !_isPrimaryActionInFlight && _isGameRuntimeActive;
-    final canResumeFromSaved = _isConnected &&
+        controlsReady && !_isPrimaryActionInFlight && _isGameRuntimeActive;
+    final canResumeFromSaved = controlsReady &&
         !_isPrimaryActionInFlight &&
         _isLaunchableContentState(contentState) &&
         !_isGameRuntimeActive &&
@@ -2482,6 +2730,15 @@ class _ControlScreenState extends State<ControlScreen>
             text: _contentDeliveryEnabled
                 ? 'Headset is offline. Install/update actions will stay disabled until reconnect.'
                 : 'Headset is offline. Reconnect to continue.',
+          ),
+          const SizedBox(height: 6),
+        ] else if (!_sessionAttachReady) ...[
+          _buildStateBanner(
+            icon: Icons.sync,
+            color: Colors.orange.shade800,
+            text: _sessionAttachInFlight
+                ? 'Synchronizing session context with headset...'
+                : 'Session context not synced yet. Commands stay blocked until sync completes.',
           ),
           const SizedBox(height: 6),
         ],
@@ -2693,21 +2950,24 @@ class _ControlScreenState extends State<ControlScreen>
         _buildMoreGamesHint(),
         const SizedBox(height: 8),
         ElevatedButton.icon(
-          onPressed: _isConnected && _isSelectedGameLaunchable
-              ? () {
-                  setState(() {
-                    _workflowStep = _WorkflowStep.gameSetup;
-                    _isVideoPreviewExpanded = true;
-                  });
-                }
-              : null,
+          onPressed:
+              _isConnected && _sessionAttachReady && _isSelectedGameLaunchable
+                  ? () {
+                      setState(() {
+                        _workflowStep = _WorkflowStep.gameSetup;
+                        _isVideoPreviewExpanded = true;
+                      });
+                    }
+                  : null,
           icon: const Icon(Icons.videogame_asset),
           label: Text(
-            _isSelectedGameLaunchable
-                ? 'Open game session'
-                : _contentDeliveryEnabled
-                    ? 'Install or update selected game first'
-                    : 'Select available game first',
+            !_sessionAttachReady
+                ? 'Wait for session sync first'
+                : _isSelectedGameLaunchable
+                    ? 'Open game session'
+                    : _contentDeliveryEnabled
+                        ? 'Install or update selected game first'
+                        : 'Select available game first',
           ),
           style: ElevatedButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -2774,6 +3034,15 @@ class _ControlScreenState extends State<ControlScreen>
                       'Headset is offline. Controls are disabled until reconnect.',
                 ),
                 const SizedBox(height: 8),
+              ] else if (!_sessionAttachReady) ...[
+                _buildStateBanner(
+                  icon: Icons.sync,
+                  color: Colors.orange.shade800,
+                  text: _sessionAttachInFlight
+                      ? 'Synchronizing session context...'
+                      : 'Session context is not synced yet. Controls remain locked.',
+                ),
+                const SizedBox(height: 8),
               ],
               if (!_isLaunchableContentState(contentState)) ...[
                 _buildStateBanner(
@@ -2813,9 +3082,10 @@ class _ControlScreenState extends State<ControlScreen>
         ),
         const SizedBox(height: 8),
         ElevatedButton.icon(
-          onPressed: _isPrimaryActionInFlight
-              ? null
-              : () => unawaited(_endSessionFromGameScreen()),
+          onPressed:
+              _isPrimaryActionInFlight || !_isConnected || !_sessionAttachReady
+                  ? null
+                  : () => unawaited(_endSessionFromGameScreen()),
           icon: const Icon(Icons.flag),
           label: const Text('End Session'),
           style: ElevatedButton.styleFrom(

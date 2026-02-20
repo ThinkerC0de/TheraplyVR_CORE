@@ -143,6 +143,7 @@ namespace TheraplyCore.Games.Runtime
         {
             if (_subscribeToStandardCommands && _commandBus != null)
             {
+                _commandBus.Subscribe<SessionAttachCommand>(HandleSessionAttachCommand);
                 _commandBus.Subscribe<StartGameCommand>(HandleStartCommand);
                 _commandBus.Subscribe<PauseGameCommand>(HandlePauseCommand);
                 _commandBus.Subscribe<ResumeGameCommand>(HandleResumeCommand);
@@ -181,6 +182,7 @@ namespace TheraplyCore.Games.Runtime
         {
             if (_subscribeToStandardCommands && _commandBus != null)
             {
+                _commandBus.Unsubscribe<SessionAttachCommand>(HandleSessionAttachCommand);
                 _commandBus.Unsubscribe<StartGameCommand>(HandleStartCommand);
                 _commandBus.Unsubscribe<PauseGameCommand>(HandlePauseCommand);
                 _commandBus.Unsubscribe<ResumeGameCommand>(HandleResumeCommand);
@@ -410,6 +412,98 @@ namespace TheraplyCore.Games.Runtime
                 { "reason", reason.ToString() },
             });
             return true;
+        }
+
+        private void HandleSessionAttachCommand(SessionAttachCommand command)
+        {
+            if (_sessionContext == null)
+            {
+                _sessionContext = ResolveSessionContext();
+            }
+
+            if (_sessionContext == null)
+            {
+                throw new InvalidOperationException("SESSION_ATTACH_CONTEXT_MISSING");
+            }
+
+            var requestedSessionId = command == null ? string.Empty : (command.sessionId ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(requestedSessionId))
+            {
+                throw new InvalidOperationException("SESSION_ATTACH_SESSION_ID_REQUIRED");
+            }
+
+            var patientId = command == null ? string.Empty : (command.patientId ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(patientId))
+            {
+                patientId = string.IsNullOrWhiteSpace(_sessionContext.PatientId)
+                    ? "unknown_patient"
+                    : _sessionContext.PatientId;
+            }
+
+            var therapistId = command == null ? string.Empty : (command.therapistId ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(therapistId))
+            {
+                therapistId = string.IsNullOrWhiteSpace(_sessionContext.TherapistId)
+                    ? "unknown_therapist"
+                    : _sessionContext.TherapistId;
+            }
+
+            var reasonCode = command == null ? string.Empty : (command.reasonCode ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(reasonCode))
+            {
+                reasonCode = "SESSION_ATTACH";
+            }
+
+            var currentSessionId = _sessionContext.SessionId ?? string.Empty;
+            var currentState = _sessionContext.SessionState;
+            var sameSession = string.Equals(currentSessionId, requestedSessionId, StringComparison.Ordinal);
+
+            if (_activeGame != null && !sameSession)
+            {
+                throw new InvalidOperationException("SESSION_ATTACH_ACTIVE_GAME_CONFLICT");
+            }
+
+            if (sameSession)
+            {
+                _sessionContext.UpdateParticipantIds(patientId, therapistId);
+                if (IsTerminalSessionState(currentState))
+                {
+                    _sessionContext.BeginSession(patientId, therapistId, requestedSessionId);
+                }
+
+                TrackCriticalRuntimeEvent("session_attach", new Dictionary<string, object>
+                {
+                    { "sessionId", requestedSessionId },
+                    { "patientId", patientId },
+                    { "therapistId", therapistId },
+                    { "reasonCode", reasonCode },
+                    { "mode", "same_session" },
+                });
+                return;
+            }
+
+            var restored = _sessionContext.RestoreSession(
+                patientId: patientId,
+                therapistId: therapistId,
+                sessionId: requestedSessionId,
+                startedAtUtc: DateTime.UtcNow,
+                restoredState: GameContracts.SessionLifecycleState.CREATED,
+                reasonCode: reasonCode,
+                forceReplaceActive: true);
+
+            if (!restored)
+            {
+                throw new InvalidOperationException("SESSION_ATTACH_RESTORE_FAILED");
+            }
+
+            TrackCriticalRuntimeEvent("session_attach", new Dictionary<string, object>
+            {
+                { "sessionId", requestedSessionId },
+                { "patientId", patientId },
+                { "therapistId", therapistId },
+                { "reasonCode", reasonCode },
+                { "mode", "restored_created" },
+            });
         }
 
         private void HandleStartCommand(StartGameCommand command)
@@ -2082,6 +2176,13 @@ namespace TheraplyCore.Games.Runtime
                    state == GameContracts.SessionLifecycleState.IN_PROGRESS ||
                    state == GameContracts.SessionLifecycleState.PAUSED ||
                    state == GameContracts.SessionLifecycleState.INTERRUPTED;
+        }
+
+        private static bool IsTerminalSessionState(GameContracts.SessionLifecycleState state)
+        {
+            return state == GameContracts.SessionLifecycleState.COMPLETED ||
+                   state == GameContracts.SessionLifecycleState.ABORTED_BY_THERAPIST ||
+                   state == GameContracts.SessionLifecycleState.FAILED_TECHNICAL;
         }
 
         private string ResolveRuntimeStatus(int pendingQueueSize)

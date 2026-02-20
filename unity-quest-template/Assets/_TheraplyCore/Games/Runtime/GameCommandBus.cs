@@ -403,6 +403,11 @@ namespace TheraplyCore.Games.Runtime
         {
             rejectReasonCode = string.Empty;
 
+            if (string.Equals(commandId, GameCommandIds.SessionAttach, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
             if (_sessionContext == null)
             {
                 _sessionContext = FindFirstObjectByType<GameSessionContext>();
@@ -532,6 +537,7 @@ namespace TheraplyCore.Games.Runtime
 
         private void RegisterBuiltInCommandMappings()
         {
+            SetCommandIdMapping(typeof(SessionAttachCommand), GameCommandIds.SessionAttach);
             SetCommandIdMapping(typeof(StartGameCommand), GameCommandIds.StartGame);
             SetCommandIdMapping(typeof(PauseGameCommand), GameCommandIds.PauseGame);
             SetCommandIdMapping(typeof(ResumeGameCommand), GameCommandIds.ResumeGame);

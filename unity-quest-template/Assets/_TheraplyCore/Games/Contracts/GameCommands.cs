@@ -8,6 +8,7 @@ namespace TheraplyCore.Games.Contracts
     /// </summary>
     public static class GameCommandIds
     {
+        public const string SessionAttach = "SESSION_ATTACH";
         public const string StartGame = "START_GAME";
         public const string PauseGame = "PAUSE_GAME";
         public const string ResumeGame = "RESUME_GAME";
@@ -31,6 +32,7 @@ namespace TheraplyCore.Games.Contracts
         private static readonly HashSet<string> Values =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
+                GameCommandIds.SessionAttach,
                 GameCommandIds.StartGame,
                 GameCommandIds.PauseGame,
                 GameCommandIds.ResumeGame,
@@ -50,6 +52,18 @@ namespace TheraplyCore.Games.Contracts
     public interface IGameCommand
     {
         string CorrelationId { get; }
+    }
+
+    [Serializable]
+    public sealed class SessionAttachCommand : IGameCommand
+    {
+        public string correlationId;
+        public string sessionId;
+        public string patientId;
+        public string therapistId;
+        public string reasonCode;
+
+        public string CorrelationId => correlationId;
     }
 
     [Serializable]
