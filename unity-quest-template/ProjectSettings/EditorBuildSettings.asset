@@ -20,5 +20,8 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/_Examples/Scenes/SessionResilienceTest.unity
     guid: ee96dadc1d92d0e41bac47e90197b4fd
-  m_configObjects: {}
+  m_configObjects:
+    Unity.XR.Oculus.Settings: {fileID: 11400000, guid: 14ed910b9a5520d4d9b1704cd6397c7f, type: 2}
+    com.unity.xr.management.loader_settings: {fileID: 11400000, guid: 261b78e0e4b1dbe4d90a65867516ccd8, type: 2}
+    com.unity.xr.openxr.settings4: {fileID: 11400000, guid: 87284c9047716cd4780e46fdee439bdc, type: 2}
   m_UseUCBPForAssetBundles: 0
