@@ -547,6 +547,7 @@ namespace TheraplyCore.Games.Runtime
             SetCommandIdMapping(typeof(SessionStateUpdateCommand), GameCommandIds.SessionStateUpdate);
             SetCommandIdMapping(typeof(RuntimeStatusUpdateCommand), GameCommandIds.RuntimeStatusUpdate);
             SetCommandIdMapping(typeof(SessionWatchdogHeartbeatCommand), GameCommandIds.SessionWatchdogHeartbeat);
+            SetCommandIdMapping(typeof(DevicePresenceUpdateCommand), GameCommandIds.DevicePresenceUpdate);
             SetCommandIdMapping(typeof(ManualResyncCommand), GameCommandIds.ManualResync);
             SetCommandIdMapping(typeof(ManualResyncReportCommand), GameCommandIds.ManualResyncReport);
             SetCommandIdMapping(typeof(SyncCatalogCommand), GameCommandIds.SyncCatalog);

@@ -900,3 +900,46 @@ Go/No-Go decision:
   - reproduce Unity network off/on during active session,
   - confirm mobile transitions from stale-connected to reconnect without waiting for operator command taps,
   - confirm controls + preview recover after reconnect/attach and no forced app restart is needed.
+
+## 39) Device presence signal: Unity lifecycle -> mobile operator feedback (2026-02-21)
+
+- `OK` Added new shared runtime signal contract for headset app presence:
+  - Unity command id: `DEVICE_PRESENCE_UPDATE`,
+  - payload includes `presenceState`, `reasonCode`, app pause/focus flags, tcp-client flag, active game context.
+  - files:
+    - `unity-quest-template/Assets/_TheraplyCore/Games/Contracts/GameCommands.cs`
+    - `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameCommandBus.cs`
+- `OK` Unity runtime emission wired in `GameRuntimeService`:
+  - emits presence updates on:
+    - `OnApplicationPause`,
+    - `OnApplicationFocus`,
+    - `OnApplicationQuit`,
+    - `TCP_CLIENT_CONNECTED`,
+  - deduplicates noisy repeats (750ms threshold),
+  - publishes telemetry event `device_presence_update`.
+  - file:
+    - `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs`
+- `OK` Flutter parser + UI integration:
+  - added `DevicePresenceState` + `DevicePresenceUpdateSignal` parser,
+  - `ControlScreen` now:
+    - listens for `DEVICE_PRESENCE_UPDATE`,
+    - shows operator snackbars for background/focus-loss/quitting and recovery,
+    - renders warning banners when headset app is not in active VR foreground,
+    - blocks gameplay controls + "Open game session" while headset presence is blocking.
+  - files:
+    - `flutter_controller/lib/models/runtime_status_signal.dart`
+    - `flutter_controller/lib/screens/control_screen.dart`
+- `OK` Added parser coverage test:
+  - `flutter_controller/test/runtime_status_signal_test.dart`
+- `OK` Validation rerun (`flutter_controller`):
+  - first attempt (compile icon mismatch) captured for traceability:
+    - `docs/evidence/20260221_125904/flutter_analyze.log`
+    - `docs/evidence/20260221_125904/flutter_test.log`
+  - final clean run:
+    - `flutter analyze` PASS -> `docs/evidence/20260221_125944/flutter_analyze.log`
+    - `flutter test` PASS -> `docs/evidence/20260221_125944/flutter_test.log`
+    - summary -> `docs/evidence/20260221_125944/notes/SUMMARY.md`
+- `TODO` Manual validation still required:
+  - open Quest system menu during active session and verify mobile warning banner + controls lock,
+  - return to app and verify mobile "controls unlocked" feedback,
+  - close/reopen Quest app and verify reconnect + attach path still restores control availability.

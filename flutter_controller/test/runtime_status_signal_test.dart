@@ -81,4 +81,37 @@ void main() {
 
     expect(customSignal.isStale(DateTime.now().toUtc()), isTrue);
   });
+
+  test('parses DEVICE_PRESENCE_UPDATE payload', () {
+    final nowUtc = DateTime.now().toUtc();
+    final message = <String, dynamic>{
+      'commandId': RuntimeStatusSignalCommandIds.devicePresenceUpdate,
+      'payload': base64Encode(
+        utf8.encode(
+          jsonEncode(<String, dynamic>{
+            'sessionId': 'session-2',
+            'patientId': 'patient-2',
+            'therapistId': 'therapist-2',
+            'presenceState': DevicePresenceState.focusLost.wireValue,
+            'reasonCode': 'APP_FOCUS_LOST',
+            'changedAtUnixMs': nowUtc.millisecondsSinceEpoch,
+            'appPaused': false,
+            'appFocused': false,
+            'hasTcpClient': true,
+            'activeGameId': 'demo_cube_clicker',
+            'activeGameState': 'Playing',
+          }),
+        ),
+      ),
+    };
+
+    final signal = DevicePresenceUpdateSignal.tryFromNetworkMessage(message);
+
+    expect(signal, isNotNull);
+    expect(signal!.sessionId, 'session-2');
+    expect(signal.presenceState, DevicePresenceState.focusLost);
+    expect(signal.reasonCode, 'APP_FOCUS_LOST');
+    expect(signal.appFocused, isFalse);
+    expect(signal.hasTcpClient, isTrue);
+  });
 }

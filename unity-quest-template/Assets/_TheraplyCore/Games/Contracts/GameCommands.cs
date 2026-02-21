@@ -19,6 +19,7 @@ namespace TheraplyCore.Games.Contracts
         public const string SessionStateUpdate = "SESSION_STATE_UPDATE";
         public const string RuntimeStatusUpdate = "RUNTIME_STATUS_UPDATE";
         public const string SessionWatchdogHeartbeat = "SESSION_WATCHDOG_HEARTBEAT";
+        public const string DevicePresenceUpdate = "DEVICE_PRESENCE_UPDATE";
         public const string ManualResync = "MANUAL_RESYNC";
         public const string ManualResyncReport = "MANUAL_RESYNC_REPORT";
         public const string SyncCatalog = "SYNC_CATALOG";
@@ -186,6 +187,34 @@ namespace TheraplyCore.Games.Contracts
         public int pendingQueueSize;
         public int expectedIntervalMs;
         public int staleAfterMs;
+
+        public string CorrelationId => correlationId;
+    }
+
+    public static class DevicePresenceStateValues
+    {
+        public const string Connected = "connected";
+        public const string Foreground = "foreground";
+        public const string Background = "background";
+        public const string FocusLost = "focus_lost";
+        public const string Quitting = "quitting";
+    }
+
+    [Serializable]
+    public sealed class DevicePresenceUpdateCommand : IGameCommand
+    {
+        public string correlationId;
+        public string sessionId;
+        public string patientId;
+        public string therapistId;
+        public string presenceState;
+        public string reasonCode;
+        public long changedAtUnixMs;
+        public bool appPaused;
+        public bool appFocused;
+        public bool hasTcpClient;
+        public string activeGameId;
+        public string activeGameState;
 
         public string CorrelationId => correlationId;
     }

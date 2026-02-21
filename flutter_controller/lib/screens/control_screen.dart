@@ -73,8 +73,7 @@ class _ControlScreenState extends State<ControlScreen>
   static const String _pulseTargetGameId = 'pulse_target_tap';
   static const Duration _recentlyEndedSessionTtl = Duration(seconds: 20);
   static const Duration _discoveryCandidateFreshTtl = Duration(seconds: 12);
-  static const Duration _connectionLivenessPollInterval =
-      Duration(seconds: 2);
+  static const Duration _connectionLivenessPollInterval = Duration(seconds: 2);
   static const Duration _connectionSignalGracePeriod = Duration(seconds: 8);
   static const Duration _connectionSignalFallbackTimeout =
       Duration(seconds: 12);
@@ -127,6 +126,7 @@ class _ControlScreenState extends State<ControlScreen>
   DateTime? _latestDiscoveryReconnectSeenAt;
   DateTime? _connectedAtUtc;
   DateTime? _lastRuntimeSignalAtUtc;
+  DevicePresenceUpdateSignal? _lastDevicePresenceSignal;
   int _lastWatchdogStaleAfterMs = 6000;
   bool _livenessRecoveryInFlight = false;
   String? _disconnectReasonOverride;
@@ -192,6 +192,7 @@ class _ControlScreenState extends State<ControlScreen>
         _isConnected = connected;
         if (!connected) {
           _sessionAttachReady = false;
+          _lastDevicePresenceSignal = null;
         }
       });
 
@@ -231,8 +232,7 @@ class _ControlScreenState extends State<ControlScreen>
         _lastRuntimeSignalAtUtc = null;
         _livenessRecoveryInFlight = false;
         if (wasConnected) {
-          final disconnectReason =
-              _disconnectReasonOverride ?? 'TCP_LINK_LOST';
+          final disconnectReason = _disconnectReasonOverride ?? 'TCP_LINK_LOST';
           _disconnectReasonOverride = null;
           unawaited(
             _recordConnectionLifecycleEvent(
@@ -255,6 +255,8 @@ class _ControlScreenState extends State<ControlScreen>
       final runtimeUpdate = RuntimeStatusUpdateSignal.tryFromNetworkMessage(
         message,
       );
+      final devicePresenceUpdate =
+          DevicePresenceUpdateSignal.tryFromNetworkMessage(message);
       final watchdogHeartbeat =
           SessionWatchdogHeartbeatSignal.tryFromNetworkMessage(message);
       final watchdogSessionState = SessionLifecycleState.tryParse(
@@ -262,6 +264,20 @@ class _ControlScreenState extends State<ControlScreen>
       );
       final contentStatusSignal =
           ContentInstallStatusSignal.tryFromNetworkMessage(message);
+
+      if (mounted && devicePresenceUpdate != null) {
+        final previousSignal = _lastDevicePresenceSignal;
+        _lastRuntimeSignalAtUtc = DateTime.now().toUtc();
+
+        setState(() {
+          _lastDevicePresenceSignal = devicePresenceUpdate;
+        });
+
+        _handleDevicePresenceFeedback(
+          previousSignal: previousSignal,
+          signal: devicePresenceUpdate,
+        );
+      }
 
       if (mounted &&
           (sessionUpdate != null ||
@@ -434,7 +450,10 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   Future<void> _forceLivenessReconnect(String reasonCode) async {
-    if (!mounted || !_isConnected || _allowSystemPop || _livenessRecoveryInFlight) {
+    if (!mounted ||
+        !_isConnected ||
+        _allowSystemPop ||
+        _livenessRecoveryInFlight) {
       return;
     }
 
@@ -1169,6 +1188,127 @@ class _ControlScreenState extends State<ControlScreen>
     return _runtimeStatus == TherapistRuntimeStatus.paused ||
         _sessionLifecycleState == SessionLifecycleState.paused ||
         _optimisticRuntimePaused;
+  }
+
+  bool get _isHeadsetPresenceBlocking {
+    if (!_isConnected) {
+      return false;
+    }
+
+    final state = _lastDevicePresenceSignal?.presenceState;
+    return state == DevicePresenceState.background ||
+        state == DevicePresenceState.focusLost ||
+        state == DevicePresenceState.quitting;
+  }
+
+  String? get _headsetPresenceBannerText {
+    if (!_isHeadsetPresenceBlocking) {
+      return null;
+    }
+
+    final signal = _lastDevicePresenceSignal;
+    if (signal == null) {
+      return null;
+    }
+
+    switch (signal.presenceState) {
+      case DevicePresenceState.background:
+        return 'Headset app is in background/menu (${_describePresenceReason(signal.reasonCode)}). Ask student to return to VR app.';
+      case DevicePresenceState.focusLost:
+        return 'Headset lost app focus (${_describePresenceReason(signal.reasonCode)}). Controls stay locked until focus returns.';
+      case DevicePresenceState.quitting:
+        return 'Headset app is closing (${_describePresenceReason(signal.reasonCode)}). Wait for reconnect or reopen app.';
+      case DevicePresenceState.connected:
+      case DevicePresenceState.foreground:
+        return null;
+    }
+  }
+
+  String _describePresenceReason(String reasonCode) {
+    final normalized = reasonCode.trim();
+    if (normalized.isEmpty) {
+      return 'unknown reason';
+    }
+
+    switch (normalized) {
+      case 'APP_PAUSED':
+        return 'app paused';
+      case 'APP_RESUMED':
+        return 'app resumed';
+      case 'APP_FOCUS_LOST':
+        return 'focus lost';
+      case 'APP_FOCUS_GAINED':
+        return 'focus regained';
+      case 'APP_QUIT':
+        return 'app quit';
+      case 'TCP_CLIENT_CONNECTED':
+        return 'transport connected';
+      default:
+        return normalized;
+    }
+  }
+
+  void _handleDevicePresenceFeedback({
+    required DevicePresenceUpdateSignal? previousSignal,
+    required DevicePresenceUpdateSignal signal,
+  }) {
+    if (!mounted) {
+      return;
+    }
+
+    final didStateChange = previousSignal == null ||
+        previousSignal.presenceState != signal.presenceState;
+    final didReasonChange = previousSignal == null ||
+        previousSignal.reasonCode != signal.reasonCode;
+    if (!didStateChange && !didReasonChange) {
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    final reason = _describePresenceReason(signal.reasonCode);
+
+    final isBlockingState =
+        signal.presenceState == DevicePresenceState.background ||
+            signal.presenceState == DevicePresenceState.focusLost ||
+            signal.presenceState == DevicePresenceState.quitting;
+
+    if (isBlockingState) {
+      final message = switch (signal.presenceState) {
+        DevicePresenceState.background =>
+          'Headset opened system menu / app is in background ($reason).',
+        DevicePresenceState.focusLost =>
+          'Headset focus lost ($reason). Controls are temporarily locked.',
+        DevicePresenceState.quitting =>
+          'Headset app is closing ($reason). Waiting for reconnect.',
+        DevicePresenceState.connected => '',
+        DevicePresenceState.foreground => '',
+      };
+
+      if (message.isNotEmpty) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.orange.shade800,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+      return;
+    }
+
+    final wasBlocking = previousSignal != null &&
+        (previousSignal.presenceState == DevicePresenceState.background ||
+            previousSignal.presenceState == DevicePresenceState.focusLost ||
+            previousSignal.presenceState == DevicePresenceState.quitting);
+    if (wasBlocking) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content:
+              Text('Headset returned to active app. Controls are unlocked.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   bool get _isSetupLockedByRuntime => _isGameRuntimeActive;
@@ -2754,7 +2894,8 @@ class _ControlScreenState extends State<ControlScreen>
     required _GameCatalogEntry entry,
     required PurchasedContentState contentState,
   }) {
-    final controlsReady = _isConnected && _sessionAttachReady;
+    final controlsReady =
+        _isConnected && _sessionAttachReady && !_isHeadsetPresenceBlocking;
     final canStart = controlsReady &&
         !_isPrimaryActionInFlight &&
         _isLaunchableContentState(contentState) &&
@@ -2930,6 +3071,13 @@ class _ControlScreenState extends State<ControlScreen>
             text: _contentDeliveryEnabled
                 ? 'Headset is offline. Install/update actions will stay disabled until reconnect.'
                 : 'Headset is offline. Reconnect to continue.',
+          ),
+          const SizedBox(height: 6),
+        ] else if (_headsetPresenceBannerText != null) ...[
+          _buildStateBanner(
+            icon: Icons.warning_amber_rounded,
+            color: Colors.orange.shade800,
+            text: _headsetPresenceBannerText!,
           ),
           const SizedBox(height: 6),
         ] else if (!_sessionAttachReady) ...[
@@ -3150,24 +3298,28 @@ class _ControlScreenState extends State<ControlScreen>
         _buildMoreGamesHint(),
         const SizedBox(height: 8),
         ElevatedButton.icon(
-          onPressed:
-              _isConnected && _sessionAttachReady && _isSelectedGameLaunchable
-                  ? () {
-                      setState(() {
-                        _workflowStep = _WorkflowStep.gameSetup;
-                        _isVideoPreviewExpanded = true;
-                      });
-                    }
-                  : null,
+          onPressed: _isConnected &&
+                  _sessionAttachReady &&
+                  !_isHeadsetPresenceBlocking &&
+                  _isSelectedGameLaunchable
+              ? () {
+                  setState(() {
+                    _workflowStep = _WorkflowStep.gameSetup;
+                    _isVideoPreviewExpanded = true;
+                  });
+                }
+              : null,
           icon: const Icon(Icons.videogame_asset),
           label: Text(
             !_sessionAttachReady
                 ? 'Wait for session sync first'
-                : _isSelectedGameLaunchable
-                    ? 'Open game session'
-                    : _contentDeliveryEnabled
-                        ? 'Install or update selected game first'
-                        : 'Select available game first',
+                : _isHeadsetPresenceBlocking
+                    ? 'Headset not in active VR app yet'
+                    : _isSelectedGameLaunchable
+                        ? 'Open game session'
+                        : _contentDeliveryEnabled
+                            ? 'Install or update selected game first'
+                            : 'Select available game first',
           ),
           style: ElevatedButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -3232,6 +3384,13 @@ class _ControlScreenState extends State<ControlScreen>
                   color: Colors.red.shade700,
                   text:
                       'Headset is offline. Controls are disabled until reconnect.',
+                ),
+                const SizedBox(height: 8),
+              ] else if (_headsetPresenceBannerText != null) ...[
+                _buildStateBanner(
+                  icon: Icons.warning_amber_rounded,
+                  color: Colors.orange.shade800,
+                  text: _headsetPresenceBannerText!,
                 ),
                 const SizedBox(height: 8),
               ] else if (!_sessionAttachReady) ...[

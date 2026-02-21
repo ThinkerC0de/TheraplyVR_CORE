@@ -122,6 +122,11 @@ namespace TheraplyCore.Games.Runtime
         private int _controllerConnectionEpoch;
         private string _lastControllerClientIp = string.Empty;
         private DateTime _lastControllerDisconnectedAtUtc = DateTime.MinValue;
+        private string _lastPublishedDevicePresenceState = string.Empty;
+        private string _lastPublishedDevicePresenceReasonCode = string.Empty;
+        private DateTime _lastPublishedDevicePresenceAtUtc = DateTime.MinValue;
+        private bool _lastAppPaused;
+        private bool _lastAppFocused = true;
 
         public GameContracts.IGameModule ActiveGame => _activeGame;
         public string ActiveGameId => _activeGameId;
@@ -220,6 +225,30 @@ namespace TheraplyCore.Games.Runtime
         {
             DrainPendingCrashSignals();
             ReconcileTerminalGameStateOutsideWatchdog();
+        }
+
+        private void OnApplicationPause(bool pause)
+        {
+            _lastAppPaused = pause;
+            PublishDevicePresenceUpdateIfPossible(
+                pause ? DevicePresenceStateValues.Background : DevicePresenceStateValues.Foreground,
+                pause ? "APP_PAUSED" : "APP_RESUMED");
+        }
+
+        private void OnApplicationFocus(bool hasFocus)
+        {
+            _lastAppFocused = hasFocus;
+            PublishDevicePresenceUpdateIfPossible(
+                hasFocus ? DevicePresenceStateValues.Foreground : DevicePresenceStateValues.FocusLost,
+                hasFocus ? "APP_FOCUS_GAINED" : "APP_FOCUS_LOST");
+        }
+
+        private void OnApplicationQuit()
+        {
+            PublishDevicePresenceUpdateIfPossible(
+                DevicePresenceStateValues.Quitting,
+                "APP_QUIT",
+                force: true);
         }
 
         private void ReconcileTerminalGameStateOutsideWatchdog()
@@ -1276,6 +1305,10 @@ namespace TheraplyCore.Games.Runtime
             _hasObservedControllerConnection = true;
             _lastControllerClientIp = normalizedClientIp;
             _lastControllerDisconnectedAtUtc = DateTime.MinValue;
+            PublishDevicePresenceUpdateIfPossible(
+                DevicePresenceStateValues.Connected,
+                "TCP_CLIENT_CONNECTED",
+                force: true);
             PublishRuntimeStatusIfChanged("TCP_CLIENT_CONNECTED");
             if (_publishContentCatalogOnClientConnect)
             {
@@ -1290,6 +1323,9 @@ namespace TheraplyCore.Games.Runtime
                 "controller_disconnected",
                 "TCP_CLIENT_DISCONNECTED",
                 _lastControllerClientIp);
+            _lastPublishedDevicePresenceState = string.Empty;
+            _lastPublishedDevicePresenceReasonCode = string.Empty;
+            _lastPublishedDevicePresenceAtUtc = DateTime.MinValue;
             _lastRuntimeStatus = string.Empty;
         }
 
@@ -2118,6 +2154,61 @@ namespace TheraplyCore.Games.Runtime
             _ = PublishRuntimeStatusUpdateAsync(command);
         }
 
+        private void PublishDevicePresenceUpdateIfPossible(
+            string presenceState,
+            string reasonCode,
+            bool force = false)
+        {
+            if (_commandBus == null || !HasStatusDeliveryRoute())
+            {
+                return;
+            }
+
+            var normalizedState = presenceState ?? string.Empty;
+            var normalizedReason = reasonCode ?? string.Empty;
+            var nowUtc = DateTime.UtcNow;
+
+            if (!force &&
+                string.Equals(_lastPublishedDevicePresenceState, normalizedState, StringComparison.Ordinal) &&
+                string.Equals(_lastPublishedDevicePresenceReasonCode, normalizedReason, StringComparison.Ordinal) &&
+                _lastPublishedDevicePresenceAtUtc != DateTime.MinValue &&
+                (nowUtc - _lastPublishedDevicePresenceAtUtc).TotalMilliseconds < 750)
+            {
+                return;
+            }
+
+            var command = new DevicePresenceUpdateCommand
+            {
+                sessionId = _sessionContext?.SessionId ?? string.Empty,
+                patientId = _sessionContext?.PatientId ?? string.Empty,
+                therapistId = _sessionContext?.TherapistId ?? string.Empty,
+                presenceState = normalizedState,
+                reasonCode = normalizedReason,
+                changedAtUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                appPaused = _lastAppPaused,
+                appFocused = _lastAppFocused,
+                hasTcpClient = _tcpServerService != null && _tcpServerService.HasClient,
+                activeGameId = _activeGameId ?? string.Empty,
+                activeGameState = _activeGame == null ? GameContracts.GameState.NotInitialized.ToString() : _activeGame.State.ToString(),
+            };
+
+            _lastPublishedDevicePresenceState = normalizedState;
+            _lastPublishedDevicePresenceReasonCode = normalizedReason;
+            _lastPublishedDevicePresenceAtUtc = nowUtc;
+
+            _ = PublishDevicePresenceUpdateAsync(command);
+            TrackCriticalRuntimeEvent("device_presence_update", new Dictionary<string, object>
+            {
+                { "presenceState", normalizedState },
+                { "reasonCode", normalizedReason },
+                { "appPaused", _lastAppPaused },
+                { "appFocused", _lastAppFocused },
+                { "hasTcpClient", command.hasTcpClient },
+                { "activeGameId", _activeGameId ?? string.Empty },
+                { "activeGameState", command.activeGameState ?? string.Empty },
+            });
+        }
+
         private async Task PublishRuntimeStatusUpdateAsync(RuntimeStatusUpdateCommand command)
         {
             try
@@ -2128,6 +2219,24 @@ namespace TheraplyCore.Games.Runtime
             {
                 Logger.Warning(
                     $"[GameRuntime] Failed to publish {GameCommandIds.RuntimeStatusUpdate}: {e.Message}");
+            }
+        }
+
+        private async Task PublishDevicePresenceUpdateAsync(DevicePresenceUpdateCommand command)
+        {
+            if (_commandBus == null || command == null)
+            {
+                return;
+            }
+
+            try
+            {
+                await _commandBus.PublishAsync(command);
+            }
+            catch (Exception e)
+            {
+                Logger.Warning(
+                    $"[GameRuntime] Failed to publish {GameCommandIds.DevicePresenceUpdate}: {e.Message}");
             }
         }
 
