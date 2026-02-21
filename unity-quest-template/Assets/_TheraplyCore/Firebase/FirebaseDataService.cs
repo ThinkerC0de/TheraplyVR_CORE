@@ -96,6 +96,9 @@ namespace TheraplyCore.Firebase
                 "game_end",
                 "session_stop",
                 "error",
+                "controller_connected",
+                "controller_reconnected",
+                "controller_disconnected",
                 // Compatibility with existing event names in framework modules.
                 "game_started",
                 "game_completed",

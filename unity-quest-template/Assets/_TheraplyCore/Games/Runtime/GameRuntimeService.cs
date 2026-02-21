@@ -118,6 +118,10 @@ namespace TheraplyCore.Games.Runtime
         private string _lastCrashFingerprint = string.Empty;
         private DateTime _lastCrashFingerprintAtUtc = DateTime.MinValue;
         private int _capturedCrashReportCount;
+        private bool _hasObservedControllerConnection;
+        private int _controllerConnectionEpoch;
+        private string _lastControllerClientIp = string.Empty;
+        private DateTime _lastControllerDisconnectedAtUtc = DateTime.MinValue;
 
         public GameContracts.IGameModule ActiveGame => _activeGame;
         public string ActiveGameId => _activeGameId;
@@ -1252,8 +1256,26 @@ namespace TheraplyCore.Games.Runtime
             }
         }
 
-        private void HandleClientConnected(string _)
+        private void HandleClientConnected(string clientIp)
         {
+            var normalizedClientIp = string.IsNullOrWhiteSpace(clientIp)
+                ? string.Empty
+                : clientIp.Trim();
+
+            _controllerConnectionEpoch++;
+
+            var eventName = _hasObservedControllerConnection
+                ? "controller_reconnected"
+                : "controller_connected";
+
+            TrackControllerConnectionEvent(
+                eventName,
+                "TCP_CLIENT_CONNECTED",
+                normalizedClientIp);
+
+            _hasObservedControllerConnection = true;
+            _lastControllerClientIp = normalizedClientIp;
+            _lastControllerDisconnectedAtUtc = DateTime.MinValue;
             PublishRuntimeStatusIfChanged("TCP_CLIENT_CONNECTED");
             if (_publishContentCatalogOnClientConnect)
             {
@@ -1263,7 +1285,47 @@ namespace TheraplyCore.Games.Runtime
 
         private void HandleClientDisconnected()
         {
+            _lastControllerDisconnectedAtUtc = DateTime.UtcNow;
+            TrackControllerConnectionEvent(
+                "controller_disconnected",
+                "TCP_CLIENT_DISCONNECTED",
+                _lastControllerClientIp);
             _lastRuntimeStatus = string.Empty;
+        }
+
+        private void TrackControllerConnectionEvent(string eventName, string reasonCode, string clientIp)
+        {
+            if (string.IsNullOrWhiteSpace(eventName))
+            {
+                return;
+            }
+
+            if (_sessionContext == null)
+            {
+                _sessionContext = ResolveSessionContext();
+            }
+
+            var payload = new Dictionary<string, object>
+            {
+                { "reasonCode", reasonCode ?? string.Empty },
+                { "clientIp", clientIp ?? string.Empty },
+                { "activeGameId", _activeGameId ?? string.Empty },
+                { "hasActiveGame", _activeGame != null },
+                { "sessionState", _sessionContext != null ? _sessionContext.SessionState.ToString() : string.Empty },
+                { "connectionEpoch", _controllerConnectionEpoch },
+            };
+
+            if ((string.Equals(eventName, "controller_connected", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(eventName, "controller_reconnected", StringComparison.OrdinalIgnoreCase)) &&
+                _lastControllerDisconnectedAtUtc != DateTime.MinValue)
+            {
+                var downtimeMs = Math.Max(
+                    0L,
+                    (long)(DateTime.UtcNow - _lastControllerDisconnectedAtUtc).TotalMilliseconds);
+                payload["downtimeMs"] = downtimeMs;
+            }
+
+            TrackCriticalRuntimeEvent(eventName, payload);
         }
 
         private void RegisterCrashHooks()

@@ -53,6 +53,8 @@ namespace TheraplyCore.Network.Discovery
         private bool _isRunning = false;
         private DeviceInfo _myDeviceInfo;
         private Coroutine _broadcastCoroutine;
+        private int _broadcastErrorStreak;
+        private float _nextBroadcastErrorLogAtRealtime;
         
         // ============================================
         // EVENTS
@@ -230,6 +232,8 @@ namespace TheraplyCore.Network.Discovery
             string localIP = _myDeviceInfo.ip;
             IPAddress broadcastAddress = CalculateBroadcastAddress(localIP);
             IPEndPoint broadcastEndpoint = new IPEndPoint(broadcastAddress, _discoveryPort);
+            _broadcastErrorStreak = 0;
+            _nextBroadcastErrorLogAtRealtime = 0f;
             
             Debug.Log($"[UDPDiscovery] Broadcasting to {broadcastAddress}:{_discoveryPort}");
             
@@ -246,15 +250,50 @@ namespace TheraplyCore.Network.Discovery
                     
                     // Broadcast
                     _udpClient.Send(data, data.Length, broadcastEndpoint);
+
+                    if (_broadcastErrorStreak > 0)
+                    {
+                        Debug.Log($"[UDPDiscovery] Broadcast recovered after {_broadcastErrorStreak} transient error(s)");
+                    }
+                    _broadcastErrorStreak = 0;
                     
                     if (_logBroadcasts)
                     {
                         Debug.Log($"[UDPDiscovery] Broadcast: {_myDeviceInfo.deviceName} @ {_myDeviceInfo.ip} at {System.DateTime.Now:HH:mm:ss.fff}");
                     }
                 }
+                catch (SocketException socketException)
+                {
+                    _broadcastErrorStreak++;
+
+                    if (Time.realtimeSinceStartup >= _nextBroadcastErrorLogAtRealtime)
+                    {
+                        Debug.LogWarning(
+                            $"[UDPDiscovery] Broadcast transient network issue ({socketException.SocketErrorCode}): {socketException.Message} (streak={_broadcastErrorStreak})");
+                        _nextBroadcastErrorLogAtRealtime = Time.realtimeSinceStartup + 5f;
+                    }
+
+                    // Refresh local/broadcast endpoint periodically while the network is unstable.
+                    if (_broadcastErrorStreak % 6 == 0)
+                    {
+                        var refreshedLocalIp = GetLocalIPAddress();
+                        if (!string.IsNullOrWhiteSpace(refreshedLocalIp) &&
+                            !string.Equals(refreshedLocalIp, "0.0.0.0", StringComparison.Ordinal))
+                        {
+                            _myDeviceInfo.ip = refreshedLocalIp;
+                            broadcastAddress = CalculateBroadcastAddress(refreshedLocalIp);
+                            broadcastEndpoint = new IPEndPoint(broadcastAddress, _discoveryPort);
+                        }
+                    }
+                }
                 catch (Exception e)
                 {
-                    Debug.LogError($"[UDPDiscovery] Broadcast error: {e.Message}");
+                    _broadcastErrorStreak++;
+                    if (Time.realtimeSinceStartup >= _nextBroadcastErrorLogAtRealtime)
+                    {
+                        Debug.LogWarning($"[UDPDiscovery] Broadcast transient error: {e.Message} (streak={_broadcastErrorStreak})");
+                        _nextBroadcastErrorLogAtRealtime = Time.realtimeSinceStartup + 5f;
+                    }
                 }
                 
                 yield return new WaitForSeconds(_broadcastInterval);

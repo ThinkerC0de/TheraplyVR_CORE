@@ -397,9 +397,9 @@ MonoBehaviour:
   _sendQuestAudio: 1
   _sourceAudioListener: {fileID: 1684796130}
   _receiveTherapistVoice: 1
-  _streamWidth: 1280
-  _streamHeight: 720
-  _targetFps: 60
+  _streamWidth: 1920
+  _streamHeight: 1080
+  _targetFps: 90
   _targetBitrate: 2500000
   _stunServers:
   - stun:stun.l.google.com:19302
@@ -520,6 +520,26 @@ MonoBehaviour:
   _defaultGameId: 
   _subscribeToStandardCommands: 1
   _syncStatusPollIntervalSeconds: 1
+  _enableContentDeliverySimulation: 1
+  _publishContentCatalogOnClientConnect: 1
+  _simulatedInstallDurationSeconds: 1.2
+  _defaultSimulatedContentVersion: 1.0.0
+  _simulatedContentCatalog:
+  - gameId: smoke_test_game
+    owned: 1
+    installedVersion: 1.0.0
+    targetVersion: 1.0.0
+    updateOptional: 0
+  - gameId: demo_cube_clicker
+    owned: 1
+    installedVersion: 1.1.0
+    targetVersion: 1.2.0
+    updateOptional: 0
+  - gameId: pulse_target_tap
+    owned: 1
+    installedVersion: 
+    targetVersion: 1.0.0
+    updateOptional: 0
   _enableSessionWatchdog: 1
   _watchdogHeartbeatIntervalSeconds: 2
   _watchdogHungThresholdSeconds: 8
@@ -637,7 +657,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.GameCommandBus
   _tcpServerService: {fileID: 854900686}
-  _tcpConnectionService: {fileID: 0}
   _sessionContext: {fileID: 1784697675}
   _logInbound: 1
   _logOutbound: 1

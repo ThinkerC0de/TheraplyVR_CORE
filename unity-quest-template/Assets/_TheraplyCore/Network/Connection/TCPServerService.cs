@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -521,13 +522,47 @@ namespace TheraplyCore.Network.Connection
             }
             catch (Exception e)
             {
-                Debug.LogError($"[TCPServer] Receive error: {e.Message}");
-                EnqueueMainThreadAction(() => OnError?.Invoke(e));
+                if (IsExpectedRemoteDisconnect(e))
+                {
+                    if (_logConnections)
+                    {
+                        Debug.LogWarning($"[TCPServer] Receive loop ended due remote disconnect: {e.Message}");
+                    }
+                }
+                else
+                {
+                    Debug.LogError($"[TCPServer] Receive error: {e.Message}");
+                    EnqueueMainThreadAction(() => OnError?.Invoke(e));
+                }
             }
             finally
             {
                 DisconnectClient();
             }
+        }
+
+        private static bool IsExpectedRemoteDisconnect(Exception exception)
+        {
+            if (exception is IOException ioException &&
+                ioException.InnerException is SocketException innerSocketException)
+            {
+                return IsExpectedSocketDisconnect(innerSocketException.SocketErrorCode);
+            }
+
+            if (exception is SocketException socketException)
+            {
+                return IsExpectedSocketDisconnect(socketException.SocketErrorCode);
+            }
+
+            return false;
+        }
+
+        private static bool IsExpectedSocketDisconnect(SocketError socketError)
+        {
+            return socketError == SocketError.ConnectionReset ||
+                   socketError == SocketError.ConnectionAborted ||
+                   socketError == SocketError.OperationAborted ||
+                   socketError == SocketError.Shutdown;
         }
         
         /// <summary>

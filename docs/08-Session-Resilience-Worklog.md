@@ -742,3 +742,161 @@ Go/No-Go decision:
   - scenario from operator logs: active game + reconnect + `End Session`,
   - confirm no Unity handler exception for `SESSION_ATTACH`,
   - confirm `END_SESSION` reaches ACK path and flow exits cleanly to student selection.
+
+## 31) Unity disconnect/broadcast log-noise hardening (2026-02-20)
+
+- `OK` Root-cause classification from live logs:
+  - TCP receive loop often logs hard error when mobile disconnects abruptly (`connection reset by peer`), even when this is an expected transient disconnect path.
+  - UDP discovery broadcasts can spam error logs during temporary network unavailability (`network unreachable`).
+- `OK` Unity hotfix in `unity-quest-template/Assets/_TheraplyCore/Network/Connection/TCPServerService.cs`:
+  - added expected-disconnect classification (`IOException`/`SocketException` with reset/aborted/shutdown codes),
+  - expected remote disconnects are now warning-level connection lifecycle logs instead of hard receive-loop errors.
+- `OK` Unity hotfix in `unity-quest-template/Assets/_TheraplyCore/Network/Discovery/UDPDiscoveryService.cs`:
+  - added transient broadcast error streak tracking and warning throttling,
+  - added recovery log after transient failures,
+  - added periodic local IP/broadcast endpoint refresh while network is unstable.
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260220_132952/flutter_analyze.log`
+  - `flutter test` PASS -> `docs/evidence/20260220_132952/flutter_test.log`
+  - summary -> `docs/evidence/20260220_132952/notes/SUMMARY.md`
+- `NOTE` `SESSION_INGEST_CONNECTION_ERROR` to `http://127.0.0.1:18765/session-ingest` remains infrastructure/configuration noise when local ingest endpoint is not reachable; runtime now keeps durable outbox retry schedule.
+
+## 32) Reconnect gate fix: controls stayed disabled after streaming return (2026-02-20)
+
+- `OK` Root cause confirmed in `flutter_controller/lib/screens/control_screen.dart`:
+  - auto-reconnect loop was setting `_isConnected = true` before `connectionStatus` stream callback arrived,
+  - listener then observed `wasConnected == true` and skipped reconnect bootstrap (`_ensureSessionAttached`),
+  - result: `_sessionAttachReady` stayed `false`, so gameplay controls remained disabled even after transport/stream recovered.
+- `OK` Mobile hotfix:
+  - `_runAutoReconnectLoop(...)` no longer pre-sets `_isConnected` on reconnect success,
+  - connection transition is now sourced only from `ConnectionService.connectionStatus` stream,
+  - attach-ready reset retained without overriding connection transition semantics.
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260220_133816/flutter_analyze.log`
+  - `flutter test` PASS -> `docs/evidence/20260220_133816/flutter_test.log`
+  - summary -> `docs/evidence/20260220_133816/notes/SUMMARY.md`
+- `TODO` Manual re-test required:
+  - drop headset network mid-session, restore network, wait for reconnect,
+  - confirm controls unlock automatically after attach ACK (without app restart),
+  - confirm no repeated handoff popup appears after clean `End Session`.
+
+## 33) Reconnect hardening: Unity host network flap fallback via discovery (2026-02-20)
+
+- `OK` Root-cause confirmation from operator test/log:
+  - after Unity-side network drop/recovery, Unity logs showed no subsequent `Client connected` before app quit,
+  - mobile remained with disabled controls/no preview (TCP route not re-established end-to-end).
+- `OK` Mobile fallback added in `flutter_controller/lib/screens/control_screen.dart`:
+  - added discovery stream listener in `ControlScreen`,
+  - tracks latest fresh UDP-discovered reconnect candidate matching selected device/student (`deviceId` / `studentId` / `deviceName`),
+  - reconnect loop now:
+    - tries normal `reconnect()` against last known endpoint,
+    - if that fails, attempts direct `connect()` to fresh discovery candidate endpoint.
+- `OK` Rationale:
+  - covers Unity host IP/address churn after PC network flap (or stale endpoint on mobile),
+  - keeps reconnect autonomous without forcing operator to return to scanner.
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260220_135410/flutter_analyze.log`
+  - `flutter test` PASS -> `docs/evidence/20260220_135410/flutter_test.log`
+  - summary -> `docs/evidence/20260220_135410/notes/SUMMARY.md`
+- `TODO` Manual re-test required:
+  - repeat exact scenario: Unity network off/on while game active,
+  - confirm Unity log includes new `Client connected` after recovery,
+  - confirm mobile controls re-enable after attach sync (without restarting app or reselecting student).
+
+## 34) Stale connected-state failover after exhausted critical ACK retries (2026-02-20)
+
+- `OK` Root-cause hypothesis validated against operator report:
+  - in Unity-host network flap scenario, mobile could stay in optimistic `Connected` while critical commands timed out,
+  - operator then observed controls disabled during in-flight action, without automatic reconnect recovery.
+- `OK` Mobile transport failover hardening in `flutter_controller/lib/services/connection_service.dart`:
+  - `sendCriticalCommand(...)` keeps standard retry semantics (compatible with delayed-ACK and chaos tests),
+  - after retries are exhausted, transport-like terminal reasons (`ACK_TIMEOUT`, `DISCONNECTED`, etc.) now force `disconnect()`,
+  - this guarantees `connectionStatus=false` emission and enables reconnect loop/attach recovery path.
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260220_140333/flutter_analyze.log`
+  - `flutter test` PASS -> `docs/evidence/20260220_140333/flutter_test.log`
+  - summary -> `docs/evidence/20260220_140333/notes/SUMMARY.md`
+- `TODO` Manual re-test required:
+  - Unity network off/on while session active,
+  - after first failed control send, verify mobile transitions from stale connected to reconnect flow automatically,
+  - verify post-reconnect attach ACK restores controls without returning to scanner.
+
+## 35) Reconnect race fix: stale socket callback closed new TCP route (2026-02-20)
+
+- `OK` Root cause confirmed from merged Unity + Flutter logs:
+  - mobile reconnected successfully (`Connected`, `SESSION_ATTACH` sent),
+  - immediately after reconnect a disconnect event appeared, while inbound messages were still flowing,
+  - pattern matched stale old-socket `onDone/onError` callback closing current new socket (race).
+- `OK` Fix in `flutter_controller/lib/services/connection_service.dart`:
+  - `Socket.connect(...)` result is now captured as local `socket`,
+  - listener callbacks (`onError`, `onDone`) validate ownership with `identical(_socket, socket)`,
+  - stale callbacks are ignored and logged as informational,
+  - only callbacks belonging to the current active socket can trigger `disconnect()`.
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260220_141542/flutter_analyze.log`
+  - `flutter test` PASS -> `docs/evidence/20260220_141542/flutter_test.log`
+  - summary -> `docs/evidence/20260220_141542/notes/SUMMARY.md`
+- `TODO` Manual re-test required:
+  - repeat Unity network flap scenario,
+  - verify no immediate `Connected -> Disconnected` bounce right after successful reconnect,
+  - verify controls recover after attach without manual app restart.
+
+## 36) Critical action serialization: prevent STOP_GAME/END_SESSION overlap (2026-02-20)
+
+- `OK` Observation from live mobile logs:
+  - during unstable reconnect window, `STOP_GAME` and `END_SESSION` retries overlapped,
+  - parallel critical flows increased disconnect/retry churn and made operator state harder to recover.
+- `OK` UI hardening in `flutter_controller/lib/screens/control_screen.dart`:
+  - `End Game` button now executes via `_runPrimaryAction(...)` gate,
+  - prevents concurrent critical command dispatch overlap with other primary actions.
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260220_141706/flutter_analyze.log`
+  - `flutter test` PASS -> `docs/evidence/20260220_141706/flutter_test.log`
+  - summary -> `docs/evidence/20260220_141706/notes/SUMMARY.md`
+
+## 37) Holistic reconnect plan + Unity connection events in session history (2026-02-20)
+
+- `OK` Holistic repair plan updated (mobile-authoritative session model retained):
+  - mobile remains source-of-truth for active `sessionId` and handoff decision based on persisted server state,
+  - Unity reconnect path keeps command transport + runtime state consistent with mobile attach flow,
+  - network-loss/reconnect paths are tracked as first-class session history events to support reconciliation/debugging.
+- `OK` Unity session history enriched with explicit controller connection lifecycle telemetry:
+  - updated `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs`,
+  - added runtime events:
+    - `controller_connected`,
+    - `controller_reconnected`,
+    - `controller_disconnected`,
+  - payload includes connection epoch, client IP, session state, active-game flag, and reconnect downtime (when applicable).
+- `OK` Durable persistence scope extended for new Unity connection events:
+  - updated `unity-quest-template/Assets/_TheraplyCore/Firebase/FirebaseDataService.cs`,
+  - added above event names to `CriticalDurableEventTypes` so they are queued into local durable store and retried via outbox.
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260220_174841/flutter_analyze.log`
+  - `flutter test` PASS -> `docs/evidence/20260220_174841/flutter_test.log`
+  - summary -> `docs/evidence/20260220_174841/notes/SUMMARY.md`
+- `TODO` Manual verification now required:
+  - execute phone-network drop + recover and Unity-network drop + recover scenarios,
+  - confirm `controller_*` events appear in session history timeline for the same `sessionId`,
+  - confirm controls recover only after reconnect + attach readiness, with no false handoff prompt after clean `End Session`.
+
+## 38) P0 false-connected watchdog: force reconnect on stale runtime signals (2026-02-20)
+
+- `OK` Root cause targeted:
+  - after Unity-side network flap, mobile could remain in optimistic `Connected` despite dead TCP route,
+  - controls then became inactive only after command send attempts, instead of proactively recovering transport.
+- `OK` Mobile watchdog hardening in `flutter_controller/lib/screens/control_screen.dart`:
+  - added periodic connection liveness watchdog (`Timer.periodic`),
+  - monitors freshness of runtime/watchdog signals after attach readiness,
+  - computes adaptive stale timeout from watchdog contract (`staleAfterMs`) with safe fallback window,
+  - when connection is stale, forces `disconnect()` to trigger existing auto-reconnect + session-attach bootstrap.
+- `OK` Session journal reason propagation improved:
+  - disconnect lifecycle event now supports reason override for watchdog-driven drops
+    (e.g. `NO_RUNTIME_SIGNAL_TIMEOUT`, `RUNTIME_SIGNAL_STALE`).
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260220_175439/flutter_analyze.log`
+  - `flutter test` PASS -> `docs/evidence/20260220_175439/flutter_test.log`
+  - summary -> `docs/evidence/20260220_175439/notes/SUMMARY.md`
+- `TODO` Manual verification required now:
+  - reproduce Unity network off/on during active session,
+  - confirm mobile transitions from stale-connected to reconnect without waiting for operator command taps,
+  - confirm controls + preview recover after reconnect/attach and no forced app restart is needed.

@@ -72,6 +72,12 @@ class _ControlScreenState extends State<ControlScreen>
   static const String _demoCubeGameId = 'demo_cube_clicker';
   static const String _pulseTargetGameId = 'pulse_target_tap';
   static const Duration _recentlyEndedSessionTtl = Duration(seconds: 20);
+  static const Duration _discoveryCandidateFreshTtl = Duration(seconds: 12);
+  static const Duration _connectionLivenessPollInterval =
+      Duration(seconds: 2);
+  static const Duration _connectionSignalGracePeriod = Duration(seconds: 8);
+  static const Duration _connectionSignalFallbackTimeout =
+      Duration(seconds: 12);
   static final Map<String, DateTime> _recentlyEndedSessionIds =
       <String, DateTime>{};
   static const List<String> _demoLevelModes = <String>[
@@ -106,6 +112,8 @@ class _ControlScreenState extends State<ControlScreen>
 
   StreamSubscription<bool>? _connectionSubscription;
   StreamSubscription<Map<String, dynamic>>? _messageSubscription;
+  StreamSubscription<DeviceInfo>? _discoverySubscription;
+  Timer? _connectionLivenessTimer;
 
   late String _activeSessionId;
   late String _selectedGameId;
@@ -115,6 +123,13 @@ class _ControlScreenState extends State<ControlScreen>
   String? _lastRuntimeStatusSessionId;
   TherapySessionRecord? _latestPersistedSession;
   bool _persistedSessionRefreshInFlight = false;
+  DeviceInfo? _latestDiscoveryReconnectCandidate;
+  DateTime? _latestDiscoveryReconnectSeenAt;
+  DateTime? _connectedAtUtc;
+  DateTime? _lastRuntimeSignalAtUtc;
+  int _lastWatchdogStaleAfterMs = 6000;
+  bool _livenessRecoveryInFlight = false;
+  String? _disconnectReasonOverride;
 
   _WorkflowStep _workflowStep = _WorkflowStep.gameCatalog;
   bool _resumeFromSavedPreference = false;
@@ -137,6 +152,8 @@ class _ControlScreenState extends State<ControlScreen>
     _bootstrapLocalContentStates();
 
     _setupConnectionListeners();
+    _setupDiscoveryListener();
+    _startConnectionLivenessWatchdog();
     unawaited(ForegroundServiceBridge.start());
     unawaited(WakelockPlus.enable());
     unawaited(_refreshPersistedSessionSnapshot(triggerPrompt: true));
@@ -156,6 +173,8 @@ class _ControlScreenState extends State<ControlScreen>
     _autoReconnectEnabled = false;
     _connectionSubscription?.cancel();
     _messageSubscription?.cancel();
+    _discoverySubscription?.cancel();
+    _connectionLivenessTimer?.cancel();
     unawaited(ForegroundServiceBridge.stop());
     unawaited(WakelockPlus.disable());
     _connection.dispose();
@@ -177,6 +196,11 @@ class _ControlScreenState extends State<ControlScreen>
       });
 
       if (connected) {
+        _connectedAtUtc = DateTime.now().toUtc();
+        _lastRuntimeSignalAtUtc = null;
+        _disconnectReasonOverride = null;
+        _livenessRecoveryInFlight = false;
+
         final attachReason =
             _hasConnectedAtLeastOnce ? 'AUTO_RECONNECT' : 'INITIAL_CONNECT';
         _hasConnectedAtLeastOnce = true;
@@ -203,13 +227,21 @@ class _ControlScreenState extends State<ControlScreen>
           );
         }
       } else {
+        _connectedAtUtc = null;
+        _lastRuntimeSignalAtUtc = null;
+        _livenessRecoveryInFlight = false;
         if (wasConnected) {
+          final disconnectReason =
+              _disconnectReasonOverride ?? 'TCP_LINK_LOST';
+          _disconnectReasonOverride = null;
           unawaited(
             _recordConnectionLifecycleEvent(
               eventType: 'CONTROLLER_DISCONNECTED',
-              reasonCode: 'TCP_LINK_LOST',
+              reasonCode: disconnectReason,
             ),
           );
+        } else {
+          _disconnectReasonOverride = null;
         }
         _startAutoReconnectLoop(reason: 'connection_lost');
       }
@@ -235,6 +267,10 @@ class _ControlScreenState extends State<ControlScreen>
           (sessionUpdate != null ||
               runtimeUpdate != null ||
               watchdogHeartbeat != null)) {
+        _lastRuntimeSignalAtUtc = DateTime.now().toUtc();
+        if (watchdogHeartbeat != null && watchdogHeartbeat.staleAfterMs > 0) {
+          _lastWatchdogStaleAfterMs = watchdogHeartbeat.staleAfterMs;
+        }
         setState(() {
           if (sessionUpdate != null) {
             _lastSessionStateUpdateSessionId = sessionUpdate.sessionId;
@@ -343,6 +379,156 @@ class _ControlScreenState extends State<ControlScreen>
     });
   }
 
+  void _startConnectionLivenessWatchdog() {
+    _connectionLivenessTimer?.cancel();
+    _connectionLivenessTimer = Timer.periodic(
+      _connectionLivenessPollInterval,
+      (_) => unawaited(_evaluateConnectionLiveness()),
+    );
+  }
+
+  Future<void> _evaluateConnectionLiveness() async {
+    if (!mounted ||
+        !_autoReconnectEnabled ||
+        !_isConnected ||
+        _allowSystemPop ||
+        _autoReconnectLoopActive ||
+        _sessionAttachInFlight ||
+        _livenessRecoveryInFlight) {
+      return;
+    }
+
+    if (!_sessionAttachReady) {
+      return;
+    }
+
+    final connectedAtUtc = _connectedAtUtc;
+    if (connectedAtUtc == null) {
+      return;
+    }
+
+    final nowUtc = DateTime.now().toUtc();
+    if (nowUtc.difference(connectedAtUtc) < _connectionSignalGracePeriod) {
+      return;
+    }
+
+    final staleAfterMs = _lastWatchdogStaleAfterMs > 0
+        ? _lastWatchdogStaleAfterMs
+        : _connectionSignalFallbackTimeout.inMilliseconds;
+    final adaptiveTimeout = Duration(milliseconds: staleAfterMs + 2500);
+    final timeout = adaptiveTimeout < _connectionSignalFallbackTimeout
+        ? _connectionSignalFallbackTimeout
+        : adaptiveTimeout;
+
+    final lastSignalAtUtc = _lastRuntimeSignalAtUtc;
+    if (lastSignalAtUtc == null) {
+      if (nowUtc.difference(connectedAtUtc) >= timeout) {
+        await _forceLivenessReconnect('NO_RUNTIME_SIGNAL_TIMEOUT');
+      }
+      return;
+    }
+
+    if (nowUtc.difference(lastSignalAtUtc) >= timeout) {
+      await _forceLivenessReconnect('RUNTIME_SIGNAL_STALE');
+    }
+  }
+
+  Future<void> _forceLivenessReconnect(String reasonCode) async {
+    if (!mounted || !_isConnected || _allowSystemPop || _livenessRecoveryInFlight) {
+      return;
+    }
+
+    _livenessRecoveryInFlight = true;
+    _disconnectReasonOverride = reasonCode;
+    debugPrint(
+      '[ControlScreen] Liveness watchdog forcing disconnect ($reasonCode)',
+    );
+
+    try {
+      await _connection.disconnect();
+    } finally {
+      _livenessRecoveryInFlight = false;
+    }
+  }
+
+  void _setupDiscoveryListener() {
+    _discoverySubscription = widget.discoveryService.devices.listen((device) {
+      if (!_matchesReconnectCandidate(device)) {
+        return;
+      }
+
+      _latestDiscoveryReconnectCandidate = device;
+      _latestDiscoveryReconnectSeenAt = DateTime.now().toUtc();
+
+      if (!mounted || _allowSystemPop || _connection.isConnected) {
+        return;
+      }
+
+      if (!_autoReconnectLoopActive) {
+        _startAutoReconnectLoop(reason: 'discovery_candidate');
+      }
+    });
+  }
+
+  bool _matchesReconnectCandidate(DeviceInfo device) {
+    if (device.controlPort != widget.device.controlPort) {
+      return false;
+    }
+
+    if (device.deviceId == widget.device.deviceId) {
+      return true;
+    }
+
+    if (device.studentId != null && device.studentId == widget.student.id) {
+      return true;
+    }
+
+    if (device.deviceName == widget.device.deviceName) {
+      return true;
+    }
+
+    return false;
+  }
+
+  DeviceInfo? _resolveFreshDiscoveryReconnectCandidate() {
+    final candidate = _latestDiscoveryReconnectCandidate;
+    final seenAt = _latestDiscoveryReconnectSeenAt;
+    if (candidate == null || seenAt == null) {
+      return null;
+    }
+
+    final age = DateTime.now().toUtc().difference(seenAt);
+    if (age > _discoveryCandidateFreshTtl) {
+      return null;
+    }
+
+    return candidate;
+  }
+
+  Future<bool> _tryReconnectViaDiscoveryCandidate() async {
+    final candidate = _resolveFreshDiscoveryReconnectCandidate();
+    if (candidate == null) {
+      return false;
+    }
+
+    final candidateIp = candidate.ip.trim();
+    if (candidateIp.isEmpty) {
+      return false;
+    }
+
+    final connected = await _connection.connect(
+      candidateIp,
+      candidate.controlPort,
+    );
+    if (connected) {
+      debugPrint(
+        '[ControlScreen] Reconnected via discovery candidate '
+        '${candidate.deviceName} @ ${candidate.ip}:${candidate.controlPort}',
+      );
+    }
+    return connected;
+  }
+
   Future<void> _connect() async {
     final success = await _connection.connect(
       widget.device.ip,
@@ -387,22 +573,28 @@ class _ControlScreenState extends State<ControlScreen>
         _autoReconnectEnabled &&
         !_allowSystemPop &&
         !_connection.isConnected) {
-      final ok = await _connection.reconnect(
+      var ok = await _connection.reconnect(
         maxAttempts: 4,
         baseDelay: const Duration(milliseconds: 350),
       );
+
+      if (!ok) {
+        ok = await _tryReconnectViaDiscoveryCandidate();
+      }
 
       if (!mounted || !_autoReconnectEnabled || _allowSystemPop) {
         break;
       }
 
       if (ok) {
-        if (mounted) {
+        if (mounted && _sessionAttachReady) {
           setState(() {
-            _isConnected = true;
             _sessionAttachReady = false;
           });
         }
+        // Keep _isConnected transitions sourced from connectionStatus stream.
+        // Otherwise listener-level "wasConnected" detection can be bypassed and
+        // SESSION_ATTACH bootstrap may be skipped after reconnect.
         break;
       }
 
@@ -2655,7 +2847,11 @@ class _ControlScreenState extends State<ControlScreen>
           const SizedBox(height: 8),
           ElevatedButton.icon(
             onPressed: canEndGame
-                ? () => unawaited(_sendCommand(CriticalCommandIds.stopGame))
+                ? () => unawaited(
+                      _runPrimaryAction(() async {
+                        await _sendCommand(CriticalCommandIds.stopGame);
+                      }),
+                    )
                 : null,
             icon: const Icon(Icons.stop_circle_outlined),
             label: const Text('End Game'),

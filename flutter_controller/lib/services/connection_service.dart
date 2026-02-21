@@ -59,14 +59,15 @@ class ConnectionService {
     try {
       print('[Connection] 🔌 Connecting to $ip:$port');
 
-      _socket = await Socket.connect(
+      final socket = await Socket.connect(
         ip,
         port,
         timeout: const Duration(seconds: 5),
       );
+      _socket = socket;
 
       // TCP no delay for low latency
-      _socket!.setOption(SocketOption.tcpNoDelay, true);
+      socket.setOption(SocketOption.tcpNoDelay, true);
 
       _isConnected = true;
       if (!_connectionController.isClosed) {
@@ -79,16 +80,24 @@ class ConnectionService {
       print('[Connection] ✅ Connected successfully');
 
       // Listen for incoming messages
-      _socket!.listen(
+      socket.listen(
         _handleData,
         onError: (error) {
+          if (!identical(_socket, socket)) {
+            print('[Connection] ℹ️ Ignoring stale socket error callback');
+            return;
+          }
           print('[Connection] ❌ Error: $error');
-          disconnect();
+          unawaited(disconnect());
         },
         onDone: () {
+          if (!identical(_socket, socket)) {
+            print('[Connection] ℹ️ Ignoring stale socket close callback');
+            return;
+          }
           print(
               '[Connection] 🔌 Socket closed (onDone) - peer or app closed connection');
-          disconnect();
+          unawaited(disconnect());
         },
         cancelOnError: false,
       );
@@ -314,9 +323,28 @@ class ConnectionService {
       }
     }
 
+    if (_isTransportFailureReason(lastReasonCode)) {
+      print(
+          '[Connection] ⚠️ Terminal transport failure for $commandId -> forcing disconnect');
+      await disconnect();
+    }
+
     throw Exception(
       'Critical command $commandId failed after $maxRetries attempts (reason=$lastReasonCode)',
     );
+  }
+
+  bool _isTransportFailureReason(String reasonCode) {
+    final normalized = reasonCode.trim().toUpperCase();
+    if (normalized.isEmpty) {
+      return false;
+    }
+
+    return normalized == 'DISCONNECTED' ||
+        normalized == 'ACK_TIMEOUT' ||
+        normalized == 'NO_ACTIVE_TCP_ROUTE' ||
+        normalized == 'TRANSPORT_CLOSED' ||
+        normalized == 'SOCKET_CLOSED';
   }
 
   void _handleCriticalAckIfNeeded(Map<String, dynamic> message) {
