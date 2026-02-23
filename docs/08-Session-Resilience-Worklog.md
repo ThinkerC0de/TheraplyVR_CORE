@@ -2500,3 +2500,142 @@ Go/No-Go decision:
   - ponowic lane OPS trace export tak, aby uzyskac:
     - `readyForTraining=true`,
     - `reasonCode=DATASET_READY_FOR_TRAINING`.
+
+## 79) Parent MVP + rewards bridge + unified E2E gate scripts (2026-02-23)
+
+- `OK` Scope:
+  - domknac role/plan gates pod Parent MVP w mobilce (`Start`, podglad, postep),
+  - dopiac VR -> mobile rewards unlock trail,
+  - dodac stale skrypty operatorskie:
+    - jedna bramka E2E (`Unity+Flutter+Firebase`),
+    - jeden runner OPS-003 (`trace collect -> validation -> handoff -> optional ACK`).
+- `OK` Implementation:
+  - `flutter_controller/lib/screens/control_screen.dart`:
+    - dodano parent-aware flow:
+      - `Parent guided mode` quick start,
+      - parent progress panel (snapshot sesji + rewards),
+      - role-aware plan gate (`parent_guided_start`, `progress_insights`, `rewards_unlocks`),
+      - reward unlock trigger po `END_SESSION` + timeline event `REWARD_UNLOCKED`.
+  - `flutter_controller/lib/models/parent_progress_snapshot.dart`:
+    - kontrakt snapshotu postepu rodzica (total/terminal/unfinished/last state).
+  - `flutter_controller/lib/services/parent_progress_service.dart`:
+    - agregacja postepu z `therapy_sessions` pod owner context (`therapistId + studentId`).
+  - `flutter_controller/lib/models/student_reward_unlock.dart`:
+    - kontrakt odblokowania nagrody.
+  - `flutter_controller/lib/services/student_reward_service.dart`:
+    - idempotentny zapis nagrod do `student_rewards`,
+    - pobranie ostatnich nagrod dziecka.
+  - `scripts/e2e_unity_flutter_firebase_gate.ps1`:
+    - jedna komenda gate dla:
+      - `flutter_controller analyze/test`,
+      - `admin_console_web analyze/test`,
+      - `unity_editor_mvp_smoke` (Unity+Firebase lane).
+  - `scripts/ops003_real_trace_ready_gate.ps1`:
+    - orchestrator OPS-003:
+      - auto collect trace (gdy brak podanego path),
+      - `unity_ops_dataset_trace_export_validate.ps1 -RequireProvidedTrace`,
+      - handoff package build,
+      - optional intake ACK confirm.
+- `OK` Tests:
+  - dodano:
+    - `flutter_controller/test/parent_progress_service_test.dart`,
+    - `flutter_controller/test/student_reward_service_test.dart`.
+- `OK` Validation evidence:
+  - `flutter_controller`:
+    - analyze PASS:
+      - `docs/evidence/20260223_105833/commands/flutter_controller_flutter_analyze.log`
+    - test PASS:
+      - `docs/evidence/20260223_105833/commands/flutter_controller_flutter_test.log`
+  - `admin_console_web`:
+    - analyze PASS:
+      - `docs/evidence/20260223_105833/commands/admin_console_web_flutter_analyze.log`
+    - test PASS:
+      - `docs/evidence/20260223_105833/commands/admin_console_web_flutter_test.log`
+  - skrypt E2E gate (skip Unity lane) PASS:
+    - `docs/evidence/20260223_105833/commands/e2e_gate_skip_unity.log`
+    - `docs/evidence/20260223_105833/artifacts/e2e_gate_skip_unity/notes/SUMMARY.md`
+  - skrypt E2E gate (dry run path) PASS:
+    - `docs/evidence/20260223_105833/commands/e2e_gate_dry_run.log`
+    - `docs/evidence/20260223_105833/artifacts/e2e_gate_dry_run/notes/SUMMARY.md`
+  - podsumowanie:
+    - `docs/evidence/20260223_105833/notes/SUMMARY.md`
+- `TODO` Next:
+  - wykonac pelny run `ops003_real_trace_ready_gate.ps1` na nowym trace z sesji tak, aby quality gate zwrocil `readyForTraining=true`.
+
+## 80) OPS-004 closure run: pelna bramka E2E (`Unity+Flutter+Firebase`) bez skipow (2026-02-23)
+
+- `OK` Scope:
+  - domknac stalego gate runnera przez pelny execution path:
+    - `flutter_controller analyze/test`,
+    - `admin_console_web analyze/test`,
+    - `unity_editor_mvp_smoke` (compile/build + Firebase validation).
+- `OK` Implementation/hardening:
+  - `scripts/unity_editor_mvp_smoke.ps1`:
+    - dodano timeout + polling markerow PASS/FAIL,
+    - dodano bounded grace window po PASS markerze i kontrolowane domkniecie procesu Unity, gdy proces nie konczy sie sam.
+  - `scripts/e2e_unity_flutter_firebase_gate.ps1`:
+    - lane Unity przekazuje argumenty warunkowo i stabilnie obsluguje listy `ValidationGameIds`.
+  - `unity-quest-template/Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs`:
+    - domkniecie completion flow i markerow PASS/FAIL,
+    - reconnect gate akceptuje metryke `replayedIncreased` jako sygnal raportowy (bez blokowania PASS dla fallbacku NDJSON).
+  - `unity-quest-template/Assets/_TheraplyCore/Firebase/FirebaseDataService.cs`:
+    - backend request polling ma twardy deadline timeout + `Abort()` (brak nieskonczonego `Task.Yield` loop).
+- `OK` Validation evidence:
+  - pelny gate PASS:
+    - `docs/evidence/20260223_135526/artifacts/e2e_gate_full/notes/SUMMARY.md`
+  - root summary:
+    - `docs/evidence/20260223_135526/notes/SUMMARY.md`
+  - Unity Firebase PASS marker:
+    - `docs/evidence/20260223_135526/artifacts/e2e_gate_full/artifacts/unity_editor_mvp_smoke/artifacts/unity_editor_mvp/firebase_validation_run1_demo_cube_clicker.log`
+    - marker: `[FirebaseNetworkValidation] PASS: ...`.
+  - Unity finalize behavior:
+    - runner domknal proces po grace window (`PASS marker observed, forced shutdown`) i zaliczyl run jako PASS.
+- `OK` Status:
+  - OPS-004: `DONE` z pelnym runem bez skipow.
+- `TODO` Next:
+  - wykonac pelny run `ops003_real_trace_ready_gate.ps1` na nowym trace z sesji tak, aby quality gate zwrocil `readyForTraining=true`.
+
+## 81) OPS-003 stability follow-up: repeated `pulse_target_tap` rollover regression check (2026-02-23)
+
+- `OK` Scope:
+  - zweryfikowac regresje zglaszana przez operatora:
+    - po ukonczeniu `pulse_target_tap` i ponownym `Start` w tej samej sciezce sterowania mobilka tracila podglad, a runtime wygladal na zawieszony,
+  - domknac follow-up OPS-003 na realnych danych z Questa po poprawce ownership/session rollover.
+- `OK` Fix implementation (mobile controller):
+  - `flutter_controller/lib/screens/control_screen.dart`:
+    - dodano kontrolowany `CREATED` rollover accept przy ownership/sessionKey mismatch po stanie terminalnym,
+    - mobilka przejmuje nowy `activeSessionId` po takim sygnale i dalej utrzymuje lock ownership dla kolejnych komend.
+  - `flutter_controller/lib/models/session_recovery_policy.dart`:
+    - dodano polityke `shouldAdoptCreatedRolloverSession(...)`.
+  - `flutter_controller/test/session_recovery_policy_test.dart`:
+    - dodano testy regresyjne dla zasad rollover (terminal/recently-ended/pending-decision/same-session/non-terminal).
+- `OK` Validation (local):
+  - `flutter test test/session_recovery_policy_test.dart`: PASS,
+  - `flutter test test/reconnect_path_test.dart test/end_session_reliability_test.dart`: PASS,
+  - `flutter analyze lib/screens/control_screen.dart lib/models/session_recovery_policy.dart`: PASS.
+- `OK` Quest evidence (device-connected):
+  - evidence root:
+    - `docs/evidence/20260223_171046/notes/SUMMARY.md`,
+  - z raportu follow-up:
+    - `windowStartUtc=2026-02-23T14:08:00Z`,
+    - `pulseCompletedSessionStopCountWindow=7`,
+    - `conflictReasonHitsInEvents=0`,
+    - `crashReportsSinceWindowStart=0`,
+    - `latestCrashReportAtUtc=2026-02-23T13:50:57.0470070Z` (starszy niz okno walidacji).
+  - artefakty:
+    - `docs/evidence/20260223_171046/artifacts/quest_events.ndjson`,
+    - `docs/evidence/20260223_171046/artifacts/quest_crash_reports.ndjson`,
+    - `docs/evidence/20260223_171046/artifacts/quest_ops003_followup_report.json`,
+    - `docs/evidence/20260223_171046/artifacts/quest_pulse_sequence.log`,
+    - `docs/evidence/20260223_171046/artifacts/quest_runtime_domain.log`.
+- `OK` Roadmap/status update:
+  - `docs/29-Controller-Authority-Resilience-And-Data-Roadmap.md`:
+    - OPS-003 row uzupelniony o evidence:
+      - `docs/evidence/20260223_171046/notes/SUMMARY.md`.
+  - `.last_evidence_dir`:
+    - ustawiono na `docs\\evidence\\20260223_171046`.
+- `OK` Status:
+  - follow-up OPS-003 (rollover regression) zamkniety jako `DONE`.
+- `TODO` Next:
+  - bez zmian strategicznych:
+    - nadal wymagany osobny real-trace run do `readyForTraining=true` (quality gate progi datasetowe).

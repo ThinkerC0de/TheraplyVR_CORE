@@ -239,7 +239,9 @@ Status legend:
 | RDM-014 | AI | Dataset quality validation before training | P3 | DONE | Team | `docs/evidence/20260222_183204/notes/SUMMARY.md` |
 | OPS-001 | Ops | Operacyjny lane pod trening i rollout (`dataset export` + `pre-train manifest` + sanity checks + raport operatora) | P4 | DONE | Team | `docs/evidence/20260222_185857/notes/SUMMARY.md` |
 | OPS-002 | Ops | Integracja lane eksportu z realnymi trace sesji + SOP/operator handoff paczki pre-train | P4 | DONE | Team | `docs/evidence/20260222_192103/notes/SUMMARY.md` |
-| OPS-003 | Ops | Real-trace-required run + operator intake ACK trail (handoff confirmation flow) | P4 | DONE | Team | `docs/evidence/20260222_202038/notes/SUMMARY.md`; `docs/evidence/20260222_221123/notes/SUMMARY.md`; `docs/evidence/20260223_101542/notes/SUMMARY.md` |
+| OPS-003 | Ops | Real-trace-required run + operator intake ACK trail (handoff confirmation flow) | P4 | DONE | Team | `docs/evidence/20260222_202038/notes/SUMMARY.md`; `docs/evidence/20260222_221123/notes/SUMMARY.md`; `docs/evidence/20260223_101542/notes/SUMMARY.md`; `docs/evidence/20260223_171046/notes/SUMMARY.md` |
+| MVP-001 | Mobile | Parent MVP: guided start + podglad + progress snapshot + rewards unlock bridge | P4 | DONE | Team | `docs/evidence/20260223_105833/notes/SUMMARY.md` |
+| OPS-004 | Ops | Stala bramka E2E (`Unity+Flutter+Firebase`) + orchestrator OPS-003 run (`ops003_real_trace_ready_gate.ps1`) | P4 | DONE | Team | `docs/evidence/20260223_105833/notes/SUMMARY.md`; `docs/evidence/20260223_135526/notes/SUMMARY.md` |
 
 ## Zasady aktualizacji roadmapy
 1. Kazda istotna zmiana architektury lub polityki sesji aktualizuje ten dokument.

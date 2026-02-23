@@ -64,5 +64,77 @@ void main() {
 
       expect(requiresDecision, isTrue);
     });
+
+    test('adopts created rollover session after terminal active session state',
+        () {
+      final shouldAdopt =
+          SessionRecoveryPolicy.shouldAdoptCreatedRolloverSession(
+        sessionAttachReady: true,
+        requiresSessionDecision: false,
+        activeSessionId: 'session-a',
+        incomingSessionId: 'session-b',
+        activeSessionState: SessionLifecycleState.completed,
+        activeSessionRecentlyEnded: false,
+      );
+
+      expect(shouldAdopt, isTrue);
+    });
+
+    test('adopts created rollover session after recently ended active session',
+        () {
+      final shouldAdopt =
+          SessionRecoveryPolicy.shouldAdoptCreatedRolloverSession(
+        sessionAttachReady: true,
+        requiresSessionDecision: false,
+        activeSessionId: 'session-a',
+        incomingSessionId: 'session-b',
+        activeSessionState: null,
+        activeSessionRecentlyEnded: true,
+      );
+
+      expect(shouldAdopt, isTrue);
+    });
+
+    test('does not adopt rollover when handoff decision is pending', () {
+      final shouldAdopt =
+          SessionRecoveryPolicy.shouldAdoptCreatedRolloverSession(
+        sessionAttachReady: true,
+        requiresSessionDecision: true,
+        activeSessionId: 'session-a',
+        incomingSessionId: 'session-b',
+        activeSessionState: SessionLifecycleState.completed,
+        activeSessionRecentlyEnded: true,
+      );
+
+      expect(shouldAdopt, isFalse);
+    });
+
+    test('does not adopt rollover for same session id', () {
+      final shouldAdopt =
+          SessionRecoveryPolicy.shouldAdoptCreatedRolloverSession(
+        sessionAttachReady: true,
+        requiresSessionDecision: false,
+        activeSessionId: 'session-a',
+        incomingSessionId: 'session-a',
+        activeSessionState: SessionLifecycleState.completed,
+        activeSessionRecentlyEnded: true,
+      );
+
+      expect(shouldAdopt, isFalse);
+    });
+
+    test('does not adopt rollover for non-terminal active session', () {
+      final shouldAdopt =
+          SessionRecoveryPolicy.shouldAdoptCreatedRolloverSession(
+        sessionAttachReady: true,
+        requiresSessionDecision: false,
+        activeSessionId: 'session-a',
+        incomingSessionId: 'session-b',
+        activeSessionState: SessionLifecycleState.inProgress,
+        activeSessionRecentlyEnded: false,
+      );
+
+      expect(shouldAdopt, isFalse);
+    });
   });
 }

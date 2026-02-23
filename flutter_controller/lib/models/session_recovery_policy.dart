@@ -47,4 +47,29 @@ class SessionRecoveryPolicy {
         state == SessionLifecycleState.abortedByTherapist ||
         state == SessionLifecycleState.failedTechnical;
   }
+
+  static bool shouldAdoptCreatedRolloverSession({
+    required bool sessionAttachReady,
+    required bool requiresSessionDecision,
+    required String activeSessionId,
+    required String incomingSessionId,
+    required SessionLifecycleState? activeSessionState,
+    required bool activeSessionRecentlyEnded,
+  }) {
+    if (!sessionAttachReady || requiresSessionDecision) {
+      return false;
+    }
+
+    final normalizedActiveSessionId = activeSessionId.trim();
+    final normalizedIncomingSessionId = incomingSessionId.trim();
+    if (normalizedActiveSessionId.isEmpty ||
+        normalizedIncomingSessionId.isEmpty ||
+        normalizedActiveSessionId == normalizedIncomingSessionId) {
+      return false;
+    }
+
+    final activeStateIsTerminal =
+        activeSessionState != null && isTerminalState(activeSessionState);
+    return activeStateIsTerminal || activeSessionRecentlyEnded;
+  }
 }

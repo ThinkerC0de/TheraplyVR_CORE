@@ -5,20 +5,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter_controller/models/content_delivery_contract.dart';
 import 'package:flutter_controller/models/critical_command_envelope.dart';
 import 'package:flutter_controller/models/device_info.dart';
+import 'package:flutter_controller/models/entitlement_access.dart';
 import 'package:flutter_controller/models/ops_error_catalog.dart';
+import 'package:flutter_controller/models/parent_progress_snapshot.dart';
 import 'package:flutter_controller/models/runtime_status_signal.dart';
 import 'package:flutter_controller/models/session_fsm_contract.dart';
 import 'package:flutter_controller/models/session_recovery_manager.dart';
 import 'package:flutter_controller/models/session_ownership.dart';
 import 'package:flutter_controller/models/session_recovery_policy.dart';
 import 'package:flutter_controller/models/student.dart';
+import 'package:flutter_controller/models/student_reward_unlock.dart';
 import 'package:flutter_controller/models/therapist_session_settings.dart';
 import 'package:flutter_controller/services/connection_service.dart';
 import 'package:flutter_controller/services/discovery_service.dart';
+import 'package:flutter_controller/services/entitlement_service.dart';
 import 'package:flutter_controller/services/firebase_service.dart';
 import 'package:flutter_controller/services/foreground_service_bridge.dart';
 import 'package:flutter_controller/services/operator_incident_popup_queue.dart';
+import 'package:flutter_controller/services/parent_progress_service.dart';
 import 'package:flutter_controller/services/session_journal_service.dart';
+import 'package:flutter_controller/services/student_reward_service.dart';
 import 'package:flutter_controller/services/therapist_session_settings_service.dart';
 import 'package:flutter_controller/models/therapy_session_record.dart';
 import 'package:flutter_controller/widgets/media_stream_widget.dart';
@@ -142,6 +148,10 @@ class _ControlScreenState extends State<ControlScreen>
   String? _lastSessionStateUpdateSessionId;
   String? _lastRuntimeStatusSessionId;
   TherapySessionRecord? _latestPersistedSession;
+  ParentProgressSnapshot _parentProgressSnapshot = ParentProgressSnapshot.empty;
+  List<StudentRewardUnlock> _recentRewardUnlocks =
+      const <StudentRewardUnlock>[];
+  bool _parentInsightsLoading = false;
   bool _persistedSessionRefreshInFlight = false;
   bool _interruptedSessionAutoCloseInFlight = false;
   DeviceInfo? _latestDiscoveryReconnectCandidate;
@@ -179,7 +189,7 @@ class _ControlScreenState extends State<ControlScreen>
 
     _connection.setDiscoveryService(widget.discoveryService);
     _activeSessionId = _buildLocalSessionId();
-    _selectedGameId = _gameCatalog.first.gameId;
+    _selectedGameId = _resolveInitialGameId();
     _bootstrapLocalContentStates();
 
     _setupConnectionListeners();
@@ -188,6 +198,7 @@ class _ControlScreenState extends State<ControlScreen>
     unawaited(ForegroundServiceBridge.start());
     unawaited(_loadTherapistSessionSettings());
     unawaited(_refreshPersistedSessionSnapshot(triggerPrompt: true));
+    unawaited(_refreshParentInsights());
     unawaited(_connect());
   }
 
@@ -320,12 +331,28 @@ class _ControlScreenState extends State<ControlScreen>
           (sessionUpdate != null ||
               runtimeUpdate != null ||
               watchdogHeartbeat != null)) {
+        final shouldAdoptCreatedSessionRollover = sessionUpdate != null &&
+            sessionUpdate.state == SessionLifecycleState.created &&
+            _shouldAdoptCreatedSessionRollover(
+              sessionUpdate.sessionId,
+              activeSessionStateOverride: previousSessionState,
+            );
         _lastRuntimeSignalAtUtc = DateTime.now().toUtc();
         if (watchdogHeartbeat != null && watchdogHeartbeat.staleAfterMs > 0) {
           _lastWatchdogStaleAfterMs = watchdogHeartbeat.staleAfterMs;
         }
         setState(() {
           if (sessionUpdate != null) {
+            if (shouldAdoptCreatedSessionRollover) {
+              final previousActiveSessionId = _activeSessionId;
+              _activeSessionId = sessionUpdate.sessionId.trim();
+              _sessionAttachReady = true;
+              debugPrint(
+                '[ControlScreen][Ownership] Accepted rollover CREATED signal: '
+                'activeSession=$previousActiveSessionId '
+                'incomingSession=$_activeSessionId',
+              );
+            }
             _lastSessionStateUpdateSessionId = sessionUpdate.sessionId;
             _sessionLifecycleState = sessionUpdate.state;
             if (SessionRecoveryPolicy.isTerminalState(sessionUpdate.state)) {
@@ -1360,6 +1387,20 @@ class _ControlScreenState extends State<ControlScreen>
     );
   }
 
+  bool _shouldAdoptCreatedSessionRollover(
+    String incomingSessionId, {
+    SessionLifecycleState? activeSessionStateOverride,
+  }) {
+    return SessionRecoveryPolicy.shouldAdoptCreatedRolloverSession(
+      sessionAttachReady: _sessionAttachReady,
+      requiresSessionDecision: _requiresSessionDecision,
+      activeSessionId: _activeSessionId,
+      incomingSessionId: incomingSessionId,
+      activeSessionState: activeSessionStateOverride ?? _sessionLifecycleState,
+      activeSessionRecentlyEnded: _wasSessionRecentlyEnded(_activeSessionId),
+    );
+  }
+
   bool _isSignalOwnershipAccepted({
     required String source,
     required String sessionId,
@@ -1368,6 +1409,7 @@ class _ControlScreenState extends State<ControlScreen>
     required String patientId,
     required String ownerKey,
     required String sessionKey,
+    bool allowCreatedSessionRollover = false,
   }) {
     final expectedTherapistId = _resolveActorTherapistId().trim();
     final expectedStudentId = widget.student.id.trim();
@@ -1452,6 +1494,15 @@ class _ControlScreenState extends State<ControlScreen>
         }
 
         if (incomingSessionKey != expectedSessionKey) {
+          if (allowCreatedSessionRollover &&
+              _shouldAdoptCreatedSessionRollover(normalizedSessionId)) {
+            debugPrint(
+              '[ControlScreen][Ownership] Accepting $source signal due '
+              'terminal rollover: activeSession=$activeSessionId '
+              'incomingSession=$normalizedSessionId',
+            );
+            return true;
+          }
           debugPrint(
             '[ControlScreen][Ownership] Rejecting $source signal due session '
             'mismatch: expectedSessionKey=$expectedSessionKey '
@@ -1480,6 +1531,8 @@ class _ControlScreenState extends State<ControlScreen>
       patientId: signal.patientId,
       ownerKey: signal.ownerKey,
       sessionKey: signal.sessionKey,
+      allowCreatedSessionRollover:
+          signal.state == SessionLifecycleState.created,
     )) {
       return null;
     }
@@ -1619,6 +1672,9 @@ class _ControlScreenState extends State<ControlScreen>
       setState(() {
         _latestPersistedSession = latest;
       });
+      if (_isParentRole) {
+        unawaited(_refreshParentInsights());
+      }
 
       if (triggerPrompt) {
         final handledByAutoClose = _applyInterruptedSessionAutoClose();
@@ -1632,6 +1688,94 @@ class _ControlScreenState extends State<ControlScreen>
       );
     } finally {
       _persistedSessionRefreshInFlight = false;
+    }
+  }
+
+  Future<void> _refreshParentInsights() async {
+    if (!_isParentRole || _parentInsightsLoading) {
+      return;
+    }
+
+    _parentInsightsLoading = true;
+    try {
+      final progressSnapshot = _isProgressInsightsAllowed
+          ? await ParentProgressService.fetchSnapshot(
+              studentId: widget.student.id,
+              therapistId: _resolveActorTherapistId(),
+            )
+          : ParentProgressSnapshot.empty;
+      final rewards = _isRewardsUnlocksAllowed
+          ? await StudentRewardService.fetchRecentRewardsForStudent(
+              studentId: widget.student.id,
+            )
+          : const <StudentRewardUnlock>[];
+
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _parentProgressSnapshot = progressSnapshot;
+        _recentRewardUnlocks = rewards;
+      });
+    } catch (e) {
+      debugPrint('[ControlScreen] Parent insights refresh failed: $e');
+    } finally {
+      _parentInsightsLoading = false;
+    }
+  }
+
+  Future<void> _unlockRewardForCompletedSession({
+    required String sessionId,
+    required String gameId,
+    required String reasonCode,
+  }) async {
+    if (!_isRewardsUnlocksAllowed) {
+      return;
+    }
+
+    try {
+      final result = await StudentRewardService.unlockForCompletedSession(
+        studentId: widget.student.id,
+        therapistId: _resolveActorTherapistId(),
+        sessionId: sessionId,
+        gameId: gameId,
+        reasonCode: reasonCode,
+      );
+      if (result == null) {
+        return;
+      }
+
+      if (result.unlockedNow) {
+        await SessionJournalService.appendSessionEvent(
+          sessionId: sessionId,
+          studentId: widget.student.id,
+          therapistId: _resolveActorTherapistId(),
+          eventType: 'REWARD_UNLOCKED',
+          gameId: gameId,
+          details: <String, dynamic>{
+            'rewardCode': result.reward.rewardCode,
+            'rewardTitle': result.reward.rewardTitle,
+            'reasonCode': reasonCode,
+            'unlockId': result.reward.unlockId,
+          },
+        );
+      }
+
+      await _refreshParentInsights();
+
+      if (result.unlockedNow && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Reward unlocked: ${result.reward.rewardTitle}'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint(
+        '[ControlScreen] Reward unlock persist failed: '
+        'session=$sessionId game=$gameId error=$e',
+      );
     }
   }
 
@@ -2039,6 +2183,11 @@ class _ControlScreenState extends State<ControlScreen>
             'reason': 'THERAPIST_CONFIRMED_END',
           },
         );
+        await _unlockRewardForCompletedSession(
+          sessionId: sessionId,
+          gameId: selectedGameId,
+          reasonCode: 'THERAPIST_CONFIRMED_END',
+        );
       }
     } catch (e) {
       debugPrint(
@@ -2085,7 +2234,54 @@ class _ControlScreenState extends State<ControlScreen>
     }
   }
 
+  String _resolveInitialGameId() {
+    final entitledCatalog = _entitledGameCatalog;
+    if (entitledCatalog.isNotEmpty) {
+      return entitledCatalog.first.gameId;
+    }
+    return _gameCatalog.first.gameId;
+  }
+
+  List<_GameCatalogEntry> get _entitledGameCatalog {
+    final access = EntitlementService.activeAccess;
+    if (access == null) {
+      return _gameCatalog;
+    }
+
+    final nowUtc = DateTime.now().toUtc();
+    final filtered = <_GameCatalogEntry>[];
+    for (final entry in _gameCatalog) {
+      if (access.hasGameAccess(gameId: entry.gameId, atUtc: nowUtc) &&
+          access.isGameAllowedByPlan(entry.gameId)) {
+        filtered.add(entry);
+      }
+    }
+    return filtered;
+  }
+
   _GameCatalogEntry get _selectedGameEntry {
+    final entitledCatalog = _entitledGameCatalog;
+    if (entitledCatalog.isNotEmpty) {
+      for (final entry in entitledCatalog) {
+        if (entry.gameId == _selectedGameId) {
+          return entry;
+        }
+      }
+
+      final fallback = entitledCatalog.first;
+      if (_selectedGameId != fallback.gameId) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || _selectedGameId == fallback.gameId) {
+            return;
+          }
+          setState(() {
+            _selectedGameId = fallback.gameId;
+          });
+        });
+      }
+      return fallback;
+    }
+
     for (final entry in _gameCatalog) {
       if (entry.gameId == _selectedGameId) {
         return entry;
@@ -2093,6 +2289,73 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     return _gameCatalog.first;
+  }
+
+  SubscriptionPlanTier get _activePlanTier {
+    return EntitlementService.activeAccess?.planProfile.tier ??
+        SubscriptionPlanTier.unknown;
+  }
+
+  EntitlementRole get _activeRole {
+    return EntitlementService.activeAccess?.role ?? EntitlementRole.unknown;
+  }
+
+  bool get _isParentRole => _activeRole == EntitlementRole.parent;
+
+  bool get _isFreePlan => _activePlanTier == SubscriptionPlanTier.free;
+
+  bool get _hasRemainingDemoSessions {
+    return EntitlementService.hasRemainingDemoSessions();
+  }
+
+  bool get _isVrSessionControlAllowed {
+    return EntitlementService.isFeatureEnabled(
+      EntitlementFeatureKeys.vrSessionControl,
+    );
+  }
+
+  bool get _isParentGuidedStartAllowed {
+    return EntitlementService.isFeatureEnabled(
+      EntitlementFeatureKeys.parentGuidedStart,
+    );
+  }
+
+  bool get _isProgressInsightsAllowed {
+    return EntitlementService.isFeatureEnabled(
+      EntitlementFeatureKeys.progressInsights,
+    );
+  }
+
+  bool get _isRewardsUnlocksAllowed {
+    return EntitlementService.isFeatureEnabled(
+      EntitlementFeatureKeys.rewardsUnlocks,
+    );
+  }
+
+  bool get _isPlanBlockingLaunch {
+    if (!_isVrSessionControlAllowed) {
+      return true;
+    }
+    if (_isParentRole && !_isParentGuidedStartAllowed) {
+      return true;
+    }
+    if (_isFreePlan && !_hasRemainingDemoSessions) {
+      return true;
+    }
+    return false;
+  }
+
+  String? get _planGateBannerText {
+    if (!_isVrSessionControlAllowed) {
+      return 'Current plan does not allow starting VR sessions.';
+    }
+    if (_isParentRole && !_isParentGuidedStartAllowed) {
+      return 'Current plan does not allow guided parent start.';
+    }
+    if (_isFreePlan && !_hasRemainingDemoSessions) {
+      return 'Free plan demo limit reached. Upgrade plan or reset demo quota.';
+    }
+    return null;
   }
 
   bool get _isDemoCubeGameSelected => _selectedGameId == _demoCubeGameId;
@@ -2245,9 +2508,13 @@ class _ControlScreenState extends State<ControlScreen>
   void _bootstrapLocalContentStates() {
     final nowUtc = DateTime.now().toUtc();
     for (final entry in _gameCatalog) {
+      final isOwnedByEntitlement = EntitlementService.canLaunchGame(
+        entry.gameId,
+        atUtc: nowUtc,
+      );
       _contentStatesByGameId[entry.gameId] = PurchasedContentState(
         gameId: entry.gameId,
-        owned: true,
+        owned: isOwnedByEntitlement,
         installedVersion: entry.targetContentVersion,
         targetVersion: entry.targetContentVersion,
         updateRequired: false,
@@ -2267,9 +2534,13 @@ class _ControlScreenState extends State<ControlScreen>
 
     final fallbackEntry = _gameCatalog.where((entry) => entry.gameId == gameId);
     if (fallbackEntry.isNotEmpty) {
+      final isOwnedByEntitlement = EntitlementService.canLaunchGame(
+        gameId,
+        atUtc: DateTime.now().toUtc(),
+      );
       return PurchasedContentState(
         gameId: gameId,
-        owned: true,
+        owned: isOwnedByEntitlement,
         installedVersion: fallbackEntry.first.targetContentVersion,
         targetVersion: fallbackEntry.first.targetContentVersion,
         updateRequired: false,
@@ -2334,8 +2605,10 @@ class _ControlScreenState extends State<ControlScreen>
       await _connection.sendCommand(
         ContentDeliveryCommandIds.syncCatalog,
         ContentDeliveryRequests.buildSyncCatalogRequest(
-          actorId: widget.student.therapistId,
-          role: 'THERAPIST',
+          actorId: _resolveActorTherapistId(),
+          role: (EntitlementService.activeAccess?.role ??
+                  EntitlementRole.therapist)
+              .wireValue,
         ),
       );
 
@@ -2397,7 +2670,7 @@ class _ControlScreenState extends State<ControlScreen>
       await _connection.sendCommand(
         ContentDeliveryCommandIds.installGame,
         ContentDeliveryRequests.buildInstallRequest(
-          actorId: widget.student.therapistId,
+          actorId: _resolveActorTherapistId(),
           gameId: state.gameId,
           targetVersion: state.targetVersion,
         ),
@@ -2453,7 +2726,7 @@ class _ControlScreenState extends State<ControlScreen>
       await _connection.sendCommand(
         ContentDeliveryCommandIds.uninstallGame,
         ContentDeliveryRequests.buildUninstallRequest(
-          actorId: widget.student.therapistId,
+          actorId: _resolveActorTherapistId(),
           gameId: state.gameId,
         ),
       );
@@ -3423,6 +3696,61 @@ class _ControlScreenState extends State<ControlScreen>
         });
       }
     }
+  }
+
+  Future<void> _startParentGuidedSession() async {
+    if (!_isParentRole) {
+      return;
+    }
+
+    final planBanner = _planGateBannerText;
+    if (_isPlanBlockingLaunch || planBanner != null) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(planBanner ?? 'Current plan blocks guided start.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    if (!mounted || !_isConnected || !_sessionAttachReady) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Wait for headset connection and session sync first.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    if (_isHeadsetPresenceBlocking) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Headset is not in active VR app yet.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    if (_workflowStep != _WorkflowStep.gameSetup) {
+      setState(() {
+        _workflowStep = _WorkflowStep.gameSetup;
+        _isVideoPreviewExpanded = true;
+      });
+    }
+
+    await _startFromSetup();
   }
 
   Future<void> _startFromSetup() async {
@@ -4608,18 +4936,284 @@ class _ControlScreenState extends State<ControlScreen>
     });
   }
 
+  String _formatCompactDateTime(DateTime? valueUtc) {
+    if (valueUtc == null) {
+      return '--';
+    }
+
+    final local = valueUtc.toLocal();
+    final day = local.day.toString().padLeft(2, '0');
+    final month = local.month.toString().padLeft(2, '0');
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
+    return '$day.$month $hour:$minute';
+  }
+
+  Widget _buildParentMetricChip({
+    required String label,
+    required String value,
+    required IconData icon,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.blueGrey.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: Colors.blueGrey.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 14,
+            color: Colors.blueGrey.shade800,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            '$label: $value',
+            style: const TextStyle(
+              color: Colors.blueGrey,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildParentQuickStartPanel() {
+    final canStartNow = _isConnected &&
+        _sessionAttachReady &&
+        !_isHeadsetPresenceBlocking &&
+        !_isPlanBlockingLaunch &&
+        _isSelectedGameLaunchable &&
+        !_isPrimaryActionInFlight;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.green.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.green.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.family_restroom, color: Colors.green.shade800),
+              const SizedBox(width: 8),
+              Text(
+                'Parent guided mode',
+                style: TextStyle(
+                  color: Colors.green.shade900,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Start one guided VR session and monitor live preview on mobile.',
+            style: TextStyle(
+              color: Colors.green.shade900,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ElevatedButton.icon(
+            onPressed: canStartNow
+                ? () => unawaited(_startParentGuidedSession())
+                : null,
+            icon: const Icon(Icons.play_circle_fill),
+            label: Text(
+              canStartNow
+                  ? 'Start guided session now'
+                  : 'Waiting for connection/plan gate',
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green.shade700,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildParentProgressPanel() {
+    final snapshot = _parentProgressSnapshot;
+    final completionPercent = (snapshot.completionRate * 100).toStringAsFixed(
+      0,
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.blueGrey.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.blueGrey.shade100),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.insights_outlined, size: 18),
+              SizedBox(width: 8),
+              Text(
+                'Parent progress',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          if (_parentInsightsLoading) ...[
+            const SizedBox(height: 8),
+            const LinearProgressIndicator(minHeight: 2),
+          ],
+          const SizedBox(height: 8),
+          if (!_isProgressInsightsAllowed)
+            Text(
+              'Current plan does not include progress insights.',
+              style: TextStyle(
+                color: Colors.orange.shade800,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            )
+          else if (!snapshot.hasData)
+            Text(
+              'No completed session history yet for this student.',
+              style: TextStyle(
+                color: Colors.grey.shade700,
+                fontSize: 12,
+              ),
+            )
+          else ...[
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildParentMetricChip(
+                  label: 'Sessions',
+                  value: snapshot.totalSessions.toString(),
+                  icon: Icons.history,
+                ),
+                _buildParentMetricChip(
+                  label: 'Completed',
+                  value: snapshot.terminalSessions.toString(),
+                  icon: Icons.check_circle_outline,
+                ),
+                _buildParentMetricChip(
+                  label: 'Completion',
+                  value: '$completionPercent%',
+                  icon: Icons.percent,
+                ),
+                _buildParentMetricChip(
+                  label: 'Pending',
+                  value: snapshot.unfinishedSessions.toString(),
+                  icon: Icons.pending_actions_outlined,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Last: ${snapshot.lastGameId.isEmpty ? '-' : snapshot.lastGameId} | '
+              'state: ${snapshot.lastState.isEmpty ? '-' : snapshot.lastState} | '
+              '${_formatCompactDateTime(snapshot.lastUpdatedAtUtc)}',
+              style: TextStyle(
+                color: Colors.grey.shade700,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          Text(
+            'Rewards',
+            style: TextStyle(
+              color: Colors.blueGrey.shade900,
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 4),
+          if (!_isRewardsUnlocksAllowed)
+            Text(
+              'Current plan does not include VR reward unlocks.',
+              style: TextStyle(
+                color: Colors.orange.shade800,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            )
+          else if (_recentRewardUnlocks.isEmpty)
+            Text(
+              'No unlocked rewards yet.',
+              style: TextStyle(
+                color: Colors.grey.shade700,
+                fontSize: 12,
+              ),
+            )
+          else
+            Column(
+              children: _recentRewardUnlocks.map((reward) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.emoji_events_outlined,
+                        size: 16,
+                        color: Colors.amber.shade800,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          '${reward.rewardTitle} (${reward.gameId}) | '
+                          '${_formatCompactDateTime(reward.unlockedAtUtc)}',
+                          style: TextStyle(
+                            color: Colors.grey.shade800,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(growable: false),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSessionControlPanel({
     required _GameCatalogEntry entry,
     required PurchasedContentState contentState,
   }) {
     final controlsReady =
         _isConnected && _sessionAttachReady && !_isHeadsetPresenceBlocking;
+    final planLaunchBlocked = _isPlanBlockingLaunch;
     final canStart = controlsReady &&
         !_isPrimaryActionInFlight &&
+        !planLaunchBlocked &&
         _isLaunchableContentState(contentState) &&
         !_isGameRuntimeActive;
     final canRestart = controlsReady &&
         !_isPrimaryActionInFlight &&
+        !planLaunchBlocked &&
         _isLaunchableContentState(contentState) &&
         _isGameRuntimeActive;
     final canPause = controlsReady &&
@@ -4713,13 +5307,26 @@ class _ControlScreenState extends State<ControlScreen>
               backgroundColor: Colors.red.shade700,
             ),
           ),
+          if (_planGateBannerText != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              _planGateBannerText!,
+              style: TextStyle(
+                color: Colors.orange.shade900,
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
   Widget _buildGameCatalogStep() {
+    final visibleCatalog = _entitledGameCatalog;
     final selectedEntry = _selectedGameEntry;
+    final planGateBannerText = _planGateBannerText;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -4796,6 +5403,14 @@ class _ControlScreenState extends State<ControlScreen>
           _buildDeferredHandoffBanner(),
           const SizedBox(height: 6),
         ],
+        if (planGateBannerText != null) ...[
+          _buildStateBanner(
+            icon: Icons.lock_outline,
+            color: Colors.orange.shade800,
+            text: planGateBannerText,
+          ),
+          const SizedBox(height: 6),
+        ],
         if (_isSelectedGameLaunchable) ...[
           _buildStateBanner(
             icon: Icons.check_circle,
@@ -4812,19 +5427,25 @@ class _ControlScreenState extends State<ControlScreen>
           ),
           const SizedBox(height: 6),
         ],
+        if (_isParentRole) ...[
+          _buildParentQuickStartPanel(),
+          const SizedBox(height: 6),
+          _buildParentProgressPanel(),
+          const SizedBox(height: 6),
+        ],
         Expanded(
-          child: _gameCatalog.isEmpty
+          child: visibleCatalog.isEmpty
               ? Center(
                   child: Text(
-                    'No games available in catalog yet.',
+                    'No games available under current entitlement plan.',
                     style: TextStyle(color: Colors.grey[600]),
                   ),
                 )
               : ListView.separated(
-                  itemCount: _gameCatalog.length,
+                  itemCount: visibleCatalog.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 8),
                   itemBuilder: (context, index) {
-                    final entry = _gameCatalog[index];
+                    final entry = visibleCatalog[index];
                     final selected = entry.gameId == _selectedGameId;
                     final expanded =
                         _expandedPreviewGameIds.contains(entry.gameId);
@@ -5007,6 +5628,7 @@ class _ControlScreenState extends State<ControlScreen>
           onPressed: _isConnected &&
                   _sessionAttachReady &&
                   !_isHeadsetPresenceBlocking &&
+                  !_isPlanBlockingLaunch &&
                   _isSelectedGameLaunchable
               ? () {
                   setState(() {
@@ -5021,11 +5643,13 @@ class _ControlScreenState extends State<ControlScreen>
                 ? 'Wait for session sync first'
                 : _isHeadsetPresenceBlocking
                     ? 'Headset not in active VR app yet'
-                    : _isSelectedGameLaunchable
-                        ? 'Open game session'
-                        : _contentDeliveryEnabled
-                            ? 'Install or update selected game first'
-                            : 'Select available game first',
+                    : _isPlanBlockingLaunch
+                        ? 'Current plan blocks launching this session'
+                        : _isSelectedGameLaunchable
+                            ? 'Open game session'
+                            : _contentDeliveryEnabled
+                                ? 'Install or update selected game first'
+                                : 'Select available game first',
           ),
           style: ElevatedButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -5147,7 +5771,9 @@ class _ControlScreenState extends State<ControlScreen>
                 contentState: contentState,
               ),
               const SizedBox(height: 8),
-              _buildTherapistTimelinePanel(),
+              _isParentRole
+                  ? _buildParentProgressPanel()
+                  : _buildTherapistTimelinePanel(),
             ],
           ),
         ),
