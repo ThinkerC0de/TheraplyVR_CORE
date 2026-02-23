@@ -158,17 +158,45 @@ namespace TheraplyCore.Editor.Automation
                 var offlineFailureDelta = offlineStats.outboxSyncFailures - offlineBaseline.outboxSyncFailures;
                 var offlineRetryDelta = offlineStats.outboxRetriesScheduled - offlineBaseline.outboxRetriesScheduled;
                 var offlinePending = offlineStats.durableOutboxPending;
-                var retrySignalDetected = offlineFailureDelta > 0 || offlineRetryDelta > 0 || offlinePending > 0;
+                var offlineFailed = offlineStats.durableOutboxFailed;
+                var retrySignalDetected =
+                    offlineFailureDelta > 0 ||
+                    offlineRetryDelta > 0 ||
+                    offlinePending > 0 ||
+                    offlineFailed > 0;
 
                 if (!retrySignalDetected)
                 {
                     throw new InvalidOperationException(
-                        "Expected offline retry signal (failures/retries/pending), but no counters changed.");
+                        "Expected offline retry signal (failures/retries/pending/failed), but no counters changed.");
                 }
 
                 Debug.Log(
                     $"[FirebaseNetworkValidation] Offline phase: " +
-                    $"failureDelta={offlineFailureDelta}, retryDelta={offlineRetryDelta}, pending={offlinePending}.");
+                    $"failureDelta={offlineFailureDelta}, retryDelta={offlineRetryDelta}, pending={offlinePending}, failed={offlineFailed}.");
+
+                await WaitForOutboxIdleAsync(firebase, TimeSpan.FromSeconds(8), "restart-prep");
+                InvokeNonPublic(firebase, "DisposeDurableStore");
+                InvokeNonPublic(firebase, "InitializeDurableStore");
+                InvokeNonPublic(firebase, "RefreshSessionMetadataFromContext");
+                SetNonPublicField(firebase, "_isOutboxSyncRunning", false);
+                SetNonPublicField(firebase, "_lastOutboxSyncAtUtc", DateTime.UtcNow.AddMinutes(-1));
+
+                var restartStats = firebase.GetStatistics();
+                var restartBacklog =
+                    restartStats.durableOutboxPending +
+                    restartStats.durableOutboxInFlight +
+                    restartStats.durableOutboxFailed;
+                if (restartBacklog <= 0)
+                {
+                    throw new InvalidOperationException(
+                        "Outbox backlog was not restored after durable store restart.");
+                }
+
+                Debug.Log(
+                    $"[FirebaseNetworkValidation] Restart phase: pending={restartStats.durableOutboxPending}, " +
+                    $"inFlight={restartStats.durableOutboxInFlight}, failed={restartStats.durableOutboxFailed}, " +
+                    $"replayed={restartStats.durableOutboxReplayed}.");
 
                 await backend.StartAsync();
 
@@ -176,10 +204,12 @@ namespace TheraplyCore.Editor.Automation
                 var reconnectStats = firebase.GetStatistics();
                 var reconnectAcceptedEvents = backend.GetAcceptedEventCount();
 
-                if (reconnectStats.durableOutboxPending != 0 || reconnectStats.durableOutboxInFlight != 0)
+                if (reconnectStats.durableOutboxPending != 0 ||
+                    reconnectStats.durableOutboxInFlight != 0 ||
+                    reconnectStats.durableOutboxFailed != 0)
                 {
                     throw new InvalidOperationException(
-                        $"Outbox did not drain after reconnect (pending={reconnectStats.durableOutboxPending}, inFlight={reconnectStats.durableOutboxInFlight}).");
+                        $"Outbox did not drain after reconnect (pending={reconnectStats.durableOutboxPending}, inFlight={reconnectStats.durableOutboxInFlight}, failed={reconnectStats.durableOutboxFailed}).");
                 }
 
                 if (reconnectAcceptedEvents <= onlineAcceptedEvents)
@@ -188,9 +218,16 @@ namespace TheraplyCore.Editor.Automation
                         $"Reconnect ingest did not increase backend event count (online={onlineAcceptedEvents}, reconnect={reconnectAcceptedEvents}).");
                 }
 
+                if (reconnectStats.durableOutboxReplayed <= onlineStats.durableOutboxReplayed)
+                {
+                    throw new InvalidOperationException(
+                        $"Expected replayed outbox metric to increase after reconnect (online={onlineStats.durableOutboxReplayed}, reconnect={reconnectStats.durableOutboxReplayed}).");
+                }
+
                 Debug.Log(
                     $"[FirebaseNetworkValidation] Reconnect phase: accepted={reconnectAcceptedEvents}, " +
                     $"pending={reconnectStats.durableOutboxPending}, inFlight={reconnectStats.durableOutboxInFlight}, " +
+                    $"failed={reconnectStats.durableOutboxFailed}, replayed={reconnectStats.durableOutboxReplayed}, " +
                     $"synced={reconnectStats.outboxEventsSynced}.");
 
                 InvokeNonPublic(firebase, "DisposeDurableStore");
@@ -201,7 +238,11 @@ namespace TheraplyCore.Editor.Automation
                     $"onlineSynced={onlineStats.outboxEventsSynced}; " +
                     $"offlineFailureDelta={offlineFailureDelta}; " +
                     $"offlineRetryDelta={offlineRetryDelta}; " +
+                    $"offlineFailed={offlineFailed}; " +
+                    $"restartBacklog={restartBacklog}; " +
                     $"pendingAfterReconnect={reconnectStats.durableOutboxPending}; " +
+                    $"failedAfterReconnect={reconnectStats.durableOutboxFailed}; " +
+                    $"replayedAfterReconnect={reconnectStats.durableOutboxReplayed}; " +
                     $"reconnectAccepted={reconnectAcceptedEvents}; reconnectSynced={reconnectStats.outboxEventsSynced}";
             }
         }
@@ -469,11 +510,18 @@ namespace TheraplyCore.Editor.Automation
         private static void ConfigureFirebase(FirebaseDataService firebase, int port)
         {
             var baseUrl = $"http://127.0.0.1:{port}";
+            var durableFolder = $"session_resilience_validation_{DateTime.UtcNow:yyyyMMddHHmmssfff}";
             SetNonPublicField(firebase, "_simulateFirebase", false);
             SetNonPublicField(firebase, "_sessionIngestEndpointUrl", $"{baseUrl}/session-ingest");
             SetNonPublicField(firebase, "_sessionReconciliationEndpointUrl", $"{baseUrl}/session-reconciliation");
             SetNonPublicField(firebase, "_firebaseAuthBearerToken", string.Empty);
             SetNonPublicField(firebase, "_firebaseApiKey", string.Empty);
+            SetNonPublicField(firebase, "_localDurableFolder", durableFolder);
+            SetNonPublicField(firebase, "_localDurableFileName", "events.ndjson");
+            SetNonPublicField(firebase, "_sqliteStoreFileName", "session_events.db");
+            SetNonPublicField(firebase, "_enableOutboxSync", false);
+            SetNonPublicField(firebase, "_outboxBatchSize", 256);
+            SetNonPublicField(firebase, "_outboxSyncIntervalSeconds", 0.25f);
             SetNonPublicField(firebase, "_logOutboxSync", true);
             SetNonPublicField(firebase, "_logFirebaseBackendPayloads", true);
             SetNonPublicField(firebase, "_logFirebaseBackendDiagnostics", true);
@@ -502,6 +550,26 @@ namespace TheraplyCore.Editor.Automation
             throw new TimeoutException($"Outbox sync did not complete in phase '{phase}' within {timeout.TotalSeconds:F1}s.");
         }
 
+        private static async Task WaitForOutboxIdleAsync(
+            FirebaseDataService firebase,
+            TimeSpan timeout,
+            string phase)
+        {
+            var startedAt = DateTime.UtcNow;
+            while (DateTime.UtcNow - startedAt < timeout)
+            {
+                if (!ReadNonPublicBool(firebase, "_isOutboxSyncRunning"))
+                {
+                    return;
+                }
+
+                await Task.Delay(100);
+            }
+
+            throw new TimeoutException(
+                $"Outbox worker did not become idle before phase '{phase}' within {timeout.TotalSeconds:F1}s.");
+        }
+
         private static async Task DrainOutboxAfterReconnectAsync(FirebaseDataService firebase, TimeSpan timeout)
         {
             var startedAt = DateTime.UtcNow;
@@ -509,7 +577,9 @@ namespace TheraplyCore.Editor.Automation
             {
                 await TriggerOutboxSyncAsync(firebase, TimeSpan.FromSeconds(8), "reconnect");
                 var stats = firebase.GetStatistics();
-                if (stats.durableOutboxPending == 0 && stats.durableOutboxInFlight == 0)
+                if (stats.durableOutboxPending == 0 &&
+                    stats.durableOutboxInFlight == 0 &&
+                    stats.durableOutboxFailed == 0)
                 {
                     return;
                 }
@@ -519,7 +589,7 @@ namespace TheraplyCore.Editor.Automation
 
             var finalStats = firebase.GetStatistics();
             throw new TimeoutException(
-                $"Outbox did not drain after reconnect (pending={finalStats.durableOutboxPending}, inFlight={finalStats.durableOutboxInFlight}).");
+                $"Outbox did not drain after reconnect (pending={finalStats.durableOutboxPending}, inFlight={finalStats.durableOutboxInFlight}, failed={finalStats.durableOutboxFailed}).");
         }
 
         private static void QueueOfflineSessionEvents(FirebaseDataService firebase, string sessionId, int count)

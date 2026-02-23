@@ -45,7 +45,10 @@ namespace TheraplyCore.Streaming
                 _tcpServer.OnClientDisconnected += HandleClientDisconnected;
             }
             if (_mediaStreamService != null)
+            {
                 _mediaStreamService.OnIceCandidateGenerated += SendICECandidate;
+                _mediaStreamService.OnStunFallbackRequested += HandleStunFallbackRequested;
+            }
         }
 
         private void OnDisable()
@@ -57,7 +60,10 @@ namespace TheraplyCore.Streaming
                 _tcpServer.OnClientDisconnected -= HandleClientDisconnected;
             }
             if (_mediaStreamService != null)
+            {
                 _mediaStreamService.OnIceCandidateGenerated -= SendICECandidate;
+                _mediaStreamService.OnStunFallbackRequested -= HandleStunFallbackRequested;
+            }
         }
 
         private void HandleClientConnected(string clientIP)
@@ -83,14 +89,69 @@ namespace TheraplyCore.Streaming
         {
             if (_isNegotiating) yield break;
             _isNegotiating = true;
-            if (_logSignaling) Debug.Log("[WebRTCServerSignaling] Creating WebRTC offer...");
+            yield return CreateOfferAndSendInternal("INITIAL_NEGOTIATION");
+            _isNegotiating = false;
+        }
+
+        private IEnumerator CreateOfferAndSendInternal(string reasonCode)
+        {
+            if (_logSignaling) Debug.Log($"[WebRTCServerSignaling] Creating WebRTC offer ({reasonCode})...");
 
             yield return _mediaStreamService.CreateOffer(offer =>
             {
-                var offerData = new WebRTCOfferMessage { type = "offer", sdp = offer.sdp };
+                var offerData = new WebRTCOfferMessage
+                {
+                    type = "offer",
+                    sdp = offer.sdp,
+                    iceMode = _mediaStreamService != null && !_mediaStreamService.IsLanOnlyMode ? "STUN" : "LAN",
+                    reasonCode = reasonCode
+                };
                 _ = _tcpServer.SendCommandAsync("WEBRTC_OFFER", offerData);
                 if (_logSignaling) Debug.Log($"[WebRTCServerSignaling] Sent WEBRTC_OFFER to client ({offer.sdp.Length} chars)");
             });
+        }
+
+        private void HandleStunFallbackRequested(string reasonCode)
+        {
+            if (_mediaStreamService == null || _tcpServer == null)
+            {
+                return;
+            }
+
+            if (!_tcpServer.HasClient)
+            {
+                if (_logSignaling)
+                {
+                    Debug.LogWarning($"[WebRTCServerSignaling] Ignoring STUN fallback ({reasonCode}) - no active client.");
+                }
+                return;
+            }
+
+            StartCoroutine(RestartStreamingWithStunFallback(reasonCode));
+        }
+
+        private IEnumerator RestartStreamingWithStunFallback(string reasonCode)
+        {
+            if (_isNegotiating)
+            {
+                if (_logSignaling)
+                {
+                    Debug.LogWarning($"[WebRTCServerSignaling] STUN fallback requested during negotiation ({reasonCode}) - skipping.");
+                }
+                yield break;
+            }
+
+            _isNegotiating = true;
+            if (_logSignaling)
+            {
+                Debug.LogWarning($"[WebRTCServerSignaling] Restarting WebRTC in STUN mode ({reasonCode}).");
+            }
+
+            _mediaStreamService.StopStreaming();
+            yield return null;
+
+            _mediaStreamService.StartStreaming(forceStun: true);
+            yield return CreateOfferAndSendInternal("STUN_FALLBACK");
             _isNegotiating = false;
         }
 
@@ -104,7 +165,43 @@ namespace TheraplyCore.Streaming
                 case "WEBRTC_ICE_CANDIDATE":
                     HandleICECandidate(message.payloadString);
                     break;
+                case "WEBRTC_STUN_FALLBACK_REQUEST":
+                    HandleClientStunFallbackRequest(message.payloadString);
+                    break;
             }
+        }
+
+        private void HandleClientStunFallbackRequest(string payloadJson)
+        {
+            var reasonCode = "CLIENT_REQUEST";
+            if (!string.IsNullOrEmpty(payloadJson))
+            {
+                try
+                {
+                    var request = JsonUtility.FromJson<WebRTCStunFallbackRequestMessage>(payloadJson);
+                    if (request != null && !string.IsNullOrWhiteSpace(request.reasonCode))
+                    {
+                        reasonCode = $"CLIENT_REQUEST_{request.reasonCode}";
+                    }
+                }
+                catch
+                {
+                    // Keep default reason code.
+                }
+            }
+
+            if (_mediaStreamService != null &&
+                _mediaStreamService.IsStreaming &&
+                !_mediaStreamService.IsLanOnlyMode)
+            {
+                if (_logSignaling)
+                {
+                    Debug.Log($"[WebRTCServerSignaling] Ignoring {reasonCode} - already in STUN mode.");
+                }
+                return;
+            }
+
+            StartCoroutine(RestartStreamingWithStunFallback(reasonCode));
         }
 
         private void HandleWebRTCAnswer(string answerJson)
@@ -174,6 +271,8 @@ namespace TheraplyCore.Streaming
     {
         public string type;  // "offer"
         public string sdp;   // SDP string
+        public string iceMode; // "LAN" or "STUN"
+        public string reasonCode; // signaling reason metadata
     }
     
     [System.Serializable]
@@ -189,5 +288,11 @@ namespace TheraplyCore.Streaming
         public string candidate;     // ICE candidate string
         public string sdpMid;        // Media stream ID
         public int sdpMLineIndex;    // Media line index
+    }
+
+    [System.Serializable]
+    public class WebRTCStunFallbackRequestMessage
+    {
+        public string reasonCode;
     }
 }

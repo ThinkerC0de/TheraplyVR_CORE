@@ -1,0 +1,156 @@
+import 'package:flutter_controller/models/therapist_session_settings.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  group('TherapistSessionSettings', () {
+    test('returns defaults when source map is null', () {
+      final settings = TherapistSessionSettings.fromMap(null);
+
+      expect(
+        settings.sessionRecoveryWindowMinutes,
+        TherapistSessionSettings.defaultSessionRecoveryWindowMinutes,
+      );
+      expect(
+        settings.interruptedSessionAutoCloseHours,
+        TherapistSessionSettings.defaultInterruptedSessionAutoCloseHours,
+      );
+      expect(
+        settings.autoCloseInterruptedSessionsEnabled,
+        TherapistSessionSettings.defaultAutoCloseInterruptedSessionsEnabled,
+      );
+      expect(
+        settings.adaptiveDifficultyEnabled,
+        TherapistSessionSettings.defaultAdaptiveDifficultyEnabled,
+      );
+      expect(
+        settings.adaptiveDifficultySensitivity,
+        TherapistSessionSettings.defaultAdaptiveDifficultySensitivity,
+      );
+      expect(
+        settings.labelPipelineEnabled,
+        TherapistSessionSettings.defaultLabelPipelineEnabled,
+      );
+      expect(
+        settings.keepScreenAwakeWhenForeground,
+        TherapistSessionSettings.defaultKeepScreenAwakeWhenForeground,
+      );
+      expect(
+        settings.operatorUiLanguage,
+        TherapistSessionSettings.defaultOperatorUiLanguage,
+      );
+    });
+
+    test('clamps integer settings to documented bounds', () {
+      final settings = TherapistSessionSettings.fromMap(<String, dynamic>{
+        'sessionRecoveryWindowMinutes': 1000,
+        'interruptedSessionAutoCloseHours': 0,
+        'criticalCommandMaxRetries': -1,
+        'criticalCommandAckTimeoutMs': 999999,
+        'adaptiveDifficultySensitivity': 99.0,
+      });
+
+      expect(
+        settings.sessionRecoveryWindowMinutes,
+        TherapistSessionSettings.maxSessionRecoveryWindowMinutes,
+      );
+      expect(
+        settings.interruptedSessionAutoCloseHours,
+        TherapistSessionSettings.minInterruptedSessionAutoCloseHours,
+      );
+      expect(
+        settings.criticalCommandMaxRetries,
+        TherapistSessionSettings.minCriticalCommandMaxRetries,
+      );
+      expect(
+        settings.criticalCommandAckTimeoutMs,
+        TherapistSessionSettings.maxCriticalCommandAckTimeoutMs,
+      );
+      expect(
+        settings.adaptiveDifficultySensitivity,
+        TherapistSessionSettings.maxAdaptiveDifficultySensitivity,
+      );
+    });
+
+    test('parses booleans and note templates from source map', () {
+      final settings = TherapistSessionSettings.fromMap(<String, dynamic>{
+        'autoCloseInterruptedSessionsEnabled': false,
+        'requireResumeConfirmationAfterRecoveryWindow': false,
+        'keepScreenAwakeWhenForeground': true,
+        'operatorUiLanguage': 'pl',
+        'timelineQuickNoteTemplates': <dynamic>['A', ' ', 'B'],
+      });
+
+      expect(settings.autoCloseInterruptedSessionsEnabled, isFalse);
+      expect(settings.requireResumeConfirmationAfterRecoveryWindow, isFalse);
+      expect(settings.keepScreenAwakeWhenForeground, isTrue);
+      expect(settings.operatorUiLanguage, TherapistUiLanguage.polish);
+      expect(settings.timelineQuickNoteTemplates, <String>['A', 'B']);
+    });
+
+    test('serializes and deserializes stable settings map', () {
+      final source = TherapistSessionSettings.fromMap(<String, dynamic>{
+        'sessionRecoveryWindowMinutes': 120,
+        'interruptedSessionAutoCloseHours': 24,
+        'autoCloseInterruptedSessionsEnabled': false,
+        'requireResumeConfirmationAfterRecoveryWindow': true,
+        'criticalCommandMaxRetries': 6,
+        'criticalCommandAckTimeoutMs': 1200,
+        'adaptiveDifficultyEnabled': true,
+        'adaptiveDifficultySensitivity': 0.74,
+        'labelPipelineEnabled': false,
+        'keepScreenAwakeWhenForeground': true,
+        'operatorUiLanguage': 'pl',
+        'timelineQuickNoteTemplates': <String>['Template A', 'Template B'],
+      });
+
+      final roundtrip = TherapistSessionSettings.fromMap(source.toMap());
+
+      expect(roundtrip.sessionRecoveryWindowMinutes, 120);
+      expect(roundtrip.interruptedSessionAutoCloseHours, 24);
+      expect(roundtrip.autoCloseInterruptedSessionsEnabled, isFalse);
+      expect(roundtrip.requireResumeConfirmationAfterRecoveryWindow, isTrue);
+      expect(roundtrip.criticalCommandMaxRetries, 6);
+      expect(roundtrip.criticalCommandAckTimeoutMs, 1200);
+      expect(roundtrip.adaptiveDifficultyEnabled, isTrue);
+      expect(roundtrip.adaptiveDifficultySensitivity, 0.74);
+      expect(roundtrip.labelPipelineEnabled, isFalse);
+      expect(roundtrip.keepScreenAwakeWhenForeground, isTrue);
+      expect(roundtrip.operatorUiLanguage, TherapistUiLanguage.polish);
+      expect(
+        roundtrip.timelineQuickNoteTemplates,
+        <String>['Template A', 'Template B'],
+      );
+    });
+
+    test('copyWith overrides selected fields only', () {
+      final source = TherapistSessionSettings.defaults();
+
+      final updated = source.copyWith(
+        sessionRecoveryWindowMinutes: 90,
+        criticalCommandMaxRetries: 5,
+        adaptiveDifficultyEnabled: false,
+        adaptiveDifficultySensitivity: 0.25,
+        labelPipelineEnabled: false,
+        keepScreenAwakeWhenForeground: true,
+        operatorUiLanguage: TherapistUiLanguage.polish,
+        timelineQuickNoteTemplates: <String>['Custom quick note'],
+      );
+
+      expect(updated.sessionRecoveryWindowMinutes, 90);
+      expect(
+        updated.interruptedSessionAutoCloseHours,
+        source.interruptedSessionAutoCloseHours,
+      );
+      expect(updated.criticalCommandMaxRetries, 5);
+      expect(updated.adaptiveDifficultyEnabled, isFalse);
+      expect(updated.adaptiveDifficultySensitivity, 0.25);
+      expect(updated.labelPipelineEnabled, isFalse);
+      expect(updated.keepScreenAwakeWhenForeground, isTrue);
+      expect(updated.operatorUiLanguage, TherapistUiLanguage.polish);
+      expect(
+        updated.timelineQuickNoteTemplates,
+        <String>['Custom quick note'],
+      );
+    });
+  });
+}

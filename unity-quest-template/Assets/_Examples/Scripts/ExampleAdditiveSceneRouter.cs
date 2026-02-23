@@ -147,7 +147,7 @@ namespace TheraplyExamples
 
             EnsureBinding(
                 DemoCubeGameConfig.DefaultGameId,
-                "Assets/_Examples/Scenes/ExampleCubeScene.unity");
+                "Assets/_Examples/Scenes/CubeClickerVR.unity");
             EnsureBinding(
                 PulseTargetsGameConfig.DefaultGameId,
                 "Assets/_Examples/Scenes/PulseTargetsScene.unity");
@@ -170,9 +170,15 @@ namespace TheraplyExamples
 
                 if (string.Equals(existing.gameId.Trim(), gameId, StringComparison.OrdinalIgnoreCase))
                 {
-                    if (string.IsNullOrWhiteSpace(existing.scenePath))
+                    if (string.IsNullOrWhiteSpace(existing.scenePath) ||
+                        !string.Equals(existing.scenePath.Trim(), scenePath, StringComparison.OrdinalIgnoreCase))
                     {
                         existing.scenePath = scenePath;
+                        if (_logSceneSwitches)
+                        {
+                            Debug.Log(
+                                $"[ExampleSceneRouter] Binding updated: {gameId} -> {scenePath}");
+                        }
                     }
                     return;
                 }

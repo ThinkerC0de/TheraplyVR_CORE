@@ -9,6 +9,14 @@ import 'connection_service.dart';
 class WebRTCMediaService {
   WebRTCMediaService(this._connection);
 
+  static const bool _preferLanFirst = true;
+  static const Duration _lanProbeTimeout = Duration(seconds: 4);
+  static const List<Map<String, dynamic>> _stunIceServers =
+      <Map<String, dynamic>>[
+    <String, dynamic>{'urls': 'stun:stun.l.google.com:19302'},
+    <String, dynamic>{'urls': 'stun:stun1.l.google.com:19302'},
+  ];
+
   final ConnectionService _connection;
   RTCPeerConnection? _peerConnection;
   final List<Map<String, dynamic>> _pendingRemoteCandidates = [];
@@ -19,6 +27,10 @@ class WebRTCMediaService {
   MediaStream? _localMicStream;
   MediaStreamTrack? _localMicTrack;
   bool _talkbackEnabled = false;
+  bool _stunFallbackArmed = false;
+  bool _usingLanOnlyThisPeer = false;
+  bool _connectedInCurrentPeer = false;
+  Timer? _lanProbeTimer;
 
   bool get talkbackEnabled => _talkbackEnabled;
 
@@ -27,7 +39,7 @@ class WebRTCMediaService {
   static String _payloadString(Map<String, dynamic> message) {
     final p = message['payload'];
     if (p == null) return '';
-    
+
     // Unity sends payload as Base64 string
     if (p is String) {
       try {
@@ -39,7 +51,7 @@ class WebRTCMediaService {
         return p;
       }
     }
-    
+
     // Legacy: if payload is byte array (shouldn't happen with Unity)
     if (p is List) {
       try {
@@ -49,7 +61,7 @@ class WebRTCMediaService {
         return '';
       }
     }
-    
+
     return '';
   }
 
@@ -90,7 +102,7 @@ class WebRTCMediaService {
       print('[WebRTCMedia] ⚠️ Empty offer payload');
       return;
     }
-    
+
     try {
       print('[WebRTCMedia] Parsing offer JSON (${offerJson.length} chars)');
       final offerMap = jsonDecode(offerJson) as Map<String, dynamic>;
@@ -99,16 +111,36 @@ class WebRTCMediaService {
         print('[WebRTCMedia] ⚠️ No SDP in offer');
         return;
       }
-      
-      print('[WebRTCMedia] Creating peer connection...');
-      final offer = RTCSessionDescription(sdp, offerMap['type'] as String? ?? 'offer');
+
+      final iceMode = (offerMap['iceMode'] as String?)?.toUpperCase();
+      final serverRequestsStun = iceMode == 'STUN';
+      if (serverRequestsStun && !_stunFallbackArmed) {
+        _stunFallbackArmed = true;
+        print(
+            '[WebRTCMedia] Server requested STUN mode for this renegotiation.');
+      }
+
+      final useStun =
+          serverRequestsStun || !_preferLanFirst || _stunFallbackArmed;
+      _usingLanOnlyThisPeer = !useStun;
+      _connectedInCurrentPeer = false;
+
+      print(
+        '[WebRTCMedia] Creating peer connection (${_usingLanOnlyThisPeer ? 'LAN-first' : 'STUN'} mode)...',
+      );
+      final offer =
+          RTCSessionDescription(sdp, offerMap['type'] as String? ?? 'offer');
 
       _peerConnection?.close();
-      _peerConnection = await createPeerConnection({
-        'iceServers': [
-          {'urls': 'stun:stun.l.google.com:19302'},
-        ],
-      });
+      _peerConnection = await createPeerConnection(
+        _buildPeerConnectionConfig(useStun: useStun),
+      );
+
+      if (_usingLanOnlyThisPeer) {
+        _armLanProbeTimer();
+      } else {
+        _cancelLanProbeTimer();
+      }
 
       await _ensureTalkbackTrack();
 
@@ -119,25 +151,53 @@ class WebRTCMediaService {
           _remoteStreamController.add(event.streams.first);
         }
       };
-      
+
       _peerConnection!.onIceCandidate = (candidate) {
         _sendIceCandidate(candidate);
       };
-      
+
       _peerConnection!.onIceConnectionState = (state) {
         print('[WebRTCMedia] ICE Connection State: $state');
+        switch (state) {
+          case RTCIceConnectionState.RTCIceConnectionStateConnected:
+          case RTCIceConnectionState.RTCIceConnectionStateCompleted:
+            _connectedInCurrentPeer = true;
+            _cancelLanProbeTimer();
+            break;
+          case RTCIceConnectionState.RTCIceConnectionStateFailed:
+            _activateStunFallback('ICE_FAILED');
+            break;
+          case RTCIceConnectionState.RTCIceConnectionStateDisconnected:
+            if (_usingLanOnlyThisPeer && !_connectedInCurrentPeer) {
+              _activateStunFallback('ICE_DISCONNECTED');
+            }
+            break;
+          default:
+            break;
+        }
       };
-      
+
       _peerConnection!.onConnectionState = (state) {
         print('[WebRTCMedia] Peer Connection State: $state');
+        switch (state) {
+          case RTCPeerConnectionState.RTCPeerConnectionStateConnected:
+            _connectedInCurrentPeer = true;
+            _cancelLanProbeTimer();
+            break;
+          case RTCPeerConnectionState.RTCPeerConnectionStateFailed:
+            _activateStunFallback('PEER_FAILED');
+            break;
+          default:
+            break;
+        }
       };
 
       print('[WebRTCMedia] Setting remote description...');
       await _peerConnection!.setRemoteDescription(offer);
-      
+
       print('[WebRTCMedia] Creating answer...');
       final answer = await _peerConnection!.createAnswer();
-      
+
       print('[WebRTCMedia] Setting local description...');
       await _peerConnection!.setLocalDescription(answer);
 
@@ -147,7 +207,8 @@ class WebRTCMediaService {
 
       // Apply ICE candidates that arrived before peer connection was ready.
       if (_pendingRemoteCandidates.isNotEmpty) {
-        for (final candidate in List<Map<String, dynamic>>.from(_pendingRemoteCandidates)) {
+        for (final candidate
+            in List<Map<String, dynamic>>.from(_pendingRemoteCandidates)) {
           await _addRemoteCandidate(candidate);
         }
         _pendingRemoteCandidates.clear();
@@ -155,6 +216,53 @@ class WebRTCMediaService {
     } catch (e, st) {
       print('[WebRTCMedia] Handle offer error: $e');
       if (kDebugMode) print(st);
+    }
+  }
+
+  Map<String, dynamic> _buildPeerConnectionConfig({required bool useStun}) {
+    return <String, dynamic>{
+      'iceServers': useStun ? _stunIceServers : const <Map<String, dynamic>>[],
+    };
+  }
+
+  void _armLanProbeTimer() {
+    _cancelLanProbeTimer();
+    _lanProbeTimer = Timer(_lanProbeTimeout, () {
+      if (_disposed || !_usingLanOnlyThisPeer || _connectedInCurrentPeer) {
+        return;
+      }
+
+      _activateStunFallback('LAN_PROBE_TIMEOUT');
+    });
+  }
+
+  void _cancelLanProbeTimer() {
+    _lanProbeTimer?.cancel();
+    _lanProbeTimer = null;
+  }
+
+  void _activateStunFallback(String reasonCode) {
+    if (_stunFallbackArmed) {
+      return;
+    }
+
+    _stunFallbackArmed = true;
+    _cancelLanProbeTimer();
+    print(
+      '[WebRTCMedia] LAN-first path failed ($reasonCode). Arming STUN fallback and requesting renegotiation.',
+    );
+    unawaited(_requestStunFallbackRenegotiation(reasonCode));
+  }
+
+  Future<void> _requestStunFallbackRenegotiation(String reasonCode) async {
+    try {
+      await _connection
+          .sendCommand('WEBRTC_STUN_FALLBACK_REQUEST', <String, dynamic>{
+        'reasonCode': reasonCode,
+      });
+      print('[WebRTCMedia] 📤 Sent WEBRTC_STUN_FALLBACK_REQUEST ($reasonCode)');
+    } catch (e) {
+      print('[WebRTCMedia] Failed to request STUN fallback renegotiation: $e');
     }
   }
 
@@ -206,7 +314,8 @@ class WebRTCMediaService {
         'video': false,
       });
 
-      if (_localMicStream == null || _localMicStream!.getAudioTracks().isEmpty) {
+      if (_localMicStream == null ||
+          _localMicStream!.getAudioTracks().isEmpty) {
         print('[WebRTCMedia] ⚠️ No microphone track available');
         return;
       }
@@ -251,6 +360,10 @@ class WebRTCMediaService {
   void stop() {
     _messageSub?.cancel();
     _messageSub = null;
+    _cancelLanProbeTimer();
+    _stunFallbackArmed = false;
+    _usingLanOnlyThisPeer = false;
+    _connectedInCurrentPeer = false;
     _peerConnection?.close();
     _peerConnection = null;
     _pendingRemoteCandidates.clear();

@@ -1,0 +1,700 @@
+{
+  "schema": "THERAPLY_ERROR_CATALOG",
+  "version": "2026-02-22",
+  "notes": "Wire protocol reasonCode values remain unchanged. errorId is an operator-facing stable code mapped to reasonCode.",
+  "entries": [
+    {
+      "errorId": "E-1001",
+      "reasonCode": "ACK_TIMEOUT",
+      "severity": "warning",
+      "title": "Critical command ACK timeout",
+      "operatorAction": "Check Quest connectivity, keep app in foreground, then retry."
+    },
+    {
+      "errorId": "E-1002",
+      "reasonCode": "DISCONNECTED",
+      "severity": "warning",
+      "title": "Transport disconnected",
+      "operatorAction": "Reconnect controller to headset and retry."
+    },
+    {
+      "errorId": "E-1003",
+      "reasonCode": "NO_ACTIVE_TCP_ROUTE",
+      "severity": "warning",
+      "title": "No active TCP route",
+      "operatorAction": "Verify Quest is reachable on the same network."
+    },
+    {
+      "errorId": "E-1004",
+      "reasonCode": "TRANSPORT_CLOSED",
+      "severity": "warning",
+      "title": "Transport closed",
+      "operatorAction": "Re-open controller connection and retry."
+    },
+    {
+      "errorId": "E-1005",
+      "reasonCode": "SOCKET_CLOSED",
+      "severity": "warning",
+      "title": "Socket closed",
+      "operatorAction": "Reconnect the session transport."
+    },
+    {
+      "errorId": "E-1101",
+      "reasonCode": "ENVELOPE_COMMAND_ID_MISMATCH",
+      "severity": "error",
+      "title": "Envelope command mismatch",
+      "operatorAction": "Use matching mobile and Quest builds."
+    },
+    {
+      "errorId": "E-1102",
+      "reasonCode": "ENVELOPE_MESSAGE_ID_MISMATCH",
+      "severity": "error",
+      "title": "Envelope message id mismatch",
+      "operatorAction": "Retry command once; if repeated, restart session."
+    },
+    {
+      "errorId": "E-1103",
+      "reasonCode": "ENVELOPE_INVALID_ISSUED_AT",
+      "severity": "error",
+      "title": "Envelope issuedAt is invalid",
+      "operatorAction": "Check device clock and retry."
+    },
+    {
+      "errorId": "E-1104",
+      "reasonCode": "ENVELOPE_INVALID_EXPIRES_AT",
+      "severity": "error",
+      "title": "Envelope expiresAt is invalid",
+      "operatorAction": "Retry using fresh command payload."
+    },
+    {
+      "errorId": "E-1105",
+      "reasonCode": "ENVELOPE_EXPIRED",
+      "severity": "warning",
+      "title": "Envelope expired before processing",
+      "operatorAction": "Retry command immediately."
+    },
+    {
+      "errorId": "E-1201",
+      "reasonCode": "SESSION_LOCK_CONFLICT",
+      "severity": "warning",
+      "title": "Active session lock conflict",
+      "operatorAction": "Finish or re-attach to the active session."
+    },
+    {
+      "errorId": "E-1202",
+      "reasonCode": "SESSION_OWNERSHIP_CONFLICT",
+      "severity": "error",
+      "title": "Session ownership conflict",
+      "operatorAction": "Confirm therapist/student pairing before retry."
+    },
+    {
+      "errorId": "E-1203",
+      "reasonCode": "SESSION_OWNERSHIP_MISSING",
+      "severity": "error",
+      "title": "Missing ownership metadata",
+      "operatorAction": "Ensure controller sends ownerKey/sessionKey and retry."
+    },
+    {
+      "errorId": "E-1301",
+      "reasonCode": "NO_HANDLER",
+      "severity": "error",
+      "title": "No command handler on Quest runtime",
+      "operatorAction": "Use a build with matching runtime command support."
+    },
+    {
+      "errorId": "E-1302",
+      "reasonCode": "DESERIALIZE_FAILED",
+      "severity": "error",
+      "title": "Command payload deserialization failed",
+      "operatorAction": "Verify payload contract and build compatibility."
+    },
+    {
+      "errorId": "E-1303",
+      "reasonCode": "HANDLER_EXCEPTION",
+      "severity": "error",
+      "title": "Quest command handler exception",
+      "operatorAction": "Collect runtime logs and retry after restart."
+    },
+    {
+      "errorId": "E-1304",
+      "reasonCode": "COMMAND_IN_PROGRESS",
+      "severity": "warning",
+      "title": "Command already in progress",
+      "operatorAction": "Wait briefly and retry once."
+    },
+    {
+      "errorId": "E-1305",
+      "reasonCode": "DUPLICATE_COMMAND",
+      "severity": "info",
+      "title": "Duplicate command idempotency hit",
+      "operatorAction": "No action unless user-facing flow is blocked."
+    },
+    {
+      "errorId": "E-1306",
+      "reasonCode": "UNSPECIFIED",
+      "severity": "warning",
+      "title": "Unspecified ACK/NACK reason",
+      "operatorAction": "Inspect logs and retry command."
+    },
+    {
+      "errorId": "E-1307",
+      "reasonCode": "SESSION_NOT_ACTIVE",
+      "severity": "warning",
+      "title": "Session is not active",
+      "operatorAction": "Attach or resume session before sending command."
+    },
+    {
+      "errorId": "E-1308",
+      "reasonCode": "TEMPORARY_REJECT",
+      "severity": "warning",
+      "title": "Temporary command rejection",
+      "operatorAction": "Retry command after a short delay."
+    },
+    {
+      "errorId": "E-2001",
+      "reasonCode": "ENTITLEMENT_RECORD_REQUIRED",
+      "severity": "error",
+      "title": "Entitlement profile missing",
+      "operatorAction": "Ask admin operator to create entitlement profile."
+    },
+    {
+      "errorId": "E-2002",
+      "reasonCode": "APP_LICENSE_INACTIVE",
+      "severity": "error",
+      "title": "App license inactive",
+      "operatorAction": "Ask admin operator to activate app license."
+    },
+    {
+      "errorId": "E-2003",
+      "reasonCode": "ENTITLEMENT_BACKEND_UNAVAILABLE",
+      "severity": "warning",
+      "title": "Entitlement backend unavailable",
+      "operatorAction": "Verify network/backend health and retry login."
+    },
+    {
+      "errorId": "E-2004",
+      "reasonCode": "ROLE_UNDEFINED",
+      "severity": "error",
+      "title": "Role undefined",
+      "operatorAction": "Assign allowed role in entitlement profile."
+    },
+    {
+      "errorId": "E-2005",
+      "reasonCode": "LEGACY_FALLBACK_NO_RECORD",
+      "severity": "info",
+      "title": "Legacy fallback without entitlement record",
+      "operatorAction": "Create proper entitlement profile for this operator."
+    },
+    {
+      "errorId": "E-2006",
+      "reasonCode": "LEGACY_FALLBACK_FIRESTORE_ERROR",
+      "severity": "info",
+      "title": "Legacy fallback due to entitlement backend error",
+      "operatorAction": "Check Firestore availability, then validate strict gate path."
+    },
+    {
+      "errorId": "E-2007",
+      "reasonCode": "APP_LICENSE_ACTIVE",
+      "severity": "info",
+      "title": "App license active",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2101",
+      "reasonCode": "APP_PAUSED",
+      "severity": "warning",
+      "title": "Headset app paused/backgrounded",
+      "operatorAction": "Ask student to bring VR app to foreground."
+    },
+    {
+      "errorId": "E-2102",
+      "reasonCode": "APP_RESUMED",
+      "severity": "info",
+      "title": "Headset app resumed",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2103",
+      "reasonCode": "APP_FOCUS_LOST",
+      "severity": "warning",
+      "title": "Headset app focus lost",
+      "operatorAction": "Keep app focused; avoid system overlays."
+    },
+    {
+      "errorId": "E-2104",
+      "reasonCode": "APP_FOCUS_GAINED",
+      "severity": "info",
+      "title": "Headset app focus regained",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2105",
+      "reasonCode": "APP_QUIT",
+      "severity": "warning",
+      "title": "Headset app quitting",
+      "operatorAction": "Reopen VR app and wait for reconnect."
+    },
+    {
+      "errorId": "E-2106",
+      "reasonCode": "TCP_CLIENT_CONNECTED",
+      "severity": "info",
+      "title": "TCP client connected",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2107",
+      "reasonCode": "NO_RUNTIME_SIGNAL_TIMEOUT",
+      "severity": "warning",
+      "title": "No runtime signal timeout",
+      "operatorAction": "Reconnect; ensure headset app is active."
+    },
+    {
+      "errorId": "E-2108",
+      "reasonCode": "RUNTIME_SIGNAL_STALE",
+      "severity": "warning",
+      "title": "Runtime signal stale",
+      "operatorAction": "Reconnect and verify runtime heartbeat."
+    },
+    {
+      "errorId": "E-2109",
+      "reasonCode": "TCP_LINK_LOST",
+      "severity": "warning",
+      "title": "TCP link lost",
+      "operatorAction": "Restore same-network connection."
+    },
+    {
+      "errorId": "E-2110",
+      "reasonCode": "INITIAL_CONNECT",
+      "severity": "info",
+      "title": "Initial controller connect",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2111",
+      "reasonCode": "AUTO_RECONNECT",
+      "severity": "info",
+      "title": "Auto reconnect",
+      "operatorAction": "No action needed unless reconnect loops."
+    },
+    {
+      "errorId": "E-2201",
+      "reasonCode": "SESSION_ATTACH",
+      "severity": "info",
+      "title": "Session attach handshake",
+      "operatorAction": "No action needed unless attach retries repeatedly."
+    },
+    {
+      "errorId": "E-2202",
+      "reasonCode": "SESSION_ID_REQUIRED",
+      "severity": "error",
+      "title": "Session id required",
+      "operatorAction": "Provide valid session id before manual resync/ops action."
+    },
+    {
+      "errorId": "E-2203",
+      "reasonCode": "FIREBASE_DATA_SERVICE_UNAVAILABLE",
+      "severity": "warning",
+      "title": "Firebase data service unavailable",
+      "operatorAction": "Check runtime data service initialization and network."
+    },
+    {
+      "errorId": "E-2204",
+      "reasonCode": "MANUAL_RESYNC_EXCEPTION",
+      "severity": "error",
+      "title": "Manual resync exception",
+      "operatorAction": "Collect logs and retry manual resync."
+    },
+    {
+      "errorId": "E-2205",
+      "reasonCode": "UNINITIALIZED",
+      "severity": "warning",
+      "title": "Runtime uninitialized",
+      "operatorAction": "Wait for runtime initialization or restart app."
+    },
+    {
+      "errorId": "E-2206",
+      "reasonCode": "ACTIVE_GAME_COMPLETED",
+      "severity": "info",
+      "title": "Active game completed",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2207",
+      "reasonCode": "ACTIVE_GAME_FAILED",
+      "severity": "warning",
+      "title": "Active game failed",
+      "operatorAction": "Inspect runtime logs before restarting session."
+    },
+    {
+      "errorId": "E-2208",
+      "reasonCode": "TCP_CLIENT_DISCONNECTED",
+      "severity": "warning",
+      "title": "TCP client disconnected",
+      "operatorAction": "Reconnect controller-headset link."
+    },
+    {
+      "errorId": "E-2301",
+      "reasonCode": "SESSION_ATTACH_CONTEXT_MISSING",
+      "severity": "error",
+      "title": "Session attach context missing",
+      "operatorAction": "Use build with valid session context wiring and restart runtime."
+    },
+    {
+      "errorId": "E-2302",
+      "reasonCode": "SESSION_ATTACH_SESSION_ID_REQUIRED",
+      "severity": "error",
+      "title": "Session attach missing session id",
+      "operatorAction": "Ensure attach payload includes sessionId."
+    },
+    {
+      "errorId": "E-2303",
+      "reasonCode": "SESSION_ATTACH_OWNER_CONFLICT",
+      "severity": "error",
+      "title": "Session attach ownership conflict",
+      "operatorAction": "Verify therapist/student ownership keys before attach."
+    },
+    {
+      "errorId": "E-2304",
+      "reasonCode": "SESSION_ATTACH_RESTORE_FAILED",
+      "severity": "error",
+      "title": "Session attach restore failed",
+      "operatorAction": "Retry attach; if repeated, restart runtime and inspect logs."
+    },
+    {
+      "errorId": "E-2305",
+      "reasonCode": "START_GAME_NO_ACTIVE_GAME",
+      "severity": "error",
+      "title": "Start game requested without active game",
+      "operatorAction": "Select game and re-attach session before start."
+    },
+    {
+      "errorId": "E-2306",
+      "reasonCode": "START_GAME_FAILED",
+      "severity": "error",
+      "title": "Start game failed",
+      "operatorAction": "Retry start once; if repeated, inspect runtime logs."
+    },
+    {
+      "errorId": "E-2307",
+      "reasonCode": "PAUSE_GAME_NO_ACTIVE_GAME",
+      "severity": "warning",
+      "title": "Pause requested with no active game",
+      "operatorAction": "Start or resume game before pause."
+    },
+    {
+      "errorId": "E-2308",
+      "reasonCode": "PAUSE_GAME_FAILED",
+      "severity": "error",
+      "title": "Pause game failed",
+      "operatorAction": "Retry pause; if repeated, use stop/end session path."
+    },
+    {
+      "errorId": "E-2309",
+      "reasonCode": "RESUME_GAME_NO_ACTIVE_GAME",
+      "severity": "warning",
+      "title": "Resume requested with no active game",
+      "operatorAction": "Attach/start game before resume."
+    },
+    {
+      "errorId": "E-2310",
+      "reasonCode": "RESUME_GAME_START_FROM_SAVE_FAILED",
+      "severity": "error",
+      "title": "Resume from saved state failed",
+      "operatorAction": "Retry with fresh start or inspect saved-state compatibility."
+    },
+    {
+      "errorId": "E-2311",
+      "reasonCode": "RESUME_GAME_FAILED",
+      "severity": "error",
+      "title": "Resume game failed",
+      "operatorAction": "Retry resume; if repeated, restart runtime session."
+    },
+    {
+      "errorId": "E-2312",
+      "reasonCode": "STOP_GAME_NO_ACTIVE_GAME",
+      "severity": "warning",
+      "title": "Stop requested with no active game",
+      "operatorAction": "No action needed unless flow is blocked."
+    },
+    {
+      "errorId": "E-2313",
+      "reasonCode": "STOP_GAME_FAILED",
+      "severity": "error",
+      "title": "Stop game failed",
+      "operatorAction": "Use end session fallback and inspect runtime logs."
+    },
+    {
+      "errorId": "E-2314",
+      "reasonCode": "END_SESSION_STOP_FAILED",
+      "severity": "error",
+      "title": "End session failed while stopping game",
+      "operatorAction": "Retry end session and validate active game shutdown path."
+    },
+    {
+      "errorId": "E-2401",
+      "reasonCode": "ACTION_AFTER_TIMEOUT",
+      "severity": "warning",
+      "title": "Action observed after timeout",
+      "operatorAction": "Review reaction timing and runtime delay conditions."
+    },
+    {
+      "errorId": "E-2402",
+      "reasonCode": "ADAPTIVE_DISABLED",
+      "severity": "info",
+      "title": "Adaptive difficulty disabled",
+      "operatorAction": "No action needed unless adaptive mode was expected."
+    },
+    {
+      "errorId": "E-2403",
+      "reasonCode": "DATASET_EMPTY",
+      "severity": "warning",
+      "title": "Dataset empty",
+      "operatorAction": "Collect more interaction events before export."
+    },
+    {
+      "errorId": "E-2404",
+      "reasonCode": "DECREASE_DIFFICULTY",
+      "severity": "info",
+      "title": "Adaptive decision: decrease difficulty",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2405",
+      "reasonCode": "INCREASE_DIFFICULTY",
+      "severity": "info",
+      "title": "Adaptive decision: increase difficulty",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2406",
+      "reasonCode": "KEEP_DIFFICULTY",
+      "severity": "info",
+      "title": "Adaptive decision: keep difficulty",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2407",
+      "reasonCode": "KEEP_DIFFICULTY_MIXED_SIGNALS",
+      "severity": "info",
+      "title": "Adaptive decision: keep difficulty (mixed signals)",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2408",
+      "reasonCode": "NO_PENDING_STEP",
+      "severity": "info",
+      "title": "No pending step",
+      "operatorAction": "No action needed unless sequence flow is unexpected."
+    },
+    {
+      "errorId": "E-2409",
+      "reasonCode": "RESTORE_SNAPSHOT",
+      "severity": "info",
+      "title": "Session restored from snapshot",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2410",
+      "reasonCode": "STEP_TIMEOUT",
+      "severity": "warning",
+      "title": "Sequence step timeout",
+      "operatorAction": "Check pacing/difficulty and retry sequence."
+    },
+    {
+      "errorId": "E-2411",
+      "reasonCode": "TARGET_MATCHED",
+      "severity": "info",
+      "title": "Target matched",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2412",
+      "reasonCode": "TARGET_MISMATCH",
+      "severity": "warning",
+      "title": "Target mismatch",
+      "operatorAction": "Check task instructions and interaction accuracy."
+    },
+    {
+      "errorId": "E-2413",
+      "reasonCode": "TASK_LABEL_GENERATED",
+      "severity": "info",
+      "title": "Task label generated",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2414",
+      "reasonCode": "TRACE_CANDIDATES_NOT_FOUND",
+      "severity": "warning",
+      "title": "No trace candidates found",
+      "operatorAction": "Verify source directories/device pull for trace files."
+    },
+    {
+      "errorId": "E-2415",
+      "reasonCode": "TRACE_FILE_NOT_FOUND",
+      "severity": "warning",
+      "title": "Trace file not found",
+      "operatorAction": "Provide valid trace path and retry."
+    },
+    {
+      "errorId": "E-2416",
+      "reasonCode": "TRACE_PATH_REQUIRED",
+      "severity": "error",
+      "title": "Trace path required",
+      "operatorAction": "Provide trace path before running export validation."
+    },
+    {
+      "errorId": "E-2417",
+      "reasonCode": "TRACE_UNINITIALIZED",
+      "severity": "warning",
+      "title": "Trace loader uninitialized",
+      "operatorAction": "Initialize trace loader context before export."
+    },
+    {
+      "errorId": "E-2418",
+      "reasonCode": "UNKNOWN",
+      "severity": "warning",
+      "title": "Unknown reason code",
+      "operatorAction": "Inspect logs and map to a stable reason code when possible."
+    },
+    {
+      "errorId": "E-2501",
+      "reasonCode": "ACTIVE_SESSION_MATCHED",
+      "severity": "info",
+      "title": "Active session matched",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2502",
+      "reasonCode": "COMMAND_PRECONDITION",
+      "severity": "warning",
+      "title": "Command precondition not met",
+      "operatorAction": "Satisfy command precondition and retry."
+    },
+    {
+      "errorId": "E-2503",
+      "reasonCode": "CONTEXT_NOT_ENTRY_OR_RECONNECT",
+      "severity": "info",
+      "title": "Context not entry/reconnect",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2504",
+      "reasonCode": "END_SESSION_AND_ATTACH_OK",
+      "severity": "info",
+      "title": "End session and attach completed",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2505",
+      "reasonCode": "END_SESSION_OVERRIDE",
+      "severity": "warning",
+      "title": "End session override used",
+      "operatorAction": "Review override reason in timeline."
+    },
+    {
+      "errorId": "E-2506",
+      "reasonCode": "HANDOFF_GATE_CLEARED",
+      "severity": "info",
+      "title": "Handoff gate cleared",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2507",
+      "reasonCode": "HANDOFF_KEEP_CURRENT",
+      "severity": "info",
+      "title": "Handoff decision: keep current",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2508",
+      "reasonCode": "HANDOFF_RESUME",
+      "severity": "info",
+      "title": "Handoff decision: resume",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2509",
+      "reasonCode": "HANDOFF_START_NEW",
+      "severity": "info",
+      "title": "Handoff decision: start new",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2510",
+      "reasonCode": "PERSISTED_GATE_CLEARED",
+      "severity": "info",
+      "title": "Persisted gate cleared",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2511",
+      "reasonCode": "RECOVERY_UNDER_WINDOW",
+      "severity": "info",
+      "title": "Recovery within allowed window",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2512",
+      "reasonCode": "REMOTE_STATE_TERMINAL",
+      "severity": "info",
+      "title": "Remote state terminal",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2513",
+      "reasonCode": "REVIEW_DIALOG_OPENED",
+      "severity": "info",
+      "title": "Review dialog opened",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2514",
+      "reasonCode": "RUNTIME_GATE_CLEARED",
+      "severity": "info",
+      "title": "Runtime gate cleared",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2515",
+      "reasonCode": "SESSION_RECENTLY_TERMINAL",
+      "severity": "info",
+      "title": "Session recently terminal",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2516",
+      "reasonCode": "THERAPIST_CONFIRMED_END",
+      "severity": "info",
+      "title": "Therapist confirmed end session",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2517",
+      "reasonCode": "THERAPIST_CONTINUE_UNFINISHED",
+      "severity": "info",
+      "title": "Therapist chose continue unfinished",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2518",
+      "reasonCode": "THERAPIST_KEEP_CURRENT",
+      "severity": "info",
+      "title": "Therapist chose keep current",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2519",
+      "reasonCode": "THERAPIST_REVIEW_REQUESTED",
+      "severity": "info",
+      "title": "Therapist requested review",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2520",
+      "reasonCode": "THERAPIST_START_NEW_DECISION",
+      "severity": "info",
+      "title": "Therapist decision: start new",
+      "operatorAction": "No action needed."
+    }
+  ]
+}

@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using UnityEngine;
 using GameContracts = TheraplyCore.Games.Contracts;
 using TheraplyCore.Games.Contracts;
 using TheraplyCore.Games.Runtime;
+using TheraplyCore.Interactions;
 
 namespace TheraplyExamples
 {
@@ -23,12 +25,43 @@ namespace TheraplyExamples
         [SerializeField] private float _viewportPadding = 0.18f;
         [SerializeField] private Camera _targetCamera;
 
+        [Header("Task Stack")]
+        [SerializeField] private bool _emitSequenceTelemetry = true;
+        [SerializeField] private float _stimulusLeadSec = 0f;
+        [SerializeField] private float _cueTimeoutSec = 2.5f;
+
+        [Header("Adaptive")]
+        [SerializeField] private bool _adaptiveDifficultyEnabled = true;
+        [SerializeField] [Range(0f, 1f)] private float _adaptiveDifficultySensitivity = 0.55f;
+        [SerializeField] private bool _labelPipelineEnabled = true;
+
         private PulseTargetsGameConfig _activeConfig;
         private TargetRuntime _activeTarget;
         private int _nextTargetId = 1;
         private int _hits;
         private int _misses;
         private float _lastHitElapsedSec = -1f;
+        private int _sequenceStepOrdinal;
+        private string _taskRunId = string.Empty;
+        private bool _taskSummaryEmitted;
+        private TaskOutcomeAggregator.TaskOutcomeSummary _latestTaskSummary;
+        private AdaptiveDifficultyController.DifficultyDecision _latestDifficultyDecision;
+        private TaskLabelPipeline.TaskLabel _latestTaskLabel;
+        private float _effectiveTargetSpeed;
+        private float _effectiveTargetScale;
+        private float _effectiveCueTimeoutSec;
+        private bool _labelPipelineActive;
+
+        private readonly StimulusScheduler _stimulusScheduler = new StimulusScheduler();
+        private readonly SequenceTaskEngine _sequenceTaskEngine = new SequenceTaskEngine();
+        private readonly TaskOutcomeAggregator _taskOutcomeAggregator = new TaskOutcomeAggregator();
+        private readonly AdaptiveDifficultyController _adaptiveDifficultyController =
+            new AdaptiveDifficultyController();
+        private readonly TaskLabelPipeline _taskLabelPipeline = new TaskLabelPipeline();
+        private readonly List<StimulusScheduler.ScheduledCue> _dueStimuli =
+            new List<StimulusScheduler.ScheduledCue>(8);
+        private readonly List<SequenceTaskEngine.SequenceOutcome> _timeoutOutcomes =
+            new List<SequenceTaskEngine.SequenceOutcome>(8);
 
         public override string GameId => PulseTargetsGameConfig.DefaultGameId;
 
@@ -79,14 +112,32 @@ namespace TheraplyExamples
             _hits = 0;
             _misses = 0;
             _lastHitElapsedSec = -1f;
+            _sequenceStepOrdinal = 0;
+            _taskRunId = Guid.NewGuid().ToString();
+            _taskSummaryEmitted = false;
+            _latestTaskSummary = default;
+            _latestTaskLabel = default;
+            _stimulusScheduler.Reset();
+            _sequenceTaskEngine.Reset(_taskRunId);
+            _taskOutcomeAggregator.Reset(_taskRunId, GameId);
+            _dueStimuli.Clear();
+            _timeoutOutcomes.Clear();
+            ConfigureAdaptiveDifficultyPolicy();
 
             base.Initialize(_activeConfig, context);
+            EmitTaskRunStarted();
 
             TrackEvent("pulse_targets_config", new Dictionary<string, object>
             {
                 { "targetCount", _activeConfig.TargetCount },
                 { "targetSpeed", _activeConfig.TargetSpeed },
                 { "targetScale", _activeConfig.TargetScale },
+                { "adaptiveDifficultyEnabled", _latestDifficultyDecision.enabled },
+                { "adaptiveDifficultySensitivity", _latestDifficultyDecision.sensitivity },
+                { "effectiveTargetSpeed", _effectiveTargetSpeed },
+                { "effectiveTargetScale", _effectiveTargetScale },
+                { "effectiveCueTimeoutSec", _effectiveCueTimeoutSec },
+                { "labelPipelineEnabled", _labelPipelineActive },
             });
         }
 
@@ -120,11 +171,17 @@ namespace TheraplyExamples
             }
 
             base.StopGame(reason);
+            EmitTaskOutcomeSummary(reason.ToString());
             ClearActiveTarget();
         }
 
         public override GameContracts.IGameResult BuildResult()
         {
+            if (!_taskSummaryEmitted)
+            {
+                EmitTaskOutcomeSummary(State.ToString());
+            }
+
             return new GameResult(
                 GameId,
                 State == GameContracts.GameState.Completed,
@@ -134,46 +191,62 @@ namespace TheraplyExamples
                     { "hits", _hits },
                     { "misses", _misses },
                     { "targetCount", _activeConfig == null ? 0 : _activeConfig.TargetCount },
-                    { "targetSpeed", _activeConfig == null ? 0f : _activeConfig.TargetSpeed },
+                    { "targetSpeed", _effectiveTargetSpeed },
+                    { "targetScale", _effectiveTargetScale },
+                    { "cueTimeoutSec", _effectiveCueTimeoutSec },
+                    { "adaptiveDifficultyScore", _latestDifficultyDecision.nextDifficulty },
+                    { "adaptiveDifficultyReasonCode", _latestDifficultyDecision.reasonCode ?? string.Empty },
+                    { "labelPerformanceBand", _latestTaskLabel.performanceBand ?? string.Empty },
+                    { "labelFatigueBand", _latestTaskLabel.fatigueBand ?? string.Empty },
                     { "durationSec", GetDurationSeconds() },
+                    { "taskRunId", _latestTaskSummary.taskRunId ?? string.Empty },
+                    { "taskCuesPresented", _latestTaskSummary.cuesPresented },
+                    { "taskCompletionRatio", _latestTaskSummary.completionRatio },
+                    { "taskAverageReactionSec", _latestTaskSummary.averageReactionSec },
                 });
         }
 
         private void Update()
         {
-            if (State != GameContracts.GameState.Playing || _activeTarget == null || _activeConfig == null)
+            if (State != GameContracts.GameState.Playing || _activeConfig == null)
             {
                 return;
             }
 
-            _activeTarget.viewportPos += _activeTarget.direction *
-                                         Mathf.Max(0.1f, _activeConfig.TargetSpeed) *
-                                         Time.deltaTime;
-
-            if (_activeTarget.viewportPos.x <= _viewportPadding ||
-                _activeTarget.viewportPos.x >= 1f - _viewportPadding)
+            if (_activeTarget != null)
             {
-                _activeTarget.direction.x *= -1f;
-                _activeTarget.viewportPos.x = Mathf.Clamp(
-                    _activeTarget.viewportPos.x,
-                    _viewportPadding,
-                    1f - _viewportPadding);
+                _activeTarget.viewportPos += _activeTarget.direction *
+                                             Mathf.Max(0.1f, _effectiveTargetSpeed) *
+                                             Time.deltaTime;
+
+                if (_activeTarget.viewportPos.x <= _viewportPadding ||
+                    _activeTarget.viewportPos.x >= 1f - _viewportPadding)
+                {
+                    _activeTarget.direction.x *= -1f;
+                    _activeTarget.viewportPos.x = Mathf.Clamp(
+                        _activeTarget.viewportPos.x,
+                        _viewportPadding,
+                        1f - _viewportPadding);
+                }
+
+                if (_activeTarget.viewportPos.y <= _viewportPadding ||
+                    _activeTarget.viewportPos.y >= 1f - _viewportPadding)
+                {
+                    _activeTarget.direction.y *= -1f;
+                    _activeTarget.viewportPos.y = Mathf.Clamp(
+                        _activeTarget.viewportPos.y,
+                        _viewportPadding,
+                        1f - _viewportPadding);
+                }
+
+                if (_activeTarget.instance != null)
+                {
+                    _activeTarget.instance.transform.position = ViewportToWorld(_activeTarget.viewportPos);
+                }
             }
 
-            if (_activeTarget.viewportPos.y <= _viewportPadding ||
-                _activeTarget.viewportPos.y >= 1f - _viewportPadding)
-            {
-                _activeTarget.direction.y *= -1f;
-                _activeTarget.viewportPos.y = Mathf.Clamp(
-                    _activeTarget.viewportPos.y,
-                    _viewportPadding,
-                    1f - _viewportPadding);
-            }
-
-            if (_activeTarget.instance != null)
-            {
-                _activeTarget.instance.transform.position = ViewportToWorld(_activeTarget.viewportPos);
-            }
+            FlushDueStimuli();
+            FlushTimeoutOutcomes();
         }
 
         private void SpawnNextTarget()
@@ -199,7 +272,7 @@ namespace TheraplyExamples
             var targetObject = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             targetObject.name = "PulseTarget_" + _nextTargetId;
             targetObject.transform.SetParent(transform, worldPositionStays: true);
-            targetObject.transform.localScale = Vector3.one * _activeConfig.TargetScale;
+            targetObject.transform.localScale = Vector3.one * _effectiveTargetScale;
             targetObject.transform.position = ViewportToWorld(viewportPos);
 
             var renderer = targetObject.GetComponent<Renderer>();
@@ -211,14 +284,23 @@ namespace TheraplyExamples
             var clickTarget = targetObject.AddComponent<PulseTargetClickTarget>();
             clickTarget.Configure(_nextTargetId, HandleTargetClicked);
 
+            var validationZone = targetObject.AddComponent<TargetValidationZone>();
+            validationZone.Configure(
+                _nextTargetId.ToString(CultureInfo.InvariantCulture),
+                "PULSE_TARGET",
+                defaultValidTarget: true);
+
             _activeTarget = new TargetRuntime
             {
                 targetId = _nextTargetId,
                 viewportPos = viewportPos,
                 direction = direction,
                 instance = targetObject,
+                sequenceStepId = string.Empty,
+                stimulusCueId = string.Empty,
             };
 
+            ScheduleStimulusForTarget(_activeTarget);
             _nextTargetId++;
 
             TrackEvent("pulse_target_spawned", new Dictionary<string, object>
@@ -229,12 +311,14 @@ namespace TheraplyExamples
             });
         }
 
-        private void HandleTargetClicked(int targetId)
+        private void HandleTargetClicked(int targetId, string inputSource)
         {
             if (State != GameContracts.GameState.Playing || _activeTarget == null)
             {
                 return;
             }
+
+            var taskOutcome = RecordTaskActionOutcome(targetId, inputSource);
 
             if (targetId != _activeTarget.targetId)
             {
@@ -244,6 +328,10 @@ namespace TheraplyExamples
                     { "targetId", targetId },
                     { "expectedTargetId", _activeTarget.targetId },
                     { "misses", _misses },
+                    { "inputSource", string.IsNullOrWhiteSpace(inputSource) ? "UNKNOWN" : inputSource },
+                    { "targetName", _activeTarget.instance == null ? string.Empty : _activeTarget.instance.name },
+                    { "targetValid", false },
+                    { "sequenceOutcome", MapOutcomeToken(taskOutcome.outcomeType) },
                 });
                 return;
             }
@@ -262,6 +350,10 @@ namespace TheraplyExamples
                 { "hits", _hits },
                 { "reactionSec", reactionSec },
                 { "remaining", Mathf.Max(0, _activeConfig.TargetCount - _hits) },
+                { "inputSource", string.IsNullOrWhiteSpace(inputSource) ? "UNKNOWN" : inputSource },
+                { "targetName", _activeTarget.instance == null ? string.Empty : _activeTarget.instance.name },
+                { "targetValid", true },
+                { "sequenceOutcome", MapOutcomeToken(taskOutcome.outcomeType) },
             });
 
             ClearActiveTarget();
@@ -289,6 +381,334 @@ namespace TheraplyExamples
             }
 
             _activeTarget = null;
+        }
+
+        private void EmitTaskRunStarted()
+        {
+            if (!_emitSequenceTelemetry)
+            {
+                return;
+            }
+
+            TrackEvent("task_run_started", new Dictionary<string, object>
+            {
+                { "taskRunId", _taskRunId },
+                { "taskEngine", nameof(SequenceTaskEngine) },
+                { "stimulusScheduler", nameof(StimulusScheduler) },
+                { "taskOutcomeAggregator", nameof(TaskOutcomeAggregator) },
+                { "cueTimeoutSec", Mathf.Max(0.01f, _effectiveCueTimeoutSec) },
+                { "stimulusLeadSec", Mathf.Max(0f, _stimulusLeadSec) },
+                { "adaptiveDifficultyEnabled", _latestDifficultyDecision.enabled },
+                { "adaptiveDifficultySensitivity", _latestDifficultyDecision.sensitivity },
+                { "adaptiveDifficultyScore", _latestDifficultyDecision.nextDifficulty },
+                { "labelPipelineEnabled", _labelPipelineActive },
+            });
+        }
+
+        private void ScheduleStimulusForTarget(TargetRuntime target)
+        {
+            if (!_emitSequenceTelemetry || target == null)
+            {
+                return;
+            }
+
+            _sequenceStepOrdinal++;
+            var stepId = "pulse_step_" + _sequenceStepOrdinal.ToString(CultureInfo.InvariantCulture);
+            var cueId = Guid.NewGuid().ToString();
+            var targetId = target.targetId.ToString(CultureInfo.InvariantCulture);
+            var dueAt = Mathf.Max(0f, GetDurationSeconds() + Mathf.Max(0f, _stimulusLeadSec));
+            var timeoutSec = Mathf.Max(0.01f, _effectiveCueTimeoutSec);
+
+            target.sequenceStepId = stepId;
+            target.stimulusCueId = cueId;
+
+            _stimulusScheduler.ScheduleCue(new StimulusScheduler.ScheduledCue
+            {
+                taskRunId = _taskRunId,
+                stepId = stepId,
+                cueId = cueId,
+                stimulusId = "PULSE_TARGET_CUE",
+                stimulusChannel = "VISUAL",
+                expectedTargetId = targetId,
+                requiredAction = "SELECT",
+                dueAtElapsedSec = dueAt,
+                cueTimeoutSec = timeoutSec,
+            });
+        }
+
+        private void FlushDueStimuli()
+        {
+            if (!_emitSequenceTelemetry)
+            {
+                return;
+            }
+
+            _dueStimuli.Clear();
+            var elapsedSec = GetDurationSeconds();
+            _stimulusScheduler.CollectDueCues(elapsedSec, _dueStimuli);
+
+            for (var i = 0; i < _dueStimuli.Count; i++)
+            {
+                var cue = _dueStimuli[i];
+                _sequenceTaskEngine.RegisterCue(new SequenceTaskEngine.SequenceCue
+                {
+                    taskRunId = cue.taskRunId,
+                    stepId = cue.stepId,
+                    cueId = cue.cueId,
+                    expectedTargetId = cue.expectedTargetId,
+                    requiredAction = cue.requiredAction,
+                    cueAtElapsedSec = elapsedSec,
+                    cueTimeoutSec = cue.cueTimeoutSec,
+                });
+
+                _taskOutcomeAggregator.RecordCue(cue);
+
+                TrackEvent("task_stimulus_presented", new Dictionary<string, object>
+                {
+                    { "taskRunId", cue.taskRunId },
+                    { "stepId", cue.stepId },
+                    { "cueId", cue.cueId },
+                    { "stimulusId", cue.stimulusId },
+                    { "stimulusChannel", cue.stimulusChannel },
+                    { "requiredAction", cue.requiredAction },
+                    { "expectedTargetId", cue.expectedTargetId },
+                    { "cueTimeoutSec", cue.cueTimeoutSec },
+                    { "scheduledDueAtSec", cue.dueAtElapsedSec },
+                    { "actionOutcome", "REQUIRED" },
+                    { "reasonCode", "TASK_STIMULUS_DISPATCHED" },
+                });
+            }
+        }
+
+        private void FlushTimeoutOutcomes()
+        {
+            if (!_emitSequenceTelemetry)
+            {
+                return;
+            }
+
+            _timeoutOutcomes.Clear();
+            _sequenceTaskEngine.CollectTimeoutOutcomes(GetDurationSeconds(), _timeoutOutcomes);
+
+            for (var i = 0; i < _timeoutOutcomes.Count; i++)
+            {
+                var outcome = _timeoutOutcomes[i];
+                _taskOutcomeAggregator.RecordOutcome(outcome);
+                EmitTaskActionOutcomeTelemetry(outcome);
+                ApplyAdaptiveDifficultyFromCurrentSummary("TASK_TIMEOUT_OUTCOME");
+            }
+        }
+
+        private SequenceTaskEngine.SequenceOutcome RecordTaskActionOutcome(int targetId, string inputSource)
+        {
+            if (!_emitSequenceTelemetry)
+            {
+                return default;
+            }
+
+            _sequenceTaskEngine.TryRecordAction(
+                new SequenceTaskEngine.SequenceAction
+                {
+                    stepId = _activeTarget == null ? string.Empty : _activeTarget.sequenceStepId,
+                    cueId = _activeTarget == null ? string.Empty : _activeTarget.stimulusCueId,
+                    expectedTargetId = _activeTarget == null
+                        ? string.Empty
+                        : _activeTarget.targetId.ToString(CultureInfo.InvariantCulture),
+                    targetId = targetId.ToString(CultureInfo.InvariantCulture),
+                    inputSource = string.IsNullOrWhiteSpace(inputSource) ? string.Empty : inputSource.Trim(),
+                    actionAtElapsedSec = GetDurationSeconds(),
+                },
+                out var outcome);
+
+            _taskOutcomeAggregator.RecordOutcome(outcome);
+            EmitTaskActionOutcomeTelemetry(outcome);
+            ApplyAdaptiveDifficultyFromCurrentSummary("TASK_ACTION_OUTCOME");
+            return outcome;
+        }
+
+        private void EmitTaskActionOutcomeTelemetry(SequenceTaskEngine.SequenceOutcome outcome)
+        {
+            var actionOutcome = MapOutcomeToken(outcome.outcomeType);
+
+            TrackEvent("task_action_outcome", new Dictionary<string, object>
+            {
+                { "taskRunId", outcome.taskRunId },
+                { "stepId", outcome.stepId },
+                { "cueId", outcome.cueId },
+                { "requiredAction", outcome.requiredAction },
+                { "expectedTargetId", outcome.expectedTargetId },
+                { "actualTargetId", outcome.actualTargetId },
+                { "reactionSec", outcome.reactionSec },
+                { "cueTimeoutSec", outcome.timeoutSec },
+                { "isResolvedStep", outcome.isResolvedStep },
+                { "inputSource", outcome.inputSource ?? string.Empty },
+                { "actionOutcome", actionOutcome },
+                { "reasonCode", string.IsNullOrWhiteSpace(outcome.reasonCode) ? "TASK_ACTION_OBSERVED" : outcome.reasonCode },
+            });
+        }
+
+        private void EmitTaskOutcomeSummary(string stopReason)
+        {
+            if (!_emitSequenceTelemetry || _taskSummaryEmitted)
+            {
+                return;
+            }
+
+            _latestTaskSummary = _taskOutcomeAggregator.BuildSummary(GetDurationSeconds());
+            if (_latestTaskSummary.actionsObserved <= 0)
+            {
+                _latestDifficultyDecision = _adaptiveDifficultyController.CurrentDecision;
+                _effectiveTargetSpeed = _latestDifficultyDecision.targetSpeed;
+                _effectiveTargetScale = _latestDifficultyDecision.targetScale;
+                _effectiveCueTimeoutSec = _latestDifficultyDecision.cueTimeoutSec;
+            }
+            _taskSummaryEmitted = true;
+
+            TrackEvent("task_outcome_summary", new Dictionary<string, object>
+            {
+                { "taskRunId", _latestTaskSummary.taskRunId },
+                { "cuesPresented", _latestTaskSummary.cuesPresented },
+                { "actionsObserved", _latestTaskSummary.actionsObserved },
+                { "correctCount", _latestTaskSummary.correctCount },
+                { "incorrectCount", _latestTaskSummary.incorrectCount },
+                { "lateCount", _latestTaskSummary.lateCount },
+                { "omittedCount", _latestTaskSummary.omittedCount },
+                { "redundantCount", _latestTaskSummary.redundantCount },
+                { "firstActionLatencySec", _latestTaskSummary.firstActionLatencySec },
+                { "averageReactionSec", _latestTaskSummary.averageReactionSec },
+                { "completionRatio", _latestTaskSummary.completionRatio },
+                { "elapsedSec", _latestTaskSummary.elapsedSec },
+                { "actionOutcome", _latestTaskSummary.completionRatio >= 0.999f ? "CORRECT" : "OBSERVED" },
+                { "reasonCode", string.IsNullOrWhiteSpace(stopReason) ? "TASK_SUMMARY_EMITTED" : stopReason.Trim() },
+                { "adaptiveDifficultyScore", _latestDifficultyDecision.nextDifficulty },
+                { "adaptiveDifficultyReasonCode", _latestDifficultyDecision.reasonCode ?? string.Empty },
+            });
+
+            EmitTaskLabel();
+        }
+
+        private void ConfigureAdaptiveDifficultyPolicy()
+        {
+            var sensitivity = _activeConfig == null
+                ? _adaptiveDifficultySensitivity
+                : _activeConfig.AdaptiveDifficultySensitivity;
+            var enabled = _activeConfig == null
+                ? _adaptiveDifficultyEnabled
+                : _activeConfig.AdaptiveDifficultyEnabled;
+            var seedLevel = _activeConfig == null
+                ? 3
+                : _activeConfig.AdaptiveDifficultyLevel;
+            var seedDifficulty = Mathf.InverseLerp(1f, 5f, Mathf.Clamp(seedLevel, 1, 5));
+            var baseTargetSpeed = _activeConfig == null ? _defaultTargetSpeed : _activeConfig.TargetSpeed;
+            var baseTargetScale = _activeConfig == null ? _defaultTargetScale : _activeConfig.TargetScale;
+            var baseCueTimeoutSec = Mathf.Max(0.05f, _cueTimeoutSec);
+
+            var policy = AdaptiveDifficultyController.CreateDefaultPolicy();
+            policy.enabled = enabled;
+            policy.sensitivity = sensitivity;
+            policy.minTargetSpeed = Mathf.Clamp(baseTargetSpeed * 0.72f, 0.1f, 3f);
+            policy.maxTargetSpeed = Mathf.Clamp(baseTargetSpeed * 1.4f, policy.minTargetSpeed, 3f);
+            policy.minTargetScale = Mathf.Clamp(baseTargetScale * 0.68f, 0.12f, 1.2f);
+            policy.maxTargetScale = Mathf.Clamp(baseTargetScale * 1.28f, policy.minTargetScale, 1.2f);
+            policy.minCueTimeoutSec = Mathf.Clamp(baseCueTimeoutSec * 0.58f, 0.35f, 8f);
+            policy.maxCueTimeoutSec = Mathf.Clamp(baseCueTimeoutSec * 1.35f, policy.minCueTimeoutSec, 10f);
+
+            _adaptiveDifficultyController.Configure(policy, seedDifficulty);
+            _latestDifficultyDecision = _adaptiveDifficultyController.CurrentDecision;
+            _effectiveTargetSpeed = _latestDifficultyDecision.targetSpeed;
+            _effectiveTargetScale = _latestDifficultyDecision.targetScale;
+            _effectiveCueTimeoutSec = _latestDifficultyDecision.cueTimeoutSec;
+            _labelPipelineActive = _activeConfig == null ? _labelPipelineEnabled : _activeConfig.LabelPipelineEnabled;
+        }
+
+        private void ApplyAdaptiveDifficultyFromCurrentSummary(string signalReasonCode)
+        {
+            if (_activeConfig == null)
+            {
+                return;
+            }
+
+            var summary = _taskOutcomeAggregator.BuildSummary(GetDurationSeconds());
+            _latestDifficultyDecision = _adaptiveDifficultyController.Evaluate(summary);
+            _effectiveTargetSpeed = _latestDifficultyDecision.targetSpeed;
+            _effectiveTargetScale = _latestDifficultyDecision.targetScale;
+            _effectiveCueTimeoutSec = _latestDifficultyDecision.cueTimeoutSec;
+
+            if (!_latestDifficultyDecision.changed)
+            {
+                return;
+            }
+
+            TrackEvent("adaptive_difficulty_adjusted", new Dictionary<string, object>
+            {
+                { "taskRunId", _taskRunId },
+                { "signalReasonCode", string.IsNullOrWhiteSpace(signalReasonCode) ? "TASK_SIGNAL" : signalReasonCode.Trim() },
+                { "previousDifficulty", _latestDifficultyDecision.previousDifficulty },
+                { "nextDifficulty", _latestDifficultyDecision.nextDifficulty },
+                { "difficultyDelta", _latestDifficultyDecision.delta },
+                { "targetSpeed", _latestDifficultyDecision.targetSpeed },
+                { "targetScale", _latestDifficultyDecision.targetScale },
+                { "cueTimeoutSec", _latestDifficultyDecision.cueTimeoutSec },
+                { "completionRatio", _latestDifficultyDecision.completionRatio },
+                { "averageReactionSec", _latestDifficultyDecision.averageReactionSec },
+                { "omittedRatio", _latestDifficultyDecision.omittedRatio },
+                { "lateRatio", _latestDifficultyDecision.lateRatio },
+                { "actionOutcome", _latestDifficultyDecision.delta >= 0f ? "CORRECT" : "INCORRECT" },
+                { "reasonCode", string.IsNullOrWhiteSpace(_latestDifficultyDecision.reasonCode) ? "KEEP_DIFFICULTY" : _latestDifficultyDecision.reasonCode },
+            });
+        }
+
+        private void EmitTaskLabel()
+        {
+            if (!_labelPipelineActive)
+            {
+                return;
+            }
+
+            _latestTaskLabel = _taskLabelPipeline.CreateTaskLabel(
+                _latestTaskSummary,
+                _latestDifficultyDecision);
+
+            TrackEvent("task_label_generated", new Dictionary<string, object>
+            {
+                { "taskRunId", _latestTaskLabel.taskRunId },
+                { "labelId", _latestTaskLabel.labelId },
+                { "labelSchema", _latestTaskLabel.labelSchema },
+                { "labelVersion", _latestTaskLabel.labelVersion },
+                { "labelType", _latestTaskLabel.labelType },
+                { "performanceBand", _latestTaskLabel.performanceBand },
+                { "paceBand", _latestTaskLabel.paceBand },
+                { "fatigueBand", _latestTaskLabel.fatigueBand },
+                { "adaptationRecommendation", _latestTaskLabel.adaptationRecommendation },
+                { "confidence", _latestTaskLabel.confidence },
+                { "completionRatio", _latestTaskLabel.completionRatio },
+                { "averageReactionSec", _latestTaskLabel.averageReactionSec },
+                { "omittedRatio", _latestTaskLabel.omittedRatio },
+                { "lateRatio", _latestTaskLabel.lateRatio },
+                { "difficultyScore", _latestTaskLabel.difficultyScore },
+                { "recommendedDifficultyLevel", _latestTaskLabel.recommendedDifficultyLevel },
+                { "actionOutcome", _latestTaskLabel.performanceBand == "PERFORMANCE_HIGH" ? "CORRECT" : "OBSERVED" },
+                { "reasonCode", _latestTaskLabel.reasonCode },
+            });
+        }
+
+        private static string MapOutcomeToken(SequenceOutcomeType outcomeType)
+        {
+            switch (outcomeType)
+            {
+                case SequenceOutcomeType.Correct:
+                    return "CORRECT";
+                case SequenceOutcomeType.Incorrect:
+                    return "INCORRECT";
+                case SequenceOutcomeType.Late:
+                    return "LATE";
+                case SequenceOutcomeType.Redundant:
+                    return "REDUNDANT";
+                case SequenceOutcomeType.Omitted:
+                    return "OMITTED";
+                default:
+                    return "OBSERVED";
+            }
         }
 
         private Vector3 ViewportToWorld(Vector2 viewportPos)
@@ -326,6 +746,8 @@ namespace TheraplyExamples
             public Vector2 viewportPos;
             public Vector2 direction;
             public GameObject instance;
+            public string sequenceStepId;
+            public string stimulusCueId;
         }
     }
 
@@ -339,12 +761,20 @@ namespace TheraplyExamples
         [SerializeField] private int _targetCount = 8;
         [SerializeField] private float _targetSpeed = 0.7f;
         [SerializeField] private float _targetScale = 0.3f;
+        [SerializeField] private bool _adaptiveDifficultyEnabled = true;
+        [SerializeField] private float _adaptiveDifficultySensitivity = 0.55f;
+        [SerializeField] private int _adaptiveDifficultyLevel = 3;
+        [SerializeField] private bool _labelPipelineEnabled = true;
 
         public string GameId => string.IsNullOrWhiteSpace(_gameId) ? DefaultGameId : _gameId;
         public int Version => _version <= 0 ? 1 : _version;
         public int TargetCount => Mathf.Clamp(_targetCount, 3, 64);
         public float TargetSpeed => Mathf.Clamp(_targetSpeed, 0.1f, 3f);
         public float TargetScale => Mathf.Clamp(_targetScale, 0.12f, 1.2f);
+        public bool AdaptiveDifficultyEnabled => _adaptiveDifficultyEnabled;
+        public float AdaptiveDifficultySensitivity => Mathf.Clamp01(_adaptiveDifficultySensitivity);
+        public int AdaptiveDifficultyLevel => Mathf.Clamp(_adaptiveDifficultyLevel, 1, 5);
+        public bool LabelPipelineEnabled => _labelPipelineEnabled;
 
         public static PulseTargetsGameConfig CreateDefault(
             int fallbackTargetCount,
@@ -358,6 +788,10 @@ namespace TheraplyExamples
                 _targetCount = Mathf.Clamp(fallbackTargetCount, 3, 64),
                 _targetSpeed = Mathf.Clamp(fallbackTargetSpeed, 0.1f, 3f),
                 _targetScale = Mathf.Clamp(fallbackTargetScale, 0.12f, 1.2f),
+                _adaptiveDifficultyEnabled = true,
+                _adaptiveDifficultySensitivity = 0.55f,
+                _adaptiveDifficultyLevel = 3,
+                _labelPipelineEnabled = true,
             };
         }
 
@@ -383,6 +817,23 @@ namespace TheraplyExamples
             var nextTargetScale = settings != null && settings.targetScale > 0f
                 ? settings.targetScale
                 : baseline.TargetScale;
+            var hasAdaptiveEnabled = HasStartSetting(command, "adaptiveDifficultyEnabled");
+            var hasLabelPipelineEnabled = HasStartSetting(command, "labelPipelineEnabled");
+            var hasAdaptiveSensitivity = HasStartSetting(command, "adaptiveDifficultySensitivity");
+            var hasAdaptiveLevel = HasStartSetting(command, "adaptiveDifficultyLevel");
+
+            var nextAdaptiveDifficultyEnabled = hasAdaptiveEnabled && settings != null
+                ? settings.adaptiveDifficultyEnabled
+                : baseline.AdaptiveDifficultyEnabled;
+            var nextLabelPipelineEnabled = hasLabelPipelineEnabled && settings != null
+                ? settings.labelPipelineEnabled
+                : baseline.LabelPipelineEnabled;
+            var nextAdaptiveDifficultySensitivity = hasAdaptiveSensitivity && settings != null
+                ? settings.adaptiveDifficultySensitivity
+                : baseline.AdaptiveDifficultySensitivity;
+            var nextAdaptiveDifficultyLevel = hasAdaptiveLevel && settings != null
+                ? settings.adaptiveDifficultyLevel
+                : baseline.AdaptiveDifficultyLevel;
 
             var nextVersion = baseline.Version;
             if (command != null && command.gameConfigVersion > 0)
@@ -401,6 +852,10 @@ namespace TheraplyExamples
                 _targetCount = Mathf.Clamp(nextTargetCount, 3, 64),
                 _targetSpeed = Mathf.Clamp(nextTargetSpeed, 0.1f, 3f),
                 _targetScale = Mathf.Clamp(nextTargetScale, 0.12f, 1.2f),
+                _adaptiveDifficultyEnabled = nextAdaptiveDifficultyEnabled,
+                _adaptiveDifficultySensitivity = Mathf.Clamp01(nextAdaptiveDifficultySensitivity),
+                _adaptiveDifficultyLevel = Mathf.Clamp(nextAdaptiveDifficultyLevel, 1, 5),
+                _labelPipelineEnabled = nextLabelPipelineEnabled,
             };
         }
 
@@ -421,6 +876,17 @@ namespace TheraplyExamples
             }
         }
 
+        private static bool HasStartSetting(StartGameCommand command, string key)
+        {
+            if (command == null || string.IsNullOrWhiteSpace(command.gameConfigJson) || string.IsNullOrWhiteSpace(key))
+            {
+                return false;
+            }
+
+            var marker = "\"" + key.Trim() + "\"";
+            return command.gameConfigJson.IndexOf(marker, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
         [Serializable]
         private sealed class PulseTargetsStartSettings
         {
@@ -428,23 +894,34 @@ namespace TheraplyExamples
             public float targetSpeed;
             public float targetScale;
             public int version;
+            public bool adaptiveDifficultyEnabled = true;
+            public float adaptiveDifficultySensitivity = 0.55f;
+            public int adaptiveDifficultyLevel = 3;
+            public bool labelPipelineEnabled = true;
         }
     }
 
-    public sealed class PulseTargetClickTarget : MonoBehaviour
+    public sealed class PulseTargetClickTarget : MonoBehaviour, IQuestPointerTarget
     {
         private int _targetId;
-        private Action<int> _onClicked;
+        private Action<int, string> _onClicked;
 
-        public void Configure(int targetId, Action<int> onClicked)
+        public void Configure(int targetId, Action<int, string> onClicked)
         {
             _targetId = targetId;
             _onClicked = onClicked;
         }
 
+#if UNITY_EDITOR
         private void OnMouseDown()
         {
-            _onClicked?.Invoke(_targetId);
+            ActivateFromPointer("MOUSE");
+        }
+#endif
+
+        public void ActivateFromPointer(string source)
+        {
+            _onClicked?.Invoke(_targetId, string.IsNullOrWhiteSpace(source) ? "UNKNOWN" : source.Trim());
         }
     }
 }

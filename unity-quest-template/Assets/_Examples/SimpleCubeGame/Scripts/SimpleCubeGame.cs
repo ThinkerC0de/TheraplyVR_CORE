@@ -244,7 +244,9 @@ namespace TheraplyExamples
     {
         public event Action OnClick;
 
+#if UNITY_EDITOR
         private void OnMouseDown() => OnClick?.Invoke();
+#endif
 
         private void OnTriggerEnter(Collider other)
         {

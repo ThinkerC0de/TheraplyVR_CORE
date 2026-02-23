@@ -38,7 +38,9 @@ namespace TheraplyCore.Firebase
         public bool outboxSupported;
         public int outboxPending;
         public int outboxInFlight;
+        public int outboxFailed;
         public int outboxSynced;
+        public int outboxReplayed;
         public int outboxRetryCount;
         public string mode;
     }
@@ -60,7 +62,9 @@ namespace TheraplyCore.Firebase
     {
         public int pending;
         public int inFlight;
+        public int failed;
         public int synced;
+        public int replayed;
         public int retryCount;
     }
 
@@ -71,7 +75,7 @@ namespace TheraplyCore.Firebase
         public string outboxStatus;
     }
 
-    internal sealed class SessionEventStore : IDisposable
+    internal class DurableEventOutbox : IDisposable
     {
         private readonly bool _enabled;
         private readonly BlockingCollection<DurableSessionEventRecord> _pendingWrites;
@@ -85,7 +89,7 @@ namespace TheraplyCore.Firebase
         private int _eventsFailed;
         private int _eventsDropped;
 
-        public SessionEventStore(
+        public DurableEventOutbox(
             bool enabled,
             string sqlitePath,
             string jsonLinePath,
@@ -168,7 +172,9 @@ namespace TheraplyCore.Firebase
                 outboxSupported = _backend.SupportsOutbox,
                 outboxPending = outbox.pending,
                 outboxInFlight = outbox.inFlight,
+                outboxFailed = outbox.failed,
                 outboxSynced = outbox.synced,
+                outboxReplayed = outbox.replayed,
                 outboxRetryCount = outbox.retryCount,
                 mode = _mode ?? "unknown",
             };
@@ -372,12 +378,12 @@ namespace TheraplyCore.Firebase
                 try
                 {
                     var sqliteBackend = new SqliteWalEventStoreBackend(sqlitePath, mirrorToJsonLine, jsonLinePath, logVerbose);
-                    Logger.Info("[SessionEventStore] SQLite WAL backend enabled.");
+                    Logger.Info("[DurableEventOutbox] SQLite WAL backend enabled.");
                     return sqliteBackend;
                 }
                 catch (Exception e)
                 {
-                    Logger.Warning($"[SessionEventStore] SQLite WAL backend unavailable: {e.Message}. Falling back to NDJSON.");
+                    Logger.Warning($"[DurableEventOutbox] SQLite WAL backend unavailable: {e.Message}. Falling back to NDJSON.");
                 }
             }
 
@@ -451,7 +457,7 @@ namespace TheraplyCore.Firebase
                     catch (Exception e)
                     {
                         Interlocked.Increment(ref _eventsFailed);
-                        Logger.Warning($"[SessionEventStore] Persist failed for {record.eventType}: {e.Message}");
+                        Logger.Warning($"[DurableEventOutbox] Persist failed for {record.eventType}: {e.Message}");
                     }
                 }
             }
@@ -459,10 +465,14 @@ namespace TheraplyCore.Firebase
             {
                 // Normal shutdown path.
             }
+            catch (ThreadAbortException)
+            {
+                // Unity editor teardown can abort worker threads; treat as normal shutdown.
+            }
             catch (Exception e)
             {
                 Interlocked.Increment(ref _eventsFailed);
-                Logger.Error($"[SessionEventStore] Writer loop crashed: {e.Message}", e);
+                Logger.Error($"[DurableEventOutbox] Writer loop crashed: {e.Message}", e);
             }
         }
 
@@ -625,7 +635,7 @@ namespace TheraplyCore.Firebase
 
                 if (_logVerbose)
                 {
-                    Logger.Debug($"[SessionEventStore] NDJSON persisted {record.eventType} ({record.sessionId})");
+                    Logger.Debug($"[DurableEventOutbox] NDJSON persisted {record.eventType} ({record.sessionId})");
                 }
             }
 
@@ -650,7 +660,8 @@ namespace TheraplyCore.Firebase
                         foreach (var pair in _outboxByEventId)
                         {
                             var row = pair.Value;
-                            if (!string.Equals(row.status, "PENDING", StringComparison.OrdinalIgnoreCase))
+                            if (!string.Equals(row.status, "PENDING", StringComparison.OrdinalIgnoreCase) &&
+                                !string.Equals(row.status, "FAILED", StringComparison.OrdinalIgnoreCase))
                             {
                                 continue;
                             }
@@ -804,7 +815,7 @@ namespace TheraplyCore.Firebase
                                 nextAttemptUtc = nextAttemptUtc.ToUniversalTime();
                             }
 
-                            row.status = "PENDING";
+                            row.status = "FAILED";
                             row.nextAttemptUtc = nextAttemptUtc;
                             row.lastError = string.IsNullOrWhiteSpace(retryRecord.errorCode)
                                 ? "OUTBOX_RETRY"
@@ -977,9 +988,17 @@ namespace TheraplyCore.Firebase
                         {
                             stats.inFlight++;
                         }
+                        else if (string.Equals(row.status, "FAILED", StringComparison.OrdinalIgnoreCase))
+                        {
+                            stats.failed++;
+                        }
                         else if (string.Equals(row.status, "SYNCED", StringComparison.OrdinalIgnoreCase))
                         {
                             stats.synced++;
+                            if (row.attemptCount > 1)
+                            {
+                                stats.replayed++;
+                            }
                         }
 
                         if (row.attemptCount > 1)
@@ -1055,7 +1074,7 @@ namespace TheraplyCore.Firebase
 
                 if (_logVerbose && loaded > 0)
                 {
-                    Logger.Debug($"[SessionEventStore] NDJSON loaded {loaded} persisted events.");
+                    Logger.Debug($"[DurableEventOutbox] NDJSON loaded {loaded} persisted events.");
                 }
             }
 
@@ -1262,7 +1281,10 @@ namespace TheraplyCore.Firebase
 
                 ExecuteNonQuery(
                     "UPDATE sync_outbox " +
-                    "SET status='PENDING', locked_by=NULL, locked_at_utc=NULL " +
+                    "SET status='FAILED', " +
+                    "last_error=COALESCE(last_error, 'OUTBOX_WORKER_RESTARTED'), " +
+                    "locked_by=NULL, " +
+                    "locked_at_utc=NULL " +
                     "WHERE status='IN_FLIGHT';");
             }
 
@@ -1337,7 +1359,7 @@ namespace TheraplyCore.Firebase
                     if (_logVerbose)
                     {
                         Logger.Debug(
-                            $"[SessionEventStore] SQLite persisted {record.eventType} seq={record.sequence} session={record.sessionId}");
+                            $"[DurableEventOutbox] SQLite persisted {record.eventType} seq={record.sequence} session={record.sessionId}");
                     }
                 }
             }
@@ -1368,7 +1390,7 @@ namespace TheraplyCore.Firebase
                                 selectCommand.CommandText =
                                     "SELECT event_id " +
                                     "FROM sync_outbox " +
-                                    "WHERE status='PENDING' AND next_attempt_utc <= @now_utc " +
+                                    "WHERE (status='PENDING' OR status='FAILED') AND next_attempt_utc <= @now_utc " +
                                     "ORDER BY next_attempt_utc ASC, created_at_utc ASC " +
                                     "LIMIT @limit;";
                                 AddParameter(selectCommand, "@now_utc", nowUtcText);
@@ -1405,7 +1427,9 @@ namespace TheraplyCore.Firebase
                                         "last_attempt_utc=@now_utc, " +
                                         "locked_by=@worker_id, " +
                                         "locked_at_utc=@now_utc " +
-                                        "WHERE event_id=@event_id AND status='PENDING';";
+                                        "WHERE event_id=@event_id " +
+                                        "AND (status='PENDING' OR status='FAILED') " +
+                                        "AND next_attempt_utc <= @now_utc;";
                                     AddParameter(claimCommand, "@now_utc", nowUtcText);
                                     AddParameter(claimCommand, "@worker_id", safeWorkerId);
                                     AddParameter(claimCommand, "@event_id", eventId);
@@ -1518,7 +1542,7 @@ namespace TheraplyCore.Firebase
                                     command.Transaction = transaction;
                                     command.CommandText =
                                         "UPDATE sync_outbox " +
-                                        "SET status='PENDING', " +
+                                        "SET status='FAILED', " +
                                         "next_attempt_utc=@next_attempt_utc, " +
                                         "last_error=@last_error, " +
                                         "locked_by=NULL, " +
@@ -1704,8 +1728,15 @@ namespace TheraplyCore.Firebase
                             inFlight = ExecuteScalarInt(
                                 "SELECT COUNT(1) FROM sync_outbox WHERE status='IN_FLIGHT';",
                                 0),
+                            failed = ExecuteScalarInt(
+                                "SELECT COUNT(1) FROM sync_outbox WHERE status='FAILED';",
+                                0),
                             synced = ExecuteScalarInt(
                                 "SELECT COUNT(1) FROM sync_outbox WHERE status='SYNCED';",
+                                0),
+                            replayed = ExecuteScalarInt(
+                                "SELECT COUNT(1) FROM sync_outbox " +
+                                "WHERE status='SYNCED' AND attempt_count > 1;",
                                 0),
                             retryCount = ExecuteScalarInt(
                                 "SELECT COALESCE(SUM(CASE WHEN attempt_count > 1 THEN attempt_count - 1 ELSE 0 END), 0) " +
@@ -1715,7 +1746,7 @@ namespace TheraplyCore.Firebase
                     }
                     catch (Exception e)
                     {
-                        Logger.Warning($"[SessionEventStore] Failed to read outbox statistics: {e.Message}");
+                        Logger.Warning($"[DurableEventOutbox] Failed to read outbox statistics: {e.Message}");
                         return default;
                     }
                 }
@@ -1967,6 +1998,29 @@ namespace TheraplyCore.Firebase
 
                 return fallback;
             }
+        }
+    }
+
+    // Backward-compatible alias while runtime code migrates to DurableEventOutbox naming.
+    internal sealed class SessionEventStore : DurableEventOutbox
+    {
+        public SessionEventStore(
+            bool enabled,
+            string sqlitePath,
+            string jsonLinePath,
+            bool preferSqliteWal,
+            bool mirrorToJsonLine,
+            int maxPendingWrites,
+            bool logVerbose)
+            : base(
+                enabled,
+                sqlitePath,
+                jsonLinePath,
+                preferSqliteWal,
+                mirrorToJsonLine,
+                maxPendingWrites,
+                logVerbose)
+        {
         }
     }
 }

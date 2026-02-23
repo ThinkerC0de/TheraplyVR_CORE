@@ -5,22 +5,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter_controller/models/content_delivery_contract.dart';
 import 'package:flutter_controller/models/critical_command_envelope.dart';
 import 'package:flutter_controller/models/device_info.dart';
+import 'package:flutter_controller/models/ops_error_catalog.dart';
 import 'package:flutter_controller/models/runtime_status_signal.dart';
 import 'package:flutter_controller/models/session_fsm_contract.dart';
+import 'package:flutter_controller/models/session_recovery_manager.dart';
+import 'package:flutter_controller/models/session_ownership.dart';
 import 'package:flutter_controller/models/session_recovery_policy.dart';
 import 'package:flutter_controller/models/student.dart';
+import 'package:flutter_controller/models/therapist_session_settings.dart';
 import 'package:flutter_controller/services/connection_service.dart';
 import 'package:flutter_controller/services/discovery_service.dart';
 import 'package:flutter_controller/services/firebase_service.dart';
 import 'package:flutter_controller/services/foreground_service_bridge.dart';
+import 'package:flutter_controller/services/operator_incident_popup_queue.dart';
 import 'package:flutter_controller/services/session_journal_service.dart';
+import 'package:flutter_controller/services/therapist_session_settings_service.dart';
 import 'package:flutter_controller/models/therapy_session_record.dart';
 import 'package:flutter_controller/widgets/media_stream_widget.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
 
-enum _SessionGateAction { resume, startNew }
-
-enum _ResumeStrategy { fromSavedState, fromBeginning }
+enum _SessionGateAction { keepCurrent, resume, startNew }
 
 enum _WorkflowStep { gameCatalog, gameSetup }
 
@@ -60,6 +63,19 @@ class _ControlScreenState extends State<ControlScreen>
         'Poziom random target: aktywny kolor celu zmienia sie dynamicznie.',
       ],
     ),
+    _GameCatalogEntry(
+      gameId: 'pulse_target_tap',
+      title: 'Pulse Targets',
+      description:
+          'Sekwencja celow z adaptacja trudnosci i etykietowaniem task run.',
+      targetContentVersion: '1.0.0',
+      supportsSaveResume: false,
+      previewLines: <String>[
+        'Klikaj aktywne cele zgodnie z sekwencja.',
+        'Adaptive difficulty dopasowuje tempo i skale.',
+        'Generuje TASK_OUTCOME_SUMMARY + TASK_LABEL_GENERATED.',
+      ],
+    ),
   ];
 
   static const Set<String> _gameScopedCriticalCommands = <String>{
@@ -71,6 +87,8 @@ class _ControlScreenState extends State<ControlScreen>
 
   static const String _demoCubeGameId = 'demo_cube_clicker';
   static const String _pulseTargetGameId = 'pulse_target_tap';
+  static const String _interruptedAutoCloseReasonCode =
+      'INTERRUPTED_AUTO_CLOSED_TIMEOUT';
   static const Duration _recentlyEndedSessionTtl = Duration(seconds: 20);
   static const Duration _discoveryCandidateFreshTtl = Duration(seconds: 12);
   static const Duration _connectionLivenessPollInterval = Duration(seconds: 2);
@@ -86,6 +104,7 @@ class _ControlScreenState extends State<ControlScreen>
   ];
 
   final ConnectionService _connection = ConnectionService();
+  late final OperatorIncidentPopupQueue _incidentPopupQueue;
   final Set<String> _expandedPreviewGameIds = <String>{};
 
   bool _isConnected = false;
@@ -102,6 +121,8 @@ class _ControlScreenState extends State<ControlScreen>
   bool _sessionAttachInFlight = false;
   bool _sessionAttachReady = false;
   bool _hasConnectedAtLeastOnce = false;
+  TherapistSessionSettings _therapistSessionSettings =
+      TherapistSessionSettings.defaults();
 
   SessionLifecycleState? _sessionLifecycleState;
   TherapistRuntimeStatus? _runtimeStatus;
@@ -122,17 +143,23 @@ class _ControlScreenState extends State<ControlScreen>
   String? _lastRuntimeStatusSessionId;
   TherapySessionRecord? _latestPersistedSession;
   bool _persistedSessionRefreshInFlight = false;
+  bool _interruptedSessionAutoCloseInFlight = false;
   DeviceInfo? _latestDiscoveryReconnectCandidate;
   DateTime? _latestDiscoveryReconnectSeenAt;
   DateTime? _connectedAtUtc;
+  DateTime? _lastConnectionLostAtUtc;
   DateTime? _lastRuntimeSignalAtUtc;
   DevicePresenceUpdateSignal? _lastDevicePresenceSignal;
   int _lastWatchdogStaleAfterMs = 6000;
   bool _livenessRecoveryInFlight = false;
   String? _disconnectReasonOverride;
+  final TextEditingController _timelineNoteController = TextEditingController();
+  bool _timelineNoteInFlight = false;
+  String? _deferredHandoffSessionId;
+  DateTime? _deferredHandoffMarkedAtUtc;
+  String? _deferredHandoffReasonCode;
 
   _WorkflowStep _workflowStep = _WorkflowStep.gameCatalog;
-  bool _resumeFromSavedPreference = false;
 
   int _demoCubeCount = 12;
   double _demoCubeSpeed = 0.7;
@@ -145,6 +172,10 @@ class _ControlScreenState extends State<ControlScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _incidentPopupQueue = OperatorIncidentPopupQueue(
+      queueName: 'control_screen',
+      languageResolver: () => _therapistSessionSettings.operatorUiLanguage,
+    );
 
     _connection.setDiscoveryService(widget.discoveryService);
     _activeSessionId = _buildLocalSessionId();
@@ -155,7 +186,7 @@ class _ControlScreenState extends State<ControlScreen>
     _setupDiscoveryListener();
     _startConnectionLivenessWatchdog();
     unawaited(ForegroundServiceBridge.start());
-    unawaited(WakelockPlus.enable());
+    unawaited(_loadTherapistSessionSettings());
     unawaited(_refreshPersistedSessionSnapshot(triggerPrompt: true));
     unawaited(_connect());
   }
@@ -171,12 +202,12 @@ class _ControlScreenState extends State<ControlScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _autoReconnectEnabled = false;
+    _timelineNoteController.dispose();
     _connectionSubscription?.cancel();
     _messageSubscription?.cancel();
     _discoverySubscription?.cancel();
     _connectionLivenessTimer?.cancel();
     unawaited(ForegroundServiceBridge.stop());
-    unawaited(WakelockPlus.disable());
     _connection.dispose();
     super.dispose();
   }
@@ -209,6 +240,7 @@ class _ControlScreenState extends State<ControlScreen>
         if (_contentDeliveryEnabled) {
           unawaited(_syncContentCatalog(silent: true));
         }
+        unawaited(_loadTherapistSessionSettings());
         unawaited(_refreshPersistedSessionSnapshot(triggerPrompt: true));
         if (!wasConnected) {
           final connectionEventType = attachReason == 'INITIAL_CONNECT'
@@ -229,6 +261,9 @@ class _ControlScreenState extends State<ControlScreen>
         }
       } else {
         _connectedAtUtc = null;
+        if (wasConnected) {
+          _lastConnectionLostAtUtc = DateTime.now().toUtc();
+        }
         _lastRuntimeSignalAtUtc = null;
         _livenessRecoveryInFlight = false;
         if (wasConnected) {
@@ -249,16 +284,18 @@ class _ControlScreenState extends State<ControlScreen>
 
     _messageSubscription = _connection.messages.listen((message) {
       final previousSessionState = _sessionLifecycleState;
-      final sessionUpdate = SessionStateUpdateSignal.tryFromNetworkMessage(
-        message,
+      final sessionUpdate = _filterSessionUpdateByOwnership(
+        SessionStateUpdateSignal.tryFromNetworkMessage(message),
       );
-      final runtimeUpdate = RuntimeStatusUpdateSignal.tryFromNetworkMessage(
-        message,
+      final runtimeUpdate = _filterRuntimeUpdateByOwnership(
+        RuntimeStatusUpdateSignal.tryFromNetworkMessage(message),
       );
-      final devicePresenceUpdate =
-          DevicePresenceUpdateSignal.tryFromNetworkMessage(message);
-      final watchdogHeartbeat =
-          SessionWatchdogHeartbeatSignal.tryFromNetworkMessage(message);
+      final devicePresenceUpdate = _filterDevicePresenceByOwnership(
+        DevicePresenceUpdateSignal.tryFromNetworkMessage(message),
+      );
+      final watchdogHeartbeat = _filterWatchdogHeartbeatByOwnership(
+        SessionWatchdogHeartbeatSignal.tryFromNetworkMessage(message),
+      );
       final watchdogSessionState = SessionLifecycleState.tryParse(
         watchdogHeartbeat?.sessionState,
       );
@@ -556,11 +593,11 @@ class _ControlScreenState extends State<ControlScreen>
 
     if (!success && mounted) {
       _autoReconnectEnabled = false;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to connect to device'),
-          backgroundColor: Colors.red,
-        ),
+      _enqueueIncidentAlert(
+        title: 'Failed to connect to device',
+        message:
+            'Could not connect to ${widget.device.deviceName} (${widget.device.ip}:${widget.device.controlPort}).',
+        reasonCode: 'DISCONNECTED',
       );
       _allowSystemPop = true;
       Navigator.pop(context);
@@ -672,29 +709,61 @@ class _ControlScreenState extends State<ControlScreen>
   Future<void> _ensureSessionAttached({
     required String reasonCode,
     bool force = false,
+    String? sessionIdOverride,
   }) async {
     if (!mounted || !_isConnected || _allowSystemPop) {
+      _logAttachDecision(
+        decision: 'SKIP_ATTACH',
+        reasonCode: reasonCode,
+        sessionId: sessionIdOverride,
+      );
       return;
     }
     if (_sessionAttachInFlight) {
+      _logAttachDecision(
+        decision: 'SKIP_ATTACH_IN_FLIGHT',
+        reasonCode: reasonCode,
+        sessionId: sessionIdOverride,
+      );
       return;
     }
     if (_sessionAttachReady && !force) {
+      _logAttachDecision(
+        decision: 'SKIP_ALREADY_READY',
+        reasonCode: reasonCode,
+        sessionId: sessionIdOverride,
+      );
       return;
     }
 
-    final targetSessionId = _resolveAttachTargetSessionId().trim();
+    final targetSessionId =
+        (sessionIdOverride ?? _resolveAttachTargetSessionId()).trim();
     if (targetSessionId.isEmpty) {
+      _logAttachDecision(
+        decision: 'SKIP_EMPTY_SESSION_ID',
+        reasonCode: reasonCode,
+      );
       return;
     }
 
     final therapistId = _resolveActorTherapistId();
+    final ownerKey = _resolveOwnerKey(therapistIdOverride: therapistId);
+    final sessionKey = _resolveSessionKey(
+      targetSessionId,
+      therapistIdOverride: therapistId,
+    );
     _sessionAttachInFlight = true;
     if (mounted) {
       setState(() {});
     }
 
     try {
+      _logAttachDecision(
+        decision: 'SEND_SESSION_ATTACH',
+        reasonCode: reasonCode,
+        commandId: CriticalCommandIds.sessionAttach,
+        sessionId: targetSessionId,
+      );
       await _connection.sendCriticalCommand(
         commandId: CriticalCommandIds.sessionAttach,
         sessionId: targetSessionId,
@@ -703,6 +772,8 @@ class _ControlScreenState extends State<ControlScreen>
           'studentId': widget.student.id,
           'patientId': widget.student.id,
           'therapistId': therapistId,
+          'ownerKey': ownerKey,
+          'sessionKey': sessionKey,
           'reasonCode': reasonCode,
           'origin': 'mobile_controller',
         },
@@ -717,6 +788,12 @@ class _ControlScreenState extends State<ControlScreen>
         _sessionAttachReady = true;
         _activeSessionId = targetSessionId;
       });
+      _logAttachDecision(
+        decision: 'SESSION_ATTACH_ACK',
+        reasonCode: reasonCode,
+        commandId: CriticalCommandIds.sessionAttach,
+        sessionId: targetSessionId,
+      );
 
       await _recordConnectionLifecycleEvent(
         eventType: 'SESSION_ATTACH_ACK',
@@ -728,14 +805,28 @@ class _ControlScreenState extends State<ControlScreen>
         return;
       }
 
+      final failureReasonCode =
+          OpsErrorCatalog.tryExtractReasonCode(e) ?? reasonCode;
+      final attachReasonTag = OpsErrorCatalog.buildReasonTag(failureReasonCode);
+      final errorSummary = OpsErrorCatalog.buildOperatorSummary(
+        error: e,
+        fallbackReasonCode: reasonCode,
+      );
+
       setState(() {
         _sessionAttachReady = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Session attach failed ($reasonCode): $e'),
-          backgroundColor: Colors.orange,
-        ),
+      _logAttachDecision(
+        decision: 'SESSION_ATTACH_FAILED',
+        reasonCode: reasonCode,
+        commandId: CriticalCommandIds.sessionAttach,
+        sessionId: targetSessionId,
+      );
+      _enqueueIncidentAlert(
+        title: 'Session attach failed',
+        message: 'Session attach failed [$attachReasonTag]: $errorSummary',
+        reasonCode: failureReasonCode,
+        severity: OperatorIncidentSeverity.error,
       );
     } finally {
       _sessionAttachInFlight = false;
@@ -841,6 +932,392 @@ class _ControlScreenState extends State<ControlScreen>
     }
   }
 
+  bool get _isStableActiveSessionContext {
+    return _workflowStep == _WorkflowStep.gameSetup ||
+        _isGameRuntimeActive ||
+        _isPrimaryActionInFlight;
+  }
+
+  bool _isSessionDecisionAllowedByContext() {
+    if (_allowSystemPop) {
+      return false;
+    }
+
+    if (_isStableActiveSessionContext) {
+      return false;
+    }
+
+    if (!_isConnected) {
+      return !_hasConnectedAtLeastOnce;
+    }
+
+    if (_sessionAttachInFlight || !_sessionAttachReady) {
+      return true;
+    }
+
+    if (_workflowStep != _WorkflowStep.gameCatalog) {
+      return false;
+    }
+
+    return true;
+  }
+
+  bool get _hasDeferredHandoff {
+    return (_deferredHandoffSessionId?.trim().isNotEmpty ?? false);
+  }
+
+  String get _deferredHandoffSessionIdValue {
+    return _deferredHandoffSessionId?.trim() ?? '';
+  }
+
+  void _markDeferredHandoff({
+    required String sessionId,
+    required String reasonCode,
+    required String source,
+  }) {
+    final normalizedSessionId = sessionId.trim();
+    if (normalizedSessionId.isEmpty ||
+        _wasSessionRecentlyEnded(normalizedSessionId)) {
+      return;
+    }
+
+    final normalizedReasonCode = reasonCode.trim();
+    final previousSessionId = _deferredHandoffSessionId?.trim() ?? '';
+    final previousReasonCode = _deferredHandoffReasonCode?.trim() ?? '';
+    final shouldUpdate = previousSessionId != normalizedSessionId ||
+        previousReasonCode != normalizedReasonCode;
+    if (!shouldUpdate) {
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _deferredHandoffSessionId = normalizedSessionId;
+        _deferredHandoffReasonCode = normalizedReasonCode;
+        _deferredHandoffMarkedAtUtc = DateTime.now().toUtc();
+      });
+    } else {
+      _deferredHandoffSessionId = normalizedSessionId;
+      _deferredHandoffReasonCode = normalizedReasonCode;
+      _deferredHandoffMarkedAtUtc = DateTime.now().toUtc();
+    }
+
+    _logSessionDecision(
+      source: source,
+      decision: 'DEFERRED_BADGE_SET',
+      sessionId: normalizedSessionId,
+      reason: normalizedReasonCode,
+    );
+    unawaited(
+      _recordDeferredHandoffTimelineEvent(
+        sessionId: normalizedSessionId,
+        eventType: 'SESSION_HANDOFF_DEFERRED',
+        reasonCode: normalizedReasonCode,
+      ),
+    );
+  }
+
+  void _clearDeferredHandoff({
+    String? sessionId,
+    required String source,
+    required String reasonCode,
+  }) {
+    final currentSessionId = _deferredHandoffSessionId?.trim() ?? '';
+    if (currentSessionId.isEmpty) {
+      return;
+    }
+
+    final targetSessionId = sessionId?.trim() ?? '';
+    if (targetSessionId.isNotEmpty && targetSessionId != currentSessionId) {
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _deferredHandoffSessionId = null;
+        _deferredHandoffReasonCode = null;
+        _deferredHandoffMarkedAtUtc = null;
+      });
+    } else {
+      _deferredHandoffSessionId = null;
+      _deferredHandoffReasonCode = null;
+      _deferredHandoffMarkedAtUtc = null;
+    }
+
+    _logSessionDecision(
+      source: source,
+      decision: 'DEFERRED_BADGE_CLEARED',
+      sessionId: currentSessionId,
+      reason: reasonCode,
+    );
+    unawaited(
+      _recordDeferredHandoffTimelineEvent(
+        sessionId: currentSessionId,
+        eventType: 'SESSION_HANDOFF_DEFERRED_CLEARED',
+        reasonCode: reasonCode,
+      ),
+    );
+  }
+
+  Future<void> _recordDeferredHandoffTimelineEvent({
+    required String sessionId,
+    required String eventType,
+    required String reasonCode,
+  }) async {
+    try {
+      await SessionJournalService.appendSessionEvent(
+        sessionId: sessionId,
+        studentId: widget.student.id,
+        therapistId: _resolveActorTherapistId(),
+        eventType: eventType,
+        gameId: _selectedGameId,
+        details: <String, dynamic>{
+          'reasonCode': reasonCode,
+          'workflowStep': _workflowStep.name,
+          'connected': _isConnected,
+          'attachReady': _sessionAttachReady,
+        },
+      );
+    } catch (e) {
+      debugPrint(
+        '[ControlScreen] Deferred handoff timeline event failed: '
+        'session=$sessionId event=$eventType reason=$reasonCode error=$e',
+      );
+    }
+  }
+
+  Future<void> _reviewDeferredHandoff() async {
+    final sessionId = _deferredHandoffSessionIdValue;
+    if (sessionId.isEmpty) {
+      return;
+    }
+
+    if (!_isSessionDecisionAllowedByContext()) {
+      _logSessionDecision(
+        source: 'deferred_badge',
+        decision: 'REVIEW_BLOCKED',
+        sessionId: sessionId,
+        reason: 'CONTEXT_NOT_ENTRY_OR_RECONNECT',
+      );
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Handoff is still deferred while active game flow is in progress.',
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _remoteSessionIdPendingDecision = sessionId;
+        _requiresSessionDecision = true;
+      });
+    } else {
+      _remoteSessionIdPendingDecision = sessionId;
+      _requiresSessionDecision = true;
+    }
+
+    _clearDeferredHandoff(
+      sessionId: sessionId,
+      source: 'deferred_badge',
+      reasonCode: 'THERAPIST_REVIEW_REQUESTED',
+    );
+    _logSessionDecision(
+      source: 'deferred_badge',
+      decision: 'REVIEW_OPEN_DIALOG',
+      sessionId: sessionId,
+      reason: 'THERAPIST_REVIEW_REQUESTED',
+    );
+    _promptSessionDecisionIfNeeded();
+  }
+
+  String _describeDeferredHandoffReason(String reasonCode) {
+    final normalized = reasonCode.trim();
+    switch (normalized) {
+      case 'CONTEXT_NOT_ENTRY_OR_RECONNECT':
+        return 'active workflow context';
+      case 'THERAPIST_KEEP_CURRENT':
+        return 'therapist selected Keep current';
+      case 'RECOVERY_OVER_WINDOW':
+        return 'recovery window exceeded';
+      default:
+        return normalized.isEmpty ? 'deferred state' : normalized;
+    }
+  }
+
+  SessionRecoveryEvaluation _evaluateRecoveryWindowState({
+    required bool remoteSessionNeedsDecision,
+  }) {
+    return SessionRecoveryManager.evaluate(
+      remoteSessionNeedsDecision: remoteSessionNeedsDecision,
+      nowUtc: DateTime.now().toUtc(),
+      lastConnectionLostAtUtc: _lastConnectionLostAtUtc,
+      sessionRecoveryWindowMinutes:
+          _therapistSessionSettings.sessionRecoveryWindowMinutes,
+      requireResumeConfirmationAfterRecoveryWindow: _therapistSessionSettings
+          .requireResumeConfirmationAfterRecoveryWindow,
+    );
+  }
+
+  String _recoveryStateReasonCode(SessionRecoveryWindowState state) {
+    switch (state) {
+      case SessionRecoveryWindowState.interruptedRecoveringUnderWindow:
+        return 'RECOVERY_UNDER_WINDOW';
+      case SessionRecoveryWindowState
+            .interruptedOverWindowNeedsTherapistDecision:
+        return 'RECOVERY_OVER_WINDOW';
+      case SessionRecoveryWindowState.notApplicable:
+        return 'RECOVERY_NOT_APPLICABLE';
+    }
+  }
+
+  Future<void> _attemptUnderWindowRecovery(
+    String remoteSessionId, {
+    required String source,
+  }) async {
+    _logSessionDecision(
+      source: source,
+      decision: 'AUTO_ATTACH_UNDER_WINDOW',
+      sessionId: remoteSessionId,
+      reason: 'RECOVERY_UNDER_WINDOW',
+    );
+
+    if (mounted) {
+      setState(() {
+        _requiresSessionDecision = false;
+        _remoteSessionIdPendingDecision = null;
+        _activeSessionId = remoteSessionId;
+      });
+    } else {
+      _requiresSessionDecision = false;
+      _remoteSessionIdPendingDecision = null;
+      _activeSessionId = remoteSessionId;
+    }
+    _clearDeferredHandoff(
+      sessionId: remoteSessionId,
+      source: source,
+      reasonCode: 'RECOVERY_UNDER_WINDOW',
+    );
+
+    if (!_isConnected) {
+      return;
+    }
+
+    await _ensureSessionAttached(
+      reasonCode: 'RECOVERY_UNDER_WINDOW',
+      force: true,
+      sessionIdOverride: remoteSessionId,
+    );
+    if (!mounted || !_sessionAttachReady) {
+      return;
+    }
+
+    setState(() {
+      _lastConnectionLostAtUtc = null;
+    });
+  }
+
+  void _logSessionDecision({
+    required String source,
+    required String decision,
+    String? commandId,
+    String? sessionId,
+    String? reason,
+  }) {
+    debugPrint(
+      '[ControlScreen][SessionGate] source=$source decision=$decision '
+      'command=${commandId ?? ''} session=${sessionId ?? ''} '
+      'reason=${reason ?? ''} '
+      'connected=$_isConnected attachReady=$_sessionAttachReady '
+      'attachInFlight=$_sessionAttachInFlight workflow=${_workflowStep.name} '
+      'runtimeActive=$_isGameRuntimeActive requiresDecision=$_requiresSessionDecision',
+    );
+  }
+
+  void _logAttachDecision({
+    required String decision,
+    required String reasonCode,
+    String? commandId,
+    String? sessionId,
+  }) {
+    debugPrint(
+      '[ControlScreen][AttachDecision] decision=$decision reason=$reasonCode '
+      'command=${commandId ?? ''} session=${sessionId ?? ''} '
+      'connected=$_isConnected attachReady=$_sessionAttachReady '
+      'attachInFlight=$_sessionAttachInFlight',
+    );
+  }
+
+  void _enqueueIncidentAlert({
+    required String title,
+    required String message,
+    String reasonCode = '',
+    OperatorIncidentSeverity severity = OperatorIncidentSeverity.error,
+    String source = 'control_screen',
+    Map<String, dynamic> contextData = const <String, dynamic>{},
+  }) {
+    if (!mounted) {
+      return;
+    }
+
+    final normalizedReasonCode = reasonCode.trim().toUpperCase();
+    final fallbackReasonCode = normalizedReasonCode.isNotEmpty
+        ? normalizedReasonCode
+        : (OpsErrorCatalog.tryExtractReasonCode(message) ?? 'UNKNOWN');
+
+    _incidentPopupQueue.enqueue(
+      context,
+      OperatorIncidentAlert(
+        occurredAtUtc: DateTime.now().toUtc(),
+        source: source,
+        title: title,
+        message: message,
+        reasonCode: fallbackReasonCode,
+        severity: severity,
+        contextData: _buildIncidentContextData(contextData),
+      ),
+    );
+  }
+
+  Map<String, dynamic> _buildIncidentContextData(
+    Map<String, dynamic> extras,
+  ) {
+    final context = <String, dynamic>{
+      'screen': 'control_screen',
+      'studentId': widget.student.id,
+      'studentTherapistId': widget.student.therapistId,
+      'deviceId': widget.device.deviceId,
+      'deviceName': widget.device.deviceName,
+      'deviceIp': widget.device.ip,
+      'controlPort': widget.device.controlPort,
+      'sessionId': _activeSessionId,
+      'selectedGameId': _selectedGameId,
+      'connected': _isConnected,
+      'sessionAttachReady': _sessionAttachReady,
+      'sessionAttachInFlight': _sessionAttachInFlight,
+      'requiresSessionDecision': _requiresSessionDecision,
+      'workflowStep': _workflowStep.name,
+      'runtimeStatus': _runtimeStatus?.wireValue ?? '',
+      'sessionState': _sessionLifecycleState?.wireValue ?? '',
+      'pendingDecisionSessionId': _remoteSessionIdPendingDecision ?? '',
+      'deferredHandoffSessionId': _deferredHandoffSessionId ?? '',
+      'deferredHandoffReasonCode': _deferredHandoffReasonCode ?? '',
+      'operatorUiLanguage':
+          _therapistSessionSettings.operatorUiLanguage.wireValue,
+    };
+    if (extras.isNotEmpty) {
+      context.addAll(extras);
+    }
+    return context;
+  }
+
   String _resolveActorTherapistId() {
     final currentUserId = FirebaseService.currentUser?.uid.trim() ?? '';
     if (currentUserId.isNotEmpty) {
@@ -851,6 +1328,229 @@ class _ControlScreenState extends State<ControlScreen>
       return studentOwner;
     }
     return 'unknown_therapist';
+  }
+
+  Future<void> _loadTherapistSessionSettings() async {
+    final settings =
+        await TherapistSessionSettingsService.fetchCurrentTherapistSettings();
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _therapistSessionSettings = settings;
+    });
+  }
+
+  String _resolveOwnerKey({String? therapistIdOverride}) {
+    return SessionOwnership.ownerKey(
+      therapistId: therapistIdOverride ?? _resolveActorTherapistId(),
+      studentId: widget.student.id,
+    );
+  }
+
+  String _resolveSessionKey(
+    String sessionId, {
+    String? therapistIdOverride,
+  }) {
+    return SessionOwnership.sessionKey(
+      therapistId: therapistIdOverride ?? _resolveActorTherapistId(),
+      studentId: widget.student.id,
+      sessionId: sessionId,
+    );
+  }
+
+  bool _isSignalOwnershipAccepted({
+    required String source,
+    required String sessionId,
+    required String therapistId,
+    required String studentId,
+    required String patientId,
+    required String ownerKey,
+    required String sessionKey,
+  }) {
+    final expectedTherapistId = _resolveActorTherapistId().trim();
+    final expectedStudentId = widget.student.id.trim();
+    final incomingTherapistId = therapistId.trim();
+    final incomingStudentId = SessionOwnership.resolveStudentId(
+      studentId: studentId,
+      patientId: patientId,
+    );
+    final normalizedSessionId = sessionId.trim();
+    final incomingOwnerKeyRaw = ownerKey.trim();
+    final incomingSessionKeyRaw = sessionKey.trim();
+    final expectedOwnerKey = SessionOwnership.ownerKey(
+      therapistId: expectedTherapistId,
+      studentId: expectedStudentId,
+    );
+
+    if (incomingTherapistId.isEmpty || incomingStudentId.isEmpty) {
+      final shouldRejectForMissingOwnership =
+          normalizedSessionId.isNotEmpty && _sessionAttachReady;
+      if (shouldRejectForMissingOwnership) {
+        debugPrint(
+          '[ControlScreen][Ownership] Rejecting $source signal due missing '
+          'ownership metadata: session=$normalizedSessionId '
+          'incomingTherapist=$incomingTherapistId '
+          'incomingStudent=$incomingStudentId',
+        );
+        return false;
+      }
+      return true;
+    }
+
+    final incomingOwnerKey = incomingOwnerKeyRaw.isNotEmpty
+        ? incomingOwnerKeyRaw
+        : SessionOwnership.ownerKey(
+            therapistId: incomingTherapistId,
+            studentId: incomingStudentId,
+          );
+    if (incomingOwnerKey.isEmpty || expectedOwnerKey.isEmpty) {
+      if (normalizedSessionId.isNotEmpty && _sessionAttachReady) {
+        debugPrint(
+          '[ControlScreen][Ownership] Rejecting $source signal due missing '
+          'ownerKey: session=$normalizedSessionId '
+          'incomingOwner=$incomingOwnerKey expectedOwner=$expectedOwnerKey',
+        );
+        return false;
+      }
+      return true;
+    }
+
+    if (incomingOwnerKey != expectedOwnerKey) {
+      debugPrint(
+        '[ControlScreen][Ownership] Rejecting $source signal due owner '
+        'mismatch: session=$normalizedSessionId '
+        'expected=$expectedOwnerKey incoming=$incomingOwnerKey',
+      );
+      return false;
+    }
+
+    final shouldValidateSessionKey = _sessionAttachReady;
+    if (shouldValidateSessionKey && normalizedSessionId.isNotEmpty) {
+      final activeSessionId = _activeSessionId.trim();
+      if (activeSessionId.isNotEmpty) {
+        final expectedSessionKey = SessionOwnership.sessionKey(
+          therapistId: expectedTherapistId,
+          studentId: expectedStudentId,
+          sessionId: activeSessionId,
+        );
+        final incomingSessionKey = incomingSessionKeyRaw.isNotEmpty
+            ? incomingSessionKeyRaw
+            : SessionOwnership.sessionKey(
+                therapistId: incomingTherapistId,
+                studentId: incomingStudentId,
+                sessionId: normalizedSessionId,
+              );
+        if (incomingSessionKey.isEmpty || expectedSessionKey.isEmpty) {
+          debugPrint(
+            '[ControlScreen][Ownership] Rejecting $source signal due missing '
+            'sessionKey: activeSession=$activeSessionId '
+            'incomingSession=$normalizedSessionId',
+          );
+          return false;
+        }
+
+        if (incomingSessionKey != expectedSessionKey) {
+          debugPrint(
+            '[ControlScreen][Ownership] Rejecting $source signal due session '
+            'mismatch: expectedSessionKey=$expectedSessionKey '
+            'incomingSessionKey=$incomingSessionKey',
+          );
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }
+
+  SessionStateUpdateSignal? _filterSessionUpdateByOwnership(
+    SessionStateUpdateSignal? signal,
+  ) {
+    if (signal == null) {
+      return null;
+    }
+
+    if (!_isSignalOwnershipAccepted(
+      source: SessionSignalCommandIds.sessionStateUpdate,
+      sessionId: signal.sessionId,
+      therapistId: signal.therapistId,
+      studentId: signal.studentId,
+      patientId: signal.patientId,
+      ownerKey: signal.ownerKey,
+      sessionKey: signal.sessionKey,
+    )) {
+      return null;
+    }
+
+    return signal;
+  }
+
+  RuntimeStatusUpdateSignal? _filterRuntimeUpdateByOwnership(
+    RuntimeStatusUpdateSignal? signal,
+  ) {
+    if (signal == null) {
+      return null;
+    }
+
+    if (!_isSignalOwnershipAccepted(
+      source: RuntimeStatusSignalCommandIds.runtimeStatusUpdate,
+      sessionId: signal.sessionId,
+      therapistId: signal.therapistId,
+      studentId: signal.studentId,
+      patientId: signal.patientId,
+      ownerKey: signal.ownerKey,
+      sessionKey: signal.sessionKey,
+    )) {
+      return null;
+    }
+
+    return signal;
+  }
+
+  DevicePresenceUpdateSignal? _filterDevicePresenceByOwnership(
+    DevicePresenceUpdateSignal? signal,
+  ) {
+    if (signal == null) {
+      return null;
+    }
+
+    if (!_isSignalOwnershipAccepted(
+      source: RuntimeStatusSignalCommandIds.devicePresenceUpdate,
+      sessionId: signal.sessionId,
+      therapistId: signal.therapistId,
+      studentId: signal.studentId,
+      patientId: signal.patientId,
+      ownerKey: signal.ownerKey,
+      sessionKey: signal.sessionKey,
+    )) {
+      return null;
+    }
+
+    return signal;
+  }
+
+  SessionWatchdogHeartbeatSignal? _filterWatchdogHeartbeatByOwnership(
+    SessionWatchdogHeartbeatSignal? signal,
+  ) {
+    if (signal == null) {
+      return null;
+    }
+
+    if (!_isSignalOwnershipAccepted(
+      source: RuntimeStatusSignalCommandIds.sessionWatchdogHeartbeat,
+      sessionId: signal.sessionId,
+      therapistId: signal.therapistId,
+      studentId: signal.studentId,
+      patientId: signal.patientId,
+      ownerKey: signal.ownerKey,
+      sessionKey: signal.sessionKey,
+    )) {
+      return null;
+    }
+
+    return signal;
   }
 
   bool _isKnownGameId(String gameId) {
@@ -878,12 +1578,21 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     if (_isPulseTargetGameSelected) {
+      final adaptiveDifficultySensitivity = double.parse(
+        _therapistSessionSettings.adaptiveDifficultySensitivity
+            .toStringAsFixed(2),
+      );
       return <String, dynamic>{
         'gameConfigType': 'pulse_targets_config_v1',
         'gameConfigVersion': 1,
         'targetCount': _pulseTargetCount,
         'targetSpeed': double.parse(_pulseTargetSpeed.toStringAsFixed(2)),
         'targetScale': double.parse(_pulseTargetScale.toStringAsFixed(2)),
+        'adaptiveDifficultyEnabled':
+            _therapistSessionSettings.adaptiveDifficultyEnabled,
+        'adaptiveDifficultySensitivity': adaptiveDifficultySensitivity,
+        'adaptiveDifficultyLevel': _resolveAdaptiveDifficultyLevel(),
+        'labelPipelineEnabled': _therapistSessionSettings.labelPipelineEnabled,
       };
     }
 
@@ -901,6 +1610,7 @@ class _ControlScreenState extends State<ControlScreen>
     try {
       final latest = await SessionJournalService.fetchLatestForStudent(
         studentId: widget.student.id,
+        therapistId: _resolveActorTherapistId(),
       );
       if (!mounted) {
         return;
@@ -911,7 +1621,10 @@ class _ControlScreenState extends State<ControlScreen>
       });
 
       if (triggerPrompt) {
-        _applyPersistedSessionDecisionGate();
+        final handledByAutoClose = _applyInterruptedSessionAutoClose();
+        if (!handledByAutoClose) {
+          _applyPersistedSessionDecisionGate();
+        }
       }
     } catch (e) {
       debugPrint(
@@ -933,25 +1646,97 @@ class _ControlScreenState extends State<ControlScreen>
       return false;
     }
 
+    if (_applyInterruptedSessionAutoClose()) {
+      return true;
+    }
+
     if (persisted.requiresHandoffDecision &&
         persistedSessionId != _activeSessionId &&
         !_wasSessionRecentlyEnded(persistedSessionId)) {
+      if (!_isSessionDecisionAllowedByContext()) {
+        _markDeferredHandoff(
+          sessionId: persistedSessionId,
+          reasonCode: 'CONTEXT_NOT_ENTRY_OR_RECONNECT',
+          source: 'persisted',
+        );
+        _logSessionDecision(
+          source: 'persisted',
+          decision: 'SUPPRESS',
+          sessionId: persistedSessionId,
+          reason: 'CONTEXT_NOT_ENTRY_OR_RECONNECT',
+        );
+        if (_requiresSessionDecision &&
+            _remoteSessionIdPendingDecision == persistedSessionId) {
+          setState(() {
+            _requiresSessionDecision = false;
+            _remoteSessionIdPendingDecision = null;
+          });
+        }
+        return false;
+      }
+
+      final recoveryEvaluation = _evaluateRecoveryWindowState(
+        remoteSessionNeedsDecision: true,
+      );
+      if (recoveryEvaluation.shouldAutoRecoverSilently) {
+        _clearDeferredHandoff(
+          sessionId: persistedSessionId,
+          source: 'persisted',
+          reasonCode: 'RECOVERY_UNDER_WINDOW',
+        );
+        unawaited(
+          _attemptUnderWindowRecovery(
+            persistedSessionId,
+            source: 'persisted',
+          ),
+        );
+        return true;
+      }
+
+      if (!mounted) {
+        return false;
+      }
+
       if (_isKnownGameId(persisted.latestGameId) &&
           persisted.latestGameId != _selectedGameId) {
         setState(() {
           _selectedGameId = persisted.latestGameId;
         });
       }
+      _clearDeferredHandoff(
+        sessionId: persistedSessionId,
+        source: 'persisted',
+        reasonCode: 'REVIEW_DIALOG_OPENED',
+      );
 
-      _remoteSessionIdPendingDecision = persistedSessionId;
-      _requiresSessionDecision = true;
-      if (_sessionAttachReady && mounted) {
-        setState(() {
-          _sessionAttachReady = false;
-        });
-      }
+      setState(() {
+        _remoteSessionIdPendingDecision = persistedSessionId;
+        _requiresSessionDecision = true;
+      });
+      _logSessionDecision(
+        source: 'persisted',
+        decision: 'SHOW_DIALOG',
+        sessionId: persistedSessionId,
+        reason: _recoveryStateReasonCode(recoveryEvaluation.state),
+      );
       _promptSessionDecisionIfNeeded();
       return true;
+    }
+
+    if (persistedSessionId == _activeSessionId) {
+      _clearDeferredHandoff(
+        sessionId: persistedSessionId,
+        source: 'persisted',
+        reasonCode: 'ACTIVE_SESSION_MATCHED',
+      );
+    }
+
+    if (!persisted.requiresHandoffDecision) {
+      _clearDeferredHandoff(
+        sessionId: persistedSessionId,
+        source: 'persisted',
+        reasonCode: 'PERSISTED_GATE_CLEARED',
+      );
     }
 
     if (!persisted.requiresHandoffDecision &&
@@ -961,6 +1746,12 @@ class _ControlScreenState extends State<ControlScreen>
         _requiresSessionDecision = false;
         _remoteSessionIdPendingDecision = null;
       });
+      _logSessionDecision(
+        source: 'persisted',
+        decision: 'CLEAR_GATE',
+        sessionId: persistedSessionId,
+        reason: 'PERSISTED_GATE_CLEARED',
+      );
       unawaited(
         _ensureSessionAttached(
           reasonCode: 'HANDOFF_GATE_CLEARED',
@@ -973,11 +1764,146 @@ class _ControlScreenState extends State<ControlScreen>
     return false;
   }
 
+  bool _applyInterruptedSessionAutoClose() {
+    final persisted = _latestPersistedSession;
+    if (persisted == null || _interruptedSessionAutoCloseInFlight) {
+      return false;
+    }
+
+    final sessionId = persisted.sessionId.trim();
+    if (sessionId.isEmpty || _wasSessionRecentlyEnded(sessionId)) {
+      return false;
+    }
+
+    final evaluation = SessionRecoveryManager.evaluateInterruptedAutoClose(
+      sessionState: persisted.state,
+      nowUtc: DateTime.now().toUtc(),
+      interruptedAtUtc: persisted.interruptedAtUtc,
+      interruptedSessionAutoCloseHours:
+          _therapistSessionSettings.interruptedSessionAutoCloseHours,
+      autoCloseInterruptedSessionsEnabled:
+          _therapistSessionSettings.autoCloseInterruptedSessionsEnabled,
+    );
+    if (!evaluation.shouldAutoClose) {
+      return false;
+    }
+
+    _interruptedSessionAutoCloseInFlight = true;
+    _logSessionDecision(
+      source: 'persisted',
+      decision: 'AUTO_CLOSE_INTERRUPTED',
+      sessionId: sessionId,
+      reason: _interruptedAutoCloseReasonCode,
+    );
+    unawaited(_autoCloseInterruptedSession(persisted, evaluation));
+    return true;
+  }
+
+  Future<void> _autoCloseInterruptedSession(
+    TherapySessionRecord persisted,
+    InterruptedSessionAutoCloseEvaluation evaluation,
+  ) async {
+    final sessionId = persisted.sessionId.trim();
+    if (sessionId.isEmpty) {
+      _interruptedSessionAutoCloseInFlight = false;
+      return;
+    }
+
+    final therapistId = _resolveActorTherapistId();
+    final gameId = persisted.latestGameId.trim().isNotEmpty
+        ? persisted.latestGameId.trim()
+        : _selectedGameId;
+    final interruptedAtUtc = persisted.interruptedAtUtc;
+    final interruptedAgeMinutes = evaluation.interruptedAge?.inMinutes ?? 0;
+    final autoCloseWindowHours = evaluation.autoCloseWindowHours;
+
+    try {
+      await SessionJournalService.upsertSessionState(
+        sessionId: sessionId,
+        studentId: widget.student.id,
+        therapistId: therapistId,
+        state: SessionLifecycleState.failedTechnical,
+        latestGameId: gameId,
+        reasonCode: _interruptedAutoCloseReasonCode,
+        metadata: <String, dynamic>{
+          'origin': 'mobile_auto_close_policy',
+          'sourceState': SessionLifecycleState.interrupted.wireValue,
+          'autoCloseWindowHours': autoCloseWindowHours,
+          'interruptedAtUtc': interruptedAtUtc?.toIso8601String() ?? '',
+          'interruptedAgeMinutes': interruptedAgeMinutes,
+          'autoCloseState': evaluation.state.name,
+        },
+      );
+
+      await SessionJournalService.appendSessionEvent(
+        sessionId: sessionId,
+        studentId: widget.student.id,
+        therapistId: therapistId,
+        eventType: 'INTERRUPTED_SESSION_AUTO_CLOSED',
+        gameId: gameId,
+        details: <String, dynamic>{
+          'reasonCode': _interruptedAutoCloseReasonCode,
+          'autoCloseWindowHours': autoCloseWindowHours,
+          'interruptedAtUtc': interruptedAtUtc?.toIso8601String() ?? '',
+          'interruptedAgeMinutes': interruptedAgeMinutes,
+          'autoCloseState': evaluation.state.name,
+        },
+      );
+
+      _markSessionAsRecentlyEnded(sessionId);
+      _clearDeferredHandoff(
+        sessionId: sessionId,
+        source: 'persisted',
+        reasonCode: _interruptedAutoCloseReasonCode,
+      );
+      if (mounted) {
+        setState(() {
+          if (_remoteSessionIdPendingDecision == sessionId) {
+            _requiresSessionDecision = false;
+            _remoteSessionIdPendingDecision = null;
+          }
+          if (_activeSessionId.trim() == sessionId) {
+            _activeSessionId = _buildLocalSessionId();
+            _sessionAttachReady = false;
+          }
+        });
+      }
+      _logSessionDecision(
+        source: 'persisted',
+        decision: 'AUTO_CLOSE_COMPLETED',
+        sessionId: sessionId,
+        reason: _interruptedAutoCloseReasonCode,
+      );
+    } catch (e) {
+      debugPrint(
+        '[ControlScreen] Interrupted session auto-close failed: '
+        'session=$sessionId, error=$e',
+      );
+    } finally {
+      _interruptedSessionAutoCloseInFlight = false;
+      await _refreshPersistedSessionSnapshot(triggerPrompt: true);
+    }
+  }
+
   Future<void> _persistRuntimeSessionState(
     SessionStateUpdateSignal sessionUpdate,
   ) async {
     final sessionId = sessionUpdate.sessionId.trim();
     if (sessionId.isEmpty) {
+      return;
+    }
+
+    final activeSessionId = _activeSessionId.trim();
+    final shouldIgnoreForeignSessionSignal = _sessionAttachReady &&
+        activeSessionId.isNotEmpty &&
+        sessionId != activeSessionId &&
+        !_requiresSessionDecision;
+    if (shouldIgnoreForeignSessionSignal) {
+      debugPrint(
+        '[ControlScreen] Ignoring runtime session state from foreign session '
+        'while attached: incoming=$sessionId active=$activeSessionId '
+        'state=${sessionUpdate.state.wireValue}',
+      );
       return;
     }
 
@@ -1041,7 +1967,7 @@ class _ControlScreenState extends State<ControlScreen>
           reasonCode: command,
           metadata: <String, dynamic>{
             'origin': 'mobile_command',
-            'resumeFromSaved': _resumeFromSavedPreference,
+            'resumeFromSaved': false,
           },
         );
         await SessionJournalService.appendSessionEvent(
@@ -1053,7 +1979,7 @@ class _ControlScreenState extends State<ControlScreen>
               : 'GAME_STARTED',
           gameId: selectedGameId,
           details: <String, dynamic>{
-            'resumeFromSaved': _resumeFromSavedPreference,
+            'resumeFromSaved': false,
             'config': _buildSelectedGameConfigSnapshot(),
           },
         );
@@ -1225,27 +2151,22 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   String _describePresenceReason(String reasonCode) {
-    final normalized = reasonCode.trim();
+    final normalized = reasonCode.trim().toUpperCase();
     if (normalized.isEmpty) {
-      return 'unknown reason';
+      return '${OpsErrorCatalog.buildReasonTag(normalized)} unknown reason';
     }
 
-    switch (normalized) {
-      case 'APP_PAUSED':
-        return 'app paused';
-      case 'APP_RESUMED':
-        return 'app resumed';
-      case 'APP_FOCUS_LOST':
-        return 'focus lost';
-      case 'APP_FOCUS_GAINED':
-        return 'focus regained';
-      case 'APP_QUIT':
-        return 'app quit';
-      case 'TCP_CLIENT_CONNECTED':
-        return 'transport connected';
-      default:
-        return normalized;
-    }
+    final reasonTag = OpsErrorCatalog.buildReasonTag(normalized);
+    final detail = switch (normalized) {
+      'APP_PAUSED' => 'app paused',
+      'APP_RESUMED' => 'app resumed',
+      'APP_FOCUS_LOST' => 'focus lost',
+      'APP_FOCUS_GAINED' => 'focus regained',
+      'APP_QUIT' => 'app quit',
+      'TCP_CLIENT_CONNECTED' => 'transport connected',
+      _ => normalized,
+    };
+    return '$reasonTag $detail';
   }
 
   void _handleDevicePresenceFeedback({
@@ -1433,11 +2354,11 @@ class _ControlScreenState extends State<ControlScreen>
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Catalog sync failed: $e'),
-          backgroundColor: Colors.red,
-        ),
+      _enqueueIncidentAlert(
+        title: 'Catalog sync failed',
+        message: 'Catalog sync failed: $e',
+        reasonCode: OpsErrorCatalog.tryExtractReasonCode(e) ?? 'UNSPECIFIED',
+        severity: OperatorIncidentSeverity.error,
       );
     } finally {
       if (mounted) {
@@ -1506,11 +2427,11 @@ class _ControlScreenState extends State<ControlScreen>
         _contentActionsInFlight.remove(state.gameId);
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Install/update failed for ${state.gameId}: $e'),
-          backgroundColor: Colors.red,
-        ),
+      _enqueueIncidentAlert(
+        title: 'Install/update failed',
+        message: 'Install/update failed for ${state.gameId}: $e',
+        reasonCode: OpsErrorCatalog.tryExtractReasonCode(e) ?? 'UNSPECIFIED',
+        severity: OperatorIncidentSeverity.error,
       );
     }
   }
@@ -1571,11 +2492,11 @@ class _ControlScreenState extends State<ControlScreen>
         );
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Uninstall failed for ${state.gameId}: $e'),
-          backgroundColor: Colors.red,
-        ),
+      _enqueueIncidentAlert(
+        title: 'Uninstall failed',
+        message: 'Uninstall failed for ${state.gameId}: $e',
+        reasonCode: OpsErrorCatalog.tryExtractReasonCode(e) ?? 'UNSPECIFIED',
+        severity: OperatorIncidentSeverity.error,
       );
     } finally {
       if (mounted) {
@@ -1630,6 +2551,11 @@ class _ControlScreenState extends State<ControlScreen>
     if (_wasSessionRecentlyEnded(remoteSessionId) &&
         !hasStrongNonTerminalState &&
         !hasStrongNonTerminalRuntime) {
+      _clearDeferredHandoff(
+        sessionId: remoteSessionId,
+        source: 'runtime',
+        reasonCode: 'SESSION_RECENTLY_TERMINAL',
+      );
       if (_requiresSessionDecision && mounted) {
         setState(() {
           _requiresSessionDecision = false;
@@ -1647,6 +2573,11 @@ class _ControlScreenState extends State<ControlScreen>
         SessionRecoveryPolicy.isTerminalState(remoteState);
     if (isRemoteTerminal) {
       _markSessionAsRecentlyEnded(remoteSessionId);
+      _clearDeferredHandoff(
+        sessionId: remoteSessionId,
+        source: 'runtime',
+        reasonCode: 'REMOTE_STATE_TERMINAL',
+      );
       if (_requiresSessionDecision && mounted) {
         setState(() {
           _requiresSessionDecision = false;
@@ -1664,8 +2595,59 @@ class _ControlScreenState extends State<ControlScreen>
     );
 
     if (needsDecision) {
-      _remoteSessionIdPendingDecision = remoteSessionId;
-      _requiresSessionDecision = true;
+      if (!_isSessionDecisionAllowedByContext()) {
+        _markDeferredHandoff(
+          sessionId: remoteSessionId,
+          reasonCode: 'CONTEXT_NOT_ENTRY_OR_RECONNECT',
+          source: 'runtime',
+        );
+        _logSessionDecision(
+          source: 'runtime',
+          decision: 'SUPPRESS',
+          sessionId: remoteSessionId,
+          reason: 'CONTEXT_NOT_ENTRY_OR_RECONNECT',
+        );
+        return;
+      }
+
+      final recoveryEvaluation = _evaluateRecoveryWindowState(
+        remoteSessionNeedsDecision: true,
+      );
+      if (recoveryEvaluation.shouldAutoRecoverSilently) {
+        _clearDeferredHandoff(
+          sessionId: remoteSessionId,
+          source: 'runtime',
+          reasonCode: 'RECOVERY_UNDER_WINDOW',
+        );
+        unawaited(
+          _attemptUnderWindowRecovery(
+            remoteSessionId,
+            source: 'runtime',
+          ),
+        );
+        return;
+      }
+      _clearDeferredHandoff(
+        sessionId: remoteSessionId,
+        source: 'runtime',
+        reasonCode: 'REVIEW_DIALOG_OPENED',
+      );
+
+      if (mounted) {
+        setState(() {
+          _remoteSessionIdPendingDecision = remoteSessionId;
+          _requiresSessionDecision = true;
+        });
+      } else {
+        _remoteSessionIdPendingDecision = remoteSessionId;
+        _requiresSessionDecision = true;
+      }
+      _logSessionDecision(
+        source: 'runtime',
+        decision: 'SHOW_DIALOG',
+        sessionId: remoteSessionId,
+        reason: _recoveryStateReasonCode(recoveryEvaluation.state),
+      );
       _promptSessionDecisionIfNeeded();
       return;
     }
@@ -1674,6 +2656,11 @@ class _ControlScreenState extends State<ControlScreen>
         remoteState == SessionLifecycleState.created &&
             remoteSessionId != _activeSessionId;
     final shouldClearDecisionState = _requiresSessionDecision;
+    _clearDeferredHandoff(
+      sessionId: remoteSessionId,
+      source: 'runtime',
+      reasonCode: 'RUNTIME_GATE_CLEARED',
+    );
 
     if (!shouldUpdateActiveSession && !shouldClearDecisionState) {
       return;
@@ -1713,7 +2700,7 @@ class _ControlScreenState extends State<ControlScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Gra zakonczona. Mozesz zmienic ustawienia i uruchomic nowa runde.',
+            'Game completed. You can adjust settings and start a new round.',
           ),
           duration: Duration(seconds: 2),
         ),
@@ -1722,7 +2709,7 @@ class _ControlScreenState extends State<ControlScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Sesja zakonczona (${state.wireValue}${runtime == null ? '' : ', runtime=${runtime.wireValue}'}).',
+            'Session ended (${state.wireValue}${runtime == null ? '' : ', runtime=${runtime.wireValue}'}).',
           ),
           duration: const Duration(seconds: 2),
         ),
@@ -1800,6 +2787,34 @@ class _ControlScreenState extends State<ControlScreen>
       return;
     }
 
+    if (!_isSessionDecisionAllowedByContext()) {
+      final deferredSessionId = _remoteSessionIdPendingDecision?.trim() ?? '';
+      if (deferredSessionId.isNotEmpty) {
+        _markDeferredHandoff(
+          sessionId: deferredSessionId,
+          reasonCode: 'CONTEXT_NOT_ENTRY_OR_RECONNECT',
+          source: 'prompt',
+        );
+      }
+      _logSessionDecision(
+        source: 'prompt',
+        decision: 'SKIP_DIALOG',
+        sessionId: _remoteSessionIdPendingDecision,
+        reason: 'CONTEXT_NOT_ENTRY_OR_RECONNECT',
+      );
+      setState(() {
+        _requiresSessionDecision = false;
+        _remoteSessionIdPendingDecision = null;
+      });
+      return;
+    }
+
+    _logSessionDecision(
+      source: 'prompt',
+      decision: 'OPEN_DIALOG',
+      sessionId: _remoteSessionIdPendingDecision,
+      reason: 'PENDING_DECISION',
+    );
     _isSessionDecisionDialogOpen = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_showSessionDecisionDialog());
@@ -1820,28 +2835,60 @@ class _ControlScreenState extends State<ControlScreen>
       return;
     }
 
+    if (!_isSessionDecisionAllowedByContext()) {
+      _markDeferredHandoff(
+        sessionId: remoteSessionId,
+        reasonCode: 'CONTEXT_NOT_ENTRY_OR_RECONNECT',
+        source: 'dialog',
+      );
+      _logSessionDecision(
+        source: 'dialog',
+        decision: 'SKIP_DIALOG',
+        sessionId: remoteSessionId,
+        reason: 'CONTEXT_CHANGED',
+      );
+      setState(() {
+        _requiresSessionDecision = false;
+        _remoteSessionIdPendingDecision = null;
+      });
+      _isSessionDecisionDialogOpen = false;
+      return;
+    }
+
+    final recoveryWindowMinutes =
+        _therapistSessionSettings.sessionRecoveryWindowMinutes;
     final action = await showDialog<_SessionGateAction>(
       context: context,
       barrierDismissible: false,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('Session handoff needed'),
-          content: const Text(
-            'The headset reports an unfinished session.\n\n'
-            'Continue that session or start a new one?',
+        return PopScope(
+          canPop: false,
+          child: AlertDialog(
+            title: const Text('Session handoff needed'),
+            content: Text(
+              'The headset reports another unfinished session and the '
+              'recovery window ($recoveryWindowMinutes min) has passed.\n\n'
+              'Choose whether to continue it, start a new session, '
+              'or keep current context for now.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () =>
+                    Navigator.of(context).pop(_SessionGateAction.keepCurrent),
+                child: const Text('Keep current'),
+              ),
+              TextButton(
+                onPressed: () =>
+                    Navigator.of(context).pop(_SessionGateAction.resume),
+                child: const Text('Continue unfinished'),
+              ),
+              ElevatedButton(
+                onPressed: () =>
+                    Navigator.of(context).pop(_SessionGateAction.startNew),
+                child: const Text('Start new session'),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () =>
-                  Navigator.of(context).pop(_SessionGateAction.resume),
-              child: const Text('Continue'),
-            ),
-            ElevatedButton(
-              onPressed: () =>
-                  Navigator.of(context).pop(_SessionGateAction.startNew),
-              child: const Text('Start new'),
-            ),
-          ],
         );
       },
     );
@@ -1852,6 +2899,9 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     switch (action) {
+      case _SessionGateAction.keepCurrent:
+        await _handleKeepCurrentDecision(remoteSessionId);
+        break;
       case _SessionGateAction.resume:
         await _handleResumeDecision(remoteSessionId);
         break;
@@ -1859,6 +2909,7 @@ class _ControlScreenState extends State<ControlScreen>
         await _handleStartNewDecision(remoteSessionId);
         break;
       case null:
+        await _handleKeepCurrentDecision(remoteSessionId);
         break;
     }
 
@@ -1868,13 +2919,65 @@ class _ControlScreenState extends State<ControlScreen>
     }
   }
 
+  Future<void> _handleKeepCurrentDecision(String remoteSessionId) async {
+    _logSessionDecision(
+      source: 'dialog',
+      decision: 'KEEP_CURRENT',
+      sessionId: remoteSessionId,
+      reason: 'THERAPIST_KEEP_CURRENT',
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _requiresSessionDecision = false;
+      _remoteSessionIdPendingDecision = null;
+      _lastConnectionLostAtUtc = null;
+    });
+    _markDeferredHandoff(
+      sessionId: remoteSessionId,
+      reasonCode: 'THERAPIST_KEEP_CURRENT',
+      source: 'dialog',
+    );
+
+    if (_isConnected && !_sessionAttachReady) {
+      await _ensureSessionAttached(
+        reasonCode: 'HANDOFF_KEEP_CURRENT',
+        force: true,
+        sessionIdOverride: _activeSessionId,
+      );
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Keeping current session context. You can reconnect later to hand off.',
+        ),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
   Future<void> _handleResumeDecision(String remoteSessionId) async {
+    _logSessionDecision(
+      source: 'dialog',
+      decision: 'RESUME_REMOTE',
+      sessionId: remoteSessionId,
+      reason: 'THERAPIST_CONTINUE_UNFINISHED',
+    );
     final resolvedGameId = _resolveRemoteGameIdForResume();
 
     setState(() {
       _activeSessionId = remoteSessionId;
       _requiresSessionDecision = false;
       _remoteSessionIdPendingDecision = null;
+      _lastConnectionLostAtUtc = null;
       _sessionAttachReady = false;
       _workflowStep = _WorkflowStep.gameSetup;
       _isVideoPreviewExpanded = true;
@@ -1882,92 +2985,24 @@ class _ControlScreenState extends State<ControlScreen>
         _selectedGameId = resolvedGameId;
       }
     });
+    _clearDeferredHandoff(
+      sessionId: remoteSessionId,
+      source: 'dialog',
+      reasonCode: 'THERAPIST_CONTINUE_UNFINISHED',
+    );
     await _ensureSessionAttached(
       reasonCode: 'HANDOFF_RESUME',
       force: true,
     );
-    if (!mounted || !_sessionAttachReady) {
-      return;
-    }
-
-    final strategy = await _showResumeStrategyDialog(_selectedGameEntry);
-    if (!mounted || strategy == null) {
-      return;
-    }
-
-    switch (strategy) {
-      case _ResumeStrategy.fromSavedState:
-        _resumeFromSavedPreference = true;
-        await _sendCommand(
-          CriticalCommandIds.resumeGame,
-          extraPayload: const <String, dynamic>{
-            'resumeFromSaved': true,
-          },
-        );
-        break;
-      case _ResumeStrategy.fromBeginning:
-        _resumeFromSavedPreference = false;
-        await _sendCommand(
-          CriticalCommandIds.startGame,
-          extraPayload: const <String, dynamic>{
-            'resumeFromSaved': false,
-          },
-        );
-        break;
-    }
-  }
-
-  Future<_ResumeStrategy?> _showResumeStrategyDialog(
-    _GameCatalogEntry entry,
-  ) async {
-    if (!entry.supportsSaveResume) {
-      await showDialog<void>(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            title: const Text('Kontynuacja gry'),
-            content: Text(
-              'Gra `${entry.title}` nie ma jeszcze pelnego saveGame. '
-              'Uruchomimy od poczatku.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('OK'),
-              ),
-            ],
-          );
-        },
-      );
-      return _ResumeStrategy.fromBeginning;
-    }
-
-    return showDialog<_ResumeStrategy>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Tryb wznowienia'),
+    if (mounted && _sessionAttachReady) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
           content: Text(
-            'Dla gry `${entry.title}` wybierz sposob kontynuacji:\n\n'
-            '1) Start od poczatku\n'
-            '2) Wczytaj ostatni zapisany status',
+            'Session continued. Use Start/Resume/Pause controls to proceed.',
           ),
-          actions: [
-            TextButton(
-              onPressed: () =>
-                  Navigator.of(context).pop(_ResumeStrategy.fromBeginning),
-              child: const Text('Od poczatku'),
-            ),
-            ElevatedButton(
-              onPressed: () =>
-                  Navigator.of(context).pop(_ResumeStrategy.fromSavedState),
-              child: const Text('Wznow zapis'),
-            ),
-          ],
-        );
-      },
-    );
+        ),
+      );
+    }
   }
 
   String? _resolveRemoteGameIdForResume() {
@@ -1986,30 +3021,47 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   Future<void> _handleStartNewDecision(String remoteSessionId) async {
+    _logSessionDecision(
+      source: 'dialog',
+      decision: 'START_NEW_SELECTED',
+      sessionId: remoteSessionId,
+      reason: 'THERAPIST_START_NEW_REQUESTED',
+    );
     final confirmed = await showDialog<bool>(
           context: context,
+          barrierDismissible: false,
           builder: (context) {
-            return AlertDialog(
-              title: const Text('Potwierdz nowa sesje'),
-              content: const Text(
-                'Wyslemy END_SESSION dla aktywnej sesji i utworzymy nowa. Kontynuowac?',
+            return PopScope(
+              canPop: false,
+              child: AlertDialog(
+                title: const Text('Start a new session?'),
+                content: const Text(
+                  'This sends END_SESSION for the unfinished headset session '
+                  'and creates a new one. Continue?',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text('Cancel'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    child: const Text('Start new'),
+                  ),
+                ],
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('Anuluj'),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text('Tak'),
-                ),
-              ],
             );
           },
         ) ??
         false;
 
     if (!confirmed || !mounted) {
+      _logSessionDecision(
+        source: 'dialog',
+        decision: 'START_NEW_CANCELLED',
+        sessionId: remoteSessionId,
+        reason: 'THERAPIST_CANCELLED_CONFIRMATION',
+      );
       return;
     }
 
@@ -2017,7 +3069,10 @@ class _ControlScreenState extends State<ControlScreen>
       await _connection.sendCriticalCommand(
         commandId: CriticalCommandIds.endSession,
         sessionId: remoteSessionId,
-        payload: _buildCriticalPayload(CriticalCommandIds.endSession),
+        payload: _buildCriticalPayload(
+          CriticalCommandIds.endSession,
+          sessionId: remoteSessionId,
+        ),
         expiresAtUtc: DateTime.now().toUtc().add(const Duration(seconds: 30)),
       );
       _markSessionAsRecentlyEnded(remoteSessionId);
@@ -2031,10 +3086,16 @@ class _ControlScreenState extends State<ControlScreen>
         _activeSessionId = _buildLocalSessionId();
         _requiresSessionDecision = false;
         _remoteSessionIdPendingDecision = null;
+        _lastConnectionLostAtUtc = null;
         _sessionAttachReady = false;
         _workflowStep = _WorkflowStep.gameCatalog;
         _isVideoPreviewExpanded = false;
       });
+      _clearDeferredHandoff(
+        sessionId: remoteSessionId,
+        source: 'dialog',
+        reasonCode: 'END_SESSION_AND_ATTACH_OK',
+      );
       await _ensureSessionAttached(
         reasonCode: 'HANDOFF_START_NEW',
         force: true,
@@ -2045,18 +3106,35 @@ class _ControlScreenState extends State<ControlScreen>
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Poprzednia sesja zakonczona. Mozesz uruchomic nowa.'),
+          content: Text('Previous session ended. You can start a new one.'),
         ),
+      );
+      _logSessionDecision(
+        source: 'dialog',
+        decision: 'START_NEW_COMPLETED',
+        sessionId: remoteSessionId,
+        reason: 'END_SESSION_AND_ATTACH_OK',
       );
     } catch (e) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Nie udalo sie zakonczyc sesji: $e'),
-          backgroundColor: Colors.red,
-        ),
+
+      final errorSummary = OpsErrorCatalog.buildOperatorSummary(
+        error: e,
+      );
+      _logSessionDecision(
+        source: 'dialog',
+        decision: 'START_NEW_FAILED',
+        sessionId: remoteSessionId,
+        reason: 'END_SESSION_FAILED',
+      );
+      _enqueueIncidentAlert(
+        title: 'Could not end previous session',
+        message: 'Could not end previous session: $errorSummary',
+        reasonCode: OpsErrorCatalog.tryExtractReasonCode(e) ??
+            'END_SESSION_STOP_FAILED',
+        severity: OperatorIncidentSeverity.error,
       );
     }
   }
@@ -2082,6 +3160,13 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     if (_requiresSessionDecision && command != CriticalCommandIds.endSession) {
+      _logSessionDecision(
+        source: 'command',
+        decision: 'BLOCK_COMMAND',
+        commandId: command,
+        sessionId: _remoteSessionIdPendingDecision,
+        reason: 'PENDING_HANDOFF_DECISION',
+      );
       if (!mounted) {
         return false;
       }
@@ -2098,7 +3183,13 @@ class _ControlScreenState extends State<ControlScreen>
 
     if (CriticalCommandIds.isCritical(command) &&
         command != CriticalCommandIds.sessionAttach &&
+        command != CriticalCommandIds.endSession &&
         !_sessionAttachReady) {
+      _logAttachDecision(
+        decision: 'REQUIRE_ATTACH_PRECONDITION',
+        reasonCode: 'COMMAND_PRECONDITION',
+        commandId: command,
+      );
       await _ensureSessionAttached(
         reasonCode: 'COMMAND_PRECONDITION',
         force: true,
@@ -2115,6 +3206,20 @@ class _ControlScreenState extends State<ControlScreen>
         );
         return false;
       }
+    } else if (command == CriticalCommandIds.endSession &&
+        !_sessionAttachReady) {
+      _logAttachDecision(
+        decision: 'BYPASS_ATTACH_PRECONDITION',
+        reasonCode: 'END_SESSION_OVERRIDE',
+        commandId: command,
+      );
+    } else if (CriticalCommandIds.isCritical(command) &&
+        command != CriticalCommandIds.sessionAttach) {
+      _logAttachDecision(
+        decision: 'PRECONDITION_ALREADY_SATISFIED',
+        reasonCode: 'COMMAND_PRECONDITION',
+        commandId: command,
+      );
     }
 
     final commandSessionId = CriticalCommandIds.isCritical(command)
@@ -2126,11 +3231,11 @@ class _ControlScreenState extends State<ControlScreen>
         return false;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Cannot resolve active session id for this command.'),
-          backgroundColor: Colors.red,
-        ),
+      _enqueueIncidentAlert(
+        title: 'Critical command blocked',
+        message: 'Cannot resolve active session id for this command.',
+        reasonCode: 'SESSION_ID_REQUIRED',
+        severity: OperatorIncidentSeverity.error,
       );
       return false;
     }
@@ -2140,7 +3245,11 @@ class _ControlScreenState extends State<ControlScreen>
         await _connection.sendCriticalCommand(
           commandId: command,
           sessionId: commandSessionId,
-          payload: _buildCriticalPayload(command, extraPayload: extraPayload),
+          payload: _buildCriticalPayload(
+            command,
+            sessionId: commandSessionId,
+            extraPayload: extraPayload,
+          ),
           expiresAtUtc: DateTime.now().toUtc().add(const Duration(seconds: 30)),
         );
       } else {
@@ -2195,11 +3304,20 @@ class _ControlScreenState extends State<ControlScreen>
         return false;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed: $command ($e)'),
-          backgroundColor: Colors.red,
-        ),
+      final isCritical = CriticalCommandIds.isCritical(command);
+      final errorSummary = OpsErrorCatalog.buildOperatorSummary(
+        error: e,
+      );
+      final message = isCritical
+          ? 'Failed: $command - $errorSummary'
+          : 'Failed: $command ($e)';
+
+      _enqueueIncidentAlert(
+        title: 'Command failed: $command',
+        message: message,
+        reasonCode: OpsErrorCatalog.tryExtractReasonCode(e) ??
+            (isCritical ? 'UNSPECIFIED' : 'UNKNOWN'),
+        severity: OperatorIncidentSeverity.error,
       );
       return false;
     }
@@ -2207,16 +3325,27 @@ class _ControlScreenState extends State<ControlScreen>
 
   Map<String, dynamic> _buildCriticalPayload(
     String command, {
+    required String sessionId,
     Map<String, dynamic>? extraPayload,
   }) {
+    final therapistId = _resolveActorTherapistId();
+    final ownerKey = _resolveOwnerKey(therapistIdOverride: therapistId);
+    final sessionKey = _resolveSessionKey(
+      sessionId,
+      therapistIdOverride: therapistId,
+    );
     final payload = <String, dynamic>{
+      'sessionId': sessionId,
       'studentId': widget.student.id,
-      'therapistId': _resolveActorTherapistId(),
+      'patientId': widget.student.id,
+      'therapistId': therapistId,
+      'ownerKey': ownerKey,
+      'sessionKey': sessionKey,
     };
 
     if (_gameScopedCriticalCommands.contains(command)) {
       payload['gameId'] = _selectedGameId;
-      payload['resumeFromSaved'] = _resumeFromSavedPreference;
+      payload['resumeFromSaved'] = false;
     }
 
     if (command == CriticalCommandIds.startGame && _isDemoCubeGameSelected) {
@@ -2231,12 +3360,21 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     if (command == CriticalCommandIds.startGame && _isPulseTargetGameSelected) {
+      final adaptiveDifficultySensitivity = double.parse(
+        _therapistSessionSettings.adaptiveDifficultySensitivity
+            .toStringAsFixed(2),
+      );
       payload['gameConfigType'] = 'pulse_targets_config_v1';
       payload['gameConfigVersion'] = 1;
       payload['gameConfigJson'] = jsonEncode(<String, dynamic>{
         'targetCount': _pulseTargetCount,
         'targetSpeed': double.parse(_pulseTargetSpeed.toStringAsFixed(2)),
         'targetScale': double.parse(_pulseTargetScale.toStringAsFixed(2)),
+        'adaptiveDifficultyEnabled':
+            _therapistSessionSettings.adaptiveDifficultyEnabled,
+        'adaptiveDifficultySensitivity': adaptiveDifficultySensitivity,
+        'adaptiveDifficultyLevel': _resolveAdaptiveDifficultyLevel(),
+        'labelPipelineEnabled': _therapistSessionSettings.labelPipelineEnabled,
         'version': 1,
       });
     }
@@ -2252,6 +3390,19 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     return payload;
+  }
+
+  int _resolveAdaptiveDifficultyLevel() {
+    final normalized =
+        _therapistSessionSettings.adaptiveDifficultySensitivity.clamp(0.0, 1.0);
+    final scaled = 1 + (normalized * 4).round();
+    if (scaled < 1) {
+      return 1;
+    }
+    if (scaled > 5) {
+      return 5;
+    }
+    return scaled;
   }
 
   Future<void> _runPrimaryAction(Future<void> Function() action) async {
@@ -2274,7 +3425,7 @@ class _ControlScreenState extends State<ControlScreen>
     }
   }
 
-  Future<void> _startFromSetup({required bool resumeFromSaved}) async {
+  Future<void> _startFromSetup() async {
     if (_isGameRuntimeActive) {
       if (!mounted) {
         return;
@@ -2309,13 +3460,10 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     await _runPrimaryAction(() async {
-      _resumeFromSavedPreference = resumeFromSaved;
       await _sendCommand(
-        resumeFromSaved
-            ? CriticalCommandIds.resumeGame
-            : CriticalCommandIds.startGame,
-        extraPayload: <String, dynamic>{
-          'resumeFromSaved': resumeFromSaved,
+        CriticalCommandIds.startGame,
+        extraPayload: const <String, dynamic>{
+          'resumeFromSaved': false,
         },
       );
     });
@@ -2330,7 +3478,7 @@ class _ControlScreenState extends State<ControlScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Restart jest dostepny tylko podczas aktywnej gry.',
+            'Restart is available only while a game is active.',
           ),
           backgroundColor: Colors.orange,
         ),
@@ -2366,7 +3514,6 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     await _runPrimaryAction(() async {
-      _resumeFromSavedPreference = false;
       final stopSent = await _sendCommand(
         CriticalCommandIds.stopGame,
         showSuccessSnack: false,
@@ -2389,22 +3536,26 @@ class _ControlScreenState extends State<ControlScreen>
     if (_isGameRuntimeActive) {
       final decision = await showDialog<bool>(
             context: context,
+            barrierDismissible: false,
             builder: (context) {
-              return AlertDialog(
-                title: const Text('Wrocic do wyboru gry?'),
-                content: const Text(
-                  'To zatrzyma aktualna gre i przeniesie do katalogu mini-gier.',
+              return PopScope(
+                canPop: false,
+                child: AlertDialog(
+                  title: const Text('Return to game catalog?'),
+                  content: const Text(
+                    'This will stop the current game and return to the game catalog.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: const Text('Cancel'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      child: const Text('Return'),
+                    ),
+                  ],
                 ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(false),
-                    child: const Text('Anuluj'),
-                  ),
-                  ElevatedButton(
-                    onPressed: () => Navigator.of(context).pop(true),
-                    child: const Text('Tak, wroc'),
-                  ),
-                ],
               );
             },
           ) ??
@@ -2454,6 +3605,12 @@ class _ControlScreenState extends State<ControlScreen>
     final sessionIdToEnd = _resolveSessionIdForCriticalCommand(
       CriticalCommandIds.endSession,
     );
+    _logAttachDecision(
+      decision: 'END_SESSION_REQUEST',
+      reasonCode: 'THERAPIST_CONFIRMED_END',
+      commandId: CriticalCommandIds.endSession,
+      sessionId: sessionIdToEnd,
+    );
     final ended = await _sendCommand(
       CriticalCommandIds.endSession,
       showSuccessSnack: false,
@@ -2463,6 +3620,11 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     _markSessionAsRecentlyEnded(sessionIdToEnd);
+    _clearDeferredHandoff(
+      sessionId: sessionIdToEnd,
+      source: 'command',
+      reasonCode: 'THERAPIST_CONFIRMED_END',
+    );
     _markSessionAsRecentlyEnded(_lastSessionStateUpdateSessionId);
     _markSessionAsRecentlyEnded(_lastRuntimeStatusSessionId);
     _markSessionAsRecentlyEnded(_remoteSessionIdPendingDecision);
@@ -2484,28 +3646,32 @@ class _ControlScreenState extends State<ControlScreen>
 
     final choice = await showDialog<_ExitChoice>(
       context: context,
+      barrierDismissible: false,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('Zamknac sterowanie?'),
-          content: const Text(
-            'Czy zakonczyc sesje teraz, czy zostawic ja jako niedokonczona?',
+        return PopScope(
+          canPop: false,
+          child: AlertDialog(
+            title: const Text('Close controller?'),
+            content: const Text(
+              'Do you want to end the session now, or leave it unfinished and exit?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(_ExitChoice.cancel),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () =>
+                    Navigator.of(context).pop(_ExitChoice.keepUnfinished),
+                child: const Text('Leave unfinished'),
+              ),
+              ElevatedButton(
+                onPressed: () =>
+                    Navigator.of(context).pop(_ExitChoice.endSession),
+                child: const Text('End session'),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(_ExitChoice.cancel),
-              child: const Text('Anuluj'),
-            ),
-            TextButton(
-              onPressed: () =>
-                  Navigator.of(context).pop(_ExitChoice.keepUnfinished),
-              child: const Text('Zostaw niedokonczona'),
-            ),
-            ElevatedButton(
-              onPressed: () =>
-                  Navigator.of(context).pop(_ExitChoice.endSession),
-              child: const Text('Zakoncz sesje'),
-            ),
-          ],
         );
       },
     );
@@ -2578,6 +3744,7 @@ class _ControlScreenState extends State<ControlScreen>
                 : '${_selectedGameEntry.title}: session',
           ),
           actions: [
+            if (_hasDeferredHandoff) _buildDeferredHandoffBadgeAction(),
             Padding(
               padding: const EdgeInsets.only(right: 12),
               child: Center(
@@ -2714,6 +3881,557 @@ class _ControlScreenState extends State<ControlScreen>
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeferredHandoffBadgeAction() {
+    final sessionId = _deferredHandoffSessionIdValue;
+    final hasDeferred = sessionId.isNotEmpty;
+    final accent = Colors.orange.shade800;
+
+    return IconButton(
+      tooltip: hasDeferred
+          ? 'Deferred handoff pending. Tap to review.'
+          : 'No deferred handoff',
+      onPressed: hasDeferred ? () => unawaited(_reviewDeferredHandoff()) : null,
+      icon: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          const Icon(Icons.assignment_late_outlined),
+          if (hasDeferred)
+            Positioned(
+              right: -1,
+              top: -1,
+              child: Container(
+                width: 11,
+                height: 11,
+                decoration: BoxDecoration(
+                  color: accent,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 1),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeferredHandoffBanner() {
+    final sessionId = _deferredHandoffSessionIdValue;
+    final shortSessionId = sessionId.length > 16
+        ? sessionId.substring(sessionId.length - 16)
+        : sessionId;
+    final reasonLabel =
+        _describeDeferredHandoffReason(_deferredHandoffReasonCode ?? '');
+    final deferredAt = _deferredHandoffMarkedAtUtc;
+    final deferredAtLabel = _formatTimelineTimestamp(deferredAt);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orange.shade200),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.assignment_late_outlined,
+            size: 16,
+            color: Colors.orange.shade800,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Deferred handoff pending',
+                  style: TextStyle(
+                    color: Colors.orange.shade900,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Unfinished session [$shortSessionId] was deferred due to '
+                  '$reasonLabel at $deferredAtLabel.',
+                  style: TextStyle(
+                    color: Colors.orange.shade900,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton(
+            onPressed: () => unawaited(_reviewDeferredHandoff()),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.orange.shade900,
+              side: BorderSide(color: Colors.orange.shade300),
+              visualDensity: VisualDensity.compact,
+            ),
+            child: const Text('Review'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _resolveTimelineSessionId() {
+    final activeSessionId = _activeSessionId.trim();
+    final lastSessionSignalId = _lastSessionStateUpdateSessionId?.trim() ?? '';
+    final lastRuntimeSignalId = _lastRuntimeStatusSessionId?.trim() ?? '';
+    final pendingDecisionSessionId =
+        _remoteSessionIdPendingDecision?.trim() ?? '';
+    final persistedSessionId = _latestPersistedSession?.sessionId.trim() ?? '';
+
+    for (final candidate in <String>[
+      lastSessionSignalId,
+      lastRuntimeSignalId,
+      pendingDecisionSessionId,
+      persistedSessionId,
+      activeSessionId,
+    ]) {
+      if (candidate.isNotEmpty) {
+        return candidate;
+      }
+    }
+
+    return '';
+  }
+
+  Future<void> _appendTimelineNote({
+    required String noteText,
+    required bool fromQuickTemplate,
+  }) async {
+    final normalizedNoteText = noteText.trim();
+    if (normalizedNoteText.isEmpty || _timelineNoteInFlight) {
+      return;
+    }
+
+    final sessionId = _resolveTimelineSessionId();
+    if (sessionId.isEmpty) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Session context is not ready yet. Wait for sync before adding notes.',
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _timelineNoteInFlight = true;
+      });
+    } else {
+      _timelineNoteInFlight = true;
+    }
+
+    try {
+      await SessionJournalService.appendTherapistTimelineNote(
+        sessionId: sessionId,
+        studentId: widget.student.id,
+        therapistId: _resolveActorTherapistId(),
+        noteText: normalizedNoteText,
+        gameId: _selectedGameId,
+        fromQuickTemplate: fromQuickTemplate,
+      );
+      await _refreshPersistedSessionSnapshot(triggerPrompt: false);
+      if (!mounted) {
+        return;
+      }
+
+      if (!fromQuickTemplate) {
+        _timelineNoteController.clear();
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Timeline note saved.'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      _enqueueIncidentAlert(
+        title: 'Could not save timeline note',
+        message: 'Could not save timeline note: $e',
+        reasonCode: OpsErrorCatalog.tryExtractReasonCode(e) ?? 'UNSPECIFIED',
+        severity: OperatorIncidentSeverity.error,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _timelineNoteInFlight = false;
+        });
+      } else {
+        _timelineNoteInFlight = false;
+      }
+    }
+  }
+
+  String _formatTimelineTimestamp(DateTime? eventAtUtc) {
+    if (eventAtUtc == null) {
+      return '--:--:--';
+    }
+
+    final local = eventAtUtc.toLocal();
+    final nowLocal = DateTime.now();
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
+    final second = local.second.toString().padLeft(2, '0');
+    final month = local.month.toString().padLeft(2, '0');
+    final day = local.day.toString().padLeft(2, '0');
+    final isSameDay = local.year == nowLocal.year &&
+        local.month == nowLocal.month &&
+        local.day == nowLocal.day;
+
+    return isSameDay
+        ? '$hour:$minute:$second'
+        : '$month-$day $hour:$minute:$second';
+  }
+
+  String _formatTimelineEventType(String eventType) {
+    switch (eventType.trim()) {
+      case SessionJournalService.therapistTimelineNoteEventType:
+        return 'Therapist note';
+      case 'CONTROLLER_CONNECTED':
+        return 'Controller connected';
+      case 'CONTROLLER_RECONNECTED':
+        return 'Controller reconnected';
+      case 'CONTROLLER_DISCONNECTED':
+        return 'Controller disconnected';
+      case 'SESSION_ATTACH_ACK':
+        return 'Session attached';
+      case 'RUNTIME_SESSION_STATE_UPDATE':
+        return 'Session state update';
+      case 'GAME_STARTED':
+        return 'Game started';
+      case 'GAME_RESUMED':
+        return 'Game resumed';
+      case 'GAME_PAUSED':
+        return 'Game paused';
+      case 'GAME_ENDED':
+        return 'Game ended';
+      case 'SESSION_ENDED':
+        return 'Session ended';
+      case 'SESSION_ENDED_BY_DECISION':
+        return 'Session ended by decision';
+      case 'INTERRUPTED_SESSION_AUTO_CLOSED':
+        return 'Interrupted session auto-closed';
+      case 'SESSION_HANDOFF_DEFERRED':
+        return 'Handoff deferred';
+      case 'SESSION_HANDOFF_DEFERRED_CLEARED':
+        return 'Handoff defer cleared';
+      default:
+        final compact = eventType.trim();
+        if (compact.isEmpty) {
+          return 'Unknown event';
+        }
+        final words = compact
+            .split('_')
+            .where((entry) => entry.trim().isNotEmpty)
+            .map((entry) {
+          final lower = entry.toLowerCase();
+          return '${lower[0].toUpperCase()}${lower.substring(1)}';
+        });
+        return words.join(' ');
+    }
+  }
+
+  String _formatTimelineEventSummary(SessionTimelineEvent event) {
+    if (event.isTherapistNote) {
+      return event.noteText;
+    }
+
+    final details = event.details;
+    final fragments = <String>[];
+    for (final key in <String>['state', 'reasonCode', 'reason', 'decision']) {
+      final value = details[key];
+      final text = value?.toString().trim() ?? '';
+      if (text.isEmpty) {
+        continue;
+      }
+      if (key == 'reasonCode') {
+        final knownTag = OpsErrorCatalog.tryBuildKnownReasonTag(text);
+        final reasonSummary = knownTag ?? text;
+        fragments.add('$key=$reasonSummary');
+        continue;
+      }
+      fragments.add('$key=$text');
+    }
+
+    if (fragments.isEmpty) {
+      return '';
+    }
+
+    return fragments.join(' | ');
+  }
+
+  Widget _buildTimelineEventTile(SessionTimelineEvent event) {
+    final title = _formatTimelineEventType(event.eventType);
+    final summary = _formatTimelineEventSummary(event);
+    final timestamp = _formatTimelineTimestamp(event.eventAtUtc);
+    final metaFragments = <String>[timestamp];
+    if (event.gameId.trim().isNotEmpty) {
+      metaFragments.add('game=${event.gameId.trim()}');
+    }
+    final metaLine = metaFragments.join(' | ');
+
+    final isNote = event.isTherapistNote;
+    final markerColor = isNote ? Colors.indigo.shade700 : Colors.blueGrey;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: markerColor.withValues(alpha: 0.25),
+        ),
+        color: markerColor.withValues(alpha: 0.06),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                isNote ? Icons.sticky_note_2_outlined : Icons.history,
+                size: 14,
+                color: markerColor,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    color: markerColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (summary.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              summary,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+          const SizedBox(height: 4),
+          Text(
+            metaLine,
+            style: TextStyle(
+              color: Colors.grey.shade700,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTherapistTimelinePanel() {
+    final sessionId = _resolveTimelineSessionId();
+    final hasSessionId = sessionId.isNotEmpty;
+    final templates = _therapistSessionSettings.timelineQuickNoteTemplates
+        .map((entry) => entry.trim())
+        .where((entry) => entry.isNotEmpty)
+        .toList(growable: false);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.timeline, size: 18),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Session timeline',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              if (hasSessionId)
+                Text(
+                  'session: ${sessionId.length > 16 ? sessionId.substring(sessionId.length - 16) : sessionId}',
+                  style: TextStyle(
+                    color: Colors.grey.shade700,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'System events and therapist notes in one stream.',
+            style: TextStyle(
+              color: Colors.grey.shade700,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (!hasSessionId)
+            _buildStateBanner(
+              icon: Icons.sync,
+              color: Colors.orange.shade800,
+              text:
+                  'Timeline waits for session context. Reconnect/attach to start logging notes.',
+            )
+          else ...[
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _timelineNoteController,
+                    enabled: !_timelineNoteInFlight,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (value) {
+                      if (_timelineNoteInFlight) {
+                        return;
+                      }
+                      unawaited(
+                        _appendTimelineNote(
+                          noteText: value,
+                          fromQuickTemplate: false,
+                        ),
+                      );
+                    },
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                      labelText: 'Add timeline note',
+                      hintText: 'Type note and press Enter',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: _timelineNoteInFlight
+                      ? null
+                      : () => unawaited(
+                            _appendTimelineNote(
+                              noteText: _timelineNoteController.text,
+                              fromQuickTemplate: false,
+                            ),
+                          ),
+                  icon: _timelineNoteInFlight
+                      ? const SizedBox(
+                          width: 12,
+                          height: 12,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.send, size: 16),
+                  label: const Text('Add'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (templates.isNotEmpty)
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final template in templates)
+                    ActionChip(
+                      label: Text(template),
+                      onPressed: _timelineNoteInFlight
+                          ? null
+                          : () => unawaited(
+                                _appendTimelineNote(
+                                  noteText: template,
+                                  fromQuickTemplate: true,
+                                ),
+                              ),
+                    ),
+                ],
+              ),
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 250,
+              child: StreamBuilder<List<SessionTimelineEvent>>(
+                stream: SessionJournalService.watchSessionTimeline(
+                  sessionId: sessionId,
+                  limit: 40,
+                ),
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Text(
+                        'Timeline unavailable: ${snapshot.error}',
+                        style: TextStyle(
+                          color: Colors.red.shade700,
+                          fontSize: 12,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    );
+                  }
+
+                  if (!snapshot.hasData) {
+                    return const Center(
+                      child: CircularProgressIndicator(),
+                    );
+                  }
+
+                  final events = snapshot.data!;
+                  if (events.isEmpty) {
+                    return Center(
+                      child: Text(
+                        'No timeline events yet.',
+                        style: TextStyle(
+                          color: Colors.grey.shade700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    );
+                  }
+
+                  return ListView.separated(
+                    itemCount: events.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 6),
+                    itemBuilder: (context, index) {
+                      return _buildTimelineEventTile(events[index]);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -2914,11 +4632,6 @@ class _ControlScreenState extends State<ControlScreen>
         _isGameRuntimePaused;
     final canEndGame =
         controlsReady && !_isPrimaryActionInFlight && _isGameRuntimeActive;
-    final canResumeFromSaved = controlsReady &&
-        !_isPrimaryActionInFlight &&
-        _isLaunchableContentState(contentState) &&
-        !_isGameRuntimeActive &&
-        entry.supportsSaveResume;
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -2941,9 +4654,8 @@ class _ControlScreenState extends State<ControlScreen>
             children: [
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: canStart
-                      ? () => unawaited(_startFromSetup(resumeFromSaved: false))
-                      : null,
+                  onPressed:
+                      canStart ? () => unawaited(_startFromSetup()) : null,
                   icon: const Icon(Icons.play_arrow),
                   label: const Text('Start'),
                   style:
@@ -3001,16 +4713,6 @@ class _ControlScreenState extends State<ControlScreen>
               backgroundColor: Colors.red.shade700,
             ),
           ),
-          if (entry.supportsSaveResume) ...[
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: canResumeFromSaved
-                  ? () => unawaited(_startFromSetup(resumeFromSaved: true))
-                  : null,
-              icon: const Icon(Icons.restore),
-              label: const Text('Start from saved state'),
-            ),
-          ],
         ],
       ),
     );
@@ -3088,6 +4790,10 @@ class _ControlScreenState extends State<ControlScreen>
                 ? 'Synchronizing session context with headset...'
                 : 'Session context not synced yet. Commands stay blocked until sync completes.',
           ),
+          const SizedBox(height: 6),
+        ],
+        if (_hasDeferredHandoff) ...[
+          _buildDeferredHandoffBanner(),
           const SizedBox(height: 6),
         ],
         if (_isSelectedGameLaunchable) ...[
@@ -3403,6 +5109,10 @@ class _ControlScreenState extends State<ControlScreen>
                 ),
                 const SizedBox(height: 8),
               ],
+              if (_hasDeferredHandoff) ...[
+                _buildDeferredHandoffBanner(),
+                const SizedBox(height: 8),
+              ],
               if (!_isLaunchableContentState(contentState)) ...[
                 _buildStateBanner(
                   icon: Icons.warning_amber_rounded,
@@ -3436,15 +5146,16 @@ class _ControlScreenState extends State<ControlScreen>
                 entry: entry,
                 contentState: contentState,
               ),
+              const SizedBox(height: 8),
+              _buildTherapistTimelinePanel(),
             ],
           ),
         ),
         const SizedBox(height: 8),
         ElevatedButton.icon(
-          onPressed:
-              _isPrimaryActionInFlight || !_isConnected || !_sessionAttachReady
-                  ? null
-                  : () => unawaited(_endSessionFromGameScreen()),
+          onPressed: _isPrimaryActionInFlight || !_isConnected
+              ? null
+              : () => unawaited(_endSessionFromGameScreen()),
           icon: const Icon(Icons.flag),
           label: const Text('End Session'),
           style: ElevatedButton.styleFrom(

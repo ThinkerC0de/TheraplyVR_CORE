@@ -493,11 +493,12 @@ namespace TheraplyCore.Games.Runtime
 
             if (_activeGame != null && !sameSession)
             {
-                _sessionContext.UpdateParticipantIds(patientId, therapistId);
                 TrackCriticalRuntimeEvent("session_attach", new Dictionary<string, object>
                 {
                     { "sessionId", currentSessionId },
                     { "requestedSessionId", requestedSessionId },
+                    { "activePatientId", _sessionContext.PatientId ?? string.Empty },
+                    { "activeTherapistId", _sessionContext.TherapistId ?? string.Empty },
                     { "patientId", patientId },
                     { "therapistId", therapistId },
                     { "reasonCode", reasonCode },
@@ -510,6 +511,20 @@ namespace TheraplyCore.Games.Runtime
 
             if (sameSession)
             {
+                if (!IsTerminalSessionState(currentState))
+                {
+                    var activePatientId = (_sessionContext.PatientId ?? string.Empty).Trim();
+                    var activeTherapistId = (_sessionContext.TherapistId ?? string.Empty).Trim();
+                    var incomingPatientId = patientId.Trim();
+                    var incomingTherapistId = therapistId.Trim();
+
+                    if (!string.Equals(activePatientId, incomingPatientId, StringComparison.Ordinal) ||
+                        !string.Equals(activeTherapistId, incomingTherapistId, StringComparison.Ordinal))
+                    {
+                        throw new InvalidOperationException("SESSION_ATTACH_OWNER_CONFLICT");
+                    }
+                }
+
                 _sessionContext.UpdateParticipantIds(patientId, therapistId);
                 if (IsTerminalSessionState(currentState))
                 {
@@ -639,6 +654,13 @@ namespace TheraplyCore.Games.Runtime
 
         private void HandleEndSessionCommand(EndSessionCommand command)
         {
+            var currentSessionId = _sessionContext == null ? string.Empty : _sessionContext.SessionId ?? string.Empty;
+            var currentSessionState = _sessionContext == null
+                ? string.Empty
+                : _sessionContext.SessionState.ToString();
+            Logger.Info(
+                $"[GameRuntime] END_SESSION received: session={currentSessionId}, state={currentSessionState}, activeGame={_activeGameId ?? string.Empty}, reason={command?.reason ?? string.Empty}");
+
             if (_activeGame != null)
             {
                 if (!StopActiveGame(GameContracts.GameStopReason.TherapistStop))
@@ -1239,11 +1261,20 @@ namespace TheraplyCore.Games.Runtime
                 return;
             }
 
+            var sessionId = _sessionContext.SessionId ?? string.Empty;
+            var patientId = _sessionContext.PatientId ?? string.Empty;
+            var therapistId = _sessionContext.TherapistId ?? string.Empty;
+            var ownerKey = BuildOwnerKey(therapistId, patientId);
+            var sessionKey = BuildSessionKey(ownerKey, sessionId);
+
             var command = new SessionStateUpdateCommand
             {
-                sessionId = _sessionContext.SessionId,
-                patientId = _sessionContext.PatientId,
-                therapistId = _sessionContext.TherapistId,
+                sessionId = sessionId,
+                studentId = patientId,
+                patientId = patientId,
+                therapistId = therapistId,
+                ownerKey = ownerKey,
+                sessionKey = sessionKey,
                 state = GameContracts.SessionFsmContract.ToWireState(currentState),
                 previousState = GameContracts.SessionFsmContract.ToWireState(previousState),
                 reasonCode = reasonCode ?? string.Empty,
@@ -1985,6 +2016,11 @@ namespace TheraplyCore.Games.Runtime
             var nowUnixMs = new DateTimeOffset(nowUtc).ToUnixTimeMilliseconds();
             var lastHealthyUtc = _watchdogLastHealthyUtc == DateTime.MinValue ? nowUtc : _watchdogLastHealthyUtc;
             var lastHealthyUnixMs = new DateTimeOffset(lastHealthyUtc).ToUnixTimeMilliseconds();
+            var sessionId = _sessionContext?.SessionId ?? string.Empty;
+            var patientId = _sessionContext?.PatientId ?? string.Empty;
+            var therapistId = _sessionContext?.TherapistId ?? string.Empty;
+            var ownerKey = BuildOwnerKey(therapistId, patientId);
+            var sessionKey = BuildSessionKey(ownerKey, sessionId);
             var expectedIntervalMs = Math.Max(200, Mathf.RoundToInt(Mathf.Max(0.2f, heartbeatIntervalSeconds) * 1000f));
             var staleAfterMs = Math.Max(
                 expectedIntervalMs * 3,
@@ -1992,9 +2028,12 @@ namespace TheraplyCore.Games.Runtime
 
             var command = new SessionWatchdogHeartbeatCommand
             {
-                sessionId = _sessionContext?.SessionId ?? string.Empty,
-                patientId = _sessionContext?.PatientId ?? string.Empty,
-                therapistId = _sessionContext?.TherapistId ?? string.Empty,
+                sessionId = sessionId,
+                studentId = patientId,
+                patientId = patientId,
+                therapistId = therapistId,
+                ownerKey = ownerKey,
+                sessionKey = sessionKey,
                 sessionState = _sessionContext == null
                     ? string.Empty
                     : GameContracts.SessionFsmContract.ToWireState(_sessionContext.SessionState),
@@ -2138,11 +2177,20 @@ namespace TheraplyCore.Games.Runtime
                 return;
             }
 
+            var sessionId = _sessionContext?.SessionId ?? string.Empty;
+            var patientId = _sessionContext?.PatientId ?? string.Empty;
+            var therapistId = _sessionContext?.TherapistId ?? string.Empty;
+            var ownerKey = BuildOwnerKey(therapistId, patientId);
+            var sessionKey = BuildSessionKey(ownerKey, sessionId);
+
             var command = new RuntimeStatusUpdateCommand
             {
-                sessionId = _sessionContext?.SessionId ?? string.Empty,
-                patientId = _sessionContext?.PatientId ?? string.Empty,
-                therapistId = _sessionContext?.TherapistId ?? string.Empty,
+                sessionId = sessionId,
+                studentId = patientId,
+                patientId = patientId,
+                therapistId = therapistId,
+                ownerKey = ownerKey,
+                sessionKey = sessionKey,
                 status = nextStatus,
                 previousStatus = _lastRuntimeStatus ?? string.Empty,
                 reasonCode = reasonCode ?? string.Empty,
@@ -2167,6 +2215,11 @@ namespace TheraplyCore.Games.Runtime
             var normalizedState = presenceState ?? string.Empty;
             var normalizedReason = reasonCode ?? string.Empty;
             var nowUtc = DateTime.UtcNow;
+            var sessionId = _sessionContext?.SessionId ?? string.Empty;
+            var patientId = _sessionContext?.PatientId ?? string.Empty;
+            var therapistId = _sessionContext?.TherapistId ?? string.Empty;
+            var ownerKey = BuildOwnerKey(therapistId, patientId);
+            var sessionKey = BuildSessionKey(ownerKey, sessionId);
 
             if (!force &&
                 string.Equals(_lastPublishedDevicePresenceState, normalizedState, StringComparison.Ordinal) &&
@@ -2179,9 +2232,12 @@ namespace TheraplyCore.Games.Runtime
 
             var command = new DevicePresenceUpdateCommand
             {
-                sessionId = _sessionContext?.SessionId ?? string.Empty,
-                patientId = _sessionContext?.PatientId ?? string.Empty,
-                therapistId = _sessionContext?.TherapistId ?? string.Empty,
+                sessionId = sessionId,
+                studentId = patientId,
+                patientId = patientId,
+                therapistId = therapistId,
+                ownerKey = ownerKey,
+                sessionKey = sessionKey,
                 presenceState = normalizedState,
                 reasonCode = normalizedReason,
                 changedAtUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
@@ -2329,7 +2385,8 @@ namespace TheraplyCore.Games.Runtime
                     stats.queueSize +
                     stats.durablePendingWrites +
                     stats.durableOutboxPending +
-                    stats.durableOutboxInFlight);
+                    stats.durableOutboxInFlight +
+                    stats.durableOutboxFailed);
             }
             catch (Exception e)
             {
@@ -2477,6 +2534,40 @@ namespace TheraplyCore.Games.Runtime
                 default:
                     return GameContracts.SessionLifecycleState.INTERRUPTED;
             }
+        }
+
+        private static string BuildOwnerKey(string therapistId, string studentId)
+        {
+            var normalizedTherapistId = string.IsNullOrWhiteSpace(therapistId)
+                ? string.Empty
+                : therapistId.Trim();
+            var normalizedStudentId = string.IsNullOrWhiteSpace(studentId)
+                ? string.Empty
+                : studentId.Trim();
+            if (string.IsNullOrWhiteSpace(normalizedTherapistId) ||
+                string.IsNullOrWhiteSpace(normalizedStudentId))
+            {
+                return string.Empty;
+            }
+
+            return $"{normalizedTherapistId}|{normalizedStudentId}";
+        }
+
+        private static string BuildSessionKey(string ownerKey, string sessionId)
+        {
+            var normalizedOwnerKey = string.IsNullOrWhiteSpace(ownerKey)
+                ? string.Empty
+                : ownerKey.Trim();
+            var normalizedSessionId = string.IsNullOrWhiteSpace(sessionId)
+                ? string.Empty
+                : sessionId.Trim();
+            if (string.IsNullOrWhiteSpace(normalizedOwnerKey) ||
+                string.IsNullOrWhiteSpace(normalizedSessionId))
+            {
+                return string.Empty;
+            }
+
+            return $"{normalizedOwnerKey}|{normalizedSessionId}";
         }
 
         private static string BuildSequencePreview(IReadOnlyList<long> sequences, int maxItems)

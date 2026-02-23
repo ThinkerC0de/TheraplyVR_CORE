@@ -6,6 +6,7 @@ using UnityEngine;
 using GameContracts = TheraplyCore.Games.Contracts;
 using TheraplyCore.Games.Contracts;
 using TheraplyCore.Games.Runtime;
+using TheraplyCore.Interactions;
 
 namespace TheraplyExamples
 {
@@ -38,6 +39,7 @@ namespace TheraplyExamples
         [SerializeField] private float _viewportPadding = 0.08f;
         [SerializeField] private float _cubeScale = 0.35f;
         [SerializeField] private bool _showOverlayHud = true;
+        [SerializeField] private bool _anchorPlayfieldToSessionStart = true;
 
         [Header("Save/Resume")]
         [SerializeField] private bool _enableSaveResume = true;
@@ -74,6 +76,12 @@ namespace TheraplyExamples
         private DemoCubeSavedState _pendingRestoreState;
         private float _lastSavedAtRealtime = -1f;
         private float _restoredDurationOffsetSec = 0f;
+        private bool _playfieldAnchorReady;
+        private Vector3 _playfieldCenterWorld;
+        private Vector3 _playfieldRightWorld;
+        private Vector3 _playfieldUpWorld;
+        private float _playfieldHalfWidthWorld;
+        private float _playfieldHalfHeightWorld;
 
         public override string GameId => DemoCubeGameConfig.DefaultGameId;
 
@@ -123,6 +131,7 @@ namespace TheraplyExamples
             _lastSavedAtRealtime = -1f;
             _restoredDurationOffsetSec = 0f;
             _pendingRestoreState = null;
+            _playfieldAnchorReady = false;
 
             if (_enableSaveResume && !_activeConfig.ResumeFromSaved)
             {
@@ -173,12 +182,15 @@ namespace TheraplyExamples
 
             if (!wasPaused)
             {
+                CapturePlayfieldAnchor();
+
                 if (!TryRestoreSavedStateIfRequested())
                 {
                     SpawnInitialCubes();
                     RefreshTargetColor(forceRandomRefresh: true);
                 }
 
+                UpdatePointerTargetIndicator();
                 PersistSavedState("START_GAME");
             }
         }
@@ -224,6 +236,7 @@ namespace TheraplyExamples
             base.StopGame(reason);
             ClearActiveCubes();
             _pendingRestoreState = null;
+            ClearPointerTargetIndicator();
         }
 
         public override GameContracts.IGameResult BuildResult()
@@ -257,6 +270,11 @@ namespace TheraplyExamples
             if (_activeConfig == null)
             {
                 return;
+            }
+
+            if (_anchorPlayfieldToSessionStart && !_playfieldAnchorReady)
+            {
+                CapturePlayfieldAnchor();
             }
 
             var dt = Time.deltaTime;
@@ -322,6 +340,7 @@ namespace TheraplyExamples
             }
 
             ClearActiveCubes();
+            ClearPointerTargetIndicator();
         }
 
         private void OnGUI()
@@ -464,11 +483,18 @@ namespace TheraplyExamples
             }
 
             var clickable = cubeObject.AddComponent<DemoCubeClickTarget>();
-            clickable.Configure(cubeState.cubeId, HandleCubeClicked);
+            clickable.Configure(cubeState.cubeId, HandleCubeClicked, ResolveCubeHoverFeedback);
+
+            var validationZone = cubeObject.AddComponent<TargetValidationZone>();
+            validationZone.Configure(
+                cubeState.cubeId.ToString(CultureInfo.InvariantCulture),
+                "DEMO_CUBE_TARGET",
+                defaultValidTarget: true);
+
             cubeState.instance = cubeObject;
         }
 
-        private void HandleCubeClicked(int cubeId)
+        private void HandleCubeClicked(int cubeId, string inputSource)
         {
             if (State != GameContracts.GameState.Playing)
             {
@@ -487,12 +513,17 @@ namespace TheraplyExamples
             if (!CanAcceptColor(cube.color, expected))
             {
                 _wrongClicks++;
+                PointerIndicatorService.Instance?.ReportHit(false);
                 TrackEvent("demo_cube_wrong_click", new Dictionary<string, object>
                 {
                     { "cubeId", cube.cubeId },
                     { "clickedColor", cube.color.ToString() },
                     { "expectedColor", FormatColorLabel(expected) },
                     { "wrongClicks", _wrongClicks },
+                    { "inputSource", string.IsNullOrWhiteSpace(inputSource) ? "UNKNOWN" : inputSource },
+                    { "targetId", cube.cubeId.ToString() },
+                    { "targetName", cube.instance == null ? string.Empty : cube.instance.name },
+                    { "targetValid", false },
                 });
                 PersistSavedState("WRONG_CLICK");
                 return;
@@ -500,6 +531,7 @@ namespace TheraplyExamples
 
             cube.clicked = true;
             _clickedCount++;
+            PointerIndicatorService.Instance?.ReportHit(true);
 
             var elapsedSec = GetSessionDurationSeconds();
             var reactionSec = _lastHitElapsedSec < 0f
@@ -513,6 +545,10 @@ namespace TheraplyExamples
                 { "clickedColor", cube.color.ToString() },
                 { "reactionSec", reactionSec },
                 { "clickedCount", _clickedCount },
+                { "inputSource", string.IsNullOrWhiteSpace(inputSource) ? "UNKNOWN" : inputSource },
+                { "targetId", cube.cubeId.ToString() },
+                { "targetName", cube.instance == null ? string.Empty : cube.instance.name },
+                { "targetValid", true },
             });
 
             if (cube.instance != null)
@@ -521,6 +557,7 @@ namespace TheraplyExamples
             }
 
             AdvanceTargetAfterCorrectClick();
+            UpdatePointerTargetIndicator();
             PersistSavedState("CORRECT_CLICK");
 
             if (!_completionHandled && _clickedCount >= _spawnedCount)
@@ -606,6 +643,8 @@ namespace TheraplyExamples
             {
                 _targetColorChanges++;
             }
+
+            UpdatePointerTargetIndicator();
         }
 
         private List<DemoCubeColor> CollectRemainingColors()
@@ -640,7 +679,8 @@ namespace TheraplyExamples
                 case DemoCubeLevelMode.Basic:
                     return DemoCubeColor.Cyan;
                 case DemoCubeLevelMode.AlternateTwoColors:
-                    return UnityEngine.Random.value >= 0.5f ? DemoCubeColor.Red : DemoCubeColor.Blue;
+                    // Keep deterministic parity so alternate mode cannot become unsatisfiable.
+                    return index % 2 == 0 ? DemoCubeColor.Red : DemoCubeColor.Blue;
                 case DemoCubeLevelMode.RandomTargetColor:
                     return _randomPalette[UnityEngine.Random.Range(0, _randomPalette.Length)];
                 default:
@@ -660,7 +700,20 @@ namespace TheraplyExamples
                 case DemoCubeLevelMode.Basic:
                     return DemoCubeColor.Any;
                 case DemoCubeLevelMode.AlternateTwoColors:
-                    return _alternateExpectedIndex == 0 ? DemoCubeColor.Red : DemoCubeColor.Blue;
+                    var preferred = _alternateExpectedIndex == 0
+                        ? DemoCubeColor.Red
+                        : DemoCubeColor.Blue;
+                    if (HasRemainingColor(preferred))
+                    {
+                        return preferred;
+                    }
+
+                    var fallback = preferred == DemoCubeColor.Red
+                        ? DemoCubeColor.Blue
+                        : DemoCubeColor.Red;
+                    return HasRemainingColor(fallback)
+                        ? fallback
+                        : DemoCubeColor.Any;
                 case DemoCubeLevelMode.RandomTargetColor:
                     return _randomTargetColor;
                 default:
@@ -668,9 +721,53 @@ namespace TheraplyExamples
             }
         }
 
+        private bool HasRemainingColor(DemoCubeColor color)
+        {
+            for (var i = 0; i < _cubes.Count; i++)
+            {
+                var cube = _cubes[i];
+                if (cube == null || cube.clicked || cube.instance == null)
+                {
+                    continue;
+                }
+
+                if (cube.color == color)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private static bool CanAcceptColor(DemoCubeColor clickedColor, DemoCubeColor expectedColor)
         {
             return expectedColor == DemoCubeColor.Any || clickedColor == expectedColor;
+        }
+
+        private PointerHoverFeedback ResolveCubeHoverFeedback(int cubeId)
+        {
+            var cube = FindCube(cubeId);
+            if (cube == null || cube.clicked || cube.instance == null)
+            {
+                return new PointerHoverFeedback(new Color(0.45f, 0.45f, 0.45f, 1f), false);
+            }
+
+            var expected = GetExpectedColor();
+            var isValid = CanAcceptColor(cube.color, expected);
+            if (expected == DemoCubeColor.Any)
+            {
+                var anyColor = ToUnityColor(cube.color);
+                return new PointerHoverFeedback(anyColor, true);
+            }
+
+            var targetColor = ToUnityColor(expected);
+            if (!isValid)
+            {
+                targetColor = new Color(1f, 0.28f, 0.28f, 1f);
+            }
+
+            return new PointerHoverFeedback(targetColor, isValid);
         }
 
         private static string FormatColorLabel(DemoCubeColor color)
@@ -706,6 +803,13 @@ namespace TheraplyExamples
 
         private Vector3 ViewportToWorld(Vector2 viewport)
         {
+            if (_anchorPlayfieldToSessionStart && _playfieldAnchorReady)
+            {
+                var x = (Mathf.Clamp01(viewport.x) - 0.5f) * 2f * _playfieldHalfWidthWorld;
+                var y = (Mathf.Clamp01(viewport.y) - 0.5f) * 2f * _playfieldHalfHeightWorld;
+                return _playfieldCenterWorld + (_playfieldRightWorld * x) + (_playfieldUpWorld * y);
+            }
+
             if (_targetCamera == null)
             {
                 var x = (viewport.x - 0.5f) * 8f;
@@ -714,6 +818,56 @@ namespace TheraplyExamples
             }
 
             return _targetCamera.ViewportToWorldPoint(new Vector3(viewport.x, viewport.y, Mathf.Max(0.2f, _spawnDepth)));
+        }
+
+        private void UpdatePointerTargetIndicator()
+        {
+            var service = PointerIndicatorService.Instance;
+            if (service == null)
+            {
+                return;
+            }
+
+            var expected = GetExpectedColor();
+            if (expected == DemoCubeColor.Any)
+            {
+                service.SetTargetColor(new Color(0.9f, 0.9f, 0.95f, 1f));
+                return;
+            }
+
+            service.SetTargetColor(ToUnityColor(expected));
+        }
+
+        private static void ClearPointerTargetIndicator()
+        {
+            PointerIndicatorService.Instance?.ClearTargetColor();
+        }
+
+        private void CapturePlayfieldAnchor()
+        {
+            if (!_anchorPlayfieldToSessionStart)
+            {
+                return;
+            }
+
+            EnsureCamera();
+            if (_targetCamera == null)
+            {
+                _playfieldAnchorReady = false;
+                return;
+            }
+
+            var depth = Mathf.Max(0.2f, _spawnDepth);
+            var cameraTransform = _targetCamera.transform;
+            var halfHeight = Mathf.Tan(Mathf.Deg2Rad * Mathf.Clamp(_targetCamera.fieldOfView, 1f, 179f) * 0.5f) * depth;
+            var aspect = Mathf.Max(0.1f, _targetCamera.aspect);
+
+            _playfieldCenterWorld = cameraTransform.position + (cameraTransform.forward * depth);
+            _playfieldRightWorld = cameraTransform.right.normalized;
+            _playfieldUpWorld = cameraTransform.up.normalized;
+            _playfieldHalfHeightWorld = Mathf.Max(0.05f, halfHeight);
+            _playfieldHalfWidthWorld = Mathf.Max(0.05f, halfHeight * aspect);
+            _playfieldAnchorReady = true;
         }
 
         private CubeRuntimeData FindCube(int cubeId)
@@ -1273,28 +1427,52 @@ namespace TheraplyExamples
         }
     }
 
-    public sealed class DemoCubeClickTarget : MonoBehaviour
+    public sealed class DemoCubeClickTarget : MonoBehaviour, IQuestPointerTarget, IPointerHoverFeedbackTarget
     {
         private int _cubeId;
-        private Action<int> _onClicked;
+        private Action<int, string> _onClicked;
+        private Func<int, PointerHoverFeedback> _onHoverFeedback;
 
-        public void Configure(int cubeId, Action<int> onClicked)
+        public void Configure(
+            int cubeId,
+            Action<int, string> onClicked,
+            Func<int, PointerHoverFeedback> onHoverFeedback)
         {
             _cubeId = cubeId;
             _onClicked = onClicked;
+            _onHoverFeedback = onHoverFeedback;
         }
 
+#if UNITY_EDITOR
         private void OnMouseDown()
         {
-            _onClicked?.Invoke(_cubeId);
+            ActivateFromPointer("MOUSE");
         }
+#endif
 
         private void OnTriggerEnter(Collider other)
         {
             if (other != null && other.CompareTag("Controller"))
             {
-                _onClicked?.Invoke(_cubeId);
+                ActivateFromPointer("CONTROLLER_TRIGGER");
             }
+        }
+
+        public void ActivateFromPointer(string source)
+        {
+            _onClicked?.Invoke(_cubeId, string.IsNullOrWhiteSpace(source) ? "UNKNOWN" : source.Trim());
+        }
+
+        public bool TryGetHoverFeedback(out PointerHoverFeedback feedback)
+        {
+            if (_onHoverFeedback != null)
+            {
+                feedback = _onHoverFeedback(_cubeId);
+                return true;
+            }
+
+            feedback = default;
+            return false;
         }
     }
 }

@@ -1,0 +1,96 @@
+﻿{
+    "manifestSchema": "THERAPLY_PRETRAIN_MANIFEST",
+    "manifestVersion": "2026-02-22",
+    "generatedAtUtc": "2026-02-22T18:23:00.1408586Z",
+    "exportName": "ops002_pretrain_export",
+    "exportMode": "DURABLE_SESSION_TRACE",
+    "readyForTraining": true,
+    "reasonCode": "EXPORT_READY_FOR_TRAINING",
+    "expectedSourceOfTruth": "MOBILE_CONTROLLER",
+    "totalEvents": 9,
+    "uniqueTaskRuns": 3,
+    "taskOutcomeSummaries": 3,
+    "taskLabels": 3,
+    "adaptiveEvents": 3,
+    "taskRuns": [
+        {
+            "taskRunId": "9e98ca83-6d63-47f1-9fff-5a425aa65359",
+            "summaryCount": 1,
+            "labelCount": 1,
+            "adaptiveCount": 1,
+            "ownerKey": "validation_therapist|validation_student",
+            "sessionKey": "validation_therapist|validation_student|validation_session"
+        },
+        {
+            "taskRunId": "bc1e22ef-4370-4640-97b2-40594b92b73f",
+            "summaryCount": 1,
+            "labelCount": 1,
+            "adaptiveCount": 1,
+            "ownerKey": "validation_therapist|validation_student",
+            "sessionKey": "validation_therapist|validation_student|validation_session"
+        },
+        {
+            "taskRunId": "e7a70add-dcd6-49a8-a274-6257ff828e92",
+            "summaryCount": 1,
+            "labelCount": 1,
+            "adaptiveCount": 1,
+            "ownerKey": "validation_therapist|validation_student",
+            "sessionKey": "validation_therapist|validation_student|validation_session"
+        }
+    ],
+    "eventTypes": [
+        {
+            "eventType": "ADAPTIVE_DIFFICULTY_ADJUSTED",
+            "count": 3
+        },
+        {
+            "eventType": "TASK_LABEL_GENERATED",
+            "count": 3
+        },
+        {
+            "eventType": "TASK_OUTCOME_SUMMARY",
+            "count": 3
+        }
+    ],
+    "sanity": {
+        "passed": true,
+        "invalidRecords": 0,
+        "sourceOfTruthViolations": 0,
+        "ownershipViolations": 0,
+        "taskRunConsistencyViolations": 0,
+        "uniqueTaskRuns": 3,
+        "taskOutcomeSummaries": 3,
+        "taskLabels": 3,
+        "adaptiveEvents": 3
+    },
+    "quality": {
+        "readyForTraining": true,
+        "reasonCode": "DATASET_READY_FOR_TRAINING",
+        "qualityScore": 1.0,
+        "labelCoverageRatio": 1.0,
+        "summaryCoverageRatio": 1.0,
+        "averageLabelConfidence": 0.859375,
+        "missingRequiredFields": 0,
+        "duplicateEventIds": 0,
+        "nonMonotonicSequenceCount": 0,
+        "invalidSourceOfTruthCount": 0,
+        "invalidLabelConfidenceCount": 0,
+        "unmatchedLabelRuns": 0
+    },
+    "traceLoad": {
+        "loaded": true,
+        "reasonCode": "TRACE_LOADED",
+        "durableTracePath": "C:\\Users\\licen\\Projects\\theraply-vr-framework\\docs\\evidence\\20260222_192103\\artifacts\\ops_dataset_trace_export\\session_trace_input.ndjson",
+        "sessionIdFilter": "validation_session",
+        "totalLines": 9,
+        "importedEvents": 9,
+        "skippedBySession": 0,
+        "skippedUnsupportedEventType": 0,
+        "invalidLines": 0
+    },
+    "artifacts": {
+        "canonicalDatasetFile": "canonical_events.ndjson",
+        "preTrainManifestFile": "pretrain_manifest.json",
+        "operatorReportFile": "operator_report.md"
+    }
+}

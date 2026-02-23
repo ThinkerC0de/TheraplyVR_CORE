@@ -1,0 +1,21 @@
+﻿{
+    "ackSchema":  "THERAPLY_PRETRAIN_INTAKE_ACK",
+    "ackVersion":  "2026-02-22",
+    "ackId":  "7d511e5d-402d-4fb4-b823-69c5c6815ceb",
+    "ackedAtUtc":  "2026-02-22T18:49:27.2805554Z",
+    "ackStatus":  "ACKNOWLEDGED",
+    "intakeTicketId":  "OPS003-INTAKE-20260222",
+    "intakeOperatorId":  "ops_intake_validation",
+    "notes":  "Validated on provided trace path in OPS-003 lane.",
+    "packageDirectory":  "C:\\Users\\licen\\Projects\\theraply-vr-framework\\docs\\evidence\\20260222_194839\\artifacts\\ops_dataset_trace_export_real_trace\\handoff\\ops003_pretrain_handoff",
+    "packageName":  "ops003_pretrain_handoff",
+    "exportName":  "ops003_pretrain_export_real_trace",
+    "exportMode":  "DURABLE_SESSION_TRACE",
+    "sessionId":  "validation_session",
+    "sourceTracePath":  "C:\\Users\\licen\\Projects\\theraply-vr-framework\\docs\\evidence\\20260222_192103\\artifacts\\ops_dataset_trace_export\\session_trace_input.ndjson",
+    "readyForTraining":  true,
+    "reasonCode":  "EXPORT_READY_FOR_TRAINING",
+    "checksumsSha256":  "b29ed5453a24adba9751a5c8fc2d306134d9c4adf133ca36ab7ee2c919d936bd",
+    "handoffManifestSha256Before":  "e3f85ce9cc46865457973a0e20a7e918556f2dd677276c9bc6839763c05121af",
+    "handoffManifestSha256After":  "6493b92ccd4193e4e336a4d0144da807da96bea1d7650e1a44736af77e3f3642"
+}

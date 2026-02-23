@@ -22,6 +22,8 @@ class MediaStreamWidget extends StatefulWidget {
 }
 
 class _MediaStreamWidgetState extends State<MediaStreamWidget> {
+  static const bool _playQuestAudioOnMobile = false;
+
   WebRTCMediaService? _webrtcService;
   StreamSubscription<MediaStream>? _streamSub;
   StreamSubscription<bool>? _connectionSub;
@@ -50,6 +52,11 @@ class _MediaStreamWidgetState extends State<MediaStreamWidget> {
     _webrtcService!.start();
     _streamSub = _webrtcService!.onRemoteStream.listen((stream) {
       if (mounted) {
+        if (!_playQuestAudioOnMobile) {
+          for (final track in stream.getAudioTracks()) {
+            track.enabled = false;
+          }
+        }
         setState(() => _renderer?.srcObject = stream);
       }
     });
@@ -92,7 +99,8 @@ class _MediaStreamWidgetState extends State<MediaStreamWidget> {
                 else if (_rendererReady && _renderer != null)
                   RTCVideoView(
                     _renderer!,
-                    objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitContain,
+                    objectFit:
+                        RTCVideoViewObjectFit.RTCVideoViewObjectFitContain,
                   )
                 else
                   _buildWaiting(),
@@ -105,12 +113,14 @@ class _MediaStreamWidgetState extends State<MediaStreamWidget> {
                     onTapCancel: () => _setPtt(false),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 100),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
                       decoration: BoxDecoration(
                         color: _pttPressed ? Colors.red : Colors.black54,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                          color: _pttPressed ? Colors.redAccent : Colors.white24,
+                          color:
+                              _pttPressed ? Colors.redAccent : Colors.white24,
                         ),
                       ),
                       child: Row(
@@ -157,7 +167,8 @@ class _MediaStreamWidgetState extends State<MediaStreamWidget> {
           SizedBox(
             width: 40,
             height: 40,
-            child: CircularProgressIndicator(color: Colors.white54, strokeWidth: 2),
+            child: CircularProgressIndicator(
+                color: Colors.white54, strokeWidth: 2),
           ),
           SizedBox(height: 16),
           Text(

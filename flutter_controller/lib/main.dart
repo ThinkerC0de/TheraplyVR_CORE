@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_controller/services/firebase_service.dart';
+import 'package:flutter_controller/services/screen_awake_policy_service.dart';
 import 'package:flutter_controller/screens/login_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Initialize Firebase
   await FirebaseService.initialize();
-  
+  ScreenAwakePolicyService.instance.start();
+
   runApp(const TheraplyControllerApp());
 }
 

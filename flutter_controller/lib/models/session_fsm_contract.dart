@@ -78,8 +78,11 @@ class SessionSignalCommandIds {
 
 class SessionStateUpdateSignal {
   final String sessionId;
+  final String studentId;
   final String patientId;
   final String therapistId;
+  final String ownerKey;
+  final String sessionKey;
   final SessionLifecycleState state;
   final SessionLifecycleState? previousState;
   final String reasonCode;
@@ -87,8 +90,11 @@ class SessionStateUpdateSignal {
 
   const SessionStateUpdateSignal({
     required this.sessionId,
+    required this.studentId,
     required this.patientId,
     required this.therapistId,
+    required this.ownerKey,
+    required this.sessionKey,
     required this.state,
     required this.previousState,
     required this.reasonCode,
@@ -122,11 +128,16 @@ class SessionStateUpdateSignal {
     final changedAtUtc = changedAtUnixMs > 0
         ? DateTime.fromMillisecondsSinceEpoch(changedAtUnixMs, isUtc: true)
         : DateTime.now().toUtc();
+    final patientId = payload['patientId'] as String? ?? '';
+    final studentId = payload['studentId'] as String? ?? patientId;
 
     return SessionStateUpdateSignal(
       sessionId: payload['sessionId'] as String? ?? '',
-      patientId: payload['patientId'] as String? ?? '',
+      studentId: studentId,
+      patientId: patientId,
       therapistId: payload['therapistId'] as String? ?? '',
+      ownerKey: payload['ownerKey'] as String? ?? '',
+      sessionKey: payload['sessionKey'] as String? ?? '',
       state: state,
       previousState: previousState,
       reasonCode: payload['reasonCode'] as String? ?? '',

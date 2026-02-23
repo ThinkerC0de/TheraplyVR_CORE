@@ -1,0 +1,117 @@
+﻿Unity executable: C:\Program Files\Unity\Hub\Editor\6000.3.8f1\Editor\Unity.exe
+Unity project: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template
+Unity log: .\docs\evidence\20260222_195522\commands\unity_operational_dataset_trace_export_validation_quest_real_trace.log
+Export output directory override: C:\Users\licen\Projects\theraply-vr-framework\docs\evidence\20260222_195522\artifacts\ops_dataset_trace_export_quest_real_trace
+Export name override: ops003_pretrain_export_quest_real_trace
+Trace input path override: C:\Users\licen\Projects\theraply-vr-framework\docs\evidence\20260222_195522\artifacts\quest_trace\quest_events.ndjson
+Require provided trace mode: ENABLED
+[EXIT] 1
+----- Last 100 lines from .\docs\evidence\20260222_195522\commands\unity_operational_dataset_trace_export_validation_quest_real_trace.log -----
+		ExecutionOrderSort2 (0ms)
+		AwakeInstancesAfterBackupRestoration (5ms)
+Asset Pipeline Refresh (id=e659ea39ec7a0d347bd992e396c5578c): Total: 3.059 seconds - Initiated by InitialRefreshV2(ForceSynchronousImport)
+	Summary:
+		Imports: total=0 (actual=0, local cache=0, cache server=0)
+		Asset DB Process Time: managed=0 ms, native=1364 ms
+		Asset DB Callback time: managed=514 ms, native=23 ms
+		Scripting: domain reloads=1, domain reload time=621 ms, compile time=498 ms, other=36 ms
+		Project Asset Count: scripts=1419, non-scripts=2161
+		Asset File Changes: new=0, changed=0, moved=0, deleted=0
+		Scan Filter Count: 0
+	InvokeCustomDependenciesCallbacks: 0.001ms
+	InvokePackagesCallback: 25.017ms
+	ApplyChangesToAssetFolders: 0.602ms
+	Scan: 68.885ms
+	OnSourceAssetsModified: 0.004ms
+	CategorizeAssetsWithTransientArtifact: 22.492ms
+	ProcessAssetsWithTransientArtifactChanges: 47.422ms
+	CategorizeAssets: 32.411ms
+	ImportOutOfDateAssets: 1088.330ms (589.002ms without children)
+		CompileScripts: 498.275ms
+		ReloadNativeAssets: 0.006ms
+		UnloadImportedAssets: 0.155ms
+		EnsureUptoDateAssetsAreRegisteredWithGuidPM: 0.541ms
+		InitializingProgressBar: 0.000ms
+		PostProcessAllAssetNotificationsAddChangedAssets: 0.001ms
+		OnDemandSchedulerStart: 0.350ms
+	PostProcessAllAssets: 514.451ms
+	GatherAllCurrentPrimaryArtifactRevisions: 0.003ms
+	UnloadStreamsBegin: 2.824ms
+	PersistCurrentRevisions: 0.084ms
+	UnloadStreamsEnd: 0.001ms
+	GenerateScriptTypeHashes: 7.622ms
+	Untracked: 1256.612ms
+
+Application.AssetDatabase Initial Refresh End
+Scanning for USB devices : 5.620ms
+Initializing Unity extensions:
+[MODES] ModeService[none].Initialize
+[MODES] ModeService[none].LoadModes
+[MODES] Loading mode Default (0) for mode-current-id-unity-quest-template
+Unloading 12 Unused Serialized files (Serialized files now loaded: 0)
+Unloading 3268 unused Assets / (2.7 MB). Loaded Objects now: 3967.
+Memory consumption went from 158.9 MB to 156.2 MB.
+Total: 12.335300 ms (FindLiveObjects: 0.357300 ms CreateObjectMapping: 0.162500 ms MarkObjects: 9.995000 ms  DeleteObjects: 1.819500 ms)
+
+[OperationalDatasetTraceExportValidation] FAIL: System.InvalidOperationException: Trace export returned unsuccessful status. reason=TRACE_NO_DATASET_EVENTS
+  at TheraplyCore.Editor.Automation.OperationalDatasetTraceExportValidation.ExecuteValidation () [0x00388] in C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Assets\_TheraplyCore\Editor\Automation\OperationalDatasetTraceExportValidation.cs:205 
+  at TheraplyCore.Editor.Automation.OperationalDatasetTraceExportValidation.RunOperationalDatasetTraceExportValidation () [0x00000] in C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Assets\_TheraplyCore\Editor\Automation\OperationalDatasetTraceExportValidation.cs:48 
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:LogError (object)
+TheraplyCore.Editor.Automation.OperationalDatasetTraceExportValidation:RunOperationalDatasetTraceExportValidation () (at Assets/_TheraplyCore/Editor/Automation/OperationalDatasetTraceExportValidation.cs:55)
+
+(Filename: Assets/_TheraplyCore/Editor/Automation/OperationalDatasetTraceExportValidation.cs Line: 55)
+
+[OperationalDatasetTraceExportValidation] Result file: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Temp\CliValidation\operational_dataset_trace_export_validation_result.txt
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Editor.Automation.OperationalDatasetTraceExportValidation:PersistValidationResult (string,string) (at Assets/_TheraplyCore/Editor/Automation/OperationalDatasetTraceExportValidation.cs:669)
+TheraplyCore.Editor.Automation.OperationalDatasetTraceExportValidation:RunOperationalDatasetTraceExportValidation () (at Assets/_TheraplyCore/Editor/Automation/OperationalDatasetTraceExportValidation.cs:56)
+
+(Filename: Assets/_TheraplyCore/Editor/Automation/OperationalDatasetTraceExportValidation.cs Line: 669)
+
+Request timed out while processing request "https://public-cdn.cloud.unity3d.com/config/production", HTTP error code 0
+.[UnityConnect] Request timed out.
+Curl error 42: Callback aborted
+Killing ADB server in 0,0628963 seconds.
+[Physics::Module] Cleanup current backend.
+[Physics::Module] Id: 0xf2b8ea05
+Input System module state changed to: ShutdownInProgress.
+Input System polling thread exited.
+Input System module state changed to: Shutdown.
+[Licensing::IpcConnector] LicenseClient-licen-notifications channel disconnected successfully.
+[Licensing::IpcConnector] LicenseClient-licen channel disconnected successfully.
+AcceleratorClientConnectionCallback - disconnected - :0
+Shut down.
+Cleanup mono
+abort_threads: Failed aborting id: 0000000000008974, mono_thread_manage will ignore it
+
+abort_threads: Failed aborting id: 0000000000003C0C, mono_thread_manage will ignore it
+
+abort_threads: Failed aborting id: 0000000000008974, mono_thread_manage will ignore it
+
+abort_threads: Failed aborting id: 0000000000003C0C, mono_thread_manage will ignore it
+
+debugger-agent: Unable to listen on 3340
+Checking for leaked weakptr:
+  Found no leaked weakptrs.
+[Package Manager] Server process was shutdown
+##utp:{"type":"MemoryLeaks","version":2,"phase":"Immediate","time":1771786647657,"processId":1724,"allocatedMemory":14594765,"memoryLabels":[{"Default":29313},{"Permanent":15236},{"NewDelete":67609},{"Thread":4230384},{"Manager":32157},{"VertexData":8},{"Geometry":816},{"Texture":160},{"Shader":79379},{"Material":24},{"GfxDevice":55257},{"Animation":392},{"Audio":2664},{"FreeType":8},{"FontEngine":736},{"Physics":2090},{"Physics2D":16},{"Serialization":592},{"Input":14984},{"JobScheduler":33024},{"TextLib":216},{"Mono":32},{"ScriptingNativeRuntime":155060},{"BaseObject":1620336},{"Resource":1336},{"Renderer":3000},{"Transform":4685},{"File":1016},{"WebCam":616},{"Culling":32},{"Terrain":11394},{"Wind":24},{"STL":40},{"String":12371},{"DynamicArray":160102},{"HashMap":77144},{"Utility":2660134},{"Curl":1712},{"PoolAlloc":2056},{"AI":80},{"TypeTree":5341},{"ScriptManager":512},{"RuntimeInitializeOnLoadManager":64},{"SpriteAtlas":112},{"GI":7792},{"Director":8240},{"CloudService":7632},{"WebRequest":845},{"VR":48138},{"SceneManager":504},{"Video":64},{"LazyScriptCache":32},{"Camera":17},{"Secure":3169},{"SerializationCache":1576},{"APIUpdating":10320},{"Subsystems":192},{"VirtualTexturing":57888},{"StaticSafetyDebugInfo":278528},{"Analytics":384},{"Hierarchy":608},{"CoreStats":13032},{"Identifiers":12960},{"Gui":96},{"EditorUtility":104535},{"VersionControl":4},{"Undo":947},{"AssetDatabase":4695649},{"EditorGi":328},{"UnityConnect":29208},{"Upm":1896},{"AssetCompliance":64},{"DrivenProperties":72},{"LocalIPC":211},{"ProfilerEditor":9746},{"CoreBusinessMetrics":2876},{"TLS":13756},{"Licensing":1232},{"AssetReference":32},{"IPCStream":32}]}
+~StackAllocator(ALLOC_TEMP_MAIN) m_LastAlloc not NULL. Did you forget to call FreeAllStackAllocations()? To get more information, run app with -diag-temp-memory-leak-validation cmd line argument
+[OVRPlugin][INFO] UnityPluginLoad called
+----- End of log excerpt -----
+Operational dataset trace export validation failed.
+At C:\Users\licen\Projects\theraply-vr-framework\scripts\unity_ops_dataset_trace_export_validate.ps1:123 char:9
++         throw "Operational dataset trace export validation failed."
++         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Operational dat...idation failed.:String) [], RuntimeException
+    + FullyQualifiedErrorId : Operational dataset trace export validation failed.
+ 

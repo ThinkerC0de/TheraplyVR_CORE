@@ -60,8 +60,11 @@ class RuntimeStatusSignalCommandIds {
 
 class RuntimeStatusUpdateSignal {
   final String sessionId;
+  final String studentId;
   final String patientId;
   final String therapistId;
+  final String ownerKey;
+  final String sessionKey;
   final TherapistRuntimeStatus status;
   final TherapistRuntimeStatus? previousStatus;
   final String reasonCode;
@@ -70,8 +73,11 @@ class RuntimeStatusUpdateSignal {
 
   const RuntimeStatusUpdateSignal({
     required this.sessionId,
+    required this.studentId,
     required this.patientId,
     required this.therapistId,
+    required this.ownerKey,
+    required this.sessionKey,
     required this.status,
     required this.previousStatus,
     required this.reasonCode,
@@ -106,11 +112,16 @@ class RuntimeStatusUpdateSignal {
     final changedAtUtc = changedAtUnixMs > 0
         ? DateTime.fromMillisecondsSinceEpoch(changedAtUnixMs, isUtc: true)
         : DateTime.now().toUtc();
+    final patientId = payload['patientId'] as String? ?? '';
+    final studentId = payload['studentId'] as String? ?? patientId;
 
     return RuntimeStatusUpdateSignal(
       sessionId: payload['sessionId'] as String? ?? '',
-      patientId: payload['patientId'] as String? ?? '',
+      studentId: studentId,
+      patientId: patientId,
       therapistId: payload['therapistId'] as String? ?? '',
+      ownerKey: payload['ownerKey'] as String? ?? '',
+      sessionKey: payload['sessionKey'] as String? ?? '',
       status: status,
       previousStatus: previousStatus,
       reasonCode: payload['reasonCode'] as String? ?? '',
@@ -140,8 +151,11 @@ class RuntimeStatusUpdateSignal {
 
 class DevicePresenceUpdateSignal {
   final String sessionId;
+  final String studentId;
   final String patientId;
   final String therapistId;
+  final String ownerKey;
+  final String sessionKey;
   final DevicePresenceState presenceState;
   final String reasonCode;
   final DateTime changedAtUtc;
@@ -153,8 +167,11 @@ class DevicePresenceUpdateSignal {
 
   const DevicePresenceUpdateSignal({
     required this.sessionId,
+    required this.studentId,
     required this.patientId,
     required this.therapistId,
+    required this.ownerKey,
+    required this.sessionKey,
     required this.presenceState,
     required this.reasonCode,
     required this.changedAtUtc,
@@ -189,11 +206,16 @@ class DevicePresenceUpdateSignal {
     final changedAtUtc = changedAtUnixMs > 0
         ? DateTime.fromMillisecondsSinceEpoch(changedAtUnixMs, isUtc: true)
         : DateTime.now().toUtc();
+    final patientId = payload['patientId'] as String? ?? '';
+    final studentId = payload['studentId'] as String? ?? patientId;
 
     return DevicePresenceUpdateSignal(
       sessionId: payload['sessionId'] as String? ?? '',
-      patientId: payload['patientId'] as String? ?? '',
+      studentId: studentId,
+      patientId: patientId,
       therapistId: payload['therapistId'] as String? ?? '',
+      ownerKey: payload['ownerKey'] as String? ?? '',
+      sessionKey: payload['sessionKey'] as String? ?? '',
       presenceState: presenceState,
       reasonCode: payload['reasonCode'] as String? ?? '',
       changedAtUtc: changedAtUtc,
@@ -226,8 +248,11 @@ class DevicePresenceUpdateSignal {
 
 class SessionWatchdogHeartbeatSignal {
   final String sessionId;
+  final String studentId;
   final String patientId;
   final String therapistId;
+  final String ownerKey;
+  final String sessionKey;
   final String sessionState;
   final TherapistRuntimeStatus? runtimeStatus;
   final String healthCode;
@@ -242,8 +267,11 @@ class SessionWatchdogHeartbeatSignal {
 
   const SessionWatchdogHeartbeatSignal({
     required this.sessionId,
+    required this.studentId,
     required this.patientId,
     required this.therapistId,
+    required this.ownerKey,
+    required this.sessionKey,
     required this.sessionState,
     required this.runtimeStatus,
     required this.healthCode,
@@ -290,11 +318,16 @@ class SessionWatchdogHeartbeatSignal {
         (payload['expectedIntervalMs'] as num?)?.toInt() ?? 2000;
     final staleAfterMs = (payload['staleAfterMs'] as num?)?.toInt() ??
         (expectedIntervalMs > 0 ? expectedIntervalMs * 3 : 6000);
+    final patientId = payload['patientId'] as String? ?? '';
+    final studentId = payload['studentId'] as String? ?? patientId;
 
     return SessionWatchdogHeartbeatSignal(
       sessionId: payload['sessionId'] as String? ?? '',
-      patientId: payload['patientId'] as String? ?? '',
+      studentId: studentId,
+      patientId: patientId,
       therapistId: payload['therapistId'] as String? ?? '',
+      ownerKey: payload['ownerKey'] as String? ?? '',
+      sessionKey: payload['sessionKey'] as String? ?? '',
       sessionState: payload['sessionState'] as String? ?? '',
       runtimeStatus:
           TherapistRuntimeStatus.tryParse(payload['runtimeStatus'] as String?),

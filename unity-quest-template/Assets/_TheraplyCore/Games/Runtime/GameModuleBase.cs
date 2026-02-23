@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using GameContracts = TheraplyCore.Games.Contracts;
 using TheraplyCore.Games.Contracts;
+using TheraplyCore.Interactions;
 using Logger = TheraplyCore.Logging.Logger;
 
 namespace TheraplyCore.Games.Runtime
@@ -174,6 +175,27 @@ namespace TheraplyCore.Games.Runtime
             if (!mergedPayload.ContainsKey("state")) mergedPayload["state"] = State.ToString();
 
             Context.Telemetry.Track(eventName, mergedPayload, payloadVersion);
+
+            var interactionBridge = InteractionEventBridge.Instance;
+            if (interactionBridge == null)
+            {
+                return;
+            }
+
+            try
+            {
+                interactionBridge.RecordGameplayEvent(
+                    GameId,
+                    eventName,
+                    State.ToString(),
+                    mergedPayload,
+                    GetType().Name);
+            }
+            catch (Exception e)
+            {
+                Logger.Warning(
+                    $"[{GameId}] Interaction bridge publish failed for event '{eventName}': {e.Message}");
+            }
         }
 
         private void ResetTiming()

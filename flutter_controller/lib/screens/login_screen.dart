@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_controller/models/ops_error_catalog.dart';
 import 'package:flutter_controller/services/student_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_controller/services/firebase_service.dart';
@@ -15,30 +17,70 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   static const String _lastLoginEmailKey = 'last_login_email_v1';
   static const String _lastLoginUserIdKey = 'last_login_user_id_v1';
+  static const String _rememberPasswordKey = 'remember_password_v1';
+  static const String _rememberedPasswordValueKey =
+      'remembered_password_value_v1';
+  static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
 
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _isRestoring = true;
+  bool _rememberPassword = false;
+  bool _obscurePassword = true;
+  bool _passwordRestoredFromStorage = false;
+  bool _passwordEditedManually = false;
   String? _error;
   String? _entitlementReasonCode;
 
   @override
   void initState() {
     super.initState();
-    _restoreLastLoginEmail();
+    _restoreLastLoginPreferences();
   }
 
-  Future<void> _restoreLastLoginEmail() async {
+  Future<void> _restoreLastLoginPreferences() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final lastEmail = prefs.getString(_lastLoginEmailKey);
+      final rememberPassword = prefs.getBool(_rememberPasswordKey) ?? false;
+      var rememberedPassword =
+          await _secureStorage.read(key: _rememberedPasswordValueKey) ?? '';
+      final legacyRememberedPassword =
+          prefs.getString(_rememberedPasswordValueKey) ?? '';
       if (!mounted) {
         return;
       }
 
+      if (mounted) {
+        setState(() {
+          _rememberPassword = rememberPassword;
+        });
+      }
+
       if (lastEmail != null && lastEmail.trim().isNotEmpty) {
         _emailController.text = lastEmail.trim();
+      }
+
+      // Migrate historical plaintext password from SharedPreferences.
+      if (rememberedPassword.isEmpty && legacyRememberedPassword.isNotEmpty) {
+        rememberedPassword = legacyRememberedPassword;
+        await _secureStorage.write(
+          key: _rememberedPasswordValueKey,
+          value: legacyRememberedPassword,
+        );
+      }
+      if (legacyRememberedPassword.isNotEmpty) {
+        await prefs.remove(_rememberedPasswordValueKey);
+      }
+
+      if (rememberPassword && rememberedPassword.isNotEmpty) {
+        _passwordController.text = rememberedPassword;
+        _passwordRestoredFromStorage = true;
+        _passwordEditedManually = false;
+        _obscurePassword = true;
+      } else {
+        await _secureStorage.delete(key: _rememberedPasswordValueKey);
       }
     } catch (_) {
       // Ignore local cache restore errors, login can still continue manually.
@@ -59,6 +101,38 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_lastLoginEmailKey, normalized);
+  }
+
+  Future<void> _persistRememberedPasswordPreference(String password) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_rememberPasswordKey, _rememberPassword);
+
+    if (_rememberPassword && password.isNotEmpty) {
+      await _secureStorage.write(
+        key: _rememberedPasswordValueKey,
+        value: password,
+      );
+      await prefs.remove(_rememberedPasswordValueKey);
+      return;
+    }
+
+    await _secureStorage.delete(key: _rememberedPasswordValueKey);
+    await prefs.remove(_rememberedPasswordValueKey);
+  }
+
+  Future<void> _handleRememberPasswordChanged(bool value) async {
+    setState(() {
+      _rememberPassword = value;
+    });
+
+    if (value) {
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_rememberPasswordKey, false);
+    await _secureStorage.delete(key: _rememberedPasswordValueKey);
+    await prefs.remove(_rememberedPasswordValueKey);
   }
 
   Future<void> _handleAccountSwitchIfNeeded(String currentUserId) async {
@@ -111,6 +185,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (user != null) {
         await _persistLastLoginEmail(email);
+        await _persistRememberedPasswordPreference(password);
         await _handleAccountSwitchIfNeeded(user.uid);
         final didBootstrapEntitlement =
             await EntitlementService.tryBootstrapDevelopmentEntitlement(user);
@@ -130,10 +205,12 @@ class _LoginScreenState extends State<LoginScreen> {
         }
 
         if (gateDecision.usedLegacyFallback) {
+          final reasonTag =
+              OpsErrorCatalog.buildReasonTag(gateDecision.reasonCode);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                '${gateDecision.message} (${gateDecision.reasonCode})',
+                '${gateDecision.message} [$reasonTag]',
               ),
             ),
           );
@@ -174,12 +251,17 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final busy = _isLoading || _isRestoring;
+    final hasPasswordText = _passwordController.text.isNotEmpty;
+    final canTogglePasswordVisibility =
+        !_isLoading && hasPasswordText && _passwordEditedManually;
     final cachedEmail = _emailController.text.trim();
     final restorationLabel = _isRestoring
-        ? 'Restoring last login email...'
+        ? 'Restoring login details...'
         : (cachedEmail.isEmpty
             ? 'No cached email on this device yet.'
-            : 'Cached email: $cachedEmail');
+            : (_rememberPassword
+                ? 'Cached email: $cachedEmail (password remembered)'
+                : 'Cached email: $cachedEmail'));
 
     return Scaffold(
       body: SafeArea(
@@ -287,14 +369,77 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 12),
                       TextField(
                         controller: _passwordController,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'Password',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.lock),
+                          border: const OutlineInputBorder(),
+                          prefixIcon: const Icon(Icons.lock),
+                          suffixIcon: IconButton(
+                            tooltip: _obscurePassword
+                                ? 'Show password'
+                                : 'Hide password',
+                            onPressed: canTogglePasswordVisibility
+                                ? () {
+                                    setState(() {
+                                      _obscurePassword = !_obscurePassword;
+                                    });
+                                  }
+                                : null,
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
+                            ),
+                          ),
                         ),
-                        obscureText: true,
+                        obscureText: _obscurePassword,
                         enabled: !busy,
+                        enableSuggestions: false,
+                        autocorrect: false,
+                        onTap: () {
+                          final text = _passwordController.text;
+                          if (text.isEmpty) {
+                            return;
+                          }
+
+                          _passwordController.selection = TextSelection(
+                            baseOffset: 0,
+                            extentOffset: text.length,
+                          );
+                        },
                         onSubmitted: (_) => _handleLogin(),
+                        onChanged: (value) {
+                          final shouldMarkEdited = value.isNotEmpty &&
+                              (!_passwordEditedManually ||
+                                  _passwordRestoredFromStorage);
+                          if (!shouldMarkEdited) {
+                            return;
+                          }
+
+                          setState(() {
+                            _passwordEditedManually = true;
+                            _passwordRestoredFromStorage = false;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Checkbox(
+                            value: _rememberPassword,
+                            onChanged: busy
+                                ? null
+                                : (value) => _handleRememberPasswordChanged(
+                                      value ?? false,
+                                    ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Expanded(
+                            child: Text(
+                              'Remember password on this device',
+                              style: TextStyle(fontSize: 13),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -338,6 +483,8 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildErrorCard() {
     final reasonCode = _entitlementReasonCode;
     final errorText = _error ?? '';
+    final mappedReasonTag =
+        reasonCode == null ? null : OpsErrorCatalog.buildReasonTag(reasonCode);
 
     String title = 'Login failed';
     String nextStep = 'Check credentials and try again.';
@@ -391,7 +538,7 @@ class _LoginScreenState extends State<LoginScreen> {
           if (reasonCode != null) ...[
             const SizedBox(height: 4),
             Text(
-              'Code: $reasonCode',
+              'Code: $mappedReasonTag',
               style: TextStyle(color: Colors.red.shade600, fontSize: 11),
             ),
           ],

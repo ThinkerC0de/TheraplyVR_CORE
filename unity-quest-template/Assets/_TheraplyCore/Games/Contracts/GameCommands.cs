@@ -134,8 +134,11 @@ namespace TheraplyCore.Games.Contracts
     {
         public string correlationId;
         public string sessionId;
+        public string studentId;
         public string patientId;
         public string therapistId;
+        public string ownerKey;
+        public string sessionKey;
         public string state;
         public string previousState;
         public string reasonCode;
@@ -158,8 +161,11 @@ namespace TheraplyCore.Games.Contracts
     {
         public string correlationId;
         public string sessionId;
+        public string studentId;
         public string patientId;
         public string therapistId;
+        public string ownerKey;
+        public string sessionKey;
         public string status;
         public string previousStatus;
         public string reasonCode;
@@ -174,8 +180,11 @@ namespace TheraplyCore.Games.Contracts
     {
         public string correlationId;
         public string sessionId;
+        public string studentId;
         public string patientId;
         public string therapistId;
+        public string ownerKey;
+        public string sessionKey;
         public string sessionState;
         public string runtimeStatus;
         public string healthCode;
@@ -205,8 +214,11 @@ namespace TheraplyCore.Games.Contracts
     {
         public string correlationId;
         public string sessionId;
+        public string studentId;
         public string patientId;
         public string therapistId;
+        public string ownerKey;
+        public string sessionKey;
         public string presenceState;
         public string reasonCode;
         public long changedAtUnixMs;

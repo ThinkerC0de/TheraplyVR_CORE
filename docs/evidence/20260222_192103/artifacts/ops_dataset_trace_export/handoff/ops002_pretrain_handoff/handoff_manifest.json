@@ -1,0 +1,43 @@
+﻿{
+    "packageSchema":  "THERAPLY_PRETRAIN_HANDOFF",
+    "packageVersion":  "2026-02-22",
+    "generatedAtUtc":  "2026-02-22T18:23:11.1571715Z",
+    "operatorId":  "ops_validation",
+    "exportDirectory":  "C:\\Users\\licen\\Projects\\theraply-vr-framework\\docs\\evidence\\20260222_192103\\artifacts\\ops_dataset_trace_export",
+    "sourceTracePath":  "C:\\Users\\licen\\Projects\\theraply-vr-framework\\docs\\evidence\\20260222_192103\\artifacts\\ops_dataset_trace_export\\session_trace_input.ndjson",
+    "sessionId":  "validation_session",
+    "exportName":  "ops002_pretrain_export",
+    "exportMode":  "DURABLE_SESSION_TRACE",
+    "readyForTraining":  true,
+    "reasonCode":  "EXPORT_READY_FOR_TRAINING",
+    "totalEvents":  9,
+    "uniqueTaskRuns":  3,
+    "traceLoad":  {
+                      "loaded":  true,
+                      "reasonCode":  "TRACE_LOADED",
+                      "durableTracePath":  "C:\\Users\\licen\\Projects\\theraply-vr-framework\\docs\\evidence\\20260222_192103\\artifacts\\ops_dataset_trace_export\\session_trace_input.ndjson",
+                      "sessionIdFilter":  "validation_session",
+                      "totalLines":  9,
+                      "importedEvents":  9,
+                      "skippedBySession":  0,
+                      "skippedUnsupportedEventType":  0,
+                      "invalidLines":  0
+                  },
+    "files":  [
+                  {
+                      "name":  "canonical_events.ndjson",
+                      "sha256":  "93ed47b0dc99a5637ab62a9cd9d8de15fa2b041a543c94e5f61f298820574355",
+                      "bytes":  6853
+                  },
+                  {
+                      "name":  "pretrain_manifest.json",
+                      "sha256":  "89c6fee6691b002220fc1facd53a235579350b2c57eccc4c558a66115140b350",
+                      "bytes":  3267
+                  },
+                  {
+                      "name":  "operator_report.md",
+                      "sha256":  "468522853af7ed2b5dffd2b2f8558e22a7760ed0211aa0a3b30cd66f1ad19309",
+                      "bytes":  2170
+                  }
+              ]
+}

@@ -116,18 +116,24 @@ namespace TheraplyExamples
 
             var backendState = "missing";
             var pendingOutbox = 0;
+            var inFlightOutbox = 0;
+            var failedOutbox = 0;
+            var replayedOutbox = 0;
             var outboxFailures = 0;
             if (_firebaseDataService != null)
             {
                 var stats = _firebaseDataService.GetStatistics();
                 pendingOutbox = stats.durableOutboxPending;
+                inFlightOutbox = stats.durableOutboxInFlight;
+                failedOutbox = stats.durableOutboxFailed;
+                replayedOutbox = stats.durableOutboxReplayed;
                 outboxFailures = stats.outboxSyncFailures;
 
-                if (outboxFailures > 0)
+                if (failedOutbox > 0 || outboxFailures > 0)
                 {
                     backendState = "degraded";
                 }
-                else if (pendingOutbox > 0)
+                else if (pendingOutbox > 0 || inFlightOutbox > 0)
                 {
                     backendState = "sync_pending";
                 }
@@ -143,7 +149,7 @@ namespace TheraplyExamples
                 $"Session State: {sessionState}\n" +
                 $"Active Game ID: {activeGameId}\n" +
                 $"Runtime Status: {runtimeStatus}\n" +
-                $"Backend: {backendState} (outbox pending={pendingOutbox}, sync failures={outboxFailures})";
+                $"Backend: {backendState} (outbox pending={pendingOutbox}, inFlight={inFlightOutbox}, failed={failedOutbox}, replayed={replayedOutbox}, sync failures={outboxFailures})";
         }
     }
 }

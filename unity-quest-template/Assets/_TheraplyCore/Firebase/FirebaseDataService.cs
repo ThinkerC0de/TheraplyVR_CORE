@@ -72,7 +72,7 @@ namespace TheraplyCore.Firebase
         private string _therapistId;
         private string _localDurablePath;
         private string _sqliteStorePath;
-        private SessionEventStore _sessionEventStore;
+        private DurableEventOutbox _durableEventOutbox;
 
         private int _pointsQueued = 0;
         private int _pointsWritten = 0;
@@ -385,9 +385,9 @@ namespace TheraplyCore.Firebase
                 }
             }
 
-            if (_sessionEventStore != null)
+            if (_durableEventOutbox != null)
             {
-                _sessionEventStore.Flush(TimeSpan.FromSeconds(2));
+                _durableEventOutbox.Flush(TimeSpan.FromSeconds(2));
             }
             
             Logger.Info("[FirebaseData] All data flushed");
@@ -434,8 +434,8 @@ namespace TheraplyCore.Firebase
         
         public QueueStatistics GetStatistics()
         {
-            var durableStats = _sessionEventStore != null
-                ? _sessionEventStore.GetStatistics()
+            var durableStats = _durableEventOutbox != null
+                ? _durableEventOutbox.GetStatistics()
                 : new SessionEventStoreStatistics { mode = "disabled" };
 
             return new QueueStatistics
@@ -454,7 +454,9 @@ namespace TheraplyCore.Firebase
                 durableOutboxSupported = durableStats.outboxSupported,
                 durableOutboxPending = durableStats.outboxPending,
                 durableOutboxInFlight = durableStats.outboxInFlight,
+                durableOutboxFailed = durableStats.outboxFailed,
                 durableOutboxSynced = durableStats.outboxSynced,
+                durableOutboxReplayed = durableStats.outboxReplayed,
                 durableOutboxRetryCount = durableStats.outboxRetryCount,
                 outboxBatchesSynced = _outboxBatchesSynced,
                 outboxEventsSynced = _outboxEventsSynced,
@@ -498,7 +500,7 @@ namespace TheraplyCore.Firebase
                 return report;
             }
 
-            if (_sessionEventStore == null)
+            if (_durableEventOutbox == null)
             {
                 report.reasonCode = "DURABLE_STORE_UNAVAILABLE";
                 return report;
@@ -513,13 +515,13 @@ namespace TheraplyCore.Firebase
                     records = new List<SessionSequenceIndexRecord>(),
                 };
 
-                if (_sessionEventStore == null)
+                if (_durableEventOutbox == null)
                 {
                     result.error = "Session event store unavailable.";
                     return result;
                 }
 
-                result.success = _sessionEventStore.TryGetSessionSequenceIndex(
+                result.success = _durableEventOutbox.TryGetSessionSequenceIndex(
                     normalizedSessionId,
                     out var records,
                     out var error);
@@ -655,7 +657,7 @@ namespace TheraplyCore.Firebase
                 return report;
             }
 
-            if (_sessionEventStore == null)
+            if (_durableEventOutbox == null)
             {
                 report.reasonCode = "DURABLE_STORE_UNAVAILABLE";
                 return report;
@@ -670,13 +672,13 @@ namespace TheraplyCore.Firebase
                     records = new List<SessionSequenceIndexRecord>(),
                 };
 
-                if (_sessionEventStore == null)
+                if (_durableEventOutbox == null)
                 {
                     result.error = "Session event store unavailable.";
                     return result;
                 }
 
-                result.success = _sessionEventStore.TryGetSessionSequenceIndex(
+                result.success = _durableEventOutbox.TryGetSessionSequenceIndex(
                     normalizedSessionId,
                     out var records,
                     out var error);
@@ -768,13 +770,13 @@ namespace TheraplyCore.Firebase
                     error = string.Empty,
                 };
 
-                if (_sessionEventStore == null)
+                if (_durableEventOutbox == null)
                 {
                     result.error = "Session event store unavailable.";
                     return result;
                 }
 
-                result.success = _sessionEventStore.ForceOutboxPending(
+                result.success = _durableEventOutbox.ForceOutboxPending(
                     targetEventIds,
                     DateTime.UtcNow,
                     report.requestedReasonCode,
@@ -830,7 +832,7 @@ namespace TheraplyCore.Firebase
 
         private async Task<bool> TriggerOutboxSyncForSupportAsync()
         {
-            if (_sessionEventStore == null || !_sessionEventStore.SupportsOutboxSync)
+            if (_durableEventOutbox == null || !_durableEventOutbox.SupportsOutboxSync)
             {
                 return false;
             }
@@ -950,7 +952,7 @@ namespace TheraplyCore.Firebase
                 return false;
             }
 
-            if (_sessionEventStore == null || !_sessionEventStore.SupportsOutboxSync)
+            if (_durableEventOutbox == null || !_durableEventOutbox.SupportsOutboxSync)
             {
                 return false;
             }
@@ -966,7 +968,7 @@ namespace TheraplyCore.Firebase
                 return;
             }
 
-            if (_sessionEventStore == null || !_sessionEventStore.SupportsOutboxSync)
+            if (_durableEventOutbox == null || !_durableEventOutbox.SupportsOutboxSync)
             {
                 return;
             }
@@ -987,13 +989,13 @@ namespace TheraplyCore.Firebase
                         error = string.Empty,
                     };
 
-                    if (_sessionEventStore == null)
+                    if (_durableEventOutbox == null)
                     {
                         result.error = "Session event store unavailable.";
                         return result;
                     }
 
-                    result.success = _sessionEventStore.TryClaimOutboxBatch(
+                    result.success = _durableEventOutbox.TryClaimOutboxBatch(
                         claimBatchSize,
                         workerIdentity,
                         out var claimed,
@@ -1045,13 +1047,13 @@ namespace TheraplyCore.Firebase
                                 error = string.Empty,
                             };
 
-                            if (_sessionEventStore == null)
+                            if (_durableEventOutbox == null)
                             {
                                 result.error = "Session event store unavailable.";
                                 return result;
                             }
 
-                            result.success = _sessionEventStore.MarkOutboxBatchSynced(syncedEventIds, out var markError);
+                            result.success = _durableEventOutbox.MarkOutboxBatchSynced(syncedEventIds, out var markError);
                             result.error = markError;
                             return result;
                         });
@@ -2010,7 +2012,7 @@ namespace TheraplyCore.Firebase
             IReadOnlyList<SessionOutboxBatchItem> batch,
             string errorCode)
         {
-            if (_sessionEventStore == null || batch == null || batch.Count == 0)
+            if (_durableEventOutbox == null || batch == null || batch.Count == 0)
             {
                 return false;
             }
@@ -2044,7 +2046,7 @@ namespace TheraplyCore.Firebase
             IReadOnlyList<SessionOutboxRetryRecord> retryRecords,
             string fallbackErrorCode)
         {
-            if (_sessionEventStore == null || retryRecords == null || retryRecords.Count == 0)
+            if (_durableEventOutbox == null || retryRecords == null || retryRecords.Count == 0)
             {
                 return false;
             }
@@ -2090,13 +2092,13 @@ namespace TheraplyCore.Firebase
                     error = string.Empty,
                 };
 
-                if (_sessionEventStore == null)
+                if (_durableEventOutbox == null)
                 {
                     result.error = "Session event store unavailable.";
                     return result;
                 }
 
-                result.success = _sessionEventStore.RescheduleOutboxBatch(normalizedRetries, out var retryError);
+                result.success = _durableEventOutbox.RescheduleOutboxBatch(normalizedRetries, out var retryError);
                 result.error = retryError;
                 return result;
             });
@@ -2246,7 +2248,7 @@ namespace TheraplyCore.Firebase
                 return;
             }
 
-            if (_sessionEventStore != null)
+            if (_durableEventOutbox != null)
             {
                 return;
             }
@@ -2265,7 +2267,7 @@ namespace TheraplyCore.Firebase
                 _sqliteStorePath = Path.Combine(Application.persistentDataPath, folder, sqliteFileName);
             }
 
-            _sessionEventStore = new SessionEventStore(
+            _durableEventOutbox = new DurableEventOutbox(
                 enabled: true,
                 sqlitePath: _sqliteStorePath,
                 jsonLinePath: _localDurablePath,
@@ -2277,19 +2279,19 @@ namespace TheraplyCore.Firebase
 
         private void DisposeDurableStore()
         {
-            if (_sessionEventStore == null)
+            if (_durableEventOutbox == null)
             {
                 return;
             }
 
             try
             {
-                _sessionEventStore.Flush(TimeSpan.FromSeconds(2));
-                _sessionEventStore.Dispose();
+                _durableEventOutbox.Flush(TimeSpan.FromSeconds(2));
+                _durableEventOutbox.Dispose();
             }
             finally
             {
-                _sessionEventStore = null;
+                _durableEventOutbox = null;
             }
         }
 
@@ -2323,7 +2325,7 @@ namespace TheraplyCore.Firebase
                 return false;
             }
 
-            if (_sessionEventStore == null)
+            if (_durableEventOutbox == null)
             {
                 error = "Durable event store is not initialized.";
                 return false;
@@ -2344,9 +2346,9 @@ namespace TheraplyCore.Firebase
                     createdAtUtc = ResolveTimestamp(dataPoint).ToString("O", CultureInfo.InvariantCulture),
                     payloadJson = SerializePayloadDictionary(dataPoint.payload),
                 };
-                record.checksum = SessionEventStore.ComputeChecksum(record);
+                record.checksum = DurableEventOutbox.ComputeChecksum(record);
 
-                if (!_sessionEventStore.TryEnqueue(record, out error))
+                if (!_durableEventOutbox.TryEnqueue(record, out error))
                 {
                     return false;
                 }
@@ -2628,7 +2630,9 @@ namespace TheraplyCore.Firebase
                 $"Outbox supported: {stats.durableOutboxSupported}\n" +
                 $"Outbox pending: {stats.durableOutboxPending}\n" +
                 $"Outbox in-flight: {stats.durableOutboxInFlight}\n" +
+                $"Outbox failed: {stats.durableOutboxFailed}\n" +
                 $"Outbox synced: {stats.durableOutboxSynced}\n" +
+                $"Outbox replayed: {stats.durableOutboxReplayed}\n" +
                 $"Outbox retries (store): {stats.durableOutboxRetryCount}\n" +
                 $"Outbox batches synced: {stats.outboxBatchesSynced}\n" +
                 $"Outbox events synced: {stats.outboxEventsSynced}\n" +
@@ -2733,7 +2737,9 @@ namespace TheraplyCore.Firebase
         public bool durableOutboxSupported;
         public int durableOutboxPending;
         public int durableOutboxInFlight;
+        public int durableOutboxFailed;
         public int durableOutboxSynced;
+        public int durableOutboxReplayed;
         public int durableOutboxRetryCount;
         public int outboxBatchesSynced;
         public int outboxEventsSynced;

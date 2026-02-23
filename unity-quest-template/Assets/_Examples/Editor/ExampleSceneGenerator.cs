@@ -9,7 +9,7 @@ namespace TheraplyExamples.Editor
     {
         private const string MainTemplateScenePath = "Assets/_Examples/Scenes/DemoCubeScene.unity";
         private const string MainScenePath = "Assets/_Examples/Scenes/MainScene.unity";
-        private const string ExampleCubeScenePath = "Assets/_Examples/Scenes/ExampleCubeScene.unity";
+        private const string CubeClickerVrScenePath = "Assets/_Examples/Scenes/CubeClickerVR.unity";
         private const string PulseTargetsScenePath = "Assets/_Examples/Scenes/PulseTargetsScene.unity";
 
         [MenuItem("Theraply/Examples/Generate Main + Game Scenes")]
@@ -36,8 +36,8 @@ namespace TheraplyExamples.Editor
         {
             GenerateMainScene();
             GenerateGameplayScene(
-                ExampleCubeScenePath,
-                "ExampleCubeSceneRoot",
+                CubeClickerVrScenePath,
+                "CubeClickerVRRoot",
                 new Color(0.17f, 0.30f, 0.46f, 1f));
             GenerateGameplayScene(
                 PulseTargetsScenePath,

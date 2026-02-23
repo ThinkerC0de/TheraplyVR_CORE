@@ -31,7 +31,7 @@ namespace TheraplyCore.Streaming
         [SerializeField] private bool _autoDetectCamera = false;
 
         [Header("Audio Settings")]
-        [SerializeField] private bool _sendQuestAudio = true;
+        [SerializeField] private bool _sendQuestAudio = false;
         [SerializeField] private AudioListener _sourceAudioListener;
         [SerializeField] private bool _receiveTherapistVoice = true;
         
@@ -47,6 +47,8 @@ namespace TheraplyCore.Streaming
             "stun:stun.l.google.com:19302",
             "stun:stun1.l.google.com:19302"
         };
+        [SerializeField] private bool _preferLanFirst = true;
+        [SerializeField] private float _lanProbeTimeoutSeconds = 4f;
         
         [Header("Debug")]
         [SerializeField] private bool _logStats = true;
@@ -68,12 +70,17 @@ namespace TheraplyCore.Streaming
         private GameObject _remoteVoiceAudioGo;
         
         private bool _isStreaming = false;
+        private bool _isLanOnlyModeActive = false;
+        private bool _stunFallbackRequestedForCurrentPeer = false;
+        private Coroutine _lanFallbackProbeCoroutine;
 
         private Coroutine _webrtcUpdateCoroutine;
         private int _framesSent = 0;
         
         /// <summary>Fired when an ICE candidate is generated; signaling layer sends it to the client via TCP.</summary>
         public event Action<RTCIceCandidate> OnIceCandidateGenerated;
+        /// <summary>Raised when LAN-only ICE path failed and signaling should renegotiate with STUN.</summary>
+        public event Action<string> OnStunFallbackRequested;
         
         // ============================================
         // LIFECYCLE
@@ -260,7 +267,7 @@ namespace TheraplyCore.Streaming
         // ============================================
         
         /// <summary>Start WebRTC streaming (creates peer connection). Signaling sends offer when client is connected.</summary>
-        public void StartStreaming()
+        public void StartStreaming(bool forceStun = false)
         {
             if (_isStreaming) return;
             if (_sourceCamera == null || _renderTexture == null)
@@ -300,10 +307,9 @@ namespace TheraplyCore.Streaming
                     }
                 }
 
-                RTCConfiguration config = new RTCConfiguration
-                {
-                    iceServers = new RTCIceServer[] { new RTCIceServer { urls = _stunServers } }
-                };
+                _stunFallbackRequestedForCurrentPeer = false;
+                _isLanOnlyModeActive = _preferLanFirst && !forceStun;
+                var config = BuildIceConfiguration(_isLanOnlyModeActive);
                 _peerConnection = new RTCPeerConnection(ref config);
                 foreach (var track in _mediaStream.GetTracks())
                     _peerConnection.AddTrack(track, _mediaStream);
@@ -313,6 +319,15 @@ namespace TheraplyCore.Streaming
                 _peerConnection.OnTrack = OnTrack;
                 _isStreaming = true;
                 _framesSent = 0;
+                if (_isLanOnlyModeActive)
+                {
+                    Debug.Log("[MediaStreamService] LAN-first mode active (host ICE only, STUN fallback armed).");
+                    StartLanFallbackProbe();
+                }
+                else
+                {
+                    Debug.Log("[MediaStreamService] STUN mode active (direct + server reflexive ICE candidates).");
+                }
                 Debug.Log("[MediaStreamService] ✅ WebRTC streaming started (offer will be sent by signaling)");
                 if (_logStats) StartCoroutine(LogStatistics());
             }
@@ -325,7 +340,10 @@ namespace TheraplyCore.Streaming
         public void StopStreaming()
         {
             if (!_isStreaming) return;
+            StopLanFallbackProbe();
             _isStreaming = false;
+            _isLanOnlyModeActive = false;
+            _stunFallbackRequestedForCurrentPeer = false;
             if (_peerConnection != null)
             {
                 _peerConnection.Close();
@@ -466,6 +484,91 @@ namespace TheraplyCore.Streaming
             if (_logVerbose) Debug.Log($"[MediaStreamService] ICE Candidate: {candidate.Candidate}");
             OnIceCandidateGenerated?.Invoke(candidate);
         }
+
+        private RTCConfiguration BuildIceConfiguration(bool lanOnlyMode)
+        {
+            if (lanOnlyMode || _stunServers == null || _stunServers.Length == 0)
+            {
+                return new RTCConfiguration();
+            }
+
+            return new RTCConfiguration
+            {
+                iceServers = new RTCIceServer[] { new RTCIceServer { urls = _stunServers } }
+            };
+        }
+
+        private void StartLanFallbackProbe()
+        {
+            StopLanFallbackProbe();
+
+            if (!_isLanOnlyModeActive || _lanProbeTimeoutSeconds <= 0f)
+            {
+                return;
+            }
+
+            _lanFallbackProbeCoroutine = StartCoroutine(LanFallbackProbeTimeout());
+        }
+
+        private void StopLanFallbackProbe()
+        {
+            if (_lanFallbackProbeCoroutine == null)
+            {
+                return;
+            }
+
+            StopCoroutine(_lanFallbackProbeCoroutine);
+            _lanFallbackProbeCoroutine = null;
+        }
+
+        private IEnumerator LanFallbackProbeTimeout()
+        {
+            yield return new WaitForSeconds(_lanProbeTimeoutSeconds);
+            _lanFallbackProbeCoroutine = null;
+
+            if (!_isStreaming || !_isLanOnlyModeActive)
+            {
+                yield break;
+            }
+
+            if (IsConnectionEstablished())
+            {
+                yield break;
+            }
+
+            RequestStunFallback("LAN_PROBE_TIMEOUT");
+        }
+
+        private bool IsConnectionEstablished()
+        {
+            if (_peerConnection == null)
+            {
+                return false;
+            }
+
+            return _peerConnection.ConnectionState == RTCPeerConnectionState.Connected ||
+                   _peerConnection.IceConnectionState == RTCIceConnectionState.Connected ||
+                   _peerConnection.IceConnectionState == RTCIceConnectionState.Completed;
+        }
+
+        private void RequestStunFallback(string reasonCode)
+        {
+            if (!_isStreaming || !_isLanOnlyModeActive || _stunFallbackRequestedForCurrentPeer)
+            {
+                return;
+            }
+
+            if (_stunServers == null || _stunServers.Length == 0)
+            {
+                Debug.LogWarning($"[MediaStreamService] STUN fallback requested ({reasonCode}), but no STUN servers configured.");
+                return;
+            }
+
+            _stunFallbackRequestedForCurrentPeer = true;
+            StopLanFallbackProbe();
+            Debug.LogWarning($"[MediaStreamService] LAN-first attempt failed ({reasonCode}). Requesting STUN fallback renegotiation.");
+            OnStunFallbackRequested?.Invoke(reasonCode);
+        }
         
         private void OnIceConnectionChange(RTCIceConnectionState state)
         {
@@ -474,13 +577,20 @@ namespace TheraplyCore.Streaming
             switch (state)
             {
                 case RTCIceConnectionState.Connected:
+                case RTCIceConnectionState.Completed:
+                    StopLanFallbackProbe();
                     Debug.Log("[MediaStreamService] ✅ ICE Connected - streaming active!");
                     break;
                 case RTCIceConnectionState.Disconnected:
                     Debug.LogWarning("[MediaStreamService] ⚠️ ICE Disconnected");
+                    if (_isLanOnlyModeActive && !_stunFallbackRequestedForCurrentPeer)
+                    {
+                        StartLanFallbackProbe();
+                    }
                     break;
                 case RTCIceConnectionState.Failed:
                     Debug.LogError("[MediaStreamService] ❌ ICE Failed - connection lost");
+                    RequestStunFallback("ICE_FAILED");
                     break;
             }
         }
@@ -492,10 +602,12 @@ namespace TheraplyCore.Streaming
             switch (state)
             {
                 case RTCPeerConnectionState.Connected:
+                    StopLanFallbackProbe();
                     Debug.Log("[MediaStreamService] 🎥 Video streaming LIVE!");
                     break;
                 case RTCPeerConnectionState.Failed:
                     Debug.LogError("[MediaStreamService] ❌ Peer connection failed");
+                    RequestStunFallback("PEER_FAILED");
                     break;
                 case RTCPeerConnectionState.Closed:
                     Debug.Log("[MediaStreamService] Connection closed");
@@ -600,6 +712,7 @@ namespace TheraplyCore.Streaming
         // ============================================
         
         public bool IsStreaming => _isStreaming;
+        public bool IsLanOnlyMode => _isLanOnlyModeActive;
         public Camera SourceCamera => _sourceCamera;
         public RTCPeerConnection PeerConnection => _peerConnection;
         public int FramesSent => _framesSent;

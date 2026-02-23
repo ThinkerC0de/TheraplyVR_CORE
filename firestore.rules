@@ -100,6 +100,21 @@ service cloud.firestore {
       }
     }
 
+    match /operator_incident_reports/{reportId} {
+      allow read: if isAdminOperator() || (
+        isSignedIn() && resource.data.actorUid == request.auth.uid
+      );
+      allow create: if isSignedIn() &&
+        request.resource.data.actorUid == request.auth.uid &&
+        request.resource.data.reportId == reportId &&
+        request.resource.data.queueName is string &&
+        request.resource.data.generatedAtUtc is string &&
+        request.resource.data.submittedAtUtc is string &&
+        request.resource.data.incidentCount is int &&
+        request.resource.data.incidents is list;
+      allow update, delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

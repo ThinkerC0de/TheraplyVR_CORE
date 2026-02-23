@@ -12,8 +12,11 @@ void main() {
         utf8.encode(
           jsonEncode(<String, dynamic>{
             'sessionId': 'session-1',
+            'studentId': 'student-1',
             'patientId': 'patient-1',
             'therapistId': 'therapist-1',
+            'ownerKey': 'therapist-1|student-1',
+            'sessionKey': 'therapist-1|student-1|session-1',
             'sessionState': 'IN_PROGRESS',
             'runtimeStatus': TherapistRuntimeStatus.playing.wireValue,
             'healthCode': 'OK',
@@ -35,6 +38,9 @@ void main() {
 
     expect(signal, isNotNull);
     expect(signal!.sessionId, 'session-1');
+    expect(signal.studentId, 'student-1');
+    expect(signal.ownerKey, 'therapist-1|student-1');
+    expect(signal.sessionKey, 'therapist-1|student-1|session-1');
     expect(signal.runtimeStatus, TherapistRuntimeStatus.playing);
     expect(signal.healthy, isTrue);
     expect(signal.healthCode, 'OK');
@@ -47,8 +53,11 @@ void main() {
     final oldUtc = DateTime.now().toUtc().subtract(const Duration(seconds: 10));
     final signal = SessionWatchdogHeartbeatSignal(
       sessionId: 'session-1',
+      studentId: 'student-1',
       patientId: 'patient-1',
       therapistId: 'therapist-1',
+      ownerKey: 'therapist-1|student-1',
+      sessionKey: 'therapist-1|student-1|session-1',
       sessionState: 'IN_PROGRESS',
       runtimeStatus: TherapistRuntimeStatus.playing,
       healthCode: 'OK',
@@ -64,8 +73,11 @@ void main() {
 
     final customSignal = SessionWatchdogHeartbeatSignal(
       sessionId: signal.sessionId,
+      studentId: signal.studentId,
       patientId: signal.patientId,
       therapistId: signal.therapistId,
+      ownerKey: signal.ownerKey,
+      sessionKey: signal.sessionKey,
       sessionState: signal.sessionState,
       runtimeStatus: signal.runtimeStatus,
       healthCode: signal.healthCode,
@@ -90,8 +102,11 @@ void main() {
         utf8.encode(
           jsonEncode(<String, dynamic>{
             'sessionId': 'session-2',
+            'studentId': 'student-2',
             'patientId': 'patient-2',
             'therapistId': 'therapist-2',
+            'ownerKey': 'therapist-2|student-2',
+            'sessionKey': 'therapist-2|student-2|session-2',
             'presenceState': DevicePresenceState.focusLost.wireValue,
             'reasonCode': 'APP_FOCUS_LOST',
             'changedAtUnixMs': nowUtc.millisecondsSinceEpoch,
@@ -109,6 +124,9 @@ void main() {
 
     expect(signal, isNotNull);
     expect(signal!.sessionId, 'session-2');
+    expect(signal.studentId, 'student-2');
+    expect(signal.ownerKey, 'therapist-2|student-2');
+    expect(signal.sessionKey, 'therapist-2|student-2|session-2');
     expect(signal.presenceState, DevicePresenceState.focusLost);
     expect(signal.reasonCode, 'APP_FOCUS_LOST');
     expect(signal.appFocused, isFalse);

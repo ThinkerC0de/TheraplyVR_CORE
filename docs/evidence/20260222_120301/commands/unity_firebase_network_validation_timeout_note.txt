@@ -1,0 +1,3 @@
+Command: Unity.exe -batchmode -nographics -projectPath <repo>/unity-quest-template -executeMethod TheraplyCore.Editor.Automation.FirebaseNetworkValidation.RunFirebaseNetworkValidation
+Result: command wrapper timeout after 122008 ms (Unity did not auto-exit in no-quit mode).
+Action: Unity background processes terminated manually after required phase markers were captured in unity_firebase_network_validation.log.

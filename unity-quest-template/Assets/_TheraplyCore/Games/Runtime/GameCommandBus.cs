@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -27,9 +28,19 @@ namespace TheraplyCore.Games.Runtime
         [SerializeField] private bool _logOutbound = true;
         [SerializeField] private bool _logUnmappedIncoming = false;
 
+        [Header("Critical Command Durability")]
+        [SerializeField] private bool _enableCommandJournal = true;
+        [SerializeField] private string _commandJournalFolder = "TheraplyRuntime";
+        [SerializeField] private string _commandJournalFileName = "critical_commands.ndjson";
+        [SerializeField] private int _commandJournalMaxEntriesInMemory = 4096;
+        [SerializeField] private int _commandJournalMaxPendingWrites = 1024;
+        [SerializeField] private bool _logCommandJournalVerbose = false;
+
         private readonly Dictionary<Type, string> _commandIdByType = new Dictionary<Type, string>();
         private readonly Dictionary<string, List<Delegate>> _handlersByCommandId =
             new Dictionary<string, List<Delegate>>(StringComparer.OrdinalIgnoreCase);
+        private CommandJournal _commandJournal;
+        private IdempotencyGuard _idempotencyGuard;
 
         private void Awake()
         {
@@ -44,6 +55,7 @@ namespace TheraplyCore.Games.Runtime
             }
 
             RegisterBuiltInCommandMappings();
+            InitializeCommandJournal();
         }
 
         private void OnEnable()
@@ -60,6 +72,11 @@ namespace TheraplyCore.Games.Runtime
             {
                 _tcpServerService.OnMessageReceived -= HandleIncomingMessage;
             }
+        }
+
+        private void OnDestroy()
+        {
+            DisposeCommandJournal();
         }
 
         public void Subscribe<TCommand>(Action<TCommand> handler) where TCommand : IGameCommand
@@ -158,6 +175,26 @@ namespace TheraplyCore.Games.Runtime
             }
 
             var isCritical = CriticalCommandIds.IsCritical(message.commandId);
+            var initialSessionId = isCritical ? ResolveCriticalSessionIdHint(message.payloadString) : string.Empty;
+            if (isCritical &&
+                _idempotencyGuard != null &&
+                !_idempotencyGuard.TryBeginCriticalCommand(
+                    message.messageId,
+                    message.commandId,
+                    initialSessionId,
+                    out var idempotencyDecision))
+            {
+                if (idempotencyDecision.shouldAck)
+                {
+                    _ = SendCriticalAckAsync(
+                        message,
+                        idempotencyDecision.ackStatus,
+                        idempotencyDecision.reasonCode,
+                        idempotencyDecision.sessionId);
+                }
+
+                return;
+            }
 
             if (!_handlersByCommandId.TryGetValue(message.commandId, out var handlers) || handlers.Count == 0)
             {
@@ -168,7 +205,12 @@ namespace TheraplyCore.Games.Runtime
 
                 if (isCritical)
                 {
-                    _ = SendCriticalAckAsync(message, CommandAckStatus.Nack, AckReasonCodes.NoHandler, string.Empty);
+                    CompleteCriticalCommand(
+                        message,
+                        initialSessionId,
+                        CommandJournalStatus.Rejected,
+                        AckReasonCodes.NoHandler);
+                    _ = SendCriticalAckAsync(message, CommandAckStatus.Nack, AckReasonCodes.NoHandler, initialSessionId);
                 }
                 return;
             }
@@ -192,11 +234,20 @@ namespace TheraplyCore.Games.Runtime
                 {
                     if (isCritical)
                     {
+                        var rejectCode = string.IsNullOrWhiteSpace(rejectReasonCode)
+                            ? AckReasonCodes.DeserializeFailed
+                            : rejectReasonCode;
+                        var rejectSessionId = string.IsNullOrWhiteSpace(parsedSessionId) ? initialSessionId : parsedSessionId;
+                        CompleteCriticalCommand(
+                            message,
+                            rejectSessionId,
+                            CommandJournalStatus.Rejected,
+                            rejectCode);
                         _ = SendCriticalAckAsync(
                             message,
                             CommandAckStatus.Nack,
-                            string.IsNullOrWhiteSpace(rejectReasonCode) ? AckReasonCodes.DeserializeFailed : rejectReasonCode,
-                            parsedSessionId);
+                            rejectCode,
+                            rejectSessionId);
                         return;
                     }
 
@@ -217,11 +268,17 @@ namespace TheraplyCore.Games.Runtime
                     Logger.Error($"[GameCommandBus] Handler failed for {message.commandId}: {e.Message}", e);
                     if (isCritical)
                     {
+                        var failedSessionId = string.IsNullOrWhiteSpace(envelopeSessionId) ? initialSessionId : envelopeSessionId;
+                        CompleteCriticalCommand(
+                            message,
+                            failedSessionId,
+                            CommandJournalStatus.Failed,
+                            AckReasonCodes.HandlerException);
                         _ = SendCriticalAckAsync(
                             message,
                             CommandAckStatus.Nack,
                             AckReasonCodes.HandlerException,
-                            envelopeSessionId);
+                            failedSessionId);
                     }
                     return;
                 }
@@ -234,8 +291,110 @@ namespace TheraplyCore.Games.Runtime
 
             if (isCritical)
             {
-                _ = SendCriticalAckAsync(message, CommandAckStatus.Ack, AckReasonCodes.Ok, envelopeSessionId);
+                var finalSessionId = string.IsNullOrWhiteSpace(envelopeSessionId) ? initialSessionId : envelopeSessionId;
+                CompleteCriticalCommand(
+                    message,
+                    finalSessionId,
+                    CommandJournalStatus.Applied,
+                    AckReasonCodes.Ok);
+                _ = SendCriticalAckAsync(message, CommandAckStatus.Ack, AckReasonCodes.Ok, finalSessionId);
             }
+        }
+
+        private void InitializeCommandJournal()
+        {
+            if (!_enableCommandJournal)
+            {
+                _idempotencyGuard = null;
+                _commandJournal = null;
+                return;
+            }
+
+            if (_commandJournal != null)
+            {
+                return;
+            }
+
+            try
+            {
+                var folder = string.IsNullOrWhiteSpace(_commandJournalFolder)
+                    ? "TheraplyRuntime"
+                    : _commandJournalFolder.Trim();
+                var fileName = string.IsNullOrWhiteSpace(_commandJournalFileName)
+                    ? "critical_commands.ndjson"
+                    : _commandJournalFileName.Trim();
+                var directory = Path.Combine(Application.persistentDataPath, folder);
+                Directory.CreateDirectory(directory);
+                var path = Path.Combine(directory, fileName);
+
+                _commandJournal = new CommandJournal(
+                    path,
+                    _commandJournalMaxEntriesInMemory,
+                    _commandJournalMaxPendingWrites,
+                    _logCommandJournalVerbose);
+                _idempotencyGuard = new IdempotencyGuard(_commandJournal, _logCommandJournalVerbose);
+
+                if (_logCommandJournalVerbose)
+                {
+                    Logger.Info($"[GameCommandBus] Command journal enabled at {path}");
+                }
+            }
+            catch (Exception exception)
+            {
+                _commandJournal = null;
+                _idempotencyGuard = null;
+                Logger.Warning($"[GameCommandBus] Command journal unavailable: {exception.Message}");
+            }
+        }
+
+        private void DisposeCommandJournal()
+        {
+            var journal = _commandJournal;
+            _commandJournal = null;
+            _idempotencyGuard = null;
+
+            if (journal == null)
+            {
+                return;
+            }
+
+            try
+            {
+                journal.Flush(TimeSpan.FromMilliseconds(250));
+            }
+            catch (Exception)
+            {
+                // Best-effort flush; dispose still proceeds.
+            }
+
+            try
+            {
+                journal.Dispose();
+            }
+            catch (Exception exception)
+            {
+                Logger.Warning($"[GameCommandBus] Command journal dispose failed: {exception.Message}");
+            }
+        }
+
+        private void CompleteCriticalCommand(
+            NetworkMessage message,
+            string sessionId,
+            string status,
+            string reasonCode)
+        {
+            if (_idempotencyGuard == null ||
+                !CriticalCommandIds.IsCritical(message.commandId))
+            {
+                return;
+            }
+
+            _idempotencyGuard.CompleteCriticalCommand(
+                message.messageId,
+                message.commandId,
+                sessionId,
+                status,
+                reasonCode);
         }
 
         private bool TryDeserializeCommand(
@@ -326,6 +485,26 @@ namespace TheraplyCore.Games.Runtime
             return true;
         }
 
+        private static string ResolveCriticalSessionIdHint(string payloadJson)
+        {
+            if (string.IsNullOrWhiteSpace(payloadJson))
+            {
+                return string.Empty;
+            }
+
+            try
+            {
+                var envelope = JsonUtility.FromJson<CriticalCommandEnvelope>(payloadJson);
+                return envelope == null || string.IsNullOrWhiteSpace(envelope.sessionId)
+                    ? string.Empty
+                    : envelope.sessionId.Trim();
+            }
+            catch (Exception)
+            {
+                return string.Empty;
+            }
+        }
+
         private static bool LooksLikeCriticalEnvelope(CriticalCommandEnvelope envelope)
         {
             return envelope != null &&
@@ -388,7 +567,11 @@ namespace TheraplyCore.Games.Runtime
                 envelope.payloadJson = "{}";
             }
 
-            if (!ValidateSessionLock(message.commandId, envelope.sessionId, out rejectReasonCode))
+            if (!ValidateSessionLock(
+                    message.commandId,
+                    envelope.sessionId,
+                    envelope.payloadJson,
+                    out rejectReasonCode))
             {
                 return false;
             }
@@ -399,12 +582,37 @@ namespace TheraplyCore.Games.Runtime
         private bool ValidateSessionLock(
             string commandId,
             string envelopeSessionId,
+            string payloadJson,
             out string rejectReasonCode)
         {
             rejectReasonCode = string.Empty;
 
+            if (!ValidateOwnershipLock(commandId, envelopeSessionId, payloadJson, out rejectReasonCode))
+            {
+                return false;
+            }
+
             if (string.Equals(commandId, GameCommandIds.SessionAttach, StringComparison.OrdinalIgnoreCase))
             {
+                return true;
+            }
+
+            if (string.Equals(commandId, GameCommandIds.EndSession, StringComparison.OrdinalIgnoreCase))
+            {
+                if (_sessionContext == null)
+                {
+                    _sessionContext = FindFirstObjectByType<GameSessionContext>();
+                }
+
+                var activeSessionIdForEnd = _sessionContext == null ? string.Empty : _sessionContext.SessionId ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(activeSessionIdForEnd) &&
+                    !string.IsNullOrWhiteSpace(envelopeSessionId) &&
+                    !string.Equals(activeSessionIdForEnd, envelopeSessionId, StringComparison.Ordinal))
+                {
+                    Logger.Warning(
+                        $"[GameCommandBus] Allowing END_SESSION despite session mismatch. activeSession={activeSessionIdForEnd}, incomingSession={envelopeSessionId}");
+                }
+
                 return true;
             }
 
@@ -442,6 +650,114 @@ namespace TheraplyCore.Games.Runtime
 
             Logger.Warning(
                 $"[GameCommandBus] Rejecting critical command due active session lock. activeSession={activeSessionId}, state={activeState}, incomingSession={envelopeSessionId}, command={commandId}");
+            rejectReasonCode = AckReasonCodes.SessionLockConflict;
+            return false;
+        }
+
+        private bool ValidateOwnershipLock(
+            string commandId,
+            string envelopeSessionId,
+            string payloadJson,
+            out string rejectReasonCode)
+        {
+            rejectReasonCode = string.Empty;
+
+            if (_sessionContext == null)
+            {
+                _sessionContext = FindFirstObjectByType<GameSessionContext>();
+            }
+
+            if (_sessionContext == null)
+            {
+                return true;
+            }
+
+            var activeSessionId = (_sessionContext.SessionId ?? string.Empty).Trim();
+            var activeState = _sessionContext.SessionState;
+            if (string.IsNullOrWhiteSpace(activeSessionId) || IsTerminalState(activeState))
+            {
+                return true;
+            }
+
+            ResolveIncomingOwnership(
+                payloadJson,
+                out var incomingTherapistId,
+                out var incomingStudentId,
+                out var incomingOwnerKeyRaw,
+                out var incomingSessionKeyRaw);
+
+            if (string.IsNullOrWhiteSpace(incomingTherapistId) || string.IsNullOrWhiteSpace(incomingStudentId))
+            {
+                Logger.Warning(
+                    $"[GameCommandBus] Rejecting critical command due missing ownership metadata. command={commandId}, session={envelopeSessionId}");
+                rejectReasonCode = AckReasonCodes.SessionOwnershipMissing;
+                return false;
+            }
+
+            var activeTherapistId = (_sessionContext.TherapistId ?? string.Empty).Trim();
+            var activeStudentId = (_sessionContext.PatientId ?? string.Empty).Trim();
+            var activeOwnerKey = BuildOwnerKey(activeTherapistId, activeStudentId);
+            if (string.IsNullOrWhiteSpace(activeOwnerKey))
+            {
+                return true;
+            }
+
+            var incomingOwnerKey = string.IsNullOrWhiteSpace(incomingOwnerKeyRaw)
+                ? BuildOwnerKey(incomingTherapistId, incomingStudentId)
+                : incomingOwnerKeyRaw.Trim();
+            if (string.IsNullOrWhiteSpace(incomingOwnerKey))
+            {
+                Logger.Warning(
+                    $"[GameCommandBus] Rejecting critical command due empty ownership key. command={commandId}, session={envelopeSessionId}");
+                rejectReasonCode = AckReasonCodes.SessionOwnershipMissing;
+                return false;
+            }
+
+            if (!string.Equals(activeOwnerKey, incomingOwnerKey, StringComparison.Ordinal))
+            {
+                Logger.Warning(
+                    $"[GameCommandBus] Rejecting critical command due ownership mismatch. command={commandId}, session={envelopeSessionId}, activeOwner={activeOwnerKey}, incomingOwner={incomingOwnerKey}");
+                rejectReasonCode = AckReasonCodes.SessionOwnershipConflict;
+                return false;
+            }
+
+            var activeSessionKey = BuildSessionKey(activeOwnerKey, activeSessionId);
+            var incomingSessionKey = string.IsNullOrWhiteSpace(incomingSessionKeyRaw)
+                ? BuildSessionKey(incomingOwnerKey, envelopeSessionId)
+                : incomingSessionKeyRaw.Trim();
+
+            if (string.IsNullOrWhiteSpace(activeSessionKey) || string.IsNullOrWhiteSpace(incomingSessionKey))
+            {
+                return true;
+            }
+
+            if (string.Equals(activeSessionKey, incomingSessionKey, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            if (string.Equals(commandId, GameCommandIds.SessionAttach, StringComparison.OrdinalIgnoreCase))
+            {
+                Logger.Warning(
+                    $"[GameCommandBus] Allowing SESSION_ATTACH with ownership match despite session key mismatch. activeSessionKey={activeSessionKey}, incomingSessionKey={incomingSessionKey}");
+                return true;
+            }
+
+            if (string.Equals(commandId, GameCommandIds.EndSession, StringComparison.OrdinalIgnoreCase))
+            {
+                Logger.Warning(
+                    $"[GameCommandBus] Allowing END_SESSION with ownership match despite session key mismatch. activeSessionKey={activeSessionKey}, incomingSessionKey={incomingSessionKey}");
+                return true;
+            }
+
+            if (activeState == GameContracts.SessionLifecycleState.CREATED &&
+                string.Equals(commandId, GameCommandIds.StartGame, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            Logger.Warning(
+                $"[GameCommandBus] Rejecting critical command due session key mismatch. command={commandId}, activeSessionKey={activeSessionKey}, incomingSessionKey={incomingSessionKey}");
             rejectReasonCode = AckReasonCodes.SessionLockConflict;
             return false;
         }
@@ -501,6 +817,74 @@ namespace TheraplyCore.Games.Runtime
             return ok;
         }
 
+        private static void ResolveIncomingOwnership(
+            string payloadJson,
+            out string therapistId,
+            out string studentId,
+            out string ownerKey,
+            out string sessionKey)
+        {
+            therapistId = string.Empty;
+            studentId = string.Empty;
+            ownerKey = string.Empty;
+            sessionKey = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(payloadJson))
+            {
+                return;
+            }
+
+            try
+            {
+                var probe = JsonUtility.FromJson<CriticalCommandOwnershipProbe>(payloadJson);
+                if (probe == null)
+                {
+                    return;
+                }
+
+                therapistId = (probe.therapistId ?? string.Empty).Trim();
+                if (!string.IsNullOrWhiteSpace(probe.studentId))
+                {
+                    studentId = probe.studentId.Trim();
+                }
+                else
+                {
+                    studentId = (probe.patientId ?? string.Empty).Trim();
+                }
+
+                ownerKey = (probe.ownerKey ?? string.Empty).Trim();
+                sessionKey = (probe.sessionKey ?? string.Empty).Trim();
+            }
+            catch (Exception)
+            {
+                // Keep empty fields so caller can decide whether to reject or fallback.
+            }
+        }
+
+        private static string BuildOwnerKey(string therapistId, string studentId)
+        {
+            var normalizedTherapistId = string.IsNullOrWhiteSpace(therapistId) ? string.Empty : therapistId.Trim();
+            var normalizedStudentId = string.IsNullOrWhiteSpace(studentId) ? string.Empty : studentId.Trim();
+            if (string.IsNullOrWhiteSpace(normalizedTherapistId) || string.IsNullOrWhiteSpace(normalizedStudentId))
+            {
+                return string.Empty;
+            }
+
+            return $"{normalizedTherapistId}|{normalizedStudentId}";
+        }
+
+        private static string BuildSessionKey(string ownerKey, string sessionId)
+        {
+            var normalizedOwnerKey = string.IsNullOrWhiteSpace(ownerKey) ? string.Empty : ownerKey.Trim();
+            var normalizedSessionId = string.IsNullOrWhiteSpace(sessionId) ? string.Empty : sessionId.Trim();
+            if (string.IsNullOrWhiteSpace(normalizedOwnerKey) || string.IsNullOrWhiteSpace(normalizedSessionId))
+            {
+                return string.Empty;
+            }
+
+            return $"{normalizedOwnerKey}|{normalizedSessionId}";
+        }
+
         private static void TryPopulateCorrelationId(object commandInstance, string fallbackMessageId)
         {
             if (commandInstance == null) return;
@@ -556,9 +940,21 @@ namespace TheraplyCore.Games.Runtime
             SetCommandIdMapping(typeof(GameInstallStatusCommand), GameCommandIds.GameInstallStatus);
         }
 
+        [Serializable]
+        private sealed class CriticalCommandOwnershipProbe
+        {
+            public string studentId;
+            public string patientId;
+            public string therapistId;
+            public string ownerKey;
+            public string sessionKey;
+        }
+
         private static class AckReasonCodes
         {
             public const string Ok = "OK";
+            public const string DuplicateCommand = "DUPLICATE_COMMAND";
+            public const string CommandInProgress = "COMMAND_IN_PROGRESS";
             public const string NoHandler = "NO_HANDLER";
             public const string DeserializeFailed = "DESERIALIZE_FAILED";
             public const string HandlerException = "HANDLER_EXCEPTION";
@@ -568,6 +964,8 @@ namespace TheraplyCore.Games.Runtime
             public const string EnvelopeInvalidExpiresAt = "ENVELOPE_INVALID_EXPIRES_AT";
             public const string EnvelopeExpired = "ENVELOPE_EXPIRED";
             public const string SessionLockConflict = "SESSION_LOCK_CONFLICT";
+            public const string SessionOwnershipConflict = "SESSION_OWNERSHIP_CONFLICT";
+            public const string SessionOwnershipMissing = "SESSION_OWNERSHIP_MISSING";
             public const string Unspecified = "UNSPECIFIED";
         }
 
