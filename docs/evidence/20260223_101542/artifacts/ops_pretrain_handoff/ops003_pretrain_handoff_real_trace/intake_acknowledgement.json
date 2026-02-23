@@ -1,0 +1,21 @@
+﻿{
+    "ackSchema":  "THERAPLY_PRETRAIN_INTAKE_ACK",
+    "ackVersion":  "2026-02-22",
+    "ackId":  "b64c7cef-9b1d-4f55-b426-72ec5fc47748",
+    "ackedAtUtc":  "2026-02-23T09:30:43.9648080Z",
+    "ackStatus":  "NEEDS_INFO",
+    "intakeTicketId":  "OPS-003-REALTRACE-20260223-01",
+    "intakeOperatorId":  "ops_cli",
+    "notes":  "Trace replay validated, but pretrain export is not ready: INSUFFICIENT_EVENT_COUNT (totalEvents=6). Collect additional gameplay events and rerun OPS-003.",
+    "packageDirectory":  "C:\\Users\\licen\\Projects\\theraply-vr-framework\\docs\\evidence\\20260223_101542\\artifacts\\ops_pretrain_handoff\\ops003_pretrain_handoff_real_trace",
+    "packageName":  "ops003_pretrain_handoff_real_trace",
+    "exportName":  "ops003_real_trace",
+    "exportMode":  "DURABLE_SESSION_TRACE",
+    "sessionId":  "mobile-dLxoPFss0wCV6nezOZfb-1771838008060",
+    "sourceTracePath":  "C:\\Users\\licen\\Projects\\theraply-vr-framework\\docs\\evidence\\20260223_101542\\artifacts\\ops_trace_collect\\prepared\\dataset_trace_all_sessions.ndjson",
+    "readyForTraining":  false,
+    "reasonCode":  "INSUFFICIENT_EVENT_COUNT",
+    "checksumsSha256":  "f1f0e4537ed17f191449244a03a0592e387f4e165c1f2d1b340a0481b40e4b16",
+    "handoffManifestSha256Before":  "4ade3de96720b253e9568a03aa185c2bac6fe54f06a3e155e83161eeb61f4389",
+    "handoffManifestSha256After":  "4ba54d4e26a64d86070ad3a53c756f595f4fdf9b72c27bbeceee0bfd7c4b5228"
+}

@@ -943,3 +943,1560 @@ Go/No-Go decision:
   - open Quest system menu during active session and verify mobile warning banner + controls lock,
   - return to app and verify mobile "controls unlocked" feedback,
   - close/reopen Quest app and verify reconnect + attach path still restores control availability.
+
+## 40) UX simplification: remove broken save-state resume path on mobile (2026-02-21)
+
+- `OK` Scope:
+  - remove unreliable "resume from saved state" UX from therapist controls,
+  - keep session handoff gate, but make `Continue` deterministic and simpler.
+- `OK` Mobile updates in `flutter_controller/lib/screens/control_screen.dart`:
+  - removed resume strategy dialog (from-beginning vs saved-state),
+  - removed "Start from saved state" action from game controls panel,
+  - simplified `_startFromSetup()` to always use `START_GAME` with `resumeFromSaved=false`,
+  - handoff `Continue` now:
+    - attaches to remote session,
+    - opens game setup screen,
+    - does not auto-force any save-load strategy command.
+  - game-scoped critical payloads now consistently publish `resumeFromSaved=false`.
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260221_143621/flutter_analyze.log`
+  - `flutter test` PASS -> `docs/evidence/20260221_143621/flutter_test.log`
+  - summary -> `docs/evidence/20260221_143621/notes/SUMMARY.md`
+- `TODO` Manual validation required:
+  - handoff popup: `Continue` should no longer ask for saved-state mode,
+  - verify start/pause/resume/restart/end game behavior remains stable after reconnect paths,
+  - verify no regression in `Start new` branch (`END_SESSION` + new session bootstrap).
+
+## 41) WebRTC LAN-first + automatic STUN fallback renegotiation (2026-02-21)
+
+- `OK` Objective:
+  - avoid hard dependency on STUN during healthy local LAN sessions,
+  - keep automatic recovery path when LAN ICE path is not sufficient.
+- `OK` Unity media runtime update in `unity-quest-template/Assets/_TheraplyCore/Streaming/MediaStreamService.cs`:
+  - added LAN-first config flags:
+    - `_preferLanFirst` (default `true`),
+    - `_lanProbeTimeoutSeconds` (default `4s`),
+  - first peer attempt now starts with host-only ICE (no STUN servers),
+  - added fallback triggers:
+    - `LAN_PROBE_TIMEOUT`,
+    - `ICE_FAILED`,
+    - `PEER_FAILED`,
+  - added signaling event `OnStunFallbackRequested(reasonCode)` for controlled renegotiation.
+- `OK` Unity signaling update in `unity-quest-template/Assets/_TheraplyCore/Streaming/WebRTCServerSignaling.cs`:
+  - listens for `OnStunFallbackRequested`,
+  - on fallback request:
+    - restarts stream in forced STUN mode,
+    - creates and sends fresh `WEBRTC_OFFER` to mobile.
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260221_145646/flutter_analyze.log`
+  - `flutter test` PASS -> `docs/evidence/20260221_145646/flutter_test.log`
+  - summary -> `docs/evidence/20260221_145646/notes/SUMMARY.md`
+- `TODO` Manual verification now required:
+  - normal LAN connect should stream without immediate fallback,
+  - in problematic path, logs should show fallback and new offer:
+    - `[MediaStreamService] LAN-first attempt failed (...)`
+    - `[WebRTCServerSignaling] Restarting WebRTC in STUN mode (...)`
+  - confirm mobile preview/controls recover after fallback renegotiation.
+
+## 42) Mobile LAN-first + explicit fallback request handshake (2026-02-21)
+
+- `OK` Scope:
+  - align Flutter WebRTC negotiation with Unity LAN-first strategy,
+  - enable mobile-side fallback trigger when LAN-only path stalls/fails.
+- `OK` Flutter update in `flutter_controller/lib/services/webrtc_media_service.dart`:
+  - initial peer creation now uses LAN-first config (no STUN servers),
+  - fallback arming conditions added:
+    - `LAN_PROBE_TIMEOUT`,
+    - `ICE_FAILED`,
+    - `PEER_FAILED`,
+  - when fallback is armed, mobile requests renegotiation via:
+    - `WEBRTC_STUN_FALLBACK_REQUEST`,
+  - mobile now consumes offer metadata `iceMode` (`LAN` / `STUN`) and builds peer config accordingly.
+- `OK` Unity signaling alignment:
+  - `unity-quest-template/Assets/_TheraplyCore/Streaming/WebRTCServerSignaling.cs`:
+    - offer payload now includes `iceMode` + `reasonCode`,
+    - handles `WEBRTC_STUN_FALLBACK_REQUEST` from mobile and restarts negotiation in STUN mode.
+  - `unity-quest-template/Assets/_TheraplyCore/Streaming/MediaStreamService.cs`:
+    - added `IsLanOnlyMode` getter for offer metadata.
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260221_150727/flutter_analyze.log`
+  - `flutter test` PASS -> `docs/evidence/20260221_150727/flutter_test.log`
+  - summary -> `docs/evidence/20260221_150727/notes/SUMMARY.md`
+- `TODO` Manual verification required:
+  - reinstall APK and verify LAN-first happy path,
+  - simulate network faults and verify fallback can be initiated by either side,
+  - verify logs show explicit mobile fallback request + STUN-mode re-offer when needed.
+
+## 43) Quest gameplay baseline: new `CubeClickerVR` scene + XR pointer interactor (2026-02-21)
+
+- `OK` Scene split for Quest gameplay:
+  - created new scene:
+    - `unity-quest-template/Assets/_Examples/Scenes/CubeClickerVR.unity`
+  - retained existing scenes, but switched demo cube routing/build target to new scene.
+- `OK` Scene routing/build wiring:
+  - `unity-quest-template/Assets/_Examples/Scripts/ExampleAdditiveSceneRouter.cs`
+    - default binding for `demo_cube_clicker` now points to `CubeClickerVR.unity`.
+  - `unity-quest-template/ProjectSettings/EditorBuildSettings.asset`
+    - build entry updated from `ExampleCubeScene.unity` to `CubeClickerVR.unity`.
+  - `unity-quest-template/Assets/_Examples/Editor/ExampleSceneGenerator.cs`
+    - generator now emits `CubeClickerVR.unity` (`CubeClickerVRRoot`).
+- `OK` Quest interaction input path:
+  - added:
+    - `unity-quest-template/Assets/_Examples/Scripts/QuestPointerClickInteractor.cs`
+  - behavior:
+    - reads XR controller press (`triggerButton` / `primaryButton` / `gripButton`),
+    - raycasts from controller (or camera fallback),
+    - activates targets implementing `IQuestPointerTarget`.
+  - game targets updated:
+    - `DemoCubeClickTarget` in `DemoCubeGameModule.cs` implements `IQuestPointerTarget`,
+    - `PulseTargetClickTarget` in `PulseTargetsGameModule.cs` implements `IQuestPointerTarget`.
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260221_154314/flutter_analyze.log`
+  - `flutter test` PASS -> `docs/evidence/20260221_154314/flutter_test.log`
+  - summary -> `docs/evidence/20260221_154314/notes/SUMMARY.md`
+- `TODO` Manual Quest verification:
+  - build/install APK and confirm `demo_cube_clicker` loads `CubeClickerVR`,
+  - verify controller press raycast clicks cubes/targets without desktop mouse path.
+
+## 44) Router migration + MainScene XR-friendly camera bootstrap (2026-02-21)
+
+- `OK` Root-cause fix for stale scene mapping:
+  - `unity-quest-template/Assets/_Examples/Scripts/ExampleAdditiveSceneRouter.cs`
+    - `EnsureBinding(...)` now updates existing serialized binding path when it differs from desired default.
+    - this removes stale legacy mapping risk (e.g. previously serialized `ExampleCubeScene` path).
+- `OK` Main scene XR-readiness hardening:
+  - `unity-quest-template/Assets/_Examples/Scenes/MainScene.unity`
+    - `MediaStreamService` switched to camera/audio auto-detection:
+      - `_autoDetectCamera: 1`
+      - `_sourceCamera: null`
+      - `_sourceAudioListener: null`
+    - runtime now adapts better when scene camera rig changes (e.g. XR camera variants).
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260221_160029/flutter_analyze.log`
+  - `flutter test` PASS -> `docs/evidence/20260221_160029/flutter_test.log`
+  - summary -> `docs/evidence/20260221_160029/notes/SUMMARY.md`
+- `TODO` Manual verification:
+  - run from `MainScene` and open `demo_cube_clicker`,
+  - confirm Unity log reports `loadedScene=Assets/_Examples/Scenes/CubeClickerVR.unity`,
+  - confirm stream/control path remains stable after auto-detected camera binding.
+
+## 45) Hold-to-talk audio loop guard + MainScene voice defaults (2026-02-21)
+
+- `OK` Scope:
+  - remove delayed local sidetone on phone during `Hold to Talk` checks,
+  - keep voice transport path deterministic before Quest audio routing is finalized.
+- `OK` Unity update:
+  - `unity-quest-template/Assets/_TheraplyCore/Streaming/MediaStreamService.cs`
+    - default `_sendQuestAudio` changed to `false`.
+  - `unity-quest-template/Assets/_Examples/Scenes/MainScene.unity`
+    - serialized `_sendQuestAudio` changed to `0`.
+- `OK` Flutter preview update:
+  - `flutter_controller/lib/widgets/media_stream_widget.dart`
+    - added `_playQuestAudioOnMobile = false`,
+    - incoming remote audio tracks are disabled for the preview stream by default.
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260221_160931/flutter_analyze.txt`
+  - `flutter test` PASS -> `docs/evidence/20260221_160931/flutter_test.txt`
+  - summary -> `docs/evidence/20260221_160931/notes/SUMMARY.md`
+- `TODO` Manual check:
+  - verify `Hold to Talk` no longer produces delayed phone self-monitoring loop,
+  - verify Quest-side voice path after explicit routing decision (phone speaker vs Quest playback) is re-enabled intentionally.
+
+## 46) MainScene XR rig bootstrap (`XR Origin` + `Camera Offset`) (2026-02-21)
+
+- `OK` Scope:
+  - make base runtime scene structurally VR-ready instead of relying on a flat root camera only.
+- `OK` Scene update:
+  - `unity-quest-template/Assets/_Examples/Scenes/MainScene.unity`:
+    - added root hierarchy:
+      - `XR Origin`
+      - child `Camera Offset`
+    - reparented existing `Main Camera` under `Camera Offset`,
+    - normalized local camera transform to `{0,0,0}` (world anchor now controlled by `XR Origin`).
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260221_161803/flutter_analyze.txt`
+  - `flutter test` PASS -> `docs/evidence/20260221_161803/flutter_test.txt`
+  - summary -> `docs/evidence/20260221_161803/notes/SUMMARY.md`
+- `TODO` Manual Quest verification:
+  - run from `MainScene` and confirm head tracking behaves correctly with new rig hierarchy,
+  - verify `demo_cube_clicker` spawn/interactions still line up with Quest headset/controller pose,
+  - verify reconnect path still restores streaming + controls after Wi-Fi drop on either side.
+
+## 47) Quest build warning hardening (Input handler + Android internet + editor-only mouse paths) (2026-02-21)
+
+- `OK` Scope:
+  - reduce Android/Quest build warnings that were signaling runtime risk,
+  - keep desktop editor click helpers without shipping them into Quest builds.
+- `OK` Project settings:
+  - `unity-quest-template/ProjectSettings/ProjectSettings.asset`
+    - `ForceInternetPermission` switched to `1` (WebRTC Android permission guaranteed),
+    - `activeInputHandler` switched from `Both` to `Input System Package` (`1`).
+- `OK` Editor-only mouse handling:
+  - `unity-quest-template/Assets/_Examples/Scripts/QuestPointerClickInteractor.cs`
+    - editor fallback now supports `ENABLE_INPUT_SYSTEM`,
+    - editor-only fallback field wrapped in `#if UNITY_EDITOR`.
+  - `unity-quest-template/Assets/_Examples/Scripts/DemoCubeGameModule.cs`
+    - `OnMouseDown` compiled only in editor.
+  - `unity-quest-template/Assets/_Examples/Scripts/PulseTargetsGameModule.cs`
+    - `OnMouseDown` compiled only in editor.
+  - `unity-quest-template/Assets/_Examples/SimpleCubeGame/Scripts/SimpleCubeGame.cs`
+    - `OnMouseDown` compiled only in editor.
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260221_190425/flutter_analyze.txt`
+  - `flutter test` PASS -> `docs/evidence/20260221_190425/flutter_test.txt`
+  - summary -> `docs/evidence/20260221_190425/notes/SUMMARY.md`
+- `TODO` Manual Unity build verification:
+  - run fresh Android/Quest build and confirm warnings about:
+    - `Active Input Handling = Both`,
+    - missing internet permission,
+    - generic `OnMouse_` mobile performance note,
+    are no longer present.
+
+## 48) Quest VR gameplay fix: world-anchored cubes + robust controller press detection (2026-02-21)
+
+- `OK` Scope:
+  - resolve VR symptom where cubes moved with headset camera,
+  - improve controller trigger recognition and ray origin resolution on Quest.
+- `OK` Gameplay anchoring:
+  - `unity-quest-template/Assets/_Examples/Scripts/DemoCubeGameModule.cs`
+    - added session-start playfield anchor capture in world space,
+    - viewport positions are now projected onto a fixed world plane (when enabled),
+    - eliminates camera-locked cube behavior during head movement.
+- `OK` Controller/pointer robustness:
+  - `unity-quest-template/Assets/_Examples/Scripts/QuestPointerClickInteractor.cs`
+    - added auto-detection for common Quest/XR hand/controller anchor paths,
+    - expanded press detection to include:
+      - trigger/grip buttons,
+      - trigger/grip analog thresholds,
+      - primary/secondary buttons,
+      - thumbstick click (`primary2DAxisClick`),
+    - camera-forward fallback remains as safety path.
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260221_191501/flutter_analyze.txt`
+  - `flutter test` PASS -> `docs/evidence/20260221_191501/flutter_test.txt`
+  - summary -> `docs/evidence/20260221_191501/notes/SUMMARY.md`
+- `TODO` Manual Quest verification:
+  - confirm cubes stay fixed in world while moving head/body,
+  - confirm trigger/grip/button press can activate cube targets consistently,
+  - if controller models are still not visible, verify interaction still works (visual models are separate from input rays).
+
+## 49) Critical hotfix: lost mobile streaming after Meta rig scene edits (2026-02-21)
+
+- `OK` Issue:
+  - mobile preview stream disappeared after `MainScene` switched to `OVRCameraRig`.
+- `OK` Root cause:
+  - scene references were accidentally cleared to `null`:
+    - `TCPServerService._mediaStreamService`
+    - `WebRTCServerSignaling._mediaStreamService`
+  - this broke runtime orchestration between TCP/signaling and media stream service.
+- `OK` Fix:
+  - `unity-quest-template/Assets/_Examples/Scenes/MainScene.unity`
+    - rebound both references to existing `MediaStreamService` on `OVRCameraRig` (`fileID: 1558752190`).
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260221_192337/flutter_analyze.txt`
+  - `flutter test` PASS -> `docs/evidence/20260221_192337/flutter_test.txt`
+  - summary -> `docs/evidence/20260221_192337/notes/SUMMARY.md`
+- `TODO` Manual verification:
+  - start session and confirm mobile preview receives live stream again,
+  - verify reconnect still restores stream/controls after temporary Wi-Fi loss.
+
+## 50) Quest aiming UX: visual laser pointer on controller raycast (2026-02-21)
+
+- `OK` Scope:
+  - add visible beam indicating where therapist/player is aiming in VR.
+- `OK` Implementation:
+  - `unity-quest-template/Assets/_Examples/Scripts/QuestPointerClickInteractor.cs`
+    - added configurable laser fields:
+      - `_showLaser`,
+      - `_showLaserWhenNoHit`,
+      - `_laserWidth`,
+      - `_laserColor`,
+    - added runtime `LineRenderer` creation/configuration,
+    - laser ray uses the same pointer/raycast path as click activation,
+    - when no hit is detected, laser extends to max distance fallback (optional),
+    - added cleanup for runtime-created laser material.
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260221_192654/flutter_analyze.txt`
+  - `flutter test` PASS -> `docs/evidence/20260221_192654/flutter_test.txt`
+  - summary -> `docs/evidence/20260221_192654/notes/SUMMARY.md`
+- `TODO` Manual Quest verification:
+  - confirm beam is visible and follows right/left controller ray,
+  - confirm hit point matches clickable cube position,
+  - adjust width/color if needed for Quest optics readability.
+
+## 51) Reusable pointer UX core: wand indicator + target feedback contracts (2026-02-21)
+
+- `OK` Scope:
+  - introduce reusable pointer guidance layer for future scenes (not only cube demo),
+  - support color-coded target objective and immediate valid/invalid aiming feedback.
+- `OK` Core layer added:
+  - `unity-quest-template/Assets/_TheraplyCore/Interactions/PointerIndicatorService.cs`
+    - global indicator singleton (auto-bootstrap),
+    - stores current target color (session/game objective),
+    - transient hit feedback channels (correct/incorrect flash).
+  - `unity-quest-template/Assets/_TheraplyCore/Interactions/PointerHoverFeedback.cs`
+    - reusable contracts:
+      - `IPointerHoverFeedbackTarget`,
+      - `PointerHoverFeedback`.
+- `OK` DemoCube integration:
+  - `unity-quest-template/Assets/_Examples/Scripts/DemoCubeGameModule.cs`
+    - updates indicator target color as expected cube color changes,
+    - reports correct/incorrect hits to indicator service,
+    - exposes hover feedback for each cube via `IPointerHoverFeedbackTarget` path.
+- `OK` Quest pointer/wand UX:
+  - `unity-quest-template/Assets/_Examples/Scripts/QuestPointerClickInteractor.cs`
+    - added wand visuals (body + tip) extending from hand ray,
+    - laser + wand color now resolved from core indicator service,
+    - if hovered target implements feedback contract, pointer color follows target feedback (e.g. wrong target -> red cue).
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260221_193657/flutter_analyze.txt`
+  - `flutter test` PASS -> `docs/evidence/20260221_193657/flutter_test.txt`
+  - summary -> `docs/evidence/20260221_193657/notes/SUMMARY.md`
+- `TODO` Manual Quest verification:
+  - confirm wand is visible and tracks controller direction in runtime,
+  - confirm pointer color reflects current expected target color,
+  - confirm aiming at wrong cube shows invalid cue before click,
+  - validate readability (wand thickness/length/tip size) in-headset.
+
+## 52) Reusable pointer telemetry core: shot usage + hit/miss + control source for ML/demo analytics (2026-02-21)
+
+- `OK` Scope:
+  - log every pointer shot attempt (not only successful hits),
+  - include which control/hand initiated the shot,
+  - include hit/miss and validity cues for downstream ML/demo dashboards.
+- `OK` Core telemetry bridge:
+  - added `unity-quest-template/Assets/_TheraplyCore/Interactions/PointerTelemetryService.cs`
+    - auto-bootstrap singleton,
+    - forwards pointer interaction payload into existing game telemetry pipeline (`pointer_shot` event),
+    - inherits current session metadata enrichment via `GameTelemetryService`.
+- `OK` Pointer shot payload (current schema):
+  - `inputHand`
+  - `inputControl`
+  - `inputValue`
+  - `hitAnyCollider`
+  - `hitInteractiveTarget`
+  - `hasHoverFeedback`
+  - `hoverIsValidTarget`
+  - `hitObjectName`
+  - `hitDistanceMeters`
+  - `indicatorColor`
+- `OK` Quest interactor wiring:
+  - `unity-quest-template/Assets/_Examples/Scripts/QuestPointerClickInteractor.cs`
+    - captures exact activation source per shot (`trigger/grip/button`, hand side),
+    - emits telemetry for both hit and miss attempts,
+    - keeps compatibility with pointer color/hover-feedback contracts.
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260221_194456/flutter_analyze.txt`
+  - `flutter test` PASS -> `docs/evidence/20260221_194456/flutter_test.txt`
+  - summary -> `docs/evidence/20260221_194456/notes/SUMMARY.md`
+- `TODO` Manual verification:
+  - trigger multiple hit/miss attempts and confirm `pointer_shot` points appear in telemetry ingest,
+  - confirm controller source values match real input usage on Quest.
+
+## 53) Hotfix: AlternateTwoColors deadlock + mid-game false `Session handoff needed` popup (2026-02-21)
+
+- `OK` Reported issue:
+  - during `alternate_colors` phase, red/blue distribution could block progress (`expected` color had no remaining cubes),
+  - mid-game mobile popup `Session handoff needed` appeared even though therapist was in active flow.
+- `OK` Unity fix (deadlock):
+  - `unity-quest-template/Assets/_Examples/Scripts/DemoCubeGameModule.cs`
+    - in `AlternateTwoColors`, spawn is now deterministic parity (`red/blue/red/blue`) instead of random 50/50,
+    - `GetExpectedColor()` now falls back to the other color if preferred color is exhausted,
+    - if no cubes remain for either color, expected color degrades to `Any` to avoid lockup.
+- `OK` Mobile guard fix (false handoff popup):
+  - `flutter_controller/lib/screens/control_screen.dart`
+    - defer persisted handoff prompt while active in-game flow is already attached (`gameSetup`, runtime active, or action in flight),
+    - ignore runtime session-state persistence for foreign `sessionId` while current attached session is stable, preventing stale/foreign state from poisoning latest persisted snapshot.
+- `OK` Diagnostics added:
+  - `ControlScreen` debug traces for:
+    - deferred persisted handoff gate,
+    - ignored foreign runtime session-state signal.
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260221_211011/flutter_analyze.log`
+  - `flutter test` PASS -> `docs/evidence/20260221_211011/flutter_test.log`
+  - summary -> `docs/evidence/20260221_211011/notes/SUMMARY.md`
+- `TODO` Manual scenario to confirm:
+  - run `basic` then `alternate_colors`,
+  - complete alternate phase and verify no mid-game handoff popup,
+  - verify reconnect/start-new gate still appears only when actually needed (on student/session entry).
+
+## 54) Quick stabilizer: END_SESSION bypass + handoff context gating + dialog/log cleanup (2026-02-21)
+
+- `OK` Scope:
+  - stabilize `session handoff / attach / end session` flow between Flutter controller and Unity runtime,
+  - enforce that `END_SESSION` is not blocked by attach precondition,
+  - constrain handoff prompt to entry/reconnect context,
+  - normalize handoff/back-close dialog copy to EN,
+  - add explicit decision logs for why handoff/attach is shown, suppressed, required, or bypassed.
+- `OK` Flutter update:
+  - `flutter_controller/lib/screens/control_screen.dart`
+    - `END_SESSION` no longer requires `_sessionAttachReady` precondition in command path,
+    - end-session CTA on game setup screen can run when connected even if attach sync is not ready,
+    - added context gate for handoff prompt (`_isSessionDecisionAllowedByContext`) to suppress popup during stable active session/game flow,
+    - handoff dialog now has deterministic actions (`Keep current`, `Continue unfinished`, `Start new session`) with back-dismiss blocked,
+    - `Start new` confirmation and system back/close dialogs converted to EN + non-dismissible back behavior,
+    - added structured debug traces:
+      - `[ControlScreen][SessionGate] ...`
+      - `[ControlScreen][AttachDecision] ...`
+      with explicit reason codes for show/suppress/attach-required/attach-bypass.
+- `OK` Unity runtime update:
+  - `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameCommandBus.cs`
+    - `ValidateSessionLock(...)` now explicitly allows `END_SESSION` even with session mismatch,
+    - mismatch path emits warning log for diagnostics.
+  - `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs`
+    - added `END_SESSION` intake diagnostic log with session/state/activeGame context.
+- `OK` Validation rerun (`flutter_controller`):
+  - `flutter analyze` PASS -> `docs/evidence/20260221_213512/commands/flutter_controller_flutter_analyze.log`
+  - `flutter test` PASS -> `docs/evidence/20260221_213512/commands/flutter_controller_flutter_test.log`
+  - summary -> `docs/evidence/20260221_213512/notes/SUMMARY.md`
+- `TODO` Manual verification focus:
+  - reconnect while stable active gameplay and confirm handoff popup is suppressed,
+  - run handoff dialog `Keep current` path and confirm no attach-failure loop,
+  - verify `END_SESSION` succeeds when attach-ready is temporarily false.
+
+## 55) Canonical roadmap: controller authority + resilience + data/ML telemetry plan (2026-02-21)
+
+- `OK` Consolidated execution roadmap created:
+  - file: `docs/29-Controller-Authority-Resilience-And-Data-Roadmap.md`
+- `OK` Scope merged into one plan:
+  - failure scenarios and current resilience assessment,
+  - configurable recovery and auto-close policy via therapist settings (`gear` in Students),
+  - hard session ownership rules (`therapistId + studentId + sessionId`),
+  - canonical event schema requirements for research and ML quality,
+  - reusable core components for Meta interactions and tool-based gameplay,
+  - phased delivery (`P0`..`P3`) + acceptance criteria,
+  - progress board with trackable item IDs (`RDM-*`).
+- `OK` Naming convention explicitly pinned:
+  - no suffixes like `v1`, `v2` in code identifiers,
+  - contract versioning only in docs/comments with backward-compatible migrations.
+
+## 56) P0 kickoff: RDM-001 ownership lock hardening + scoped P0 execution plan (2026-02-21)
+
+- `OK` Scope:
+  - prepare implementation plan only for `P0` (`RDM-001..RDM-006`),
+  - start execution from `RDM-001` with explicit ownership locks (`therapistId + studentId + sessionId`).
+- `OK` Roadmap update:
+  - `docs/29-Controller-Authority-Resilience-And-Data-Roadmap.md`:
+    - added `Plan wykonania P0 (RDM-001..RDM-006)` section with sequence/dependencies,
+    - updated board status:
+      - `RDM-001` -> `IN_PROGRESS`,
+      - `RDM-002..RDM-006` remain `TODO`.
+- `OK` Flutter ownership hardening:
+  - added ownership key utility:
+    - `flutter_controller/lib/models/session_ownership.dart`
+  - `flutter_controller/lib/screens/control_screen.dart`:
+    - critical payloads now include:
+      - `ownerKey`,
+      - `sessionKey`,
+      - canonical participant fields (`studentId`, `patientId`, `therapistId`),
+    - runtime/session/watchdog/device signals are filtered by current owner context before affecting UI/session gate logic.
+  - `flutter_controller/lib/services/session_journal_service.dart`:
+    - session reads/writes are owner-scoped (`ownerKey`),
+    - write path rejects cross-owner session takeover,
+    - persisted records/events now carry `ownerKey` and `sessionKey`.
+  - `flutter_controller/lib/models/therapy_session_record.dart`:
+    - reads/preserves `ownerKey` and `sessionKey` with backward-compatible derivation for legacy documents.
+- `OK` Unity ownership hardening:
+  - `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameCommandBus.cs`:
+    - critical command validation now enforces ownership metadata for active session lock,
+    - rejects foreign-owner takeover (`SESSION_OWNERSHIP_CONFLICT` / `SESSION_OWNERSHIP_MISSING`).
+  - `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs`:
+    - `SESSION_ATTACH` conflict path no longer rewrites active participant ownership,
+    - same-session attach rejects owner mismatch while session is non-terminal.
+- `OK` Tests/validation:
+  - added:
+    - `flutter_controller/test/session_ownership_test.dart`
+    - extended `flutter_controller/test/therapy_session_record_test.dart`
+  - validation PASS:
+    - `flutter analyze` -> `docs/evidence/20260221_232607/commands/flutter_controller_flutter_analyze.log`
+    - `flutter test` -> `docs/evidence/20260221_232607/commands/flutter_controller_flutter_test.log`
+    - summary -> `docs/evidence/20260221_232607/notes/SUMMARY.md`
+  - Unity compile attempt (blocked environment):
+    - `powershell -ExecutionPolicy Bypass -File .\\scripts\\unity_cli_validate.ps1 -Mode compile`
+    - FAIL because another Unity instance had project open:
+      - `docs/evidence/20260221_232607/commands/unity_cli_validate_compile.log`
+- `TODO` Next:
+  - proceed with `RDM-002` (`SessionRecoveryManager` + configurable recovery window state machine).
+
+## 57) P0 execution: RDM-002 configurable recovery window manager + decision gate wiring (2026-02-21)
+
+- `OK` Scope:
+  - implement `SessionRecoveryManager` with formal recovery window states:
+    - `interruptedRecoveringUnderWindow`,
+    - `interruptedOverWindowNeedsTherapistDecision`,
+  - replace static reconnect decision timing with therapist-configurable recovery window.
+- `OK` Settings model + source:
+  - added `flutter_controller/lib/models/therapist_session_settings.dart`:
+    - parses/clamps:
+      - `sessionRecoveryWindowMinutes` (`5..240`, default `60`),
+      - `interruptedSessionAutoCloseHours` (`1..168`, default `48`),
+      - `autoCloseInterruptedSessionsEnabled`,
+      - `requireResumeConfirmationAfterRecoveryWindow`,
+      - `criticalCommandMaxRetries`,
+      - `criticalCommandAckTimeoutMs`,
+      - `timelineQuickNoteTemplates`.
+  - added `flutter_controller/lib/services/therapist_session_settings_service.dart`:
+    - reads current therapist settings from `user_entitlements/{therapistId}`,
+    - uses safe defaults on missing doc/read failure.
+- `OK` Recovery manager core:
+  - added `flutter_controller/lib/models/session_recovery_manager.dart`:
+    - evaluates `lastConnectionLostAtUtc` vs `sessionRecoveryWindowMinutes`,
+    - under-window -> silent recovery,
+    - over-window -> therapist decision (or silent recovery when `requireResumeConfirmationAfterRecoveryWindow=false`).
+- `OK` Control flow integration:
+  - `flutter_controller/lib/screens/control_screen.dart`:
+    - loads therapist session settings on init/connect,
+    - stores `lastConnectionLostAtUtc` on disconnect,
+    - persisted/runtime handoff gating now routes through recovery manager evaluation,
+    - under-window path performs silent attach (`RECOVERY_UNDER_WINDOW`),
+    - over-window path shows handoff decision dialog (`RECOVERY_OVER_WINDOW`),
+    - handoff dialog copy now explicitly references recovery window minutes.
+- `OK` Tests/validation:
+  - added:
+    - `flutter_controller/test/session_recovery_manager_test.dart`
+    - `flutter_controller/test/therapist_session_settings_test.dart`
+  - validation PASS:
+    - `flutter analyze` -> `docs/evidence/20260221_234630/commands/flutter_controller_flutter_analyze.log`
+    - `flutter test` -> `docs/evidence/20260221_234630/commands/flutter_controller_flutter_test.log`
+    - summary -> `docs/evidence/20260221_234630/notes/SUMMARY.md`
+- `TODO` Next:
+  - proceed with `RDM-003` (auto-close interrupted sessions + audit event).
+
+## 58) P0 execution: RDM-001 ownership lock completion for runtime signals (2026-02-22)
+
+- `OK` Scope:
+  - keep execution plan scoped to `P0` only (`RDM-001..RDM-006`),
+  - complete `RDM-001` by enforcing ownership/session lock not only on critical commands but also on runtime signals.
+- `OK` Unity signal contract + payload hardening:
+  - `unity-quest-template/Assets/_TheraplyCore/Games/Contracts/GameCommands.cs`:
+    - added ownership/session context fields to runtime signals:
+      - `studentId`,
+      - `ownerKey`,
+      - `sessionKey`.
+  - `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs`:
+    - `SESSION_STATE_UPDATE`, `RUNTIME_STATUS_UPDATE`, `SESSION_WATCHDOG_HEARTBEAT`, `DEVICE_PRESENCE_UPDATE` now publish:
+      - `studentId`,
+      - `ownerKey`,
+      - `sessionKey`,
+    - added shared owner/session key builders for consistent payload composition.
+- `OK` Flutter signal parsing + ownership gate hardening:
+  - `flutter_controller/lib/models/session_fsm_contract.dart`:
+    - `SessionStateUpdateSignal` now parses `studentId`, `ownerKey`, `sessionKey` (with backward-compatible student fallback to `patientId`).
+  - `flutter_controller/lib/models/runtime_status_signal.dart`:
+    - `RuntimeStatusUpdateSignal`, `DevicePresenceUpdateSignal`, `SessionWatchdogHeartbeatSignal` now parse `studentId`, `ownerKey`, `sessionKey`.
+  - `flutter_controller/lib/screens/control_screen.dart`:
+    - ownership filter now validates:
+      - owner match by `ownerKey` (or derived fallback),
+      - active session lock match by `sessionKey` when attach is ready,
+    - rejects foreign-owner and foreign-session signals before they affect control flow.
+- `OK` Tests/validation:
+  - added:
+    - `flutter_controller/test/session_state_update_signal_test.dart`
+  - updated:
+    - `flutter_controller/test/runtime_status_signal_test.dart`
+  - validation PASS:
+    - `flutter analyze` -> `docs/evidence/20260222_000000/commands/flutter_controller_flutter_analyze.log`
+    - `flutter test` -> `docs/evidence/20260222_000000/commands/flutter_controller_flutter_test.log`
+    - `powershell -ExecutionPolicy Bypass -File .\\scripts\\unity_cli_validate.ps1 -Mode compile` -> PASS:
+      - `docs/evidence/20260222_000000/commands/unity_cli_validate_compile.log`
+    - summary -> `docs/evidence/20260222_000000/notes/SUMMARY.md`
+- `OK` Roadmap status update:
+  - `docs/29-Controller-Authority-Resilience-And-Data-Roadmap.md`:
+    - `RDM-001` status updated to `DONE` in both P0 execution table and progress board.
+- `TODO` Next:
+  - continue with `RDM-002`/`RDM-003` sequence according to P0 dependencies.
+
+## 59) P0 closure: RDM-002 configurable recovery window hardening + status DONE (2026-02-22)
+
+- `OK` Scope:
+  - close `RDM-002` (configurable recovery window and formal `UNDER_WINDOW`/`OVER_WINDOW` transitions),
+  - harden edge-case behavior before moving to `RDM-003`.
+- `OK` Recovery manager hardening:
+  - `flutter_controller/lib/models/session_recovery_manager.dart`:
+    - recovery window is now clamped to documented bounds (`5..240`),
+    - future `lastConnectionLostAtUtc` (clock skew) is normalized to `Duration.zero`,
+    - preserves formal decision outputs:
+      - under-window -> silent recovery,
+      - over-window -> therapist decision (or silent recovery when confirmation-after-window is disabled).
+- `OK` Tests expanded:
+  - `flutter_controller/test/session_recovery_manager_test.dart`:
+    - added no-decision path (`notApplicable`) coverage,
+    - added min/max window clamp coverage,
+    - added future timestamp skew coverage.
+- `OK` Validation rerun:
+  - `flutter analyze` PASS -> `docs/evidence/20260222_000820/commands/flutter_controller_flutter_analyze.log`
+  - `flutter test` PASS -> `docs/evidence/20260222_000820/commands/flutter_controller_flutter_test.log`
+  - `powershell -ExecutionPolicy Bypass -File .\\scripts\\unity_cli_validate.ps1 -Mode compile` PASS:
+    - `docs/evidence/20260222_000820/commands/unity_cli_validate_compile.log`
+  - summary -> `docs/evidence/20260222_000820/notes/SUMMARY.md`
+- `OK` Roadmap status update:
+  - `docs/29-Controller-Authority-Resilience-And-Data-Roadmap.md`:
+    - `RDM-002` status updated to `DONE` in both P0 execution table and board.
+- `TODO` Next:
+  - proceed with `RDM-003` (auto-close interrupted sessions + audit event).
+
+## 60) P0 closure: RDM-003 interrupted session auto-close + audit trail (2026-02-22)
+
+- `OK` Scope:
+  - close `RDM-003` by implementing automatic closure for stale `INTERRUPTED` sessions,
+  - enforce therapist-configurable policy:
+    - `interruptedSessionAutoCloseHours`,
+    - `autoCloseInterruptedSessionsEnabled`,
+  - guarantee that every auto-close leaves an auditable `SessionEvent`.
+- `OK` Durable interrupted timestamp:
+  - `flutter_controller/lib/services/session_journal_service.dart`:
+    - session upsert now persists `interruptedAtUtc`/`interruptedAtUnixMs` when state becomes `INTERRUPTED`,
+    - preserves interrupted timestamp while session remains interrupted,
+    - keeps ownership checks active for state writes and event writes.
+  - `flutter_controller/lib/models/therapy_session_record.dart`:
+    - parses `interruptedAtUtc` from persisted record,
+    - falls back for legacy interrupted records to `updatedAtUtc` when explicit interrupted timestamp is missing.
+- `OK` Auto-close policy + control flow integration:
+  - `flutter_controller/lib/models/session_recovery_manager.dart`:
+    - added interrupted auto-close evaluation model (`InterruptedSessionAutoCloseEvaluation`) with threshold/enable checks and clock-skew normalization.
+  - `flutter_controller/lib/screens/control_screen.dart`:
+    - on persisted session refresh (startup/reconnect path), controller evaluates whether latest interrupted session exceeded auto-close window,
+    - if threshold is reached, controller auto-closes session with terminal state update and reason code `INTERRUPTED_AUTO_CLOSED_TIMEOUT`,
+    - appends audit event `INTERRUPTED_SESSION_AUTO_CLOSED` with timeout metadata,
+    - uses in-flight and recently-ended guards to avoid duplicate auto-close writes.
+- `OK` Tests updated:
+  - `flutter_controller/test/session_recovery_manager_test.dart`:
+    - added interrupted auto-close decision coverage (not-applicable/disabled/under-threshold/over-threshold/future timestamp).
+  - `flutter_controller/test/therapy_session_record_test.dart`:
+    - added parsing coverage for explicit `interruptedAtUtc`,
+    - added legacy fallback coverage (`INTERRUPTED` + `updatedAtUtc`).
+- `OK` Validation rerun:
+  - `dart format` PASS -> `docs/evidence/20260222_002306/commands/dart_format.log`
+  - `flutter analyze` PASS -> `docs/evidence/20260222_002306/commands/flutter_controller_flutter_analyze.log`
+  - `flutter test` PASS -> `docs/evidence/20260222_002306/commands/flutter_controller_flutter_test.log`
+  - summary -> `docs/evidence/20260222_002306/notes/SUMMARY.md`
+- `TODO` Next:
+  - proceed with `RDM-004` (`DurableEventOutbox` + replay after Unity restart).
+
+## 61) P0 closure: RDM-004 durable outbox replay + explicit outbox metrics (2026-02-22)
+
+- `OK` Scope:
+  - close `RDM-004` by finalizing Unity-side durable local outbox with restart replay path,
+  - guarantee offline append independent from network,
+  - expose explicit outbox metrics: `pending`, `inFlight`, `failed`, `replayed`.
+- `OK` Unity runtime implementation:
+  - `unity-quest-template/Assets/_TheraplyCore/Firebase/SessionEventStore.cs`:
+    - introduced canonical `DurableEventOutbox` class (with compatibility alias `SessionEventStore`),
+    - outbox retry flow now uses explicit `FAILED` state before re-claim,
+    - batch claim accepts `PENDING` and `FAILED` rows,
+    - startup recovery remaps stale `IN_FLIGHT` rows to retryable state,
+    - added store-level metrics for `failed` and `replayed` rows,
+    - shutdown hardening: ignore `ThreadAbortException` during editor teardown.
+  - `unity-quest-template/Assets/_TheraplyCore/Firebase/FirebaseDataService.cs`:
+    - switched runtime integration to `DurableEventOutbox`,
+    - added explicit queue statistics fields:
+      - `durableOutboxFailed`,
+      - `durableOutboxReplayed`,
+    - expanded diagnostics output with the new outbox metrics.
+  - `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameRuntimeService.cs`:
+    - runtime pending-queue signal now includes failed outbox rows (no silent backlog).
+  - `unity-quest-template/Assets/_Examples/Scripts/EditorRuntimeDiagnosticsOverlay.cs`:
+    - editor HUD now shows `pending/inFlight/failed/replayed` counters.
+- `OK` Validation harness update (RDM-004 scenario):
+  - `unity-quest-template/Assets/_TheraplyCore/Editor/Automation/FirebaseNetworkValidation.cs`:
+    - added offline -> restart durable store -> reconnect flow checks,
+    - added deterministic validation store isolation (`_localDurableFolder` unique per run),
+    - disabled auto outbox loop in validation to avoid race with manual trigger path,
+    - added restart pre-idle guard and reconnect drain checks covering failed rows.
+- `OK` Validation evidence:
+  - `powershell -ExecutionPolicy Bypass -File .\\scripts\\unity_cli_validate.ps1 -Mode compile` PASS:
+    - `docs/evidence/20260222_120301/commands/unity_cli_validate_compile.log`
+    - `docs/evidence/20260222_120301/commands/unity_cli_compile.log`
+  - Firebase network validation log markers (offline/restart/reconnect replay path observed):
+    - `docs/evidence/20260222_120301/commands/unity_firebase_network_validation.log`
+      - online marker: `Online phase: accepted=12, outboxSynced=12, pending=0, inFlight=0`
+      - offline marker: `Offline phase: failureDelta=1, retryDelta=4, pending=0, failed=4`
+      - restart marker: `Restart phase: pending=16, inFlight=0, failed=0, replayed=0`
+      - reconnect flush marker: `Outbox synced 16 events (duplicates acknowledged: 12)`
+    - execution note: `docs/evidence/20260222_120301/commands/unity_firebase_network_validation_timeout_note.txt`
+  - summary:
+    - `docs/evidence/20260222_120301/notes/SUMMARY.md`
+- `OK` Roadmap status update:
+  - `docs/29-Controller-Authority-Resilience-And-Data-Roadmap.md`:
+    - `RDM-004` status updated to `DONE` in both P0 execution table and board.
+- `TODO` Next:
+  - proceed with `RDM-005` (`CommandJournal` + `IdempotencyGuard`).
+
+## 62) P0 closure: RDM-005 command journal + idempotency guard (2026-02-22)
+
+- `OK` Scope:
+  - close `RDM-005` by enforcing durable idempotency for critical command processing in Unity runtime,
+  - guarantee duplicate `messageId` suppression (including replay after restart),
+  - persist terminal command outcomes (`APPLIED`/`REJECTED`/`FAILED`) for deterministic ACK/NACK behavior.
+- `OK` Unity runtime implementation:
+  - `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/CommandJournal.cs`:
+    - added durable NDJSON command journal with async writer queue (non-blocking render loop),
+    - startup load restores latest per-`messageId` status from previous app runs,
+    - added `IdempotencyGuard` to gate critical command processing:
+      - first delivery -> `RECEIVED`,
+      - success -> `APPLIED`,
+      - contract rejection -> `REJECTED`,
+      - handler exception -> `FAILED`,
+      - duplicate handling returns deterministic decision without re-executing handler.
+  - `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameCommandBus.cs`:
+    - integrated command journal lifecycle (initialize in `Awake`, flush/dispose in `OnDestroy`),
+    - added critical command durability settings:
+      - `_enableCommandJournal`,
+      - `_commandJournalFolder`,
+      - `_commandJournalFileName`,
+      - `_commandJournalMaxEntriesInMemory`,
+      - `_commandJournalMaxPendingWrites`,
+    - critical inbound flow now records terminal statuses before ACK/NACK send,
+    - duplicate and in-flight replay paths are short-circuited by idempotency guard.
+- `OK` Validation harness update (RDM-005 scenario):
+  - `unity-quest-template/Assets/_TheraplyCore/Editor/Automation/CriticalCommandIdempotencyValidation.cs`:
+    - added CLI validation method `RunCriticalCommandIdempotencyValidation`,
+    - sends duplicate critical `START_GAME` messages into `GameCommandBus`,
+    - verifies handler executes once for duplicate delivery,
+    - recreates runtime with the same journal path and verifies duplicate remains suppressed after restart.
+- `OK` Validation evidence:
+  - `powershell -ExecutionPolicy Bypass -File .\\scripts\\unity_cli_validate.ps1 -Mode compile` PASS:
+    - `docs/evidence/20260222_131144/commands/unity_cli_validate_compile.log`
+    - `docs/evidence/20260222_131144/commands/unity_cli_compile.log`
+  - critical command idempotency CLI validation PASS:
+    - `docs/evidence/20260222_131144/commands/unity_critical_command_idempotency_runner.log`
+    - `docs/evidence/20260222_131144/commands/unity_critical_command_idempotency_validation.log`
+    - PASS marker:
+      - `firstRuntimeHandlerCalls=1; restartRuntimeHandlerCalls=1; firstMessageJournalRecords=4; secondMessageJournalRecords=2`
+- `OK` Roadmap status update:
+  - `docs/29-Controller-Authority-Resilience-And-Data-Roadmap.md`:
+    - `RDM-005` status updated to `DONE` in both P0 execution table and board.
+- `TODO` Next:
+  - proceed with `RDM-006` (E2E reconnect/kill/restart + deterministic `END_SESSION` reason codes).
+
+## 63) P0 closure: RDM-006 E2E reconnect/kill/restart + deterministic END_SESSION reason codes (2026-02-22)
+
+- `OK` Scope:
+  - close `RDM-006` by validating deterministic critical-command behavior for `END_SESSION`,
+  - cover reconnect + kill/restart recovery path and explicit failure reason codes.
+- `OK` Validation harness implementation:
+  - `unity-quest-template/Assets/_TheraplyCore/Editor/Automation/CriticalEndSessionResilienceValidation.cs`:
+    - added CLI validation entrypoint:
+      - `RunCriticalEndSessionResilienceValidation`,
+    - scenario steps:
+      - valid `END_SESSION` on active session -> journal `APPLIED:OK`,
+      - ownership-conflict `END_SESSION` -> journal `REJECTED:SESSION_OWNERSHIP_CONFLICT`,
+      - restart `GameCommandBus` with same durable command journal path (kill/restart simulation),
+      - reconnect simulation via critical `SESSION_ATTACH` after restart -> journal `APPLIED:OK`,
+      - replay duplicate pre-restart `END_SESSION` `messageId` after restart -> journal `APPLIED:DUPLICATE_COMMAND`,
+      - final valid `END_SESSION` after restart -> journal `APPLIED:OK`.
+    - validates terminal runtime state (`ABORTED_BY_THERAPIST`) after successful `END_SESSION`.
+- `OK` Runtime behavior validated:
+  - reason codes are deterministic and explicit at critical-command layer:
+    - `OK`,
+    - `SESSION_OWNERSHIP_CONFLICT`,
+    - `DUPLICATE_COMMAND`.
+  - duplicate command replay after bus restart does not re-execute end-session handler.
+- `OK` Validation evidence:
+  - `powershell -ExecutionPolicy Bypass -File .\\scripts\\unity_cli_validate.ps1 -Mode compile` PASS:
+    - `docs/evidence/20260222_131144/commands/unity_cli_validate_compile.log`
+    - `docs/evidence/20260222_131144/commands/unity_cli_compile.log`
+  - critical END_SESSION resilience validation PASS:
+    - `docs/evidence/20260222_131144/commands/unity_critical_end_session_resilience_runner.log`
+    - `docs/evidence/20260222_131144/commands/unity_critical_end_session_resilience_validation.log`
+    - PASS marker:
+      - `first=APPLIED:OK; conflict=REJECTED:SESSION_OWNERSHIP_CONFLICT; reconnect=APPLIED:OK; duplicateAfterRestart=APPLIED:DUPLICATE_COMMAND; final=APPLIED:OK`
+- `OK` Note:
+  - in batchmode validation there is no active TCP client route; ACK send attempts log warnings, but command outcome determinism and reason codes are asserted from the durable command journal (`status` + `reasonCode`) produced by the same critical-command flow.
+- `OK` Roadmap status update:
+  - `docs/29-Controller-Authority-Resilience-And-Data-Roadmap.md`:
+    - `RDM-006` status updated to `DONE` in both P0 execution table and board.
+- `TODO` Next:
+  - proceed with P1 board (`RDM-007` gear settings in Students).
+
+## 64) RDM-006 addendum: real ACK transport validation outside batchmode (2026-02-22)
+
+- `OK` Scope:
+  - extend `RDM-006` evidence with real TCP ACK/NACK verification (not only journal status),
+  - execute validation in non-batch Unity mode (`BatchMode: 0`) to keep async transport route active.
+- `OK` Validation harness:
+  - `unity-quest-template/Assets/_TheraplyCore/Editor/Automation/CriticalEndSessionAckTransportValidation.cs`:
+    - added execute method:
+      - `RunCriticalEndSessionAckTransportValidation`,
+    - scenario covers deterministic ACK payload outcomes:
+      - first valid `END_SESSION` -> `ACK:OK`,
+      - ownership conflict -> `NACK:SESSION_OWNERSHIP_CONFLICT`,
+      - reconnect attach after command bus restart -> `ACK:OK`,
+      - duplicate old message replay after restart -> `ACK:DUPLICATE_COMMAND`,
+      - final valid `END_SESSION` -> `ACK:OK`,
+    - verification reads real `COMMAND_ACK` wire payload over local TCP route.
+- `OK` Stability fix during validation:
+  - ACK reader changed from aggressive per-read timeout flow to async exact-read flow:
+    - `ReadAckPayloadAsync`,
+    - `ReadWireMessageAsync`,
+    - `ReadExactAsync`,
+  - resolved partial-frame timeout/closure issue in non-batch route.
+- `OK` Validation evidence:
+  - compile PASS:
+    - `docs/evidence/20260222_143237/commands/unity_cli_validate_compile.log`
+    - `docs/evidence/20260222_143237/commands/unity_cli_compile.log`
+  - non-batch ACK transport PASS:
+    - `docs/evidence/20260222_143237/commands/unity_critical_end_session_ack_transport_non_batch_runner.log`
+    - `docs/evidence/20260222_143237/commands/unity_critical_end_session_ack_transport_non_batch.log`
+    - markers:
+      - `BatchMode: 0`
+      - `PASS: first=ACK:OK; conflict=NACK:SESSION_OWNERSHIP_CONFLICT; reconnect=ACK:OK; duplicateAfterRestart=ACK:DUPLICATE_COMMAND; final=ACK:OK; transport=tcp; mode=non-batch`
+      - `[EXIT] 0`
+  - summary:
+    - `docs/evidence/20260222_143237/notes/SUMMARY.md`
+
+## 65) P1 closure: RDM-007 gear settings in Students (2026-02-22)
+
+- `OK` Scope:
+  - close `RDM-007` by adding therapist gear settings management directly in `Students`,
+  - persist and reload settings in `user_entitlements/{therapistId}`.
+- `OK` Flutter model/service implementation:
+  - `flutter_controller/lib/models/therapist_session_settings.dart`:
+    - added `copyWith(...)`,
+    - added `toMap()` serialization for persistence payload.
+  - `flutter_controller/lib/services/therapist_session_settings_service.dart`:
+    - added save path:
+      - `saveCurrentTherapistSettings(...)` with merge write to `user_entitlements/{therapistId}`,
+    - added testability hooks:
+      - `setFirestoreInstanceForTesting(...)`,
+      - `setTherapistIdForTesting(...)`,
+      - `clearTestingOverrides()`.
+- `OK` Students screen UX:
+  - `flutter_controller/lib/screens/students_screen.dart`:
+    - added AppBar gear action for therapist role,
+    - loads current therapist settings on screen init,
+    - added settings dialog with validation/save/reset-defaults flow for all roadmap fields:
+      - `sessionRecoveryWindowMinutes`,
+      - `interruptedSessionAutoCloseHours`,
+      - `autoCloseInterruptedSessionsEnabled`,
+      - `requireResumeConfirmationAfterRecoveryWindow`,
+      - `criticalCommandMaxRetries`,
+      - `criticalCommandAckTimeoutMs`,
+      - `timelineQuickNoteTemplates` (one template per line).
+- `OK` Tests:
+  - updated:
+    - `flutter_controller/test/therapist_session_settings_test.dart`
+      - map roundtrip serialization,
+      - `copyWith` behavior.
+  - added:
+    - `flutter_controller/test/therapist_session_settings_service_test.dart`
+      - defaults when entitlement doc missing,
+      - save+merge into `user_entitlements/{therapistId}`,
+      - fetch after save,
+      - missing therapist id failure path.
+- `OK` Validation evidence:
+  - `dart format` PASS:
+    - `docs/evidence/20260222_144153/commands/dart_format.log`
+  - `flutter analyze` PASS:
+    - `docs/evidence/20260222_144153/commands/flutter_controller_flutter_analyze.log`
+  - `flutter test` PASS:
+    - `docs/evidence/20260222_144153/commands/flutter_controller_flutter_test.log`
+  - summary:
+    - `docs/evidence/20260222_144153/notes/SUMMARY.md`
+- `OK` Roadmap status update:
+  - `docs/29-Controller-Authority-Resilience-And-Data-Roadmap.md`:
+    - `RDM-007` status updated to `DONE` in board.
+- `TODO` Next:
+  - proceed with `RDM-008` (`TherapistTimelinePanel` + quick notes templates actions in timeline).
+
+## 66) P1 closure: RDM-008 timeline panel (system + notes + quick templates) (2026-02-22)
+
+- `OK` Scope:
+  - close `RDM-008` by adding therapist timeline panel to session workspace (`ControlScreen`),
+  - unify system events and therapist notes in one stream.
+- `OK` Session journal service timeline API:
+  - `flutter_controller/lib/services/session_journal_service.dart`:
+    - added timeline model:
+      - `SessionTimelineEvent`,
+    - added dedicated note event contract:
+      - `therapistTimelineNoteEventType = THERAPIST_TIMELINE_NOTE`,
+      - `appendTherapistTimelineNote(...)`,
+    - added timeline read APIs:
+      - `watchSessionTimeline(...)`,
+      - `fetchSessionTimeline(...)`,
+    - added Firestore testing override hooks:
+      - `setFirestoreInstanceForTesting(...)`,
+      - `clearTestingOverrides()`.
+- `OK` Therapist timeline UI:
+  - `flutter_controller/lib/screens/control_screen.dart`:
+    - added `Session timeline` panel in game setup step,
+    - panel shows:
+      - live timeline list from `therapy_sessions/{sessionId}/events`,
+      - system events (connection/runtime/session/game lifecycle),
+      - therapist notes,
+    - added therapist note inputs:
+      - manual note text field (`Add`),
+      - quick note action chips sourced from `timelineQuickNoteTemplates`,
+    - writes notes as `THERAPIST_TIMELINE_NOTE` with metadata:
+      - `noteText`,
+      - `noteSource` (`manual_input` / `quick_template`).
+- `OK` Tests:
+  - added:
+    - `flutter_controller/test/session_journal_service_test.dart`
+      - note append payload verification,
+      - timeline fetch ordering + limit,
+      - blank-session stream guard.
+- `OK` Validation evidence:
+  - `dart format` PASS:
+    - `docs/evidence/20260222_145657/commands/dart_format.log`
+  - `flutter analyze` PASS:
+    - `docs/evidence/20260222_145657/commands/flutter_controller_flutter_analyze.log`
+  - `flutter test` PASS:
+    - `docs/evidence/20260222_145657/commands/flutter_controller_flutter_test.log`
+  - summary:
+    - `docs/evidence/20260222_145657/notes/SUMMARY.md`
+- `OK` Roadmap status update:
+  - `docs/29-Controller-Authority-Resilience-And-Data-Roadmap.md`:
+    - `RDM-008` status updated to `DONE` in board.
+- `TODO` Next:
+  - proceed with `RDM-009` (`Deferred handoff badge`).
+
+## 67) P1 closure: RDM-009 deferred handoff badge (2026-02-22)
+
+- `OK` Scope:
+  - close `RDM-009` by exposing deferred handoff state as visible therapist UX signal,
+  - avoid hidden/silent suppression when handoff decision is postponed by context.
+- `OK` Deferred handoff state machine in controller:
+  - `flutter_controller/lib/screens/control_screen.dart`:
+    - added deferred state fields:
+      - `_deferredHandoffSessionId`,
+      - `_deferredHandoffMarkedAtUtc`,
+      - `_deferredHandoffReasonCode`,
+    - added deferred lifecycle handlers:
+      - `_markDeferredHandoff(...)`,
+      - `_clearDeferredHandoff(...)`,
+      - `_reviewDeferredHandoff()`,
+    - added timeline audit events for deferred state transitions:
+      - `SESSION_HANDOFF_DEFERRED`,
+      - `SESSION_HANDOFF_DEFERRED_CLEARED`.
+- `OK` UX integration:
+  - `flutter_controller/lib/screens/control_screen.dart`:
+    - AppBar now shows deferred handoff badge action when pending,
+    - catalog/setup screens show explicit deferred banner with reason and `Review` action,
+    - therapist can re-open handoff decision dialog from badge/banner via `Review`,
+    - `Keep current` decision now intentionally keeps deferred state visible,
+    - deferred state auto-clears on:
+      - terminal/ended session paths,
+      - under-window auto-recovery,
+      - resume/start-new completion,
+      - gate clear when active session context matches or persisted state is no longer unfinished.
+- `OK` Guard hardening:
+  - `flutter_controller/lib/screens/control_screen.dart`:
+    - when dialog prompt becomes context-blocked, controller now moves to deferred badge state and releases blocking gate (`_requiresSessionDecision=false`) instead of leaving hidden pending state.
+- `OK` Validation evidence:
+  - `dart format` PASS:
+    - `docs/evidence/20260222_150453/commands/dart_format.log`
+  - `flutter analyze` PASS:
+    - `docs/evidence/20260222_150453/commands/flutter_controller_flutter_analyze.log`
+  - `flutter test` PASS:
+    - `docs/evidence/20260222_150453/commands/flutter_controller_flutter_test.log`
+  - summary:
+    - `docs/evidence/20260222_150453/notes/SUMMARY.md`
+- `OK` Roadmap status update:
+  - `docs/29-Controller-Authority-Resilience-And-Data-Roadmap.md`:
+    - `RDM-009` status updated to `DONE` in board.
+- `TODO` Next:
+  - proceed with `RDM-010` (`InteractionEventBridge` + canonical event schema across active games).
+
+## 68) P2 closure: RDM-010 interaction bridge + canonical event schema in active games (2026-02-22)
+
+- `OK` Scope:
+  - close `RDM-010` by introducing one canonical interaction telemetry bridge for active Unity games,
+  - enforce shared schema fields (`eventId`, `sequenceNumber`, `taskRunId`, `attemptId`, `ownerKey`, `sessionKey`) without changing mobile authority rules.
+- `OK` Unity runtime implementation:
+  - `unity-quest-template/Assets/_TheraplyCore/Interactions/InteractionEventBridge.cs`:
+    - added canonical `interaction_event` adapter with schema metadata:
+      - `schema=THERAPLY_INTERACTION_SCHEMA`,
+      - `schemaVersion=2026-02-22`,
+      - `sourceOfTruth=MOBILE_CONTROLLER`,
+    - emits monotonic `sequenceNumber` per session key,
+    - attaches stable identity keys:
+      - `ownerKey = therapistId|studentId`,
+      - `sessionKey = ownerKey|sessionId`,
+    - maintains `taskRunId` / `attemptId` contexts for gameplay events.
+  - `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/GameModuleBase.cs`:
+    - all `TrackEvent(...)` calls now mirror to `InteractionEventBridge.RecordGameplayEvent(...)`,
+    - active games now share one canonical telemetry envelope with no per-game schema drift.
+  - `unity-quest-template/Assets/_TheraplyCore/Interactions/PointerTelemetryService.cs`:
+    - pointer telemetry path now also forwards to canonical bridge (`RecordPointerShot(...)`).
+  - `unity-quest-template/Assets/_Examples/Scripts/QuestPointerClickInteractor.cs`:
+    - enriched pointer payload with `gameId`, `sourceComponent`, `inputSource`,
+    - forwards richer pointer activation source (`QUEST_POINTER|HAND|CONTROL|VALUE`) to targets.
+  - `unity-quest-template/Assets/_Examples/Scripts/DemoCubeGameModule.cs`:
+    - click handlers now preserve `inputSource` and target context (`targetId`, `targetName`, `targetValid`) in gameplay events.
+  - `unity-quest-template/Assets/_Examples/Scripts/PulseTargetsGameModule.cs`:
+    - target hit/miss events now include the same interaction context fields (`inputSource`, `targetName`, `targetValid`).
+- `OK` Validation harness:
+  - `unity-quest-template/Assets/_TheraplyCore/Editor/Automation/InteractionEventSchemaValidation.cs`:
+    - added CLI validation entrypoint:
+      - `RunInteractionEventSchemaValidation`,
+    - executes `smoke_test_game`, `demo_cube_clicker`, `pulse_target_tap`,
+    - validates canonical required fields and strict monotonicity of `sequenceNumber`,
+    - asserts pointer interaction event presence in the same schema stream.
+- `OK` Validation evidence:
+  - compile PASS:
+    - `docs/evidence/20260222_154216/commands/unity_cli_validate_compile.log`
+    - `docs/evidence/20260222_154216/commands/unity_cli_compile.log`
+  - interaction schema validation PASS:
+    - `docs/evidence/20260222_154216/commands/unity_interaction_event_schema_validation_runner.log`
+    - `docs/evidence/20260222_154216/commands/unity_interaction_event_schema_validation.log`
+    - marker:
+      - `docs/evidence/20260222_154216/commands/unity_interaction_event_schema_validation_markers.log`
+      - `PASS: events=19; maxSequence=19; gameIds=demo_cube_clicker,pulse_target_tap,smoke_test_game`
+- `OK` Roadmap status update:
+  - `docs/29-Controller-Authority-Resilience-And-Data-Roadmap.md`:
+    - `RDM-010` updated to `DONE` with evidence link.
+- `TODO` Next:
+  - proceed with `RDM-011` (`Tool telemetry stack`),
+  - then `RDM-012` (`SequenceTaskEngine` / `StimulusScheduler` / `TaskOutcomeAggregator`),
+  - then `RDM-013` (`AdaptiveDifficultyController` + label pipeline).
+
+## 69) P2 closure: RDM-011 tool telemetry stack (2026-02-22)
+
+- `OK` Scope:
+  - close `RDM-011` by adding a production telemetry stack for tool interactions (`grip`, `hold`, `impact`, `target validation`) without blocking render loop.
+- `OK` Unity runtime implementation:
+  - `unity-quest-template/Assets/_TheraplyCore/Interactions/TargetValidationZone.cs`:
+    - added reusable target validation component with semantic target tag, optional `requiredToolId`, and pointer-aware validation decision.
+  - `unity-quest-template/Assets/_TheraplyCore/Interactions/ToolGripTracker.cs`:
+    - added lightweight grip state tracker (`TOOL_GRIP_START` / `TOOL_GRIP_HOLD` / `TOOL_GRIP_END`),
+    - emits heartbeat only on configured interval (no heavy per-frame allocations).
+  - `unity-quest-template/Assets/_TheraplyCore/Interactions/ToolImpactProbe.cs`:
+    - added tool impact probe classifying `TOOL_IMPACT_HIT` / `TOOL_IMPACT_INVALID` / `TOOL_IMPACT_MISS`,
+    - joins hit context with `TargetValidationZone` and pointer validity hints.
+  - `unity-quest-template/Assets/_TheraplyCore/Interactions/InteractionEventBridge.cs`:
+    - added `RecordToolTelemetry(...)` path,
+    - tool events now use canonical schema (`sourceOfTruth=MOBILE_CONTROLLER`, `ownerKey`, `sessionKey`, monotonic `sequenceNumber`).
+  - `unity-quest-template/Assets/_Examples/Scripts/QuestPointerClickInteractor.cs`:
+    - integrated tool grip + impact reporting into active pointer flow.
+  - target registration in active games:
+    - `unity-quest-template/Assets/_Examples/Scripts/DemoCubeGameModule.cs`,
+    - `unity-quest-template/Assets/_Examples/Scripts/PulseTargetsGameModule.cs`,
+    - both now attach `TargetValidationZone` to runtime targets.
+- `OK` Automated Unity CLI validation for new scope:
+  - `unity-quest-template/Assets/_TheraplyCore/Editor/Automation/ToolTelemetryStackValidation.cs`:
+    - added CLI execute method:
+      - `RunToolTelemetryStackValidation`,
+    - validates canonical capture of:
+      - `TOOL_GRIP_START`,
+      - `TOOL_GRIP_HOLD`,
+      - `TOOL_GRIP_END`,
+      - `TOOL_IMPACT_HIT`,
+      - `TOOL_IMPACT_INVALID`,
+      - `TOOL_IMPACT_MISS`,
+    - asserts canonical telemetry invariants (`interactionType=TOOL`, source-of-truth, monotonic sequence, owner/session keys, valid+invalid target outcomes).
+- `OK` Validation evidence:
+  - compile PASS:
+    - `docs/evidence/20260222_165305/commands/unity_cli_validate_compile.log`
+    - `docs/evidence/20260222_165305/commands/unity_cli_compile.log`
+  - tool telemetry validation PASS:
+    - `docs/evidence/20260222_165305/commands/unity_tool_telemetry_stack_validation_runner.log`
+    - `docs/evidence/20260222_165305/commands/unity_tool_telemetry_stack_validation.log`
+    - marker:
+      - `docs/evidence/20260222_165305/commands/unity_tool_telemetry_stack_validation_markers.log`
+      - `PASS: events=6; toolEvents=6; maxSequence=6; eventTypes=TOOL_GRIP_END,TOOL_GRIP_HOLD,TOOL_GRIP_START,TOOL_IMPACT_HIT,TOOL_IMPACT_INVALID,TOOL_IMPACT_MISS`
+- `OK` Roadmap status update:
+  - `docs/29-Controller-Authority-Resilience-And-Data-Roadmap.md`:
+    - `RDM-011` updated to `DONE` with evidence link.
+- `TODO` Next:
+  - proceed with `RDM-012` (`Sequence/stimulus/task outcome stack`),
+  - then `RDM-013` (`Adaptive difficulty + label pipeline`).
+
+## 70) P2 closure: RDM-012 sequence/stimulus/task outcome stack (2026-02-22)
+
+- `OK` Scope:
+  - close `RDM-012` by adding reusable sequence telemetry stack:
+    - `SequenceTaskEngine`,
+    - `StimulusScheduler`,
+    - `TaskOutcomeAggregator`,
+  - keep event flow non-blocking and aligned with canonical interaction telemetry.
+- `OK` Unity runtime implementation:
+  - `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/SequenceTaskEngine.cs`:
+    - added step/cue state engine for sequence tasks,
+    - classifies outcomes:
+      - `CORRECT`,
+      - `INCORRECT`,
+      - `LATE`,
+      - `REDUNDANT`,
+      - `OMITTED`.
+  - `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/StimulusScheduler.cs`:
+    - added lightweight due-time scheduler for visual/audio cues (no blocking calls, update-loop friendly).
+  - `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/TaskOutcomeAggregator.cs`:
+    - added canonical per-task-run aggregation (counts + first/avg reaction + completion ratio).
+  - `unity-quest-template/Assets/_Examples/Scripts/PulseTargetsGameModule.cs`:
+    - integrated all three components into active game flow:
+      - emits `task_run_started`,
+      - emits `task_stimulus_presented`,
+      - emits `task_action_outcome`,
+      - emits `task_outcome_summary`,
+    - preserves existing gameplay events while attaching sequence outcome token.
+- `OK` Canonical telemetry alignment:
+  - sequence/stimulus/outcome events are emitted via existing `TrackEvent(...)` -> `InteractionEventBridge.RecordGameplayEvent(...)`,
+  - ownership/session keys and mobile source-of-truth metadata remain enforced by bridge/session context path.
+- `OK` Automated Unity CLI validation for new scope:
+  - `unity-quest-template/Assets/_TheraplyCore/Editor/Automation/SequenceStimulusTaskOutcomeValidation.cs`:
+    - added CLI execute method:
+      - `RunSequenceStimulusTaskOutcomeValidation`,
+    - validates canonical event stream for:
+      - `TASK_STIMULUS_PRESENTED`,
+      - `TASK_ACTION_OUTCOME`,
+      - `TASK_OUTCOME_SUMMARY`,
+    - verifies required action outcomes in task flow:
+      - `CORRECT`,
+      - `OMITTED`,
+      - `REDUNDANT`,
+    - verifies monotonic canonical `sequenceNumber`.
+- `OK` Validation evidence:
+  - compile PASS:
+    - `docs/evidence/20260222_171605/commands/unity_cli_validate_compile.log`
+    - `docs/evidence/20260222_171605/commands/unity_cli_compile.log`
+  - sequence/stimulus/task outcome validation PASS:
+    - `docs/evidence/20260222_171605/commands/unity_sequence_stimulus_task_outcome_validation_runner.log`
+    - `docs/evidence/20260222_171605/commands/unity_sequence_stimulus_task_outcome_validation.log`
+    - marker:
+      - `docs/evidence/20260222_171605/commands/unity_sequence_stimulus_task_outcome_validation_markers.log`
+      - `PASS: events=6; maxSequence=6; eventTypes=TASK_ACTION_OUTCOME,TASK_OUTCOME_SUMMARY,TASK_STIMULUS_PRESENTED`
+- `OK` Roadmap status update:
+  - `docs/29-Controller-Authority-Resilience-And-Data-Roadmap.md`:
+    - `RDM-012` updated to `DONE` with evidence link.
+- `TODO` Next:
+  - proceed with `RDM-013` (`Adaptive difficulty + label pipeline`).
+
+## 71) P3 closure: RDM-013 adaptive difficulty + label pipeline (2026-02-22)
+
+- `OK` Scope:
+  - close `RDM-013` by adding production runtime adaptation (`AdaptiveDifficultyController`) and per-task label generation (`TaskLabelPipeline`),
+  - keep event flow non-blocking and keep mobile controller as source for session ownership/decision keys.
+- `OK` Unity runtime implementation:
+  - `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/AdaptiveDifficultyController.cs`:
+    - added lightweight adaptive policy engine (no blocking operations, summary-driven difficulty updates),
+    - emits deterministic reason codes (`INCREASE_DIFFICULTY`, `DECREASE_DIFFICULTY`, `KEEP_DIFFICULTY`).
+  - `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/TaskLabelPipeline.cs`:
+    - added label generation per task run (`performanceBand`, `paceBand`, `fatigueBand`, confidence, recommendation).
+  - `unity-quest-template/Assets/_Examples/Scripts/PulseTargetsGameModule.cs`:
+    - integrated adaptive controller with running task summary updates,
+    - emits canonical gameplay events:
+      - `adaptive_difficulty_adjusted`,
+      - `task_label_generated`,
+    - keeps ownership/session metadata under existing `InteractionEventBridge` canonical envelope.
+  - `unity-quest-template/Assets/_TheraplyCore/Editor/Automation/AdaptiveDifficultyLabelPipelineValidation.cs`:
+    - added CLI execute method:
+      - `RunAdaptiveDifficultyLabelPipelineValidation`,
+    - validates canonical stream includes both adaptive and label events with monotonic sequence and source-of-truth invariants.
+- `OK` Flutter authority/config integration:
+  - `flutter_controller/lib/models/therapist_session_settings.dart`:
+    - added therapist-level adaptive knobs:
+      - `adaptiveDifficultyEnabled`,
+      - `adaptiveDifficultySensitivity`,
+      - `labelPipelineEnabled`,
+    - included map serialization and clamp parsing.
+  - `flutter_controller/lib/screens/control_screen.dart`:
+    - `START_GAME` payload for `pulse_target_tap` now carries adaptive+label config from therapist settings.
+  - `flutter_controller/lib/screens/students_screen.dart`:
+    - settings save path now preserves adaptive/label fields (no silent reset when saving unrelated options).
+  - tests updated:
+    - `flutter_controller/test/therapist_session_settings_test.dart`,
+    - `flutter_controller/test/therapist_session_settings_service_test.dart`.
+- `OK` Validation evidence:
+  - compile PASS:
+    - `docs/evidence/20260222_174008/commands/unity_cli_validate_compile.log`
+    - `docs/evidence/20260222_174008/commands/unity_cli_compile.log`
+  - adaptive difficulty + label pipeline validation PASS:
+    - `docs/evidence/20260222_174008/commands/unity_adaptive_difficulty_label_pipeline_validation_runner.log`
+    - `docs/evidence/20260222_174008/commands/unity_adaptive_difficulty_label_pipeline_validation.log`
+    - marker:
+      - `docs/evidence/20260222_174008/commands/unity_adaptive_difficulty_label_pipeline_validation_markers.log`
+      - `PASS: events=4; adaptiveEvents=2; labelEvents=2; maxSequence=4; eventTypes=ADAPTIVE_DIFFICULTY_ADJUSTED,TASK_LABEL_GENERATED`
+  - flutter analyze PASS:
+    - `docs/evidence/20260222_174008/commands/flutter_controller_flutter_analyze.log`
+  - flutter model/service tests PASS:
+    - `docs/evidence/20260222_174008/commands/flutter_controller_settings_tests.log`
+- `OK` Roadmap status update:
+  - `docs/29-Controller-Authority-Resilience-And-Data-Roadmap.md`:
+    - `RDM-013` updated to `DONE` with evidence link.
+- `TODO` Next:
+  - proceed with P3 dataset quality gates before training (`dataset quality validation`/pre-train checks).
+
+## 72) P3 closure: RDM-014 dataset quality validation before training (2026-02-22)
+
+- `OK` Scope:
+  - close remaining P3 requirement (`Walidacja dataset quality przed treningiem`) by adding a reusable runtime quality gate and automated Unity CLI check.
+- `OK` Unity runtime implementation:
+  - `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/TaskDatasetQualityGate.cs`:
+    - added canonical pre-train quality gate for task datasets,
+    - validates required fields and integrity:
+      - required keys (`eventId`, `sequenceNumber`, `ownerKey`, `sessionKey`, `sourceOfTruth`, `taskRunId`),
+      - monotonic sequence,
+      - duplicate `eventId` detection,
+      - source-of-truth enforcement (`MOBILE_CONTROLLER`),
+      - label confidence bounds and task-run coverage,
+      - adaptive + summary + label coverage requirements,
+    - returns deterministic `reasonCode` and normalized `qualityScore`.
+- `OK` Automated Unity CLI validation:
+  - `unity-quest-template/Assets/_TheraplyCore/Editor/Automation/DatasetQualityTrainingValidation.cs`:
+    - added CLI execute method:
+      - `RunDatasetQualityTrainingValidation`,
+    - synthesizes canonical event stream for 3 task runs:
+      - `TASK_OUTCOME_SUMMARY`,
+      - `ADAPTIVE_DIFFICULTY_ADJUSTED`,
+      - `TASK_LABEL_GENERATED`,
+    - runs `TaskDatasetQualityGate` and asserts:
+      - dataset is `readyForTraining`,
+      - full run coverage by summary+label,
+      - no structural violations.
+- `OK` Validation evidence:
+  - compile PASS:
+    - `docs/evidence/20260222_183204/commands/unity_cli_validate_compile.log`
+    - `docs/evidence/20260222_183204/commands/unity_cli_compile.log`
+  - dataset quality training validation PASS:
+    - `docs/evidence/20260222_183204/commands/unity_dataset_quality_training_validation_runner.log`
+    - `docs/evidence/20260222_183204/commands/unity_dataset_quality_training_validation.log`
+    - marker:
+      - `docs/evidence/20260222_183204/commands/unity_dataset_quality_training_validation_markers.log`
+      - `PASS: events=9; taskRuns=3; labels=3; summaries=3; adaptiveEvents=3; labelCoverage=1.000; avgConfidence=0.859; qualityScore=1.000; reason=DATASET_READY_FOR_TRAINING`
+- `OK` Roadmap status update:
+  - `docs/29-Controller-Authority-Resilience-And-Data-Roadmap.md`:
+    - added and closed `RDM-014` (`Dataset quality validation before training`) with evidence link.
+- `TODO` Next:
+  - P3 roadmap scope is now closed; continue with post-roadmap execution lanes (real-device repeats, dataset export/ops checks, compliance hardening before clinical rollout).
+
+## 73) OPS-001 operational lane: dataset export + pre-train manifest + operator report (2026-02-22)
+
+- `OK` Scope:
+  - deliver first post-roadmap operational lane (`OPS-001`) for training/rollout readiness:
+    - dataset export from canonical events,
+    - pre-train manifest generation,
+    - sanity checks for `taskRunId`/`label`/`summary`, `sourceOfTruth`, ownership/session keys,
+    - operator-facing report artifact.
+- `OK` Unity runtime implementation:
+  - `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/TaskDatasetPreTrainExporter.cs`:
+    - added async export service (`Task.Run`) to avoid blocking render loop,
+    - writes operational artifacts:
+      - `canonical_events.ndjson`,
+      - `pretrain_manifest.json`,
+      - `operator_report.md`,
+    - reuses `TaskDatasetQualityGate` and enforces export sanity checks:
+      - `sourceOfTruth=MOBILE_CONTROLLER`,
+      - `ownerKey`/`sessionKey` integrity,
+      - per-task-run summary/label consistency.
+- `OK` Automated Unity CLI validation for OPS lane:
+  - `unity-quest-template/Assets/_TheraplyCore/Editor/Automation/OperationalDatasetExportValidation.cs`:
+    - added CLI execute method:
+      - `RunOperationalDatasetExportValidation`,
+    - synthesizes canonical stream (`TASK_OUTCOME_SUMMARY`, `ADAPTIVE_DIFFICULTY_ADJUSTED`, `TASK_LABEL_GENERATED`),
+    - executes exporter and fails on any sanity or readiness violations,
+    - asserts generated artifacts exist and are consistent with emitted event count.
+  - `scripts/unity_ops_dataset_export_validate.ps1`:
+    - added repeatable operator script for batchmode OPS validation run,
+    - supports export output/name overrides via parameters.
+- `OK` Validation evidence:
+  - compile PASS:
+    - `docs/evidence/20260222_185857/commands/unity_cli_validate_compile.log`
+    - `docs/evidence/20260222_185857/commands/unity_cli_compile.log`
+  - operational dataset export validation PASS:
+    - `docs/evidence/20260222_185857/commands/unity_operational_dataset_export_validation_runner.log`
+    - `docs/evidence/20260222_185857/commands/unity_operational_dataset_export_validation.log`
+    - marker:
+      - `docs/evidence/20260222_185857/commands/unity_operational_dataset_export_validation_markers.log`
+      - `PASS: events=9; taskRuns=3; labels=3; summaries=3; sourceOfTruthViolations=0; ownershipViolations=0; taskRunConsistencyViolations=0; exportReason=EXPORT_READY_FOR_TRAINING; qualityReason=DATASET_READY_FOR_TRAINING`
+  - exported operator artifacts:
+    - `docs/evidence/20260222_185857/artifacts/ops_dataset_export/canonical_events.ndjson`
+    - `docs/evidence/20260222_185857/artifacts/ops_dataset_export/pretrain_manifest.json`
+    - `docs/evidence/20260222_185857/artifacts/ops_dataset_export/operator_report.md`
+- `OK` Roadmap status update:
+  - `docs/29-Controller-Authority-Resilience-And-Data-Roadmap.md`:
+    - added and closed `OPS-001` with evidence link.
+- `TODO` Next:
+  - integrate OPS export lane with real-device session traces (not only synthetic validation stream),
+  - add operator SOP step for archive/hand-off of pre-train manifest package.
+
+## 74) OPS-002 operational lane: trace-integrated export + operator handoff package (2026-02-22)
+
+- `OK` Scope:
+  - close next post-roadmap ops increment (`OPS-002`) by:
+    - wiring export lane to durable session traces (`interaction_event` NDJSON with `payloadJson`),
+    - adding operator handoff packaging SOP with checksums + handoff manifest.
+- `OK` Unity runtime implementation:
+  - `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/TaskDatasetSessionTraceLoader.cs`:
+    - added durable trace loader for dataset-relevant event types:
+      - `TASK_OUTCOME_SUMMARY`,
+      - `TASK_LABEL_GENERATED`,
+      - `ADAPTIVE_DIFFICULTY_ADJUSTED`,
+    - supports optional `sessionId` filter and returns explicit load report (`TRACE_LOADED` / failure reason codes).
+  - `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/TaskDatasetPreTrainExporter.cs`:
+    - added trace entrypoint:
+      - `ExportPreTrainArtifactsFromDurableTraceAsync(...)`,
+    - enriched export result/manifest/report with trace load metadata and export mode:
+      - `exportMode=DURABLE_SESSION_TRACE`,
+      - `traceLoad` report block in `pretrain_manifest.json` and `operator_report.md`.
+- `OK` Automated Unity CLI validation for OPS-002:
+  - `unity-quest-template/Assets/_TheraplyCore/Editor/Automation/OperationalDatasetTraceExportValidation.cs`:
+    - added CLI execute method:
+      - `RunOperationalDatasetTraceExportValidation`,
+    - validates trace-based flow end-to-end:
+      - fixture generation of durable trace (or provided trace path via env),
+      - loader import from NDJSON trace,
+      - export readiness + sanity checks + artifact existence.
+  - `scripts/unity_ops_dataset_trace_export_validate.ps1`:
+    - added repeatable OPS-002 runner with optional:
+      - `-TraceInputPath`,
+      - `-TraceSessionId`.
+- `OK` Operator handoff package SOP:
+  - `scripts/ops_pretrain_handoff_package.ps1`:
+    - packages export artifacts into handoff bundle,
+    - generates:
+      - `checksums.sha256`,
+      - `handoff_manifest.json`,
+      - `handoff_sop_checklist.md`,
+      - optional zip (`-CreateZip`).
+  - `docs/30-OPS-Pretrain-Handoff-SOP.md`:
+    - added operator runbook for validation + packaging + handoff checklist.
+- `OK` Validation evidence:
+  - compile PASS:
+    - `docs/evidence/20260222_192103/commands/unity_cli_validate_compile.log`
+    - `docs/evidence/20260222_192103/commands/unity_cli_compile.log`
+  - operational dataset trace export validation PASS:
+    - `docs/evidence/20260222_192103/commands/unity_operational_dataset_trace_export_validation_runner.log`
+    - `docs/evidence/20260222_192103/commands/unity_operational_dataset_trace_export_validation.log`
+    - marker:
+      - `docs/evidence/20260222_192103/commands/unity_operational_dataset_trace_export_validation_markers.log`
+      - `PASS: events=9; taskRuns=3; labels=3; summaries=3; sourceOfTruthViolations=0; ownershipViolations=0; taskRunConsistencyViolations=0; traceImported=9; traceLines=9; traceReason=TRACE_LOADED; traceSource=GENERATED_FIXTURE; exportReason=EXPORT_READY_FOR_TRAINING; qualityReason=DATASET_READY_FOR_TRAINING`
+  - operational dataset trace export validation PASS (provided trace path):
+    - `docs/evidence/20260222_192103/commands/unity_operational_dataset_trace_export_validation_provided_runner.log`
+    - `docs/evidence/20260222_192103/commands/unity_operational_dataset_trace_export_validation_provided.log`
+    - marker:
+      - `docs/evidence/20260222_192103/commands/unity_operational_dataset_trace_export_validation_provided_markers.log`
+      - `PASS: events=9; taskRuns=3; labels=3; summaries=3; sourceOfTruthViolations=0; ownershipViolations=0; taskRunConsistencyViolations=0; traceImported=9; traceLines=9; traceReason=TRACE_LOADED; traceSource=PROVIDED_TRACE; exportReason=EXPORT_READY_FOR_TRAINING; qualityReason=DATASET_READY_FOR_TRAINING`
+  - handoff packaging PASS:
+    - `docs/evidence/20260222_192103/commands/ops_pretrain_handoff_package.log`
+  - exported/handoff artifacts:
+    - `docs/evidence/20260222_192103/artifacts/ops_dataset_trace_export/pretrain_manifest.json`
+    - `docs/evidence/20260222_192103/artifacts/ops_dataset_trace_export/operator_report.md`
+    - `docs/evidence/20260222_192103/artifacts/ops_dataset_trace_export/handoff/ops002_pretrain_handoff/handoff_manifest.json`
+    - `docs/evidence/20260222_192103/artifacts/ops_dataset_trace_export/handoff/ops002_pretrain_handoff/checksums.sha256`
+- `OK` Roadmap status update:
+  - `docs/29-Controller-Authority-Resilience-And-Data-Roadmap.md`:
+    - added and closed `OPS-002` with evidence link.
+- `TODO` Next:
+  - run OPS-002 lane against a real Quest-captured durable trace from production-like session,
+  - attach resulting handoff package to training intake workflow and capture ack trail.
+
+## 75) OPS-003 operational lane: provided-trace-required gate + intake ACK trail (2026-02-22)
+
+- `OK` Scope:
+  - domknac operatorski flow po OPS-002 przez:
+    - wymuszalny tryb walidacji CLI dla provided trace (`RequireProvidedTrace`),
+    - maszynowo czytelny trail potwierdzenia intake (`intakeAck` + `ackTrail`) w paczce handoff.
+- `OK` Unity CLI validation hardening:
+  - `unity-quest-template/Assets/_TheraplyCore/Editor/Automation/OperationalDatasetTraceExportValidation.cs`:
+    - dodano flage srodowiskowa `THERAPLY_DATASET_TRACE_REQUIRE_PROVIDED`,
+    - lane failuje bez podanego trace path, gdy tryb jest wymagany,
+    - lane sprawdza zgodnosc `traceLoadReport.durableTracePath` z podanym trace path,
+    - marker PASS raportuje `requireProvidedTrace=TRUE/FALSE`.
+  - `scripts/unity_ops_dataset_trace_export_validate.ps1`:
+    - dodano parametr `-RequireProvidedTrace`,
+    - skrypt failuje bez `-TraceInputPath` gdy tryb wymagany,
+    - przekazuje env do walidacji Unity.
+- `OK` Operator handoff intake ACK flow:
+  - `scripts/ops_pretrain_handoff_package.ps1`:
+    - manifest handoff startuje z `intakeAckStatus=PENDING_OPERATOR_INTAKE_ACK`,
+    - paczka zawiera `intake_ack_template.json`,
+    - checklist wymaga domkniecia `intake_acknowledgement.json` po intake.
+  - `scripts/ops_pretrain_handoff_ack_confirm.ps1`:
+    - nowy skrypt potwierdzenia intake:
+      - zapisuje `intake_acknowledgement.json` i `intake_acknowledgement.md`,
+      - aktualizuje `handoff_manifest.json` (`intakeAck*`, `ackTrail`, `intakeAck` payload),
+      - waliduje warunek `readyForTraining=true` dla statusu `ACKNOWLEDGED`.
+  - `docs/30-OPS-Pretrain-Handoff-SOP.md`:
+    - dodano krok 4: intake ACK confirmation command.
+- `OK` Validation evidence:
+  - provided-trace-required validation PASS:
+    - `docs/evidence/20260222_194839/commands/unity_operational_dataset_trace_export_validation_real_trace_runner.log`
+    - `docs/evidence/20260222_194839/commands/unity_operational_dataset_trace_export_validation_real_trace.log`
+    - marker:
+      - `docs/evidence/20260222_194839/commands/unity_operational_dataset_trace_export_validation_real_trace_markers.log`
+      - `PASS: ... traceSource=PROVIDED_TRACE ... requireProvidedTrace=TRUE`
+  - provided-trace guard EXPECTED_FAIL:
+    - `docs/evidence/20260222_194839/commands/unity_ops_dataset_trace_require_provided_guard.log`
+    - marker:
+      - `docs/evidence/20260222_194839/commands/unity_ops_dataset_trace_require_provided_guard_markers.log`
+      - `EXPECTED_FAIL`
+  - handoff package + intake ACK PASS:
+    - `docs/evidence/20260222_194839/commands/ops_pretrain_handoff_package.log`
+    - `docs/evidence/20260222_194839/commands/ops_pretrain_handoff_ack_confirm.log`
+    - marker:
+      - `docs/evidence/20260222_194839/commands/ops_pretrain_handoff_ack_confirm_markers.log`
+      - `intakeAckStatus=ACKNOWLEDGED`, `ackTrailCount=1`
+- `PARTIAL` Real Quest trace run:
+  - pobrano realny trace z podlaczonego Questa:
+    - `/sdcard/Android/data/com.DefaultCompany.unityquesttemplate/files/session_resilience/events.ndjson`
+    - lokalnie: `docs/evidence/20260222_195522/artifacts/quest_trace/quest_events.ndjson`
+  - lane uruchomiony na tym trace z `-RequireProvidedTrace` zwraca oczekiwany FAIL:
+    - `TRACE_NO_DATASET_EVENTS`
+    - marker: `docs/evidence/20260222_195522/commands/unity_operational_dataset_trace_export_validation_quest_real_trace_unity_markers.log`
+  - przyczyna: trace nie zawiera dataset-compatible envelope (`interaction_event` + `payloadJson.eventType` z task pipeline), tylko runtime/demo eventy (`demo_cube_clicked`, `pointer_shot`, `session_*`).
+- `TODO` Next:
+  - nagrac trace z Questa dla sesji zawierajacej eventy task pipeline (`TASK_OUTCOME_SUMMARY`, `TASK_LABEL_GENERATED`, `ADAPTIVE_DIFFICULTY_ADJUSTED` w `interaction_event`),
+  - ponowic lane OPS-003 na takim trace (`-RequireProvidedTrace`) i domknac ACK trail z docelowym ticketem intake.
+
+## 76) OPS-003 helper lane: trace auto-discovery + prep script (2026-02-22)
+
+- `OK` Scope:
+  - dodac operatorowi narzedzie, ktore samo wyciaga trace input "skad i kiedy trzeba":
+    - Quest/ADB autodiscovery,
+    - lokalne sciezki fallback,
+    - automatyczne przygotowanie gotowego `TraceInputPath` i `TraceSessionId`.
+- `OK` Implementation:
+  - `scripts/ops_dataset_trace_collect.ps1`:
+    - skanuje package list dla Quest buildow (`com.DefaultCompany.unityquesttemplate`, `com.unicornvr*`),
+    - probuje pobrac `events.ndjson` z `Android/data/<package>/files/...`,
+    - analizuje dataset-compatible envelope:
+      - `interaction_event`,
+      - `payloadJson.eventType` z:
+        - `TASK_OUTCOME_SUMMARY`,
+        - `TASK_LABEL_GENERATED`,
+        - `ADAPTIVE_DIFFICULTY_ADJUSTED`,
+    - buduje raport:
+      - `reports/trace_discovery_report.json`,
+      - `reports/trace_discovery_report.md`,
+    - przygotowuje artefakty:
+      - `prepared/dataset_trace_all_sessions.ndjson`,
+      - `prepared/dataset_trace_selected_session.ndjson`,
+    - zwraca rekomendacje do lane OPS:
+      - `selection.recommendedTraceInputPath`,
+      - `selection.recommendedTraceSessionId`,
+      - `selection.readyForOpsTraceValidation`.
+  - `docs/30-OPS-Pretrain-Handoff-SOP.md`:
+    - dodano `Krok 0` z komenda auto-collect i fallback dla lokalnych trace.
+- `OK` Validation evidence:
+  - Quest autodiscovery run (aktualnie podlaczony headset `RFCY9019KYF`):
+    - `docs/evidence/20260222_202038/commands/ops_dataset_trace_collect.log`
+    - marker:
+      - `docs/evidence/20260222_202038/commands/ops_dataset_trace_collect_markers.log`
+      - `selectionReason=TRACE_CANDIDATES_NOT_FOUND`
+  - Local fixture run (regression probe nowego skryptu):
+    - `docs/evidence/20260222_202038/commands/ops_dataset_trace_collect_local_fixture.log`
+    - marker:
+      - `docs/evidence/20260222_202038/commands/ops_dataset_trace_collect_local_fixture_markers.log`
+      - `readyForOpsTraceValidation=True`, `preparedSessionDatasetEvents=9`
+  - Unity CLI handoff z output collectora:
+    - `docs/evidence/20260222_202038/commands/unity_operational_dataset_trace_export_validation_from_collector_runner.log`
+    - status:
+      - `BLOCKED` (project lock: inna instancja Unity otwarta na tym samym projekcie).
+- `TODO` Next:
+  - zamknac aktywna instancje Unity i powtorzyc Unity CLI run z collectora,
+  - nagrac Quest trace zawierajacy dataset event envelope, wtedy collector powinien zwrocic `readyForOpsTraceValidation=true` bez fallback fixture.
+
+## 77) OPS-003 fast-follow: operator incident report dispatch + language policy + firestore rules release (2026-02-22)
+
+- `OK` Scope:
+  - domknac operatorski UX dla sekwencyjnych popupow incydentow przez:
+    - akcje `Send report` / `Wyslij raport` (zaleznie od jezyka terapeuty),
+    - wysylke raportu przez draft email do `errors@pranasense.pl`,
+    - trwaly zapis raportu i sekwencji incydentow w Firestore (`operator_incident_reports`),
+    - release reguł Firestore po zmianach uprawnien.
+- `OK` Implementation:
+  - `flutter_controller/lib/services/operator_incident_popup_queue.dart`:
+    - usunieto copy-flow z popupa i utrzymano pojedyncza akcje raportowa,
+    - dodano lokalizowany zestaw stringow (`pl/en`) dla popupu + body raportu,
+    - dodano otwarcie draftu `mailto:` do `errors@pranasense.pl`,
+    - zachowano sekwencyjny, blokujacy queue UX dla incydentow.
+  - `flutter_controller/lib/services/operator_incident_report_service.dart`:
+    - zapis raportu z `reportId`, `incidentReasonCodes`, `severityBreakdown`, `incidents[]`, `context`.
+  - `flutter_controller/lib/models/therapist_session_settings.dart`:
+    - dodano `operatorUiLanguage` (`pl`/`en`),
+    - ustawiono default na `pl`,
+    - parser fallback respektuje domyslny jezyk gdy pole nie istnieje.
+  - `flutter_controller/lib/screens/students_screen.dart`:
+    - dodano wybor jezyka w `Session settings` (`Incident message language`),
+    - zapis jezyka do ustawien terapeuty.
+  - `flutter_controller/lib/screens/control_screen.dart` + `flutter_controller/lib/screens/students_screen.dart`:
+    - `OperatorIncidentPopupQueue` otrzymuje dynamiczny `languageResolver` z ustawien terapeuty.
+  - `firestore.rules`:
+    - dodano polityke kolekcji `operator_incident_reports` (owner create/read + admin read, brak update/delete).
+- `OK` Validation evidence:
+  - firestore rules deploy PASS:
+    - `docs/evidence/20260222_221123/commands/firebase_deploy_firestore_rules.log`
+    - marker:
+      - `docs/evidence/20260222_221123/commands/firebase_deploy_firestore_rules_markers.log`
+      - `Deploy complete`, `released rules firestore.rules`.
+  - flutter analyze PASS:
+    - `docs/evidence/20260222_221123/commands/flutter_controller_flutter_analyze.log`
+    - marker:
+      - `docs/evidence/20260222_221123/commands/flutter_controller_flutter_analyze_markers.log`
+      - `No issues found`.
+  - flutter targeted tests PASS:
+    - `docs/evidence/20260222_221123/commands/flutter_controller_targeted_tests.log`
+    - marker:
+      - `docs/evidence/20260222_221123/commands/flutter_controller_targeted_tests_markers.log`
+      - `All tests passed`.
+- `PARTIAL` OPS-003 status:
+  - lane pozostaje `IN_PROGRESS` ze wzgledu na otwarty warunek finalny:
+    - real Quest trace z dataset envelope (`TASK_OUTCOME_SUMMARY`, `TASK_LABEL_GENERATED`, `ADAPTIVE_DIFFICULTY_ADJUSTED`) nadal wymagany do final closure.
+- `TODO` Next:
+  - nagrac docelowy trace dataset-compatible na Quescie,
+  - uruchomic ponownie `unity_ops_dataset_trace_export_validate.ps1 -RequireProvidedTrace` na tym trace,
+  - domknac OPS-003 statusem `DONE` po PASS + docelowym intake ticket.
+
+## 78) OPS-003 closure run on real Quest trace + intake ACK trail (2026-02-23)
+
+- `OK` Scope:
+  - wykonac OPS-003 na realnym trace pobranym z urzadzenia,
+  - zamknac operatorski handoff confirmation flow (`intakeAck` + `ackTrail`),
+  - utrzymac artefakty w jednym evidence root.
+- `OK` Real trace intake (collector):
+  - uruchomiono:
+    - `scripts/ops_dataset_trace_collect.ps1`
+  - wynik:
+    - `readyForOpsTraceValidation=true`,
+    - `preparedSessionDatasetEvents=6`,
+    - `recommendedTraceInputPath=docs/evidence/20260223_101542/artifacts/ops_trace_collect/prepared/dataset_trace_all_sessions.ndjson`,
+    - `recommendedTraceSessionId=mobile-dLxoPFss0wCV6nezOZfb-1771838008060`.
+  - evidence:
+    - `docs/evidence/20260223_101542/commands/ops_dataset_trace_collect.log`,
+    - `docs/evidence/20260223_101542/artifacts/ops_trace_collect/reports/trace_discovery_report.json`.
+- `OK` CLI path normalization hardening:
+  - `scripts/unity_ops_dataset_trace_export_validate.ps1`:
+    - relatywne `-ExportOutputDirectory`, `-TraceInputPath`, `-LogFile` sa normalizowane do absolutnych sciezek (repo-root),
+    - lane tworzy katalog eksportu deterministycznie i waliduje istnienie trace input.
+  - efekt:
+    - artefakty trafiaja do `docs/evidence/...` zamiast przypadkowego `unity-quest-template/docs/evidence/...`.
+- `PARTIAL` Unity OPS-003 validation outcome (real trace):
+  - uruchomiono:
+    - `scripts/unity_ops_dataset_trace_export_validate.ps1 -RequireProvidedTrace ...`
+  - wynik:
+    - lane wykonany na realnym trace, ale quality gate zwrocil FAIL:
+      - `reason=INSUFFICIENT_EVENT_COUNT`,
+      - `totalEvents=6`,
+      - `readyForTraining=false`.
+  - evidence:
+    - `docs/evidence/20260223_101542/commands/unity_operational_dataset_trace_export_validation_real_trace.log`,
+    - `docs/evidence/20260223_101542/artifacts/ops_dataset_trace_export_real_trace/pretrain_manifest.json`,
+    - `unity-quest-template/Temp/CliValidation/operational_dataset_trace_export_validation_result.txt`.
+- `OK` Handoff package + intake ACK trail closure:
+  - uruchomiono:
+    - `scripts/ops_pretrain_handoff_package.ps1`,
+    - `scripts/ops_pretrain_handoff_ack_confirm.ps1`.
+  - wynik:
+    - wygenerowano paczke handoff z checksums i manifestem,
+    - zapisano intake ACK trail ze statusem:
+      - `intakeAckStatus=NEEDS_INFO`,
+      - ticket: `OPS-003-REALTRACE-20260223-01`,
+      - powod: `INSUFFICIENT_EVENT_COUNT`.
+  - evidence:
+    - `docs/evidence/20260223_101542/commands/ops_pretrain_handoff_package.log`,
+    - `docs/evidence/20260223_101542/commands/ops_pretrain_handoff_ack_confirm.log`,
+    - `docs/evidence/20260223_101542/artifacts/ops_pretrain_handoff/ops003_pretrain_handoff_real_trace/handoff_manifest.json`,
+    - `docs/evidence/20260223_101542/artifacts/ops_pretrain_handoff/ops003_pretrain_handoff_real_trace/intake_acknowledgement.json`.
+- `OK` Status:
+  - OPS-003 flow zostal domkniety procesowo:
+    - real trace run wykonany,
+    - intake ACK trail zapisany.
+- `TODO` Next:
+  - wykonac dluzsza sesje gameplay i zebrac trace z wieksza liczba dataset eventow,
+  - osiagnac minimalne progi quality gate:
+    - `minEvents=9`,
+    - `minTaskRuns=3`,
+  - ponowic lane OPS trace export tak, aby uzyskac:
+    - `readyForTraining=true`,
+    - `reasonCode=DATASET_READY_FOR_TRAINING`.

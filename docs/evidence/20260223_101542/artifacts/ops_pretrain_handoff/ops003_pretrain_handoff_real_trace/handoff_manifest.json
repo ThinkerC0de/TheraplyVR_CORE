@@ -1,0 +1,79 @@
+﻿{
+    "packageSchema":  "THERAPLY_PRETRAIN_HANDOFF",
+    "packageVersion":  "2026-02-22",
+    "generatedAtUtc":  "2026-02-23T09:30:43.6026699Z",
+    "operatorId":  "ops_cli",
+    "exportDirectory":  "C:\\Users\\licen\\Projects\\theraply-vr-framework\\docs\\evidence\\20260223_101542\\artifacts\\ops_dataset_trace_export_real_trace",
+    "sourceTracePath":  "C:\\Users\\licen\\Projects\\theraply-vr-framework\\docs\\evidence\\20260223_101542\\artifacts\\ops_trace_collect\\prepared\\dataset_trace_all_sessions.ndjson",
+    "sessionId":  "mobile-dLxoPFss0wCV6nezOZfb-1771838008060",
+    "exportName":  "ops003_real_trace",
+    "exportMode":  "DURABLE_SESSION_TRACE",
+    "readyForTraining":  false,
+    "reasonCode":  "INSUFFICIENT_EVENT_COUNT",
+    "totalEvents":  6,
+    "uniqueTaskRuns":  1,
+    "traceLoad":  {
+                      "loaded":  true,
+                      "reasonCode":  "TRACE_LOADED",
+                      "durableTracePath":  "C:\\Users\\licen\\Projects\\theraply-vr-framework\\docs\\evidence\\20260223_101542\\artifacts\\ops_trace_collect\\prepared\\dataset_trace_all_sessions.ndjson",
+                      "sessionIdFilter":  "mobile-dLxoPFss0wCV6nezOZfb-1771838008060",
+                      "totalLines":  6,
+                      "importedEvents":  6,
+                      "skippedBySession":  0,
+                      "skippedUnsupportedEventType":  0,
+                      "invalidLines":  0
+                  },
+    "files":  [
+                  {
+                      "name":  "canonical_events.ndjson",
+                      "sha256":  "a0cf2a1340d408b68fa164764105b966754c88bf8929ad26bfc89f8c79be90ee",
+                      "bytes":  4915
+                  },
+                  {
+                      "name":  "pretrain_manifest.json",
+                      "sha256":  "0d05620f3c9754555917efd944e118769770d426a4e6f828919f08d6a46f1f62",
+                      "bytes":  2683
+                  },
+                  {
+                      "name":  "operator_report.md",
+                      "sha256":  "49395ec0587c717e134ffa44fb238a953dc81950ad23e254d19d17dda0d94479",
+                      "bytes":  1969
+                  }
+              ],
+    "intakeAckStatus":  "NEEDS_INFO",
+    "intakeAckFile":  "intake_acknowledgement.json",
+    "intakeAckAtUtc":  "2026-02-23T09:30:43.9648080Z",
+    "intakeAckBy":  "ops_cli",
+    "intakeTicketId":  "OPS-003-REALTRACE-20260223-01",
+    "ackTrail":  [
+                     {
+                         "ackId":  "b64c7cef-9b1d-4f55-b426-72ec5fc47748",
+                         "ackedAtUtc":  "2026-02-23T09:30:43.9648080Z",
+                         "ackStatus":  "NEEDS_INFO",
+                         "intakeTicketId":  "OPS-003-REALTRACE-20260223-01",
+                         "intakeOperatorId":  "ops_cli",
+                         "ackFile":  "intake_acknowledgement.json",
+                         "notes":  "Trace replay validated, but pretrain export is not ready: INSUFFICIENT_EVENT_COUNT (totalEvents=6). Collect additional gameplay events and rerun OPS-003."
+                     }
+                 ],
+    "intakeAck":  {
+                      "ackSchema":  "THERAPLY_PRETRAIN_INTAKE_ACK",
+                      "ackVersion":  "2026-02-22",
+                      "ackId":  "b64c7cef-9b1d-4f55-b426-72ec5fc47748",
+                      "ackedAtUtc":  "2026-02-23T09:30:43.9648080Z",
+                      "ackStatus":  "NEEDS_INFO",
+                      "intakeTicketId":  "OPS-003-REALTRACE-20260223-01",
+                      "intakeOperatorId":  "ops_cli",
+                      "notes":  "Trace replay validated, but pretrain export is not ready: INSUFFICIENT_EVENT_COUNT (totalEvents=6). Collect additional gameplay events and rerun OPS-003.",
+                      "packageDirectory":  "C:\\Users\\licen\\Projects\\theraply-vr-framework\\docs\\evidence\\20260223_101542\\artifacts\\ops_pretrain_handoff\\ops003_pretrain_handoff_real_trace",
+                      "packageName":  "ops003_pretrain_handoff_real_trace",
+                      "exportName":  "ops003_real_trace",
+                      "exportMode":  "DURABLE_SESSION_TRACE",
+                      "sessionId":  "mobile-dLxoPFss0wCV6nezOZfb-1771838008060",
+                      "sourceTracePath":  "C:\\Users\\licen\\Projects\\theraply-vr-framework\\docs\\evidence\\20260223_101542\\artifacts\\ops_trace_collect\\prepared\\dataset_trace_all_sessions.ndjson",
+                      "readyForTraining":  false,
+                      "reasonCode":  "INSUFFICIENT_EVENT_COUNT",
+                      "checksumsSha256":  "f1f0e4537ed17f191449244a03a0592e387f4e165c1f2d1b340a0481b40e4b16",
+                      "handoffManifestSha256Before":  "4ade3de96720b253e9568a03aa185c2bac6fe54f06a3e155e83161eeb61f4389"
+                  }
+}

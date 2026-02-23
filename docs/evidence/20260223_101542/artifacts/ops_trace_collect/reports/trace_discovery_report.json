@@ -1,0 +1,71 @@
+﻿{
+    "reportSchema":  "THERAPLY_OPS_TRACE_DISCOVERY",
+    "reportVersion":  "2026-02-22",
+    "generatedAtUtc":  "2026-02-23T09:15:43.5691985Z",
+    "adbSerial":  "2G0YC5ZF8P009T",
+    "supportedDatasetEventTypes":  [
+                                       "TASK_OUTCOME_SUMMARY",
+                                       "TASK_LABEL_GENERATED",
+                                       "ADAPTIVE_DIFFICULTY_ADJUSTED"
+                                   ],
+    "search":  {
+                   "skipQuestPull":  false,
+                   "localTracePaths":  [
+
+                                       ],
+                   "traceSessionIdFilter":  "",
+                   "outputDirectory":  "C:\\Users\\licen\\Projects\\theraply-vr-framework\\docs\\evidence\\20260223_101542\\artifacts\\ops_trace_collect"
+               },
+    "candidates":  [
+                       {
+                           "sourceType":  "QUEST",
+                           "sourceLabel":  "com.DefaultCompany.unityquesttemplate",
+                           "remotePath":  "/sdcard/Android/data/com.DefaultCompany.unityquesttemplate/files/session_resilience/events.ndjson",
+                           "localPath":  "C:\\Users\\licen\\Projects\\theraply-vr-framework\\docs\\evidence\\20260223_101542\\artifacts\\ops_trace_collect\\pulled\\quest_com_DefaultCompany_unityquesttemplate_events.ndjson",
+                           "totalLines":  1233,
+                           "invalidLines":  0,
+                           "interactionLines":  308,
+                           "payloadParseErrors":  0,
+                           "datasetLines":  6,
+                           "sessionCount":  1,
+                           "eventTypeCounts":  {
+                                                   "ADAPTIVE_DIFFICULTY_ADJUSTED":  4,
+                                                   "TASK_OUTCOME_SUMMARY":  1,
+                                                   "TASK_LABEL_GENERATED":  1
+                                               },
+                           "sessionDatasetEventCounts":  {
+                                                             "mobile-dLxoPFss0wCV6nezOZfb-1771838008060":  6
+                                                         }
+                       }
+                   ],
+    "sessions":  [
+                     {
+                         "sessionId":  "mobile-dLxoPFss0wCV6nezOZfb-1771838008060",
+                         "datasetEvents":  6,
+                         "firstOccurredAtUtc":  "2026-02-23T09:13:39.4106420+00:00",
+                         "lastOccurredAtUtc":  "2026-02-23T09:14:10.8780850+00:00",
+                         "eventTypeCounts":  {
+                                                 "ADAPTIVE_DIFFICULTY_ADJUSTED":  4,
+                                                 "TASK_OUTCOME_SUMMARY":  1,
+                                                 "TASK_LABEL_GENERATED":  1
+                                             },
+                         "sourcePaths":  [
+                                             "C:\\Users\\licen\\Projects\\theraply-vr-framework\\docs\\evidence\\20260223_101542\\artifacts\\ops_trace_collect\\pulled\\quest_com_DefaultCompany_unityquesttemplate_events.ndjson"
+                                         ]
+                     }
+                 ],
+    "selection":  {
+                      "reasonCode":  "TRACE_COLLECTED",
+                      "selectedSessionId":  "mobile-dLxoPFss0wCV6nezOZfb-1771838008060",
+                      "selectedSourceType":  "QUEST",
+                      "selectedSourceLabel":  "com.DefaultCompany.unityquesttemplate",
+                      "selectedSourcePath":  "C:\\Users\\licen\\Projects\\theraply-vr-framework\\docs\\evidence\\20260223_101542\\artifacts\\ops_trace_collect\\pulled\\quest_com_DefaultCompany_unityquesttemplate_events.ndjson",
+                      "preparedAllSessionsTracePath":  "C:\\Users\\licen\\Projects\\theraply-vr-framework\\docs\\evidence\\20260223_101542\\artifacts\\ops_trace_collect\\prepared\\dataset_trace_all_sessions.ndjson",
+                      "preparedSessionTracePath":  "C:\\Users\\licen\\Projects\\theraply-vr-framework\\docs\\evidence\\20260223_101542\\artifacts\\ops_trace_collect\\prepared\\dataset_trace_selected_session.ndjson",
+                      "preparedAllSessionsDatasetEvents":  6,
+                      "preparedSessionDatasetEvents":  6,
+                      "recommendedTraceInputPath":  "C:\\Users\\licen\\Projects\\theraply-vr-framework\\docs\\evidence\\20260223_101542\\artifacts\\ops_trace_collect\\prepared\\dataset_trace_all_sessions.ndjson",
+                      "recommendedTraceSessionId":  "mobile-dLxoPFss0wCV6nezOZfb-1771838008060",
+                      "readyForOpsTraceValidation":  true
+                  }
+}
