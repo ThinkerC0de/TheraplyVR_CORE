@@ -37,18 +37,26 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
   ];
 
   final TextEditingController _targetUserIdController = TextEditingController();
-  final TextEditingController _operationReasonController = TextEditingController();
+  final TextEditingController _operationReasonController =
+      TextEditingController();
   final TextEditingController _correlationIdController = TextEditingController(
     text: EntitlementAdminService.newCorrelationId(),
   );
   final TextEditingController _entitlementExpiresDaysController =
       TextEditingController(text: '365');
+  final TextEditingController _planAllowedGameIdsController =
+      TextEditingController();
+  final TextEditingController _planDemoSessionLimitController =
+      TextEditingController(text: '0');
+  final TextEditingController _planDemoSessionsUsedController =
+      TextEditingController(text: '0');
   final TextEditingController _grantGameIdController = TextEditingController();
   final TextEditingController _grantExpiresDaysController =
       TextEditingController(text: '30');
   final TextEditingController _grantNoteController = TextEditingController();
 
   EntitlementRole _selectedRole = EntitlementRole.therapist;
+  SubscriptionPlanTier _selectedPlanTier = SubscriptionPlanTier.basic;
   LicenseStatus _selectedAppLicenseStatus = LicenseStatus.active;
   bool _entitlementPerpetual = true;
 
@@ -76,6 +84,9 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
     _operationReasonController.dispose();
     _correlationIdController.dispose();
     _entitlementExpiresDaysController.dispose();
+    _planAllowedGameIdsController.dispose();
+    _planDemoSessionLimitController.dispose();
+    _planDemoSessionsUsedController.dispose();
     _grantGameIdController.dispose();
     _grantExpiresDaysController.dispose();
     _grantNoteController.dispose();
@@ -94,6 +105,14 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
     return max(1, parsed);
   }
 
+  int _readNonNegativeInt(TextEditingController controller, int fallback) {
+    final parsed = int.tryParse(controller.text.trim());
+    if (parsed == null) {
+      return fallback;
+    }
+    return max(0, parsed);
+  }
+
   LicenseGrant _buildGrant({
     required LicenseStatus status,
     required bool perpetual,
@@ -106,6 +125,28 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
       toUtc: perpetual ? null : nowUtc.add(Duration(days: days)),
       perpetual: perpetual,
     );
+  }
+
+  EntitlementPlanProfile _buildPlanProfile({
+    required SubscriptionPlanTier tier,
+  }) {
+    final allowedGameIds = _planAllowedGameIdsController.text
+        .split(',')
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet();
+    final demoLimit = _readNonNegativeInt(_planDemoSessionLimitController, 0);
+    final demoUsed = _readNonNegativeInt(_planDemoSessionsUsedController, 0);
+
+    final profile = EntitlementPlanProfile.fromMap(
+      <String, dynamic>{
+        'tier': tier.wireValue,
+        'allowedGameIds': allowedGameIds.toList(),
+        'demoSessionLimit': demoLimit,
+        'demoSessionsUsed': demoUsed,
+      },
+    );
+    return profile;
   }
 
   String _resolveCorrelationId() {
@@ -172,6 +213,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
           perpetual: perpetual,
           days: expiresInDays,
         ),
+        planProfile: _buildPlanProfile(tier: _selectedPlanTier),
         reason: reason,
         correlationId: correlationId,
       );
@@ -202,6 +244,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
   Future<void> _quickGrantAppAccess() async {
     setState(() {
       _selectedRole = EntitlementRole.therapist;
+      _selectedPlanTier = SubscriptionPlanTier.basic;
       _selectedAppLicenseStatus = LicenseStatus.active;
       _entitlementPerpetual = true;
     });
@@ -218,6 +261,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
   Future<void> _quickRevokeAppAccess() async {
     setState(() {
       _selectedRole = EntitlementRole.therapist;
+      _selectedPlanTier = SubscriptionPlanTier.basic;
       _selectedAppLicenseStatus = LicenseStatus.revoked;
       _entitlementPerpetual = true;
     });
@@ -257,7 +301,8 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
         grantId: '',
         granteeUserId: _targetUserId,
         scope: _selectedGrantScope,
-        gameId: _selectedGrantScope == EntitlementGrantScope.game ? gameId : null,
+        gameId:
+            _selectedGrantScope == EntitlementGrantScope.game ? gameId : null,
         licenseGrant: _buildGrant(
           status: _selectedGrantStatus,
           perpetual: _grantPerpetual,
@@ -492,6 +537,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                                   const SizedBox(height: 4),
                                   Text(
                                     'Role=${user.role.wireValue}, '
+                                    'Plan=${user.planTier.wireValue}, '
                                     'App=${user.appLicenseStatus.wireValue}, '
                                     'Updated=${_formatUtc(user.updatedAtUtc)}',
                                     style: const TextStyle(fontSize: 12),
@@ -579,7 +625,8 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                               children: [
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         student.fullName,
@@ -604,7 +651,8 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                                   ),
                                 ),
                                 TextButton(
-                                  onPressed: () => _useTargetUid(student.therapistId),
+                                  onPressed: () =>
+                                      _useTargetUid(student.therapistId),
                                   child: const Text('Use owner UID'),
                                 ),
                               ],
@@ -646,9 +694,8 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                   builder: (context, snapshot) {
                     final statsByGameId =
                         snapshot.data ?? const <String, AdminGameGrantStats>{};
-                    final knownIds = _knownGames
-                        .map((entry) => entry.gameId)
-                        .toSet();
+                    final knownIds =
+                        _knownGames.map((entry) => entry.gameId).toSet();
                     final unknownGrantGames = statsByGameId.keys
                         .where((gameId) => !knownIds.contains(gameId))
                         .toList()
@@ -758,7 +805,8 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                 padding: const EdgeInsets.only(right: 12),
                 child: Center(
                   child: Text(
-                    FirebaseService.currentUser!.email ?? FirebaseService.currentUser!.uid,
+                    FirebaseService.currentUser!.email ??
+                        FirebaseService.currentUser!.uid,
                     style: const TextStyle(fontSize: 12),
                   ),
                 ),
@@ -905,8 +953,82 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                 if (value == null) return;
                 setState(() {
                   _selectedRole = value;
+                  if (value == EntitlementRole.parent &&
+                      _selectedPlanTier == SubscriptionPlanTier.basic) {
+                    _selectedPlanTier = SubscriptionPlanTier.free;
+                  } else if (value == EntitlementRole.therapist &&
+                      _selectedPlanTier == SubscriptionPlanTier.free) {
+                    _selectedPlanTier = SubscriptionPlanTier.basic;
+                  }
                 });
               },
+            ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<SubscriptionPlanTier>(
+              initialValue: _selectedPlanTier,
+              decoration: const InputDecoration(
+                labelText: 'Subscription Plan',
+                border: OutlineInputBorder(),
+              ),
+              items: const [
+                DropdownMenuItem(
+                  value: SubscriptionPlanTier.free,
+                  child: Text('FREE'),
+                ),
+                DropdownMenuItem(
+                  value: SubscriptionPlanTier.basic,
+                  child: Text('BASIC'),
+                ),
+                DropdownMenuItem(
+                  value: SubscriptionPlanTier.premium,
+                  child: Text('PREMIUM'),
+                ),
+                DropdownMenuItem(
+                  value: SubscriptionPlanTier.live,
+                  child: Text('LIVE'),
+                ),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() {
+                  _selectedPlanTier = value;
+                });
+              },
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _planAllowedGameIdsController,
+              decoration: const InputDecoration(
+                labelText: 'Allowed gameIds (CSV, optional)',
+                hintText: 'demo_cube_clicker,pulse_target_tap',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _planDemoSessionLimitController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Demo session limit (0=unlimited)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _planDemoSessionsUsedController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Demo sessions used',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<LicenseStatus>(
@@ -916,10 +1038,14 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                 border: OutlineInputBorder(),
               ),
               items: const [
-                DropdownMenuItem(value: LicenseStatus.active, child: Text('ACTIVE')),
-                DropdownMenuItem(value: LicenseStatus.expired, child: Text('EXPIRED')),
-                DropdownMenuItem(value: LicenseStatus.revoked, child: Text('REVOKED')),
-                DropdownMenuItem(value: LicenseStatus.none, child: Text('NONE')),
+                DropdownMenuItem(
+                    value: LicenseStatus.active, child: Text('ACTIVE')),
+                DropdownMenuItem(
+                    value: LicenseStatus.expired, child: Text('EXPIRED')),
+                DropdownMenuItem(
+                    value: LicenseStatus.revoked, child: Text('REVOKED')),
+                DropdownMenuItem(
+                    value: LicenseStatus.none, child: Text('NONE')),
               ],
               onChanged: (value) {
                 if (value == null) return;
@@ -984,8 +1110,10 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                 border: OutlineInputBorder(),
               ),
               items: const [
-                DropdownMenuItem(value: EntitlementGrantScope.app, child: Text('APP')),
-                DropdownMenuItem(value: EntitlementGrantScope.game, child: Text('GAME')),
+                DropdownMenuItem(
+                    value: EntitlementGrantScope.app, child: Text('APP')),
+                DropdownMenuItem(
+                    value: EntitlementGrantScope.game, child: Text('GAME')),
               ],
               onChanged: (value) {
                 if (value == null) return;
@@ -1012,10 +1140,14 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                 border: OutlineInputBorder(),
               ),
               items: const [
-                DropdownMenuItem(value: LicenseStatus.active, child: Text('ACTIVE')),
-                DropdownMenuItem(value: LicenseStatus.expired, child: Text('EXPIRED')),
-                DropdownMenuItem(value: LicenseStatus.revoked, child: Text('REVOKED')),
-                DropdownMenuItem(value: LicenseStatus.none, child: Text('NONE')),
+                DropdownMenuItem(
+                    value: LicenseStatus.active, child: Text('ACTIVE')),
+                DropdownMenuItem(
+                    value: LicenseStatus.expired, child: Text('EXPIRED')),
+                DropdownMenuItem(
+                    value: LicenseStatus.revoked, child: Text('REVOKED')),
+                DropdownMenuItem(
+                    value: LicenseStatus.none, child: Text('NONE')),
               ],
               onChanged: (value) {
                 if (value == null) return;
@@ -1128,7 +1260,8 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
             ),
             const SizedBox(height: 8),
             StreamBuilder<EntitlementAccess?>(
-              stream: EntitlementAdminService.watchEntitlementProfile(_targetUserId),
+              stream: EntitlementAdminService.watchEntitlementProfile(
+                  _targetUserId),
               builder: (context, snapshot) {
                 final profile = snapshot.data;
                 if (profile == null) {
@@ -1138,6 +1271,8 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                 return Text(
                   'Role=${profile.role.wireValue}, '
                   'App=${profile.appLicense.status.wireValue}, '
+                  'Plan=${profile.planProfile.tier.wireValue}, '
+                  'Demo=${profile.planProfile.demoSessionsUsed}/${profile.planProfile.demoSessionLimit}, '
                   'Policy=${profile.policyVersion ?? '-'}',
                 );
               },

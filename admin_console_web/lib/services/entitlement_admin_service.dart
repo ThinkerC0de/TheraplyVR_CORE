@@ -13,8 +13,8 @@ class EntitlementAdminService {
 
   static FirebaseFirestore get _firestore =>
       _firestoreOverride ?? FirebaseService.firestore;
-  static CollectionReference<Map<String, dynamic>> get _entitlementsCollection =>
-      _firestore.collection('user_entitlements');
+  static CollectionReference<Map<String, dynamic>>
+      get _entitlementsCollection => _firestore.collection('user_entitlements');
   static CollectionReference<Map<String, dynamic>> get _grantsCollection =>
       _firestore.collection('entitlement_grants');
   static CollectionReference<Map<String, dynamic>> get _auditCollection =>
@@ -55,6 +55,7 @@ class EntitlementAdminService {
     required String reason,
     required String correlationId,
     Map<String, LicenseGrant> gameLicenses = const <String, LicenseGrant>{},
+    EntitlementPlanProfile? planProfile,
     String? policyVersion,
   }) async {
     final normalizedUserId = _requireTrimmed(userId, 'userId');
@@ -64,6 +65,8 @@ class EntitlementAdminService {
 
     final nowUtc = DateTime.now().toUtc();
     final actor = await _resolveActor();
+    final effectivePlanProfile =
+        planProfile ?? _defaultPlanProfileForRole(role);
     final gameLicensesWire = gameLicenses.map(
       (key, value) => MapEntry(key, value.toMap()),
     );
@@ -71,6 +74,7 @@ class EntitlementAdminService {
       'role': role.wireValue,
       'appLicense': appLicense.toMap(),
       'gameLicenses': gameLicensesWire,
+      'planProfile': effectivePlanProfile.toMap(),
       'policyVersion': policyVersion ?? 'admin-console-web-v1',
       'updatedAtUtc': nowUtc.toIso8601String(),
       'updatedBy': actor.uid,
@@ -91,6 +95,7 @@ class EntitlementAdminService {
       correlationId: normalizedCorrelationId,
       payloadSummary: <String, dynamic>{
         'role': role.wireValue,
+        'planTier': effectivePlanProfile.tier.wireValue,
         'appLicenseStatus': appLicense.status.wireValue,
         'policyVersion': policyVersion ?? 'admin-console-web-v1',
       },
@@ -157,9 +162,8 @@ class EntitlementAdminService {
         .where('granteeUserId', isEqualTo: normalizedUserId)
         .snapshots()
         .map((snapshot) {
-      final list = snapshot.docs
-          .map(EntitlementGrantAssignment.fromFirestore)
-          .toList();
+      final list =
+          snapshot.docs.map(EntitlementGrantAssignment.fromFirestore).toList();
       list.sort((a, b) => b.assignedAtUtc.compareTo(a.assignedAtUtc));
       return list;
     });
@@ -241,14 +245,12 @@ class EntitlementAdminService {
   static Stream<List<AdminStudentDirectoryRow>> watchStudents({
     int limit = 300,
   }) {
-    return _studentsCollection
-        .limit(limit)
-        .snapshots()
-        .map((snapshot) {
+    return _studentsCollection.limit(limit).snapshots().map((snapshot) {
       final list = snapshot.docs
           .map(AdminStudentDirectoryRow.fromStudentDocument)
           .toList();
-      list.sort((a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
+      list.sort((a, b) =>
+          a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
       return list;
     });
   }
@@ -292,6 +294,25 @@ class EntitlementAdminService {
       throw ArgumentError('$fieldName is required');
     }
     return trimmed;
+  }
+
+  static EntitlementPlanProfile _defaultPlanProfileForRole(
+    EntitlementRole role,
+  ) {
+    switch (role) {
+      case EntitlementRole.parent:
+        return EntitlementPlanProfile.fromMap(
+          const <String, dynamic>{'tier': 'FREE'},
+        );
+      case EntitlementRole.therapist:
+        return EntitlementPlanProfile.fromMap(
+          const <String, dynamic>{'tier': 'BASIC'},
+        );
+      case EntitlementRole.unknown:
+        return EntitlementPlanProfile.fromMap(
+          const <String, dynamic>{'tier': 'UNKNOWN'},
+        );
+    }
   }
 }
 

@@ -1,0 +1,80 @@
+﻿{
+    "manifestSchema": "THERAPLY_PRETRAIN_MANIFEST",
+    "manifestVersion": "2026-02-22",
+    "generatedAtUtc": "2026-02-23T09:28:53.8113003Z",
+    "exportName": "ops003_real_trace",
+    "exportMode": "DURABLE_SESSION_TRACE",
+    "readyForTraining": false,
+    "reasonCode": "INSUFFICIENT_EVENT_COUNT",
+    "expectedSourceOfTruth": "MOBILE_CONTROLLER",
+    "totalEvents": 6,
+    "uniqueTaskRuns": 1,
+    "taskOutcomeSummaries": 1,
+    "taskLabels": 1,
+    "adaptiveEvents": 4,
+    "taskRuns": [
+        {
+            "taskRunId": "3ddb332f-cabc-4181-8ff3-6c7c6e24cf8c",
+            "summaryCount": 1,
+            "labelCount": 1,
+            "adaptiveCount": 4,
+            "ownerKey": "UsZT9GBsomX93jQPuJPB8DtLNgO2|dLxoPFss0wCV6nezOZfb",
+            "sessionKey": "UsZT9GBsomX93jQPuJPB8DtLNgO2|dLxoPFss0wCV6nezOZfb|mobile-dLxoPFss0wCV6nezOZfb-1771838008060"
+        }
+    ],
+    "eventTypes": [
+        {
+            "eventType": "ADAPTIVE_DIFFICULTY_ADJUSTED",
+            "count": 4
+        },
+        {
+            "eventType": "TASK_LABEL_GENERATED",
+            "count": 1
+        },
+        {
+            "eventType": "TASK_OUTCOME_SUMMARY",
+            "count": 1
+        }
+    ],
+    "sanity": {
+        "passed": true,
+        "invalidRecords": 0,
+        "sourceOfTruthViolations": 0,
+        "ownershipViolations": 0,
+        "taskRunConsistencyViolations": 0,
+        "uniqueTaskRuns": 1,
+        "taskOutcomeSummaries": 1,
+        "taskLabels": 1,
+        "adaptiveEvents": 4
+    },
+    "quality": {
+        "readyForTraining": false,
+        "reasonCode": "INSUFFICIENT_EVENT_COUNT",
+        "qualityScore": 1.0,
+        "labelCoverageRatio": 1.0,
+        "summaryCoverageRatio": 1.0,
+        "averageLabelConfidence": 0.7984374761581421,
+        "missingRequiredFields": 0,
+        "duplicateEventIds": 0,
+        "nonMonotonicSequenceCount": 0,
+        "invalidSourceOfTruthCount": 0,
+        "invalidLabelConfidenceCount": 0,
+        "unmatchedLabelRuns": 0
+    },
+    "traceLoad": {
+        "loaded": true,
+        "reasonCode": "TRACE_LOADED",
+        "durableTracePath": "C:\\Users\\licen\\Projects\\theraply-vr-framework\\docs\\evidence\\20260223_101542\\artifacts\\ops_trace_collect\\prepared\\dataset_trace_all_sessions.ndjson",
+        "sessionIdFilter": "mobile-dLxoPFss0wCV6nezOZfb-1771838008060",
+        "totalLines": 6,
+        "importedEvents": 6,
+        "skippedBySession": 0,
+        "skippedUnsupportedEventType": 0,
+        "invalidLines": 0
+    },
+    "artifacts": {
+        "canonicalDatasetFile": "canonical_events.ndjson",
+        "preTrainManifestFile": "pretrain_manifest.json",
+        "operatorReportFile": "operator_report.md"
+    }
+}

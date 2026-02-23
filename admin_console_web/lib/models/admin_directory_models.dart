@@ -4,6 +4,7 @@ import 'package:admin_console_web/models/entitlement_access.dart';
 class AdminDirectoryUserRow {
   final String userId;
   final EntitlementRole role;
+  final SubscriptionPlanTier planTier;
   final LicenseStatus appLicenseStatus;
   final DateTime? updatedAtUtc;
   final String? updatedBy;
@@ -11,6 +12,7 @@ class AdminDirectoryUserRow {
   const AdminDirectoryUserRow({
     required this.userId,
     required this.role,
+    required this.planTier,
     required this.appLicenseStatus,
     required this.updatedAtUtc,
     required this.updatedBy,
@@ -20,11 +22,15 @@ class AdminDirectoryUserRow {
     DocumentSnapshot<Map<String, dynamic>> doc,
   ) {
     final data = doc.data() ?? const <String, dynamic>{};
-    final appLicense = LicenseGrant.fromMap(data['appLicense'] as Map<String, dynamic>?);
+    final appLicense =
+        LicenseGrant.fromMap(data['appLicense'] as Map<String, dynamic>?);
+    final planProfile = EntitlementPlanProfile.fromMap(
+        data['planProfile'] as Map<String, dynamic>?);
 
     return AdminDirectoryUserRow(
       userId: doc.id,
       role: EntitlementRoleCodec.fromWire(data['role'] as String?),
+      planTier: planProfile.tier,
       appLicenseStatus: appLicense.status,
       updatedAtUtc: _toUtcDateTime(data['updatedAtUtc']),
       updatedBy: data['updatedBy'] as String?,

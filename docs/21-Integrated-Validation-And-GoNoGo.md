@@ -57,3 +57,13 @@ Goal: run one consolidated validation gate after Sprint 1 + mobile/Unity MVP che
 1. Prepare final Sprint 1 sign-off note in `docs/08-Session-Resilience-Worklog.md`.
 2. Confirm backlog reorder based on validation findings.
 3. Start next implementation window with explicit scope freeze.
+
+## F) Unified gate command (current)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\e2e_unity_flutter_firebase_gate.ps1 `
+  -UnityValidationRuns 1 `
+  -UnityValidationGameIds demo_cube_clicker
+```
+
+This wraps `flutter_controller`, `admin_console_web`, and Unity/Firebase smoke into one repeatable operator lane.

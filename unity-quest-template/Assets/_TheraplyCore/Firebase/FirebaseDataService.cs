@@ -1762,9 +1762,24 @@ namespace TheraplyCore.Firebase
                 }
 
                 var asyncOperation = request.SendWebRequest();
+                var requestDeadlineUtc = DateTime.UtcNow.AddSeconds(Math.Max(3, timeoutSeconds + 2));
                 while (!asyncOperation.isDone)
                 {
-                    await Task.Yield();
+                    if (DateTime.UtcNow >= requestDeadlineUtc)
+                    {
+                        request.Abort();
+                        result.errorCode = $"{operationName}_TIMEOUT";
+
+                        if (_logOutboxSync || _logFirebaseBackendPayloads)
+                        {
+                            Logger.Warning(
+                                $"[FirebaseData] Backend {operationName} timeout after {timeoutSeconds}s (endpoint={endpointUrl}).");
+                        }
+
+                        return result;
+                    }
+
+                    await Task.Delay(10);
                 }
 
                 result.statusCode = request.responseCode;

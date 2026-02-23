@@ -115,6 +115,9 @@ class EntitlementService {
             'perpetual': true,
           },
           'gameLicenses': <String, dynamic>{},
+          'planProfile': EntitlementPlanProfile.fromMap(
+            const <String, dynamic>{'tier': 'BASIC'},
+          ).toMap(),
           'policyVersion': 'dev-bootstrap-v1',
           'updatedAtUtc': nowUtc.toIso8601String(),
           'updatedBy': 'dev-bootstrap:${user.uid}',
@@ -218,6 +221,29 @@ class EntitlementService {
     _activeAccess = null;
   }
 
+  static bool isFeatureEnabled(String featureKey) {
+    return _activeAccess?.isFeatureEnabled(featureKey) ?? false;
+  }
+
+  static bool hasRemainingDemoSessions() {
+    final access = _activeAccess;
+    if (access == null) {
+      return false;
+    }
+    return access.planProfile.hasDemoSessionsRemaining;
+  }
+
+  static bool canLaunchGame(String gameId, {DateTime? atUtc}) {
+    final access = _activeAccess;
+    if (access == null) {
+      return false;
+    }
+
+    final nowUtc = atUtc ?? DateTime.now().toUtc();
+    return access.hasGameAccess(gameId: gameId, atUtc: nowUtc) &&
+        access.isGameAllowedByPlan(gameId);
+  }
+
   static EntitlementGateDecision _evaluateAccess(
     EntitlementAccess access,
     DateTime nowUtc,
@@ -305,6 +331,7 @@ class EntitlementService {
       role: role,
       appLicense: appLicense,
       gameLicenses: gameLicenses,
+      planProfile: baseAccess.planProfile,
       sourceTag: '${baseAccess.sourceTag}+grants',
       policyVersion: baseAccess.policyVersion,
     );
@@ -321,6 +348,18 @@ class EntitlementService {
         perpetual: true,
       ),
       gameLicenses: <String, LicenseGrant>{},
+      planProfile: EntitlementPlanProfile(
+        tier: SubscriptionPlanTier.basic,
+        featureFlags: <String, bool>{
+          EntitlementFeatureKeys.vrSessionControl: true,
+          EntitlementFeatureKeys.parentGuidedStart: true,
+          EntitlementFeatureKeys.progressInsights: true,
+          EntitlementFeatureKeys.rewardsUnlocks: true,
+        },
+        allowedGameIds: <String>{},
+        demoSessionLimit: 0,
+        demoSessionsUsed: 0,
+      ),
       sourceTag: 'legacy-default',
       policyVersion: 'legacy-v1',
     );
@@ -342,6 +381,13 @@ class EntitlementService {
       role: EntitlementRole.unknown,
       appLicense: LicenseGrant(status: LicenseStatus.none),
       gameLicenses: <String, LicenseGrant>{},
+      planProfile: EntitlementPlanProfile(
+        tier: SubscriptionPlanTier.unknown,
+        featureFlags: <String, bool>{},
+        allowedGameIds: <String>{},
+        demoSessionLimit: 0,
+        demoSessionsUsed: 0,
+      ),
       sourceTag: 'strict-denied',
       policyVersion: 'strict-v1',
     );

@@ -36,6 +36,20 @@ powershell -ExecutionPolicy Bypass -File .\scripts\ops_dataset_trace_collect.ps1
 
 Uzyj `recommendedTraceInputPath` i `recommendedTraceSessionId` z raportu w kroku 1B.
 
+## Krok 0b: Jednokomendowy runner OPS-003 (collect -> validate -> handoff -> optional ACK)
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\ops003_real_trace_ready_gate.ps1 `
+  -EvidenceRoot .\docs\evidence\<timestamp>\ops003_real_trace_ready_gate `
+  -OperatorId <operator_id> `
+  -IntakeTicketId <ticket_id_optional> `
+  -IntakeOperatorId <intake_operator_optional>
+```
+
+Uwagi:
+- Gdy nie podasz `-TraceInputPath`, runner sam uruchomi auto-collect trace.
+- Gdy podasz `-IntakeTicketId` i `-IntakeOperatorId`, runner automatycznie wykona krok ACK.
+- Runner wymusza lane walidacji z `-RequireProvidedTrace`.
+
 ## Krok 1: Walidacja lane OPS-002 (trace -> export)
 
 ### A) Fixture trace (domyslnie)

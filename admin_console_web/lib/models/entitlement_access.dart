@@ -30,6 +30,232 @@ extension EntitlementRoleCodec on EntitlementRole {
   }
 }
 
+enum SubscriptionPlanTier {
+  free,
+  basic,
+  premium,
+  live,
+  unknown,
+}
+
+extension SubscriptionPlanTierCodec on SubscriptionPlanTier {
+  static SubscriptionPlanTier fromWire(String? wireValue) {
+    switch (wireValue?.trim().toUpperCase()) {
+      case 'FREE':
+        return SubscriptionPlanTier.free;
+      case 'BASIC':
+        return SubscriptionPlanTier.basic;
+      case 'PREMIUM':
+        return SubscriptionPlanTier.premium;
+      case 'LIVE':
+      case 'PLATINUM':
+        return SubscriptionPlanTier.live;
+      default:
+        return SubscriptionPlanTier.unknown;
+    }
+  }
+
+  String get wireValue {
+    switch (this) {
+      case SubscriptionPlanTier.free:
+        return 'FREE';
+      case SubscriptionPlanTier.basic:
+        return 'BASIC';
+      case SubscriptionPlanTier.premium:
+        return 'PREMIUM';
+      case SubscriptionPlanTier.live:
+        return 'LIVE';
+      case SubscriptionPlanTier.unknown:
+        return 'UNKNOWN';
+    }
+  }
+}
+
+class EntitlementFeatureKeys {
+  static const String vrSessionControl = 'vr_session_control';
+  static const String parentGuidedStart = 'parent_guided_start';
+  static const String progressInsights = 'progress_insights';
+  static const String therapeuticStories = 'therapeutic_stories';
+  static const String coloringPrintables = 'coloring_printables';
+  static const String premiumModules = 'premium_modules';
+  static const String liveTherapistSupport = 'live_therapist_support';
+  static const String rewardsUnlocks = 'rewards_unlocks';
+}
+
+class EntitlementPlanProfile {
+  final SubscriptionPlanTier tier;
+  final Map<String, bool> featureFlags;
+  final Set<String> allowedGameIds;
+  final int demoSessionLimit;
+  final int demoSessionsUsed;
+
+  const EntitlementPlanProfile({
+    required this.tier,
+    required this.featureFlags,
+    required this.allowedGameIds,
+    required this.demoSessionLimit,
+    required this.demoSessionsUsed,
+  });
+
+  factory EntitlementPlanProfile.fromMap(Map<String, dynamic>? data) {
+    final tier = SubscriptionPlanTierCodec.fromWire(
+      data?['tier'] as String? ?? data?['subscriptionPlan'] as String?,
+    );
+    final defaults = _defaultFeatureFlagsForTier(tier);
+    final mergedFlags = <String, bool>{
+      ...defaults,
+      ..._parseFeatureFlags(data?['featureFlags']),
+    };
+    final allowedGames = _parseAllowedGameIds(data?['allowedGameIds']);
+    final defaultDemoLimit = tier == SubscriptionPlanTier.free ? 2 : 0;
+
+    return EntitlementPlanProfile(
+      tier: tier,
+      featureFlags: mergedFlags,
+      allowedGameIds: allowedGames,
+      demoSessionLimit: _readInt(data?['demoSessionLimit'], defaultDemoLimit),
+      demoSessionsUsed: _readInt(data?['demoSessionsUsed'], 0),
+    );
+  }
+
+  bool isFeatureEnabled(String featureKey) {
+    final normalized = featureKey.trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+    return featureFlags[normalized] ?? false;
+  }
+
+  bool isGameAllowed(String gameId) {
+    final normalized = gameId.trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+    if (allowedGameIds.isEmpty) {
+      return true;
+    }
+    return allowedGameIds.contains(normalized);
+  }
+
+  bool get hasDemoSessionsRemaining {
+    if (demoSessionLimit <= 0) {
+      return true;
+    }
+    return demoSessionsUsed < demoSessionLimit;
+  }
+
+  Map<String, dynamic> toMap() {
+    return <String, dynamic>{
+      'tier': tier.wireValue,
+      'featureFlags': featureFlags,
+      'allowedGameIds': allowedGameIds.toList()..sort(),
+      'demoSessionLimit': demoSessionLimit,
+      'demoSessionsUsed': demoSessionsUsed,
+    };
+  }
+
+  static Map<String, bool> _defaultFeatureFlagsForTier(
+    SubscriptionPlanTier tier,
+  ) {
+    final defaults = <String, bool>{
+      EntitlementFeatureKeys.vrSessionControl: false,
+      EntitlementFeatureKeys.parentGuidedStart: false,
+      EntitlementFeatureKeys.progressInsights: false,
+      EntitlementFeatureKeys.therapeuticStories: false,
+      EntitlementFeatureKeys.coloringPrintables: false,
+      EntitlementFeatureKeys.premiumModules: false,
+      EntitlementFeatureKeys.liveTherapistSupport: false,
+      EntitlementFeatureKeys.rewardsUnlocks: false,
+    };
+
+    switch (tier) {
+      case SubscriptionPlanTier.free:
+        defaults[EntitlementFeatureKeys.vrSessionControl] = true;
+        defaults[EntitlementFeatureKeys.parentGuidedStart] = true;
+        defaults[EntitlementFeatureKeys.progressInsights] = true;
+        break;
+      case SubscriptionPlanTier.basic:
+        defaults[EntitlementFeatureKeys.vrSessionControl] = true;
+        defaults[EntitlementFeatureKeys.parentGuidedStart] = true;
+        defaults[EntitlementFeatureKeys.progressInsights] = true;
+        defaults[EntitlementFeatureKeys.rewardsUnlocks] = true;
+        break;
+      case SubscriptionPlanTier.premium:
+        defaults[EntitlementFeatureKeys.vrSessionControl] = true;
+        defaults[EntitlementFeatureKeys.parentGuidedStart] = true;
+        defaults[EntitlementFeatureKeys.progressInsights] = true;
+        defaults[EntitlementFeatureKeys.therapeuticStories] = true;
+        defaults[EntitlementFeatureKeys.coloringPrintables] = true;
+        defaults[EntitlementFeatureKeys.premiumModules] = true;
+        defaults[EntitlementFeatureKeys.rewardsUnlocks] = true;
+        break;
+      case SubscriptionPlanTier.live:
+        defaults[EntitlementFeatureKeys.vrSessionControl] = true;
+        defaults[EntitlementFeatureKeys.parentGuidedStart] = true;
+        defaults[EntitlementFeatureKeys.progressInsights] = true;
+        defaults[EntitlementFeatureKeys.therapeuticStories] = true;
+        defaults[EntitlementFeatureKeys.coloringPrintables] = true;
+        defaults[EntitlementFeatureKeys.premiumModules] = true;
+        defaults[EntitlementFeatureKeys.liveTherapistSupport] = true;
+        defaults[EntitlementFeatureKeys.rewardsUnlocks] = true;
+        break;
+      case SubscriptionPlanTier.unknown:
+        break;
+    }
+
+    return defaults;
+  }
+
+  static Map<String, bool> _parseFeatureFlags(dynamic rawFlags) {
+    if (rawFlags is! Map<String, dynamic>) {
+      return const <String, bool>{};
+    }
+
+    final parsed = <String, bool>{};
+    for (final entry in rawFlags.entries) {
+      final key = entry.key.trim();
+      if (key.isEmpty) {
+        continue;
+      }
+      final value = entry.value;
+      if (value is bool) {
+        parsed[key] = value;
+      }
+    }
+    return parsed;
+  }
+
+  static Set<String> _parseAllowedGameIds(dynamic rawAllowedGameIds) {
+    if (rawAllowedGameIds is! List<dynamic>) {
+      return const <String>{};
+    }
+
+    final allowed = <String>{};
+    for (final value in rawAllowedGameIds) {
+      if (value is String && value.trim().isNotEmpty) {
+        allowed.add(value.trim());
+      }
+    }
+    return allowed;
+  }
+
+  static int _readInt(dynamic rawValue, int fallback) {
+    if (rawValue is int) {
+      return rawValue;
+    }
+    if (rawValue is num) {
+      return rawValue.toInt();
+    }
+    if (rawValue is String) {
+      final parsed = int.tryParse(rawValue.trim());
+      if (parsed != null) {
+        return parsed;
+      }
+    }
+    return fallback;
+  }
+}
+
 enum LicenseStatus {
   active,
   expired,
@@ -118,16 +344,19 @@ class EntitlementAccess {
   final EntitlementRole role;
   final LicenseGrant appLicense;
   final Map<String, LicenseGrant> gameLicenses;
+  final EntitlementPlanProfile planProfile;
   final String? policyVersion;
 
   const EntitlementAccess({
     required this.role,
     required this.appLicense,
     required this.gameLicenses,
+    required this.planProfile,
     this.policyVersion,
   });
 
   factory EntitlementAccess.fromBackend(Map<String, dynamic> data) {
+    final role = EntitlementRoleCodec.fromWire(data['role'] as String?);
     final parsedGameLicenses = <String, LicenseGrant>{};
     final rawGameLicenses = data['gameLicenses'];
     if (rawGameLicenses is Map<String, dynamic>) {
@@ -139,12 +368,54 @@ class EntitlementAccess {
       }
     }
 
+    final planPayload = _readPlanProfileFromPayload(data) ??
+        _buildLegacyDefaultPlanProfilePayload(role);
+
     return EntitlementAccess(
-      role: EntitlementRoleCodec.fromWire(data['role'] as String?),
+      role: role,
       appLicense:
           LicenseGrant.fromMap(data['appLicense'] as Map<String, dynamic>?),
       gameLicenses: parsedGameLicenses,
+      planProfile: EntitlementPlanProfile.fromMap(planPayload),
       policyVersion: data['policyVersion'] as String?,
     );
+  }
+
+  static Map<String, dynamic>? _readPlanProfileFromPayload(
+    Map<String, dynamic> data,
+  ) {
+    final rawPlanProfile = data['planProfile'];
+    if (rawPlanProfile is Map<String, dynamic>) {
+      return rawPlanProfile;
+    }
+
+    final hasLegacyPlanFields = data.containsKey('subscriptionPlan') ||
+        data.containsKey('planTier') ||
+        data.containsKey('featureFlags') ||
+        data.containsKey('allowedGameIds') ||
+        data.containsKey('demoSessionLimit') ||
+        data.containsKey('demoSessionsUsed');
+    if (!hasLegacyPlanFields) {
+      return null;
+    }
+
+    return <String, dynamic>{
+      'tier': data['planTier'] ?? data['subscriptionPlan'],
+      'featureFlags': data['featureFlags'],
+      'allowedGameIds': data['allowedGameIds'],
+      'demoSessionLimit': data['demoSessionLimit'],
+      'demoSessionsUsed': data['demoSessionsUsed'],
+    };
+  }
+
+  static Map<String, dynamic> _buildLegacyDefaultPlanProfilePayload(
+    EntitlementRole role,
+  ) {
+    final tier = switch (role) {
+      EntitlementRole.parent => 'FREE',
+      EntitlementRole.therapist => 'BASIC',
+      EntitlementRole.unknown => 'UNKNOWN',
+    };
+    return <String, dynamic>{'tier': tier};
   }
 }

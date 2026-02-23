@@ -36,14 +36,16 @@ void main() {
       correlationId: correlationId,
     );
 
-    final entitlement = await firestore
-        .collection('user_entitlements')
-        .doc(userId)
-        .get();
+    final entitlement =
+        await firestore.collection('user_entitlements').doc(userId).get();
     final entitlementData = entitlement.data()!;
     expect(entitlementData['updatedBy'], 'admin-user-1');
     expect(entitlementData['updateReason'], reason);
     expect(entitlementData['correlationId'], correlationId);
+    final planProfile =
+        entitlementData['planProfile'] as Map<String, dynamic>? ??
+            const <String, dynamic>{};
+    expect(planProfile['tier'], 'BASIC');
 
     final auditSnapshot = await firestore
         .collection('admin_audit_trail')
@@ -57,6 +59,35 @@ void main() {
     expect(auditData['targetCollection'], 'user_entitlements');
     expect(auditData['targetDocumentId'], userId);
     expect(auditData['reason'], reason);
+    final payloadSummary =
+        auditData['payloadSummary'] as Map<String, dynamic>? ??
+            const <String, dynamic>{};
+    expect(payloadSummary['planTier'], 'BASIC');
+  });
+
+  test('upsertUserEntitlement defaults parent role to FREE plan', () async {
+    const correlationId = 'corr-entitlement-parent';
+    const userId = 'parent-user-1';
+    const reason = 'parent-onboarding';
+
+    await EntitlementAdminService.upsertUserEntitlement(
+      userId: userId,
+      role: EntitlementRole.parent,
+      appLicense: const LicenseGrant(
+        status: LicenseStatus.active,
+        perpetual: true,
+      ),
+      reason: reason,
+      correlationId: correlationId,
+    );
+
+    final entitlement =
+        await firestore.collection('user_entitlements').doc(userId).get();
+    final entitlementData = entitlement.data()!;
+    final planProfile =
+        entitlementData['planProfile'] as Map<String, dynamic>? ??
+            const <String, dynamic>{};
+    expect(planProfile['tier'], 'FREE');
   });
 
   test('upsertGrantAssignment writes grant and audit event', () async {
@@ -87,7 +118,8 @@ void main() {
       correlationId: correlationId,
     );
 
-    final grantsSnapshot = await firestore.collection('entitlement_grants').get();
+    final grantsSnapshot =
+        await firestore.collection('entitlement_grants').get();
     expect(grantsSnapshot.docs, hasLength(1));
     final grantData = grantsSnapshot.docs.single.data();
     expect(grantData['reason'], reason);

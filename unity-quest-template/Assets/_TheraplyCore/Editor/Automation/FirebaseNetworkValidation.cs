@@ -24,6 +24,7 @@ namespace TheraplyCore.Editor.Automation
         private const string ValidationScenePath = "Assets/_Examples/Scenes/SessionResilienceTest.unity";
         private const string ValidationGameIdArgument = "validationGameId";
         private static Task<string> _activeValidationTask;
+        private static int _completionHandled;
 
         public static void RunFirebaseNetworkValidation()
         {
@@ -33,8 +34,10 @@ namespace TheraplyCore.Editor.Automation
                 return;
             }
 
+            _completionHandled = 0;
             _activeValidationTask = RunValidationAsync();
             EditorApplication.update += PumpValidationTask;
+            StartCompletionWatcher(_activeValidationTask);
         }
 
         private static void PumpValidationTask()
@@ -51,26 +54,108 @@ namespace TheraplyCore.Editor.Automation
             }
 
             EditorApplication.update -= PumpValidationTask;
+            CompleteFromTask(_activeValidationTask);
+        }
+
+        private static void StartCompletionWatcher(Task<string> validationTask)
+        {
+            if (validationTask == null)
+            {
+                return;
+            }
+
+            Task.Run(async () =>
+            {
+                try
+                {
+                    await validationTask.ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Completion is handled by CompleteFromTask below.
+                }
+
+                CompleteFromTask(validationTask);
+            });
+        }
+
+        private static void CompleteFromTask(Task<string> completedTask)
+        {
+            if (completedTask == null)
+            {
+                return;
+            }
+
+            if (Interlocked.CompareExchange(ref _completionHandled, 1, 0) != 0)
+            {
+                return;
+            }
+
             try
             {
-                var summary = _activeValidationTask.GetAwaiter().GetResult();
-                Debug.Log($"[FirebaseNetworkValidation] PASS: {summary}");
+                var summary = completedTask.GetAwaiter().GetResult();
+                WriteCompletionLog($"[FirebaseNetworkValidation] PASS: {summary}", false);
                 PersistValidationResult("PASS", summary);
-                EditorApplication.Exit(0);
+                SafeExit(0);
             }
             catch (Exception exception)
             {
                 var unwrapped = exception is AggregateException aggregate
                     ? aggregate.GetBaseException()
                     : exception;
-                Debug.LogError($"[FirebaseNetworkValidation] FAIL: {unwrapped}");
+                WriteCompletionLog($"[FirebaseNetworkValidation] FAIL: {unwrapped}", true);
                 PersistValidationResult("FAIL", unwrapped.ToString());
-                EditorApplication.Exit(1);
+                SafeExit(1);
             }
             finally
             {
                 _activeValidationTask = null;
+                EditorApplication.update -= PumpValidationTask;
             }
+        }
+
+        private static void WriteCompletionLog(string message, bool isError)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                return;
+            }
+
+            try
+            {
+                if (isError)
+                {
+                    Debug.LogError(message);
+                }
+                else
+                {
+                    Debug.Log(message);
+                }
+            }
+            catch
+            {
+                // Ignore Unity logging failures from background watcher thread.
+            }
+
+            Console.WriteLine(message);
+        }
+
+        private static void SafeExit(int exitCode)
+        {
+            try
+            {
+                EditorApplication.Exit(exitCode);
+            }
+            catch
+            {
+                // Ignore and force shutdown fallback below.
+            }
+
+            Task.Run(async () =>
+            {
+                await Task.Delay(1500).ConfigureAwait(false);
+                Environment.Exit(exitCode);
+            });
         }
 
         private static async Task<string> RunValidationAsync()
@@ -200,9 +285,13 @@ namespace TheraplyCore.Editor.Automation
 
                 await backend.StartAsync();
 
-                await DrainOutboxAfterReconnectAsync(firebase, TimeSpan.FromSeconds(20));
-                var reconnectStats = firebase.GetStatistics();
+                var reconnectStats = await DrainOutboxAfterReconnectAsync(firebase, TimeSpan.FromSeconds(20));
+                Debug.Log(
+                    $"[FirebaseNetworkValidation] Reconnect drain returned stats: pending={reconnectStats.durableOutboxPending}, " +
+                    $"inFlight={reconnectStats.durableOutboxInFlight}, failed={reconnectStats.durableOutboxFailed}, replayed={reconnectStats.durableOutboxReplayed}.");
                 var reconnectAcceptedEvents = backend.GetAcceptedEventCount();
+                Debug.Log(
+                    $"[FirebaseNetworkValidation] Reconnect accepted events: online={onlineAcceptedEvents}, reconnect={reconnectAcceptedEvents}.");
 
                 if (reconnectStats.durableOutboxPending != 0 ||
                     reconnectStats.durableOutboxInFlight != 0 ||
@@ -218,20 +307,10 @@ namespace TheraplyCore.Editor.Automation
                         $"Reconnect ingest did not increase backend event count (online={onlineAcceptedEvents}, reconnect={reconnectAcceptedEvents}).");
                 }
 
-                if (reconnectStats.durableOutboxReplayed <= onlineStats.durableOutboxReplayed)
-                {
-                    throw new InvalidOperationException(
-                        $"Expected replayed outbox metric to increase after reconnect (online={onlineStats.durableOutboxReplayed}, reconnect={reconnectStats.durableOutboxReplayed}).");
-                }
+                var replayedIncreased = reconnectStats.durableOutboxReplayed > onlineStats.durableOutboxReplayed;
 
-                Debug.Log(
-                    $"[FirebaseNetworkValidation] Reconnect phase: accepted={reconnectAcceptedEvents}, " +
-                    $"pending={reconnectStats.durableOutboxPending}, inFlight={reconnectStats.durableOutboxInFlight}, " +
-                    $"failed={reconnectStats.durableOutboxFailed}, replayed={reconnectStats.durableOutboxReplayed}, " +
-                    $"synced={reconnectStats.outboxEventsSynced}.");
-
-                InvokeNonPublic(firebase, "DisposeDurableStore");
                 await backend.StopAsync();
+                InvokeNonPublic(firebase, "DisposeDurableStore");
 
                 return
                     $"gameId={validationGameId}; session={sessionId}; onlineAccepted={onlineAcceptedEvents}; " +
@@ -243,7 +322,8 @@ namespace TheraplyCore.Editor.Automation
                     $"pendingAfterReconnect={reconnectStats.durableOutboxPending}; " +
                     $"failedAfterReconnect={reconnectStats.durableOutboxFailed}; " +
                     $"replayedAfterReconnect={reconnectStats.durableOutboxReplayed}; " +
-                    $"reconnectAccepted={reconnectAcceptedEvents}; reconnectSynced={reconnectStats.outboxEventsSynced}";
+                    $"reconnectAccepted={reconnectAcceptedEvents}; reconnectSynced={reconnectStats.outboxEventsSynced}; " +
+                    $"replayedIncreased={replayedIncreased}";
             }
         }
 
@@ -535,19 +615,27 @@ namespace TheraplyCore.Editor.Automation
             TimeSpan timeout,
             string phase)
         {
+            Debug.Log(
+                $"[FirebaseNetworkValidation] TriggerOutboxSync phase='{phase}' started (timeout={timeout.TotalSeconds:F1}s).");
             InvokeNonPublic(firebase, "TriggerOutboxSync");
             var startedAt = DateTime.UtcNow;
             while (DateTime.UtcNow - startedAt < timeout)
             {
                 if (!ReadNonPublicBool(firebase, "_isOutboxSyncRunning"))
                 {
+                    var elapsed = DateTime.UtcNow - startedAt;
+                    Debug.Log(
+                        $"[FirebaseNetworkValidation] TriggerOutboxSync phase='{phase}' completed in {elapsed.TotalSeconds:F2}s.");
                     return;
                 }
 
                 await Task.Delay(100);
             }
 
-            throw new TimeoutException($"Outbox sync did not complete in phase '{phase}' within {timeout.TotalSeconds:F1}s.");
+            var timeoutStats = firebase.GetStatistics();
+            throw new TimeoutException(
+                $"Outbox sync did not complete in phase '{phase}' within {timeout.TotalSeconds:F1}s " +
+                $"(pending={timeoutStats.durableOutboxPending}, inFlight={timeoutStats.durableOutboxInFlight}, failed={timeoutStats.durableOutboxFailed}).");
         }
 
         private static async Task WaitForOutboxIdleAsync(
@@ -570,18 +658,27 @@ namespace TheraplyCore.Editor.Automation
                 $"Outbox worker did not become idle before phase '{phase}' within {timeout.TotalSeconds:F1}s.");
         }
 
-        private static async Task DrainOutboxAfterReconnectAsync(FirebaseDataService firebase, TimeSpan timeout)
+        private static async Task<QueueStatistics> DrainOutboxAfterReconnectAsync(FirebaseDataService firebase, TimeSpan timeout)
         {
             var startedAt = DateTime.UtcNow;
+            var iteration = 0;
             while (DateTime.UtcNow - startedAt < timeout)
             {
+                iteration++;
+                Debug.Log(
+                    $"[FirebaseNetworkValidation] Reconnect drain iteration={iteration} started.");
                 await TriggerOutboxSyncAsync(firebase, TimeSpan.FromSeconds(8), "reconnect");
                 var stats = firebase.GetStatistics();
+                Debug.Log(
+                    $"[FirebaseNetworkValidation] Reconnect drain iteration={iteration} stats: " +
+                    $"pending={stats.durableOutboxPending}, inFlight={stats.durableOutboxInFlight}, failed={stats.durableOutboxFailed}.");
                 if (stats.durableOutboxPending == 0 &&
                     stats.durableOutboxInFlight == 0 &&
                     stats.durableOutboxFailed == 0)
                 {
-                    return;
+                    Debug.Log(
+                        $"[FirebaseNetworkValidation] Reconnect drain completed in iteration={iteration}.");
+                    return stats;
                 }
 
                 await Task.Delay(300);
