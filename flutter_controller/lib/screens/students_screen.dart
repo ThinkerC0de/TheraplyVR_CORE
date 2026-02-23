@@ -732,344 +732,13 @@ class _StudentsScreenState extends State<StudentsScreen> {
   }
 
   Future<void> _openTherapistSettingsDialog() async {
-    final initialSettings = _therapistSessionSettings;
-    final sessionRecoveryController = TextEditingController(
-      text: initialSettings.sessionRecoveryWindowMinutes.toString(),
-    );
-    final interruptedAutoCloseController = TextEditingController(
-      text: initialSettings.interruptedSessionAutoCloseHours.toString(),
-    );
-    final criticalRetriesController = TextEditingController(
-      text: initialSettings.criticalCommandMaxRetries.toString(),
-    );
-    final criticalAckTimeoutController = TextEditingController(
-      text: initialSettings.criticalCommandAckTimeoutMs.toString(),
-    );
-    final quickNotesController = TextEditingController(
-      text: initialSettings.timelineQuickNoteTemplates.join('\n'),
-    );
-    var autoCloseInterruptedSessionsEnabled =
-        initialSettings.autoCloseInterruptedSessionsEnabled;
-    var requireResumeConfirmationAfterRecoveryWindow =
-        initialSettings.requireResumeConfirmationAfterRecoveryWindow;
-    var keepScreenAwakeWhenForeground =
-        initialSettings.keepScreenAwakeWhenForeground;
-    var operatorUiLanguage = initialSettings.operatorUiLanguage;
-    var isSaving = false;
-    String? validationError;
-
     final savedSettings = await showDialog<TherapistSessionSettings>(
       context: context,
       barrierDismissible: false,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (dialogContext, setDialogState) {
-            Future<void> handleSave() async {
-              if (isSaving) {
-                return;
-              }
-
-              String? validationMessage;
-              void captureError(String message) {
-                validationMessage ??= message;
-              }
-
-              final sessionRecoveryWindowMinutes = _parseBoundedInt(
-                rawValue: sessionRecoveryController.text,
-                label: 'Session recovery window',
-                min: TherapistSessionSettings.minSessionRecoveryWindowMinutes,
-                max: TherapistSessionSettings.maxSessionRecoveryWindowMinutes,
-                onError: captureError,
-              );
-              final interruptedSessionAutoCloseHours = _parseBoundedInt(
-                rawValue: interruptedAutoCloseController.text,
-                label: 'Interrupted session auto-close',
-                min: TherapistSessionSettings
-                    .minInterruptedSessionAutoCloseHours,
-                max: TherapistSessionSettings
-                    .maxInterruptedSessionAutoCloseHours,
-                onError: captureError,
-              );
-              final criticalCommandMaxRetries = _parseBoundedInt(
-                rawValue: criticalRetriesController.text,
-                label: 'Critical command retry count',
-                min: TherapistSessionSettings.minCriticalCommandMaxRetries,
-                max: TherapistSessionSettings.maxCriticalCommandMaxRetries,
-                onError: captureError,
-              );
-              final criticalCommandAckTimeoutMs = _parseBoundedInt(
-                rawValue: criticalAckTimeoutController.text,
-                label: 'Critical command ACK timeout',
-                min: TherapistSessionSettings.minCriticalCommandAckTimeoutMs,
-                max: TherapistSessionSettings.maxCriticalCommandAckTimeoutMs,
-                onError: captureError,
-              );
-
-              if (validationMessage != null ||
-                  sessionRecoveryWindowMinutes == null ||
-                  interruptedSessionAutoCloseHours == null ||
-                  criticalCommandMaxRetries == null ||
-                  criticalCommandAckTimeoutMs == null) {
-                setDialogState(() {
-                  validationError = validationMessage ?? 'Invalid settings.';
-                });
-                return;
-              }
-
-              final templateSet = <String>{};
-              final timelineQuickNoteTemplates = quickNotesController.text
-                  .split('\n')
-                  .map((entry) => entry.trim())
-                  .where((entry) => entry.isNotEmpty)
-                  .where((entry) => templateSet.add(entry))
-                  .toList(growable: false);
-
-              final settings = TherapistSessionSettings.fromMap(
-                <String, dynamic>{
-                  'sessionRecoveryWindowMinutes': sessionRecoveryWindowMinutes,
-                  'interruptedSessionAutoCloseHours':
-                      interruptedSessionAutoCloseHours,
-                  'autoCloseInterruptedSessionsEnabled':
-                      autoCloseInterruptedSessionsEnabled,
-                  'requireResumeConfirmationAfterRecoveryWindow':
-                      requireResumeConfirmationAfterRecoveryWindow,
-                  'criticalCommandMaxRetries': criticalCommandMaxRetries,
-                  'criticalCommandAckTimeoutMs': criticalCommandAckTimeoutMs,
-                  'adaptiveDifficultyEnabled':
-                      initialSettings.adaptiveDifficultyEnabled,
-                  'adaptiveDifficultySensitivity':
-                      initialSettings.adaptiveDifficultySensitivity,
-                  'labelPipelineEnabled': initialSettings.labelPipelineEnabled,
-                  'keepScreenAwakeWhenForeground':
-                      keepScreenAwakeWhenForeground,
-                  'operatorUiLanguage': operatorUiLanguage.wireValue,
-                  'timelineQuickNoteTemplates': timelineQuickNoteTemplates,
-                },
-              );
-
-              setDialogState(() {
-                isSaving = true;
-                validationError = null;
-              });
-
-              final saved = await TherapistSessionSettingsService
-                  .saveCurrentTherapistSettings(settings);
-              if (!dialogContext.mounted) {
-                return;
-              }
-
-              if (!saved) {
-                setDialogState(() {
-                  isSaving = false;
-                  validationError =
-                      'Could not save settings right now. Try again.';
-                });
-                return;
-              }
-
-              Navigator.of(dialogContext).pop(settings);
-            }
-
-            return AlertDialog(
-              title: const Text('Session settings'),
-              content: SizedBox(
-                width: 520,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      TextField(
-                        controller: sessionRecoveryController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Session Recovery Window (min)',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: interruptedAutoCloseController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Interrupted Session Auto-Close (h)',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      SwitchListTile(
-                        value: autoCloseInterruptedSessionsEnabled,
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text(
-                            'Enable Auto-Close Interrupted Sessions'),
-                        onChanged: isSaving
-                            ? null
-                            : (value) {
-                                setDialogState(() {
-                                  autoCloseInterruptedSessionsEnabled = value;
-                                });
-                              },
-                      ),
-                      SwitchListTile(
-                        value: requireResumeConfirmationAfterRecoveryWindow,
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text(
-                          'Require Confirmation After Recovery Window',
-                        ),
-                        onChanged: isSaving
-                            ? null
-                            : (value) {
-                                setDialogState(() {
-                                  requireResumeConfirmationAfterRecoveryWindow =
-                                      value;
-                                });
-                              },
-                      ),
-                      SwitchListTile(
-                        value: keepScreenAwakeWhenForeground,
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text(
-                            'Prevent phone sleep while app is active'),
-                        subtitle: const Text(
-                          'Keeps the screen awake only when the app is in foreground.',
-                        ),
-                        onChanged: isSaving
-                            ? null
-                            : (value) {
-                                setDialogState(() {
-                                  keepScreenAwakeWhenForeground = value;
-                                });
-                              },
-                      ),
-                      const SizedBox(height: 4),
-                      DropdownButtonFormField<TherapistUiLanguage>(
-                        initialValue: operatorUiLanguage,
-                        decoration: const InputDecoration(
-                          labelText: 'Incident message language',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: const [
-                          DropdownMenuItem<TherapistUiLanguage>(
-                            value: TherapistUiLanguage.english,
-                            child: Text('English (en)'),
-                          ),
-                          DropdownMenuItem<TherapistUiLanguage>(
-                            value: TherapistUiLanguage.polish,
-                            child: Text('Polski (pl)'),
-                          ),
-                        ],
-                        onChanged: isSaving
-                            ? null
-                            : (value) {
-                                if (value == null) {
-                                  return;
-                                }
-                                setDialogState(() {
-                                  operatorUiLanguage = value;
-                                });
-                              },
-                      ),
-                      const SizedBox(height: 4),
-                      TextField(
-                        controller: criticalRetriesController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Critical Command Retry Count',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: criticalAckTimeoutController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Critical Command ACK Timeout (ms)',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: quickNotesController,
-                        minLines: 3,
-                        maxLines: 6,
-                        decoration: const InputDecoration(
-                          labelText: 'Timeline Quick Notes Templates',
-                          hintText: 'One template per line',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      if (validationError != null) ...[
-                        const SizedBox(height: 10),
-                        Text(
-                          validationError!,
-                          style: TextStyle(
-                            color: Colors.red.shade700,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed:
-                      isSaving ? null : () => Navigator.of(dialogContext).pop(),
-                  child: const Text('Cancel'),
-                ),
-                TextButton(
-                  onPressed: isSaving
-                      ? null
-                      : () {
-                          final defaults = TherapistSessionSettings.defaults();
-                          sessionRecoveryController.text =
-                              defaults.sessionRecoveryWindowMinutes.toString();
-                          interruptedAutoCloseController.text = defaults
-                              .interruptedSessionAutoCloseHours
-                              .toString();
-                          criticalRetriesController.text =
-                              defaults.criticalCommandMaxRetries.toString();
-                          criticalAckTimeoutController.text =
-                              defaults.criticalCommandAckTimeoutMs.toString();
-                          quickNotesController.text =
-                              defaults.timelineQuickNoteTemplates.join('\n');
-                          setDialogState(() {
-                            autoCloseInterruptedSessionsEnabled =
-                                defaults.autoCloseInterruptedSessionsEnabled;
-                            requireResumeConfirmationAfterRecoveryWindow =
-                                defaults
-                                    .requireResumeConfirmationAfterRecoveryWindow;
-                            keepScreenAwakeWhenForeground =
-                                defaults.keepScreenAwakeWhenForeground;
-                            operatorUiLanguage = defaults.operatorUiLanguage;
-                            validationError = null;
-                          });
-                        },
-                  child: const Text('Reset defaults'),
-                ),
-                ElevatedButton(
-                  onPressed: isSaving ? null : handleSave,
-                  child: isSaving
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Save'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      builder: (_) => _TherapistSettingsDialog(
+        initialSettings: _therapistSessionSettings,
+      ),
     );
-
-    sessionRecoveryController.dispose();
-    interruptedAutoCloseController.dispose();
-    criticalRetriesController.dispose();
-    criticalAckTimeoutController.dispose();
-    quickNotesController.dispose();
 
     if (savedSettings == null || !mounted) {
       return;
@@ -1084,27 +753,6 @@ class _StudentsScreenState extends State<StudentsScreen> {
         content: Text('Session settings saved.'),
       ),
     );
-  }
-
-  int? _parseBoundedInt({
-    required String rawValue,
-    required String label,
-    required int min,
-    required int max,
-    required void Function(String message) onError,
-  }) {
-    final parsed = int.tryParse(rawValue.trim());
-    if (parsed == null) {
-      onError('$label must be a number.');
-      return null;
-    }
-
-    if (parsed < min || parsed > max) {
-      onError('$label must be between $min and $max.');
-      return null;
-    }
-
-    return parsed;
   }
 
   Future<void> _handleLogout() async {
@@ -1196,6 +844,394 @@ class _StudentsScreenState extends State<StudentsScreen> {
       SnackBar(
         content: Text(message),
       ),
+    );
+  }
+}
+
+class _TherapistSettingsDialog extends StatefulWidget {
+  const _TherapistSettingsDialog({
+    required this.initialSettings,
+  });
+
+  final TherapistSessionSettings initialSettings;
+
+  @override
+  State<_TherapistSettingsDialog> createState() =>
+      _TherapistSettingsDialogState();
+}
+
+class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
+  late final TextEditingController _sessionRecoveryController;
+  late final TextEditingController _interruptedAutoCloseController;
+  late final TextEditingController _criticalRetriesController;
+  late final TextEditingController _criticalAckTimeoutController;
+  late final TextEditingController _quickNotesController;
+
+  late bool _autoCloseInterruptedSessionsEnabled;
+  late bool _requireResumeConfirmationAfterRecoveryWindow;
+  late bool _keepScreenAwakeWhenForeground;
+  late TherapistUiLanguage _operatorUiLanguage;
+
+  bool _isSaving = false;
+  String? _validationError;
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = widget.initialSettings;
+    _sessionRecoveryController = TextEditingController(
+      text: initial.sessionRecoveryWindowMinutes.toString(),
+    );
+    _interruptedAutoCloseController = TextEditingController(
+      text: initial.interruptedSessionAutoCloseHours.toString(),
+    );
+    _criticalRetriesController = TextEditingController(
+      text: initial.criticalCommandMaxRetries.toString(),
+    );
+    _criticalAckTimeoutController = TextEditingController(
+      text: initial.criticalCommandAckTimeoutMs.toString(),
+    );
+    _quickNotesController = TextEditingController(
+      text: initial.timelineQuickNoteTemplates.join('\n'),
+    );
+
+    _autoCloseInterruptedSessionsEnabled =
+        initial.autoCloseInterruptedSessionsEnabled;
+    _requireResumeConfirmationAfterRecoveryWindow =
+        initial.requireResumeConfirmationAfterRecoveryWindow;
+    _keepScreenAwakeWhenForeground = initial.keepScreenAwakeWhenForeground;
+    _operatorUiLanguage = initial.operatorUiLanguage;
+  }
+
+  @override
+  void dispose() {
+    _sessionRecoveryController.dispose();
+    _interruptedAutoCloseController.dispose();
+    _criticalRetriesController.dispose();
+    _criticalAckTimeoutController.dispose();
+    _quickNotesController.dispose();
+    super.dispose();
+  }
+
+  int? _parseBoundedInt({
+    required String rawValue,
+    required String label,
+    required int min,
+    required int max,
+    required void Function(String message) onError,
+  }) {
+    final parsed = int.tryParse(rawValue.trim());
+    if (parsed == null) {
+      onError('$label must be a number.');
+      return null;
+    }
+
+    if (parsed < min || parsed > max) {
+      onError('$label must be between $min and $max.');
+      return null;
+    }
+
+    return parsed;
+  }
+
+  Future<void> _closeSafely([TherapistSessionSettings? result]) async {
+    FocusScope.of(context).unfocus();
+    await Future<void>.delayed(const Duration(milliseconds: 16));
+    if (!mounted) {
+      return;
+    }
+    Navigator.of(context).pop(result);
+  }
+
+  void _resetDefaults() {
+    if (_isSaving) {
+      return;
+    }
+    final defaults = TherapistSessionSettings.defaults();
+    _sessionRecoveryController.text =
+        defaults.sessionRecoveryWindowMinutes.toString();
+    _interruptedAutoCloseController.text =
+        defaults.interruptedSessionAutoCloseHours.toString();
+    _criticalRetriesController.text =
+        defaults.criticalCommandMaxRetries.toString();
+    _criticalAckTimeoutController.text =
+        defaults.criticalCommandAckTimeoutMs.toString();
+    _quickNotesController.text = defaults.timelineQuickNoteTemplates.join('\n');
+    setState(() {
+      _autoCloseInterruptedSessionsEnabled =
+          defaults.autoCloseInterruptedSessionsEnabled;
+      _requireResumeConfirmationAfterRecoveryWindow =
+          defaults.requireResumeConfirmationAfterRecoveryWindow;
+      _keepScreenAwakeWhenForeground = defaults.keepScreenAwakeWhenForeground;
+      _operatorUiLanguage = defaults.operatorUiLanguage;
+      _validationError = null;
+    });
+  }
+
+  Future<void> _handleSave() async {
+    if (_isSaving) {
+      return;
+    }
+
+    String? validationMessage;
+    void captureError(String message) {
+      validationMessage ??= message;
+    }
+
+    final sessionRecoveryWindowMinutes = _parseBoundedInt(
+      rawValue: _sessionRecoveryController.text,
+      label: 'Session recovery window',
+      min: TherapistSessionSettings.minSessionRecoveryWindowMinutes,
+      max: TherapistSessionSettings.maxSessionRecoveryWindowMinutes,
+      onError: captureError,
+    );
+    final interruptedSessionAutoCloseHours = _parseBoundedInt(
+      rawValue: _interruptedAutoCloseController.text,
+      label: 'Interrupted session auto-close',
+      min: TherapistSessionSettings.minInterruptedSessionAutoCloseHours,
+      max: TherapistSessionSettings.maxInterruptedSessionAutoCloseHours,
+      onError: captureError,
+    );
+    final criticalCommandMaxRetries = _parseBoundedInt(
+      rawValue: _criticalRetriesController.text,
+      label: 'Critical command retry count',
+      min: TherapistSessionSettings.minCriticalCommandMaxRetries,
+      max: TherapistSessionSettings.maxCriticalCommandMaxRetries,
+      onError: captureError,
+    );
+    final criticalCommandAckTimeoutMs = _parseBoundedInt(
+      rawValue: _criticalAckTimeoutController.text,
+      label: 'Critical command ACK timeout',
+      min: TherapistSessionSettings.minCriticalCommandAckTimeoutMs,
+      max: TherapistSessionSettings.maxCriticalCommandAckTimeoutMs,
+      onError: captureError,
+    );
+
+    if (validationMessage != null ||
+        sessionRecoveryWindowMinutes == null ||
+        interruptedSessionAutoCloseHours == null ||
+        criticalCommandMaxRetries == null ||
+        criticalCommandAckTimeoutMs == null) {
+      setState(() {
+        _validationError = validationMessage ?? 'Invalid settings.';
+      });
+      return;
+    }
+
+    final templateSet = <String>{};
+    final timelineQuickNoteTemplates = _quickNotesController.text
+        .split('\n')
+        .map((entry) => entry.trim())
+        .where((entry) => entry.isNotEmpty)
+        .where((entry) => templateSet.add(entry))
+        .toList(growable: false);
+
+    final settings = TherapistSessionSettings.fromMap(
+      <String, dynamic>{
+        'sessionRecoveryWindowMinutes': sessionRecoveryWindowMinutes,
+        'interruptedSessionAutoCloseHours': interruptedSessionAutoCloseHours,
+        'autoCloseInterruptedSessionsEnabled':
+            _autoCloseInterruptedSessionsEnabled,
+        'requireResumeConfirmationAfterRecoveryWindow':
+            _requireResumeConfirmationAfterRecoveryWindow,
+        'criticalCommandMaxRetries': criticalCommandMaxRetries,
+        'criticalCommandAckTimeoutMs': criticalCommandAckTimeoutMs,
+        'adaptiveDifficultyEnabled':
+            widget.initialSettings.adaptiveDifficultyEnabled,
+        'adaptiveDifficultySensitivity':
+            widget.initialSettings.adaptiveDifficultySensitivity,
+        'labelPipelineEnabled': widget.initialSettings.labelPipelineEnabled,
+        'keepScreenAwakeWhenForeground': _keepScreenAwakeWhenForeground,
+        'operatorUiLanguage': _operatorUiLanguage.wireValue,
+        'timelineQuickNoteTemplates': timelineQuickNoteTemplates,
+      },
+    );
+
+    setState(() {
+      _isSaving = true;
+      _validationError = null;
+    });
+
+    final saved =
+        await TherapistSessionSettingsService.saveCurrentTherapistSettings(
+      settings,
+    );
+    if (!mounted) {
+      return;
+    }
+
+    if (!saved) {
+      setState(() {
+        _isSaving = false;
+        _validationError = 'Could not save settings right now. Try again.';
+      });
+      return;
+    }
+
+    await _closeSafely(settings);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Session settings'),
+      content: SizedBox(
+        width: 520,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: _sessionRecoveryController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Session Recovery Window (min)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _interruptedAutoCloseController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Interrupted Session Auto-Close (h)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SwitchListTile(
+                value: _autoCloseInterruptedSessionsEnabled,
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Enable Auto-Close Interrupted Sessions'),
+                onChanged: _isSaving
+                    ? null
+                    : (value) {
+                        setState(() {
+                          _autoCloseInterruptedSessionsEnabled = value;
+                        });
+                      },
+              ),
+              SwitchListTile(
+                value: _requireResumeConfirmationAfterRecoveryWindow,
+                contentPadding: EdgeInsets.zero,
+                title: const Text(
+                  'Require Confirmation After Recovery Window',
+                ),
+                onChanged: _isSaving
+                    ? null
+                    : (value) {
+                        setState(() {
+                          _requireResumeConfirmationAfterRecoveryWindow = value;
+                        });
+                      },
+              ),
+              SwitchListTile(
+                value: _keepScreenAwakeWhenForeground,
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Prevent phone sleep while app is active'),
+                subtitle: const Text(
+                  'Keeps the screen awake only when the app is in foreground.',
+                ),
+                onChanged: _isSaving
+                    ? null
+                    : (value) {
+                        setState(() {
+                          _keepScreenAwakeWhenForeground = value;
+                        });
+                      },
+              ),
+              const SizedBox(height: 4),
+              DropdownButtonFormField<TherapistUiLanguage>(
+                initialValue: _operatorUiLanguage,
+                decoration: const InputDecoration(
+                  labelText: 'Incident message language',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem<TherapistUiLanguage>(
+                    value: TherapistUiLanguage.english,
+                    child: Text('English (en)'),
+                  ),
+                  DropdownMenuItem<TherapistUiLanguage>(
+                    value: TherapistUiLanguage.polish,
+                    child: Text('Polski (pl)'),
+                  ),
+                ],
+                onChanged: _isSaving
+                    ? null
+                    : (value) {
+                        if (value == null) {
+                          return;
+                        }
+                        setState(() {
+                          _operatorUiLanguage = value;
+                        });
+                      },
+              ),
+              const SizedBox(height: 4),
+              TextField(
+                controller: _criticalRetriesController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Critical Command Retry Count',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _criticalAckTimeoutController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Critical Command ACK Timeout (ms)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _quickNotesController,
+                minLines: 3,
+                maxLines: 6,
+                decoration: const InputDecoration(
+                  labelText: 'Timeline Quick Notes Templates',
+                  hintText: 'One template per line',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              if (_validationError != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _validationError!,
+                  style: TextStyle(
+                    color: Colors.red.shade700,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isSaving ? null : () => _closeSafely(),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: _isSaving ? null : _resetDefaults,
+          child: const Text('Reset defaults'),
+        ),
+        ElevatedButton(
+          onPressed: _isSaving ? null : _handleSave,
+          child: _isSaving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Save'),
+        ),
+      ],
     );
   }
 }
