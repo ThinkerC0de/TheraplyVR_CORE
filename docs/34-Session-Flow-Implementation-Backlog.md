@@ -23,24 +23,24 @@ Goal: implement the new framework direction end-to-end so no per-game core rewri
 
 | ID | Task | Status | Acceptance Criteria | Depends On |
 | --- | --- | --- | --- | --- |
-| SF-A-001 | Define `GameDefinition` runtime model classes | IN_PROGRESS | `config`, `taskGraph`, `bindings`, `policies`, `channels`, `controlMode` represented in typed contracts | None |
-| SF-A-002 | Define `TaskGraph` node contracts | TODO | Node types `Action/Condition/Branch/Timer/Complete/Fail` and route fields compiled | SF-A-001 |
-| SF-A-003 | Define policy contracts | TODO | `wrongActionPolicy/retryPolicy/timeoutPolicy/branchPolicy/scoringPolicy/difficultyPolicy/safetyPolicy/controlPolicy/telemetryPolicy` available | SF-A-001 |
-| SF-A-004 | Define action runtime contracts | TODO | `ActionIntent`, `AllowedActionDefinition`, `ActionValidationResult`, `ActionApplyResult`, `ActionContext` compiled | SF-A-001 |
-| SF-A-005 | Define channel contracts | TODO | Channel IDs and enable/disable settings validated at load | SF-A-001 |
+| SF-A-001 | Define `GameDefinition` runtime model classes | DONE | `config`, `taskGraph`, `bindings`, `policies`, `channels`, `controlMode` represented in typed contracts | None |
+| SF-A-002 | Define `TaskGraph` node contracts | DONE | Node types `Action/Condition/Branch/Timer/Complete/Fail` and route fields compiled | SF-A-001 |
+| SF-A-003 | Define policy contracts | DONE | `wrongActionPolicy/retryPolicy/timeoutPolicy/branchPolicy/scoringPolicy/difficultyPolicy/safetyPolicy/controlPolicy/telemetryPolicy` available | SF-A-001 |
+| SF-A-004 | Define action runtime contracts | DONE | `ActionIntent`, `AllowedActionDefinition`, `ActionValidationResult`, `ActionApplyResult`, `ActionContext` compiled | SF-A-001 |
+| SF-A-005 | Define channel contracts | DONE | Channel IDs and enable/disable settings validated at load | SF-A-001 |
 
 ## Phase B - Core Runtimes
 
 | ID | Task | Status | Acceptance Criteria | Depends On |
 | --- | --- | --- | --- | --- |
-| SF-B-001 | Implement `FlowConfigProvider` | TODO | Loads and validates definition from asset/json, returns typed `GameDefinition` | SF-A-001 |
-| SF-B-002 | Implement `FlowBindingRegistry` | TODO | Stable key lookup for objects/zones/audio/timeline | SF-A-001 |
-| SF-B-003 | Implement `SessionRuntime` bridge | TODO | FSM path enforced (`CREATED -> IN_PROGRESS -> ...`) and terminal states guarded | SF-A-001 |
-| SF-B-004 | Implement `SceneRuntimeController` | TODO | Supports `LoadScene/UnloadScene/ResetScene/Spawn/Despawn/TeleportAnchor` | SF-A-001 |
-| SF-B-005 | Implement `TaskGraphRunner` | TODO | Single active node, deterministic transition logic, timeout handling | SF-A-002 |
-| SF-B-006 | Implement `ActionGate` | TODO | Every action receives `accepted/rejected` decision with reason code | SF-A-004 |
-| SF-B-007 | Implement `ActionValidator` | TODO | Validates target/tool/sequence/time/channel/control-mode constraints | SF-A-004 |
-| SF-B-008 | Implement `TransitionEngine` | TODO | Success/fail/timeout/branch transitions deterministic and logged | SF-A-002 |
+| SF-B-001 | Implement `FlowConfigProvider` | DONE | Loads and validates definition from asset/json, returns typed `GameDefinition` | SF-A-001 |
+| SF-B-002 | Implement `FlowBindingRegistry` | DONE | Stable key lookup for objects/zones/audio/timeline | SF-A-001 |
+| SF-B-003 | Implement `SessionRuntime` bridge | DONE | FSM path enforced (`CREATED -> IN_PROGRESS -> ...`) and terminal states guarded | SF-A-001 |
+| SF-B-004 | Implement `SceneRuntimeController` | DONE | Supports `LoadScene/UnloadScene/ResetScene/Spawn/Despawn/TeleportAnchor` | SF-A-001 |
+| SF-B-005 | Implement `TaskGraphRunner` | DONE | Single active node, deterministic transition logic, timeout handling | SF-A-002 |
+| SF-B-006 | Implement `ActionGate` | DONE | Every action receives `accepted/rejected` decision with reason code | SF-A-004 |
+| SF-B-007 | Implement `ActionValidator` | DONE | Validates target/tool/sequence/time/channel/control-mode constraints | SF-A-004 |
+| SF-B-008 | Implement `TransitionEngine` | DONE | Success/fail/timeout/branch transitions deterministic and logged | SF-A-002 |
 
 ## Phase C - Action Plugin System
 
@@ -170,7 +170,7 @@ Sprint goal: establish minimal executable foundation for definition loading and 
 
 ### Ready-For-Sprint Checklist
 
-- [ ] Create sample `GameDefinition` fixture used by tests and smoke path.
+- [x] Create sample `GameDefinition` fixture used by tests and smoke path.
 - [ ] Add test stubs for definition validation.
 - [ ] Add test stubs for session FSM bridge.
 - [ ] Confirm naming rules (`no V2/V3`, no project references) in all new files.
