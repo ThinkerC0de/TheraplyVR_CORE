@@ -31,6 +31,25 @@ Canonical payload (`GAME_INSTALL_STATUS`) fields:
 - `lastError` (nullable)
 - `updatedAtUtc`
 
+## Firebase game catalog source (`game_catalog`)
+
+Mobile store/installed tabs can be sourced from Firestore collection `game_catalog`.
+
+Recommended document fields:
+- `gameId`
+- `title`
+- `description`
+- `targetContentVersion`
+- `packageUri`
+- `thumbnailUrl`
+- `supportsSaveResume`
+- `availableForPurchase`
+- `requiresExplicitLicense`
+- `runtimeLaunchEnabled`
+- `sortOrder`
+- `active`
+- `previewLines`
+
 ## Mobile -> Quest command payloads
 
 ### `SYNC_CATALOG`

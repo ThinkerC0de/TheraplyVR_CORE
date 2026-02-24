@@ -50,6 +50,7 @@ Status: minimal operator console with role gate + audit writes.
   - `Therapists/Parents` from `user_entitlements`,
   - `Children` from `students`,
   - `Games` from known catalog + GAME grant stats (`entitlement_grants`).
+- Games tab can seed Firestore `game_catalog` in one action (`Seed game_catalog`).
 
 ## Minimal Firestore Rules
 
@@ -106,6 +107,46 @@ Minimal required defines:
 - `FIREBASE_APP_ID`
 - `FIREBASE_MESSAGING_SENDER_ID`
 - `FIREBASE_PROJECT_ID`
+
+## Hosting setup (Firebase)
+
+- Firebase Hosting is configured in root `firebase.json` with:
+  - public dir: `hosting/public`
+  - landing page: `hosting/public/index.html` (button to open `/admin/`)
+  - admin rewrites: `/admin` and `/admin/**` -> `/admin/index.html`
+
+Build hosting bundle from repo root:
+
+```powershell
+.\scripts\build_admin_console_hosting_bundle.ps1
+```
+
+If local execution policy blocks script launch, use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\build_admin_console_hosting_bundle.ps1
+```
+
+This builds `admin_console_web` with `--base-href /admin/` and copies output into:
+- `hosting/public/admin/`
+
+Deploy hosting to a Firebase project:
+
+```powershell
+.\scripts\deploy_admin_console_hosting.ps1 -ProjectId <FIREBASE_PROJECT_ID>
+```
+
+Deploy without rebuild (use existing `hosting/public/admin` files):
+
+```powershell
+.\scripts\deploy_admin_console_hosting.ps1 -ProjectId <FIREBASE_PROJECT_ID> -SkipBundleBuild
+```
+
+If local execution policy blocks script launch, use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy_admin_console_hosting.ps1 -ProjectId <FIREBASE_PROJECT_ID>
+```
 
 ## Notes
 

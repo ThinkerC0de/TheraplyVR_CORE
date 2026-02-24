@@ -27,6 +27,14 @@ docs/evidence/**/artifacts/flutter_build/
 docs/evidence/**/artifacts/unity_build/
 docs/evidence/**/artifacts/adb_logcat_full.log
 
+# Firebase Hosting generated admin web bundle
+hosting/public/admin/*
+!hosting/public/admin/.gitkeep
+
+# Local Firebase/Unity build caches
+.firebase/*.cache
+unity-quest-template/.utmp/
+
 # Crashlytics generated file
 crashlytics-build.properties
 

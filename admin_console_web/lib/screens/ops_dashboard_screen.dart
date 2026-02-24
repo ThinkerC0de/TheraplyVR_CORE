@@ -21,18 +21,122 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
       title: 'Smoke Test Game',
       targetContentVersion: '1.0.0',
       description: 'Minimal connectivity and command smoke game.',
+      packageUri: '',
+      thumbnailUrl: '',
+      supportsSaveResume: false,
+      availableForPurchase: false,
+      requiresExplicitLicense: false,
+      runtimeLaunchEnabled: true,
+      sortOrder: 5,
+      active: true,
+      previewLines: <String>['Smoke validation and connectivity checks.'],
     ),
     _KnownGameEntry(
       gameId: 'demo_cube_clicker',
       title: 'Demo Cube Clicker',
       targetContentVersion: '1.2.0',
       description: 'Primary demo interaction game for resilience checks.',
+      packageUri: '',
+      thumbnailUrl: '',
+      supportsSaveResume: true,
+      availableForPurchase: false,
+      requiresExplicitLicense: false,
+      runtimeLaunchEnabled: true,
+      sortOrder: 10,
+      active: true,
+      previewLines: <String>[
+        'Basic / alternation / random target color modes.'
+      ],
     ),
     _KnownGameEntry(
       gameId: 'pulse_target_tap',
       title: 'Pulse Target Tap',
       targetContentVersion: '1.0.0',
       description: 'Second sample game with timed target taps.',
+      packageUri: '',
+      thumbnailUrl: '',
+      supportsSaveResume: false,
+      availableForPurchase: false,
+      requiresExplicitLicense: false,
+      runtimeLaunchEnabled: true,
+      sortOrder: 20,
+      active: true,
+      previewLines: <String>['Adaptive difficulty and label pipeline.'],
+    ),
+    _KnownGameEntry(
+      gameId: 'puzzle_paths',
+      title: 'Puzzle Paths',
+      targetContentVersion: '0.9.0',
+      description: 'Store placeholder: puzzle session package.',
+      packageUri: 'https://cdn.theraply.local/content/puzzle_paths_0_9_0',
+      thumbnailUrl: '',
+      supportsSaveResume: false,
+      availableForPurchase: true,
+      requiresExplicitLicense: true,
+      runtimeLaunchEnabled: false,
+      sortOrder: 30,
+      active: true,
+      previewLines: <String>['Catalog/store placeholder entry.'],
+    ),
+    _KnownGameEntry(
+      gameId: 'memory_orchard',
+      title: 'Memory Orchard',
+      targetContentVersion: '0.9.0',
+      description: 'Store placeholder: memory session package.',
+      packageUri: 'https://cdn.theraply.local/content/memory_orchard_0_9_0',
+      thumbnailUrl: '',
+      supportsSaveResume: false,
+      availableForPurchase: true,
+      requiresExplicitLicense: true,
+      runtimeLaunchEnabled: false,
+      sortOrder: 40,
+      active: true,
+      previewLines: <String>['Catalog/store placeholder entry.'],
+    ),
+    _KnownGameEntry(
+      gameId: 'sunflower_defense',
+      title: 'Sunflower Defense',
+      targetContentVersion: '0.9.0',
+      description: 'Store placeholder: sunflower defense package.',
+      packageUri: 'https://cdn.theraply.local/content/sunflower_defense_0_9_0',
+      thumbnailUrl: '',
+      supportsSaveResume: false,
+      availableForPurchase: true,
+      requiresExplicitLicense: true,
+      runtimeLaunchEnabled: false,
+      sortOrder: 50,
+      active: true,
+      previewLines: <String>['Catalog/store placeholder entry.'],
+    ),
+    _KnownGameEntry(
+      gameId: 'coding_master',
+      title: 'Coding Master',
+      targetContentVersion: '0.9.0',
+      description: 'Store placeholder: coding master package.',
+      packageUri: 'https://cdn.theraply.local/content/coding_master_0_9_0',
+      thumbnailUrl: '',
+      supportsSaveResume: false,
+      availableForPurchase: true,
+      requiresExplicitLicense: true,
+      runtimeLaunchEnabled: false,
+      sortOrder: 60,
+      active: true,
+      previewLines: <String>['Catalog/store placeholder entry.'],
+    ),
+    _KnownGameEntry(
+      gameId: 'bilateral_markers',
+      title: 'Bilateral Markers',
+      targetContentVersion: '0.9.0',
+      description: 'Store placeholder: bilateral markers package.',
+      packageUri: 'https://cdn.theraply.local/content/bilateral_markers_0_9_0',
+      thumbnailUrl: '',
+      supportsSaveResume: false,
+      availableForPurchase: true,
+      requiresExplicitLicense: true,
+      runtimeLaunchEnabled: false,
+      sortOrder: 70,
+      active: true,
+      previewLines: <String>['Catalog/store placeholder entry.'],
     ),
   ];
 
@@ -68,6 +172,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
 
   bool _savingEntitlement = false;
   bool _savingGrant = false;
+  bool _seedingGameCatalog = false;
 
   String get _targetUserId => _targetUserIdController.text.trim();
 
@@ -370,6 +475,55 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
       _rotateCorrelationId();
     } catch (e) {
       _snack('Blad revoke: $e', error: true);
+    }
+  }
+
+  Future<void> _seedGameCatalog() async {
+    final reason = _resolveReason('seed-game-catalog');
+    final correlationId = _resolveCorrelationId();
+
+    setState(() {
+      _seedingGameCatalog = true;
+    });
+
+    try {
+      final payload = _knownGames
+          .map(
+            (entry) => AdminGameCatalogSeedEntry(
+              gameId: entry.gameId,
+              title: entry.title,
+              description: entry.description,
+              targetContentVersion: entry.targetContentVersion,
+              packageUri: entry.packageUri,
+              thumbnailUrl: entry.thumbnailUrl,
+              supportsSaveResume: entry.supportsSaveResume,
+              availableForPurchase: entry.availableForPurchase,
+              requiresExplicitLicense: entry.requiresExplicitLicense,
+              runtimeLaunchEnabled: entry.runtimeLaunchEnabled,
+              sortOrder: entry.sortOrder,
+              active: entry.active,
+              previewLines: entry.previewLines,
+            ),
+          )
+          .toList(growable: false);
+
+      await EntitlementAdminService.seedGameCatalog(
+        entries: payload,
+        reason: reason,
+        correlationId: correlationId,
+      );
+
+      _snack(
+          'Seeded game_catalog (${payload.length} entries) [$correlationId]');
+      _rotateCorrelationId();
+    } catch (e) {
+      _snack('Seeding game_catalog failed: $e', error: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _seedingGameCatalog = false;
+        });
+      }
     }
   }
 
@@ -686,7 +840,34 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Lista gier z aktualnego katalogu testowego we flutter_controller.',
+                  'Known catalog used by mobile store/installed tabs. You can seed game_catalog with one click.',
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: _seedingGameCatalog ? null : _seedGameCatalog,
+                      icon: _seedingGameCatalog
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.cloud_upload_outlined),
+                      label: Text(
+                        _seedingGameCatalog
+                            ? 'Seeding...'
+                            : 'Seed game_catalog',
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _useCurrentUserUidAsTarget,
+                      icon: const Icon(Icons.person_pin),
+                      label: const Text('Use my UID'),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 10),
                 StreamBuilder<Map<String, AdminGameGrantStats>>(
@@ -709,6 +890,10 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                             gameId: game.gameId,
                             description: game.description,
                             targetVersion: game.targetContentVersion,
+                            packageUri: game.packageUri,
+                            availableForPurchase: game.availableForPurchase,
+                            runtimeLaunchEnabled: game.runtimeLaunchEnabled,
+                            sortOrder: game.sortOrder,
                             stats: statsByGameId[game.gameId],
                           ),
                         if (unknownGrantGames.isNotEmpty) ...[
@@ -727,6 +912,10 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                               gameId: gameId,
                               description: 'GAME scope detected in grants.',
                               targetVersion: '-',
+                              packageUri: '',
+                              availableForPurchase: false,
+                              runtimeLaunchEnabled: false,
+                              sortOrder: 0,
                               stats: statsByGameId[gameId],
                             ),
                         ],
@@ -747,6 +936,10 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
     required String gameId,
     required String description,
     required String targetVersion,
+    required String packageUri,
+    required bool availableForPurchase,
+    required bool runtimeLaunchEnabled,
+    required int sortOrder,
     required AdminGameGrantStats? stats,
   }) {
     final activeCount = stats?.activeAssignments ?? 0;
@@ -775,6 +968,17 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                   'targetVersion=$targetVersion',
                   style: const TextStyle(fontSize: 12),
                 ),
+                Text(
+                  'sortOrder=$sortOrder | purchasable=$availableForPurchase | launchEnabled=$runtimeLaunchEnabled',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                if (packageUri.trim().isNotEmpty)
+                  Text(
+                    'packageUri=$packageUri',
+                    style: const TextStyle(fontSize: 12),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 Text(description, style: const TextStyle(fontSize: 12)),
                 Text(
                   'Grant stats: active=$activeCount, revoked=$revokedCount',
@@ -1336,11 +1540,29 @@ class _KnownGameEntry {
   final String title;
   final String targetContentVersion;
   final String description;
+  final String packageUri;
+  final String thumbnailUrl;
+  final bool supportsSaveResume;
+  final bool availableForPurchase;
+  final bool requiresExplicitLicense;
+  final bool runtimeLaunchEnabled;
+  final int sortOrder;
+  final bool active;
+  final List<String> previewLines;
 
   const _KnownGameEntry({
     required this.gameId,
     required this.title,
     required this.targetContentVersion,
     required this.description,
+    required this.packageUri,
+    required this.thumbnailUrl,
+    required this.supportsSaveResume,
+    required this.availableForPurchase,
+    required this.requiresExplicitLicense,
+    required this.runtimeLaunchEnabled,
+    required this.sortOrder,
+    required this.active,
+    required this.previewLines,
   });
 }

@@ -136,4 +136,64 @@ void main() {
     expect(auditData['targetCollection'], 'entitlement_grants');
     expect(auditData['targetUserId'], 'mobile-user-2');
   });
+
+  test('seedGameCatalog writes entries and audit event', () async {
+    const correlationId = 'corr-seed-catalog-1';
+    const reason = 'seed-catalog';
+
+    await EntitlementAdminService.seedGameCatalog(
+      entries: const <AdminGameCatalogSeedEntry>[
+        AdminGameCatalogSeedEntry(
+          gameId: 'demo_cube_clicker',
+          title: 'Demo Cube Clicker',
+          description: 'Demo',
+          targetContentVersion: '1.2.0',
+          packageUri: '',
+          thumbnailUrl: '',
+          supportsSaveResume: true,
+          availableForPurchase: false,
+          requiresExplicitLicense: false,
+          runtimeLaunchEnabled: true,
+          sortOrder: 10,
+          active: true,
+          previewLines: <String>['Preview'],
+        ),
+        AdminGameCatalogSeedEntry(
+          gameId: 'puzzle_paths',
+          title: 'Puzzle Paths',
+          description: 'Store placeholder',
+          targetContentVersion: '0.9.0',
+          packageUri: 'https://cdn.example/puzzle_paths_0_9_0',
+          thumbnailUrl: '',
+          supportsSaveResume: false,
+          availableForPurchase: true,
+          requiresExplicitLicense: true,
+          runtimeLaunchEnabled: false,
+          sortOrder: 30,
+          active: true,
+          previewLines: <String>['Store'],
+        ),
+      ],
+      reason: reason,
+      correlationId: correlationId,
+    );
+
+    final gameDoc = await firestore
+        .collection('game_catalog')
+        .doc('demo_cube_clicker')
+        .get();
+    expect(gameDoc.exists, isTrue);
+    final payload = gameDoc.data()!;
+    expect(payload['targetContentVersion'], '1.2.0');
+    expect(payload['runtimeLaunchEnabled'], isTrue);
+    expect(payload['updatedBy'], 'admin-user-1');
+    expect(payload['correlationId'], correlationId);
+
+    final auditSnapshot = await firestore
+        .collection('admin_audit_trail')
+        .where('correlationId', isEqualTo: correlationId)
+        .get();
+    expect(auditSnapshot.docs, hasLength(1));
+    expect(auditSnapshot.docs.single.data()['action'], 'SEED_GAME_CATALOG');
+  });
 }

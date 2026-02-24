@@ -21,6 +21,8 @@ class EntitlementAdminService {
       _firestore.collection('admin_audit_trail');
   static CollectionReference<Map<String, dynamic>> get _studentsCollection =>
       _firestore.collection('students');
+  static CollectionReference<Map<String, dynamic>> get _gameCatalogCollection =>
+      _firestore.collection('game_catalog');
 
   @visibleForTesting
   static void setFirestoreInstanceForTesting(FirebaseFirestore firestore) {
@@ -288,6 +290,60 @@ class EntitlementAdminService {
     });
   }
 
+  static Future<void> seedGameCatalog({
+    required List<AdminGameCatalogSeedEntry> entries,
+    required String reason,
+    required String correlationId,
+  }) async {
+    final normalizedReason = _requireTrimmed(reason, 'reason');
+    final normalizedCorrelationId =
+        _requireTrimmed(correlationId, 'correlationId');
+    final actor = await _resolveActor();
+    final nowUtc = DateTime.now().toUtc();
+
+    final batch = _firestore.batch();
+    final seededGameIds = <String>[];
+    for (final entry in entries) {
+      final gameId = entry.gameId.trim();
+      if (gameId.isEmpty) {
+        continue;
+      }
+
+      seededGameIds.add(gameId);
+      batch.set(
+        _gameCatalogCollection.doc(gameId),
+        <String, dynamic>{
+          ...entry.toFirestore(),
+          'gameId': gameId,
+          'updatedAtUtc': nowUtc.toIso8601String(),
+          'updatedBy': actor.uid,
+          'updateReason': normalizedReason,
+          'correlationId': normalizedCorrelationId,
+        },
+        SetOptions(merge: true),
+      );
+    }
+
+    final auditEvent = AdminAuditEvent(
+      actorUid: actor.uid,
+      actorEmail: actor.email,
+      actorRole: actor.role,
+      action: 'SEED_GAME_CATALOG',
+      targetCollection: 'game_catalog',
+      targetDocumentId: 'bulk',
+      targetUserId: null,
+      occurredAtUtc: nowUtc,
+      reason: normalizedReason,
+      correlationId: normalizedCorrelationId,
+      payloadSummary: <String, dynamic>{
+        'entries': seededGameIds.length,
+        'gameIds': seededGameIds..sort(),
+      },
+    );
+    batch.set(_auditCollection.doc(), auditEvent.toFirestore());
+    await batch.commit();
+  }
+
   static String _requireTrimmed(String value, String fieldName) {
     final trimmed = value.trim();
     if (trimmed.isEmpty) {
@@ -326,4 +382,54 @@ class _AdminActor {
     required this.email,
     required this.role,
   });
+}
+
+class AdminGameCatalogSeedEntry {
+  final String gameId;
+  final String title;
+  final String description;
+  final String targetContentVersion;
+  final String packageUri;
+  final String thumbnailUrl;
+  final bool supportsSaveResume;
+  final bool availableForPurchase;
+  final bool requiresExplicitLicense;
+  final bool runtimeLaunchEnabled;
+  final int sortOrder;
+  final bool active;
+  final List<String> previewLines;
+
+  const AdminGameCatalogSeedEntry({
+    required this.gameId,
+    required this.title,
+    required this.description,
+    required this.targetContentVersion,
+    required this.packageUri,
+    required this.thumbnailUrl,
+    required this.supportsSaveResume,
+    required this.availableForPurchase,
+    required this.requiresExplicitLicense,
+    required this.runtimeLaunchEnabled,
+    required this.sortOrder,
+    required this.active,
+    required this.previewLines,
+  });
+
+  Map<String, dynamic> toFirestore() {
+    return <String, dynamic>{
+      'gameId': gameId.trim(),
+      'title': title.trim(),
+      'description': description.trim(),
+      'targetContentVersion': targetContentVersion.trim(),
+      'packageUri': packageUri.trim(),
+      'thumbnailUrl': thumbnailUrl.trim(),
+      'supportsSaveResume': supportsSaveResume,
+      'availableForPurchase': availableForPurchase,
+      'requiresExplicitLicense': requiresExplicitLicense,
+      'runtimeLaunchEnabled': runtimeLaunchEnabled,
+      'sortOrder': sortOrder,
+      'active': active,
+      'previewLines': List<String>.from(previewLines),
+    };
+  }
 }
