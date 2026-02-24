@@ -510,6 +510,50 @@ namespace TheraplyCore.Interactions
                 targetValid: TryReadNullableBool(details, "targetValid"));
         }
 
+        public IReadOnlyDictionary<string, object> RecordTimelineTelemetry(IReadOnlyDictionary<string, object> payload)
+        {
+            var details = payload != null
+                ? new Dictionary<string, object>(payload)
+                : new Dictionary<string, object>();
+
+            var normalizedGameId = NormalizeOrFallback(
+                TryReadString(details, "gameId"),
+                ResolveActiveGameId(),
+                "unknown_game");
+            var eventType = ResolveTimelineEventType(details);
+            var sourceComponent = NormalizeOrFallback(
+                TryReadString(details, "sourceComponent"),
+                "TimelineTelemetry");
+            var attemptContext = ResolveAttemptContext(normalizedGameId, eventType);
+            var actionOutcome = ResolveTimelineOutcome(details, eventType);
+            var reasonCode = ResolveTimelineReasonCode(details, eventType);
+            var targetId = NormalizeOrFallback(
+                TryReadString(details, "targetId"),
+                TryReadString(details, "segmentId"),
+                string.Empty);
+            var targetName = NormalizeOrFallback(
+                TryReadString(details, "targetName"),
+                TryReadString(details, "segmentName"),
+                string.Empty);
+
+            return EmitCanonicalEvent(
+                normalizedGameId,
+                eventType,
+                "TIMELINE",
+                actionOutcome,
+                reasonCode,
+                sourceComponent,
+                attemptContext,
+                details,
+                inputHand: NormalizeOrFallback(TryReadString(details, "inputHand"), string.Empty),
+                inputSource: NormalizeOrFallback(TryReadString(details, "inputSource"), "TIMELINE"),
+                inputControl: TryReadString(details, "inputControl"),
+                inputValue: TryReadFloat(details, "inputValue"),
+                targetId: targetId,
+                targetName: targetName,
+                targetValid: TryReadNullableBool(details, "targetValid"));
+        }
+
         private IReadOnlyDictionary<string, object> EmitCanonicalEvent(
             string gameId,
             string eventType,
@@ -1486,6 +1530,100 @@ namespace TheraplyCore.Interactions
                     return "PATH_DEVIATION_EXCEEDED";
                 default:
                     return "POSE_PATH_EVENT_OBSERVED";
+            }
+        }
+
+        private static string ResolveTimelineEventType(IReadOnlyDictionary<string, object> payload)
+        {
+            var explicitEventType = TryReadString(payload, "timelineEventType");
+            if (!string.IsNullOrWhiteSpace(explicitEventType))
+            {
+                return NormalizeEventToken(explicitEventType, "TIMELINE_EVENT");
+            }
+
+            var explicitActionId = TryReadString(payload, "actionId");
+            if (string.Equals(
+                    NormalizeEventToken(explicitActionId, string.Empty),
+                    "WATCH_TIMELINE_SEGMENT",
+                    StringComparison.Ordinal))
+            {
+                var interrupted = TryReadBool(payload, "interrupted");
+                var targetValid = TryReadNullableBool(payload, "targetValid");
+                var progress01 = TryReadFloat(payload, "progress01");
+                var elapsedSec = TryReadFloat(payload, "elapsedSec");
+                var requiredSec = TryReadFloat(payload, "requiredSec");
+
+                if (interrupted)
+                {
+                    return "TIMELINE_SEGMENT_INTERRUPTED";
+                }
+
+                if (targetValid.HasValue && !targetValid.Value)
+                {
+                    return "TIMELINE_SEGMENT_SKIPPED";
+                }
+
+                if ((progress01.HasValue && progress01.Value >= 0.999f) ||
+                    (elapsedSec.HasValue &&
+                     requiredSec.HasValue &&
+                     requiredSec.Value > 0f &&
+                     elapsedSec.Value >= requiredSec.Value))
+                {
+                    return "TIMELINE_SEGMENT_COMPLETED";
+                }
+
+                return "TIMELINE_SEGMENT_TICK";
+            }
+
+            return "TIMELINE_EVENT";
+        }
+
+        private static string ResolveTimelineOutcome(
+            IReadOnlyDictionary<string, object> payload,
+            string timelineEventType)
+        {
+            var explicitOutcome = TryReadString(payload, "actionOutcome");
+            if (!string.IsNullOrWhiteSpace(explicitOutcome))
+            {
+                return NormalizeEventToken(explicitOutcome, "OBSERVED");
+            }
+
+            switch (NormalizeEventToken(timelineEventType, "TIMELINE_EVENT"))
+            {
+                case "TIMELINE_SEGMENT_COMPLETED":
+                    return "CORRECT";
+                case "TIMELINE_SEGMENT_INTERRUPTED":
+                case "TIMELINE_SEGMENT_SKIPPED":
+                    return "INCORRECT";
+                case "TIMELINE_SEGMENT_TICK":
+                    return "OBSERVED";
+                default:
+                    return "OBSERVED";
+            }
+        }
+
+        private static string ResolveTimelineReasonCode(
+            IReadOnlyDictionary<string, object> payload,
+            string timelineEventType)
+        {
+            var explicitReason = ResolveReasonCode(payload, string.Empty);
+            if (!string.IsNullOrWhiteSpace(explicitReason))
+            {
+                return explicitReason;
+            }
+
+            switch (NormalizeEventToken(timelineEventType, "TIMELINE_EVENT"))
+            {
+                case "TIMELINE_SEGMENT_TICK":
+                    return "TIMELINE_PROGRESS";
+                case "TIMELINE_SEGMENT_COMPLETED":
+                    return "TIMELINE_SEGMENT_WATCHED";
+                case "TIMELINE_SEGMENT_INTERRUPTED":
+                    return "TIMELINE_INTERRUPTED";
+                case "TIMELINE_SEGMENT_SKIPPED":
+                    return "TIMELINE_SEGMENT_SKIPPED";
+                default:
+                    return "TIMELINE_EVENT_OBSERVED";
             }
         }
 

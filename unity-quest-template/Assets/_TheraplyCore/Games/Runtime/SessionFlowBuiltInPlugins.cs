@@ -43,6 +43,7 @@ namespace TheraplyCore.Games.Runtime
             registry.Register(new DualHandActionPlugin("mark_left_and_right_targets"), replaceExisting);
             registry.Register(new PosePathActionPlugin("hold_pose"), replaceExisting);
             registry.Register(new PosePathActionPlugin("follow_path"), replaceExisting);
+            registry.Register(new TimelineWatchActionPlugin("watch_timeline_segment"), replaceExisting);
         }
     }
 
@@ -1225,6 +1226,246 @@ namespace TheraplyCore.Games.Runtime
         }
     }
 
+    public sealed class TimelineWatchActionPlugin : GameContracts.IActionPlugin
+    {
+        private readonly ActionValidator _validator = new ActionValidator();
+        private readonly string _actionId;
+
+        public TimelineWatchActionPlugin(string actionId)
+        {
+            _actionId = string.IsNullOrWhiteSpace(actionId)
+                ? "watch_timeline_segment"
+                : actionId.Trim();
+        }
+
+        public string ActionId => _actionId;
+        public string ChannelId => GameContracts.SessionFlowChannelIds.Timeline;
+
+        public bool TryCreateIntent(
+            IReadOnlyDictionary<string, object> rawInput,
+            out GameContracts.ActionIntent intent)
+        {
+            intent = null;
+            if (!SessionFlowPluginPayload.TryReadString(rawInput, "eventType", out var eventType))
+            {
+                return false;
+            }
+
+            if (!SessionFlowPluginPayload.IsTimelineEventType(eventType))
+            {
+                return false;
+            }
+
+            var requestedActionId = SessionFlowPluginPayload.ReadRequestedActionId(rawInput);
+            var suggestedActionId = SessionFlowPluginPayload.ResolveTimelineActionIdFromEventType(eventType);
+            var effectiveActionId = !string.IsNullOrWhiteSpace(requestedActionId)
+                ? requestedActionId
+                : suggestedActionId;
+            if (string.IsNullOrWhiteSpace(effectiveActionId) ||
+                !string.Equals(effectiveActionId, ActionId, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            intent = new GameContracts.ActionIntent
+            {
+                actionId = effectiveActionId.Trim(),
+                channelId = ChannelId,
+                targetId = SessionFlowPluginPayload.ResolveTimelineTargetId(rawInput),
+                inputSource = SessionFlowPluginPayload.ReadString(rawInput, "inputSource"),
+                inputHand = SessionFlowPluginPayload.ReadString(rawInput, "inputHand"),
+                inputValue = SessionFlowPluginPayload.ReadFloat(rawInput, "inputValue"),
+                occurredAtElapsedSec = SessionFlowPluginPayload.ReadFloat(rawInput, "occurredAtElapsedSec"),
+                details = new List<GameContracts.KeyValuePairString>
+                {
+                    new GameContracts.KeyValuePairString { key = "eventType", value = eventType },
+                    new GameContracts.KeyValuePairString { key = "reasonCode", value = SessionFlowPluginPayload.ReadString(rawInput, "reasonCode") },
+                    new GameContracts.KeyValuePairString { key = "segmentId", value = SessionFlowPluginPayload.ReadString(rawInput, "segmentId") },
+                    new GameContracts.KeyValuePairString { key = "segmentName", value = SessionFlowPluginPayload.ReadString(rawInput, "segmentName") },
+                    new GameContracts.KeyValuePairString { key = "elapsedSec", value = SessionFlowPluginPayload.ReadString(rawInput, "elapsedSec") },
+                    new GameContracts.KeyValuePairString { key = "requiredSec", value = SessionFlowPluginPayload.ReadString(rawInput, "requiredSec") },
+                    new GameContracts.KeyValuePairString { key = "progress01", value = SessionFlowPluginPayload.ReadString(rawInput, "progress01") },
+                    new GameContracts.KeyValuePairString { key = "attentionScore", value = SessionFlowPluginPayload.ReadString(rawInput, "attentionScore") },
+                    new GameContracts.KeyValuePairString { key = "interrupted", value = SessionFlowPluginPayload.ReadString(rawInput, "interrupted") },
+                },
+            };
+            return true;
+        }
+
+        public GameContracts.ActionValidationResult Validate(
+            GameContracts.ActionIntent intent,
+            GameContracts.ActionContext context,
+            GameContracts.AllowedActionDefinition allowedAction)
+        {
+            var eventType = SessionFlowPluginPayload.ReadEventTypeFromIntent(intent);
+            if (eventType.IndexOf("TIMELINE_SEGMENT_INTERRUPTED", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return GameContracts.ActionValidationResult.Rejected("TIMELINE_INTERRUPTED");
+            }
+
+            if (eventType.IndexOf("TIMELINE_SEGMENT_SKIPPED", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return GameContracts.ActionValidationResult.Rejected("TIMELINE_SEGMENT_SKIPPED");
+            }
+
+            if (eventType.IndexOf("TIMELINE_SEGMENT_TICK", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return GameContracts.ActionValidationResult.Rejected("TIMELINE_SEGMENT_NOT_COMPLETED");
+            }
+
+            if (eventType.IndexOf("TIMELINE_SEGMENT_COMPLETED", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                return GameContracts.ActionValidationResult.Rejected("ACTION_EVENT_TYPE_MISMATCH");
+            }
+
+            var requiredWatchSec = ResolveRequiredWatchSec(allowedAction, intent);
+            if (requiredWatchSec > 0f &&
+                TryReadDetailFloat(intent, "elapsedSec", out var elapsedSec) &&
+                elapsedSec < requiredWatchSec)
+            {
+                return GameContracts.ActionValidationResult.Rejected("TIMELINE_WATCH_TIME_TOO_SHORT");
+            }
+
+            var minProgress = ResolveMinProgress(allowedAction, intent);
+            if (minProgress > 0f &&
+                TryReadDetailFloat(intent, "progress01", out var progress01) &&
+                progress01 < minProgress)
+            {
+                return GameContracts.ActionValidationResult.Rejected("TIMELINE_PROGRESS_BELOW_MIN");
+            }
+
+            var minAttention = ResolveMinAttention(allowedAction);
+            if (minAttention > 0f &&
+                TryReadDetailFloat(intent, "attentionScore", out var attentionScore) &&
+                attentionScore < minAttention)
+            {
+                return GameContracts.ActionValidationResult.Rejected("TIMELINE_ATTENTION_BELOW_MIN");
+            }
+
+            return _validator.Validate(intent, context, allowedAction);
+        }
+
+        public GameContracts.ActionApplyResult Apply(
+            GameContracts.ActionIntent intent,
+            GameContracts.ActionContext context,
+            GameContracts.AllowedActionDefinition allowedAction)
+        {
+            return SessionFlowPluginPayload.BuildAppliedResult(ActionId, ChannelId, "TIMELINE_ACTION_APPLIED");
+        }
+
+        private static float ResolveRequiredWatchSec(
+            GameContracts.AllowedActionDefinition allowedAction,
+            GameContracts.ActionIntent intent)
+        {
+            var requiredWatchSec = ReadConstraintFloat(allowedAction, "requiredWatchSec");
+            if (requiredWatchSec <= 0f)
+            {
+                requiredWatchSec = ReadConstraintFloat(allowedAction, "minWatchSec");
+            }
+
+            if (requiredWatchSec > 0f)
+            {
+                return requiredWatchSec;
+            }
+
+            return TryReadDetailFloat(intent, "requiredSec", out var detailRequiredSec)
+                ? (detailRequiredSec > 0f ? detailRequiredSec : 0f)
+                : 0f;
+        }
+
+        private static float ResolveMinProgress(
+            GameContracts.AllowedActionDefinition allowedAction,
+            GameContracts.ActionIntent intent)
+        {
+            var minProgress = ReadConstraintFloat(allowedAction, "minProgress01");
+            if (minProgress <= 0f)
+            {
+                minProgress = ReadConstraintFloat(allowedAction, "requiredProgress01");
+            }
+
+            if (minProgress > 0f)
+            {
+                return Clamp01(minProgress);
+            }
+
+            return TryReadDetailFloat(intent, "progress01", out var detailProgress)
+                ? Clamp01(detailProgress)
+                : 0f;
+        }
+
+        private static float ResolveMinAttention(GameContracts.AllowedActionDefinition allowedAction)
+        {
+            var minAttention = ReadConstraintFloat(allowedAction, "minAttentionScore");
+            if (minAttention <= 0f)
+            {
+                minAttention = ReadConstraintFloat(allowedAction, "requiredAttentionScore");
+            }
+
+            return minAttention > 0f ? minAttention : 0f;
+        }
+
+        private static float ReadConstraintFloat(GameContracts.AllowedActionDefinition allowedAction, string key)
+        {
+            if (allowedAction == null || allowedAction.constraints == null || string.IsNullOrWhiteSpace(key))
+            {
+                return 0f;
+            }
+
+            for (var i = 0; i < allowedAction.constraints.Count; i++)
+            {
+                var constraint = allowedAction.constraints[i];
+                if (constraint == null ||
+                    !string.Equals(constraint.key, key, StringComparison.OrdinalIgnoreCase) ||
+                    string.IsNullOrWhiteSpace(constraint.value))
+                {
+                    continue;
+                }
+
+                if (float.TryParse(
+                        constraint.value,
+                        NumberStyles.Float | NumberStyles.AllowThousands,
+                        CultureInfo.InvariantCulture,
+                        out var parsed))
+                {
+                    return parsed;
+                }
+            }
+
+            return 0f;
+        }
+
+        private static bool TryReadDetailFloat(GameContracts.ActionIntent intent, string key, out float value)
+        {
+            value = 0f;
+            var raw = SessionFlowPluginPayload.ReadDetailValueFromIntent(intent, key);
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return false;
+            }
+
+            return float.TryParse(
+                raw,
+                NumberStyles.Float | NumberStyles.AllowThousands,
+                CultureInfo.InvariantCulture,
+                out value);
+        }
+
+        private static float Clamp01(float value)
+        {
+            if (value <= 0f)
+            {
+                return 0f;
+            }
+
+            if (value >= 1f)
+            {
+                return 1f;
+            }
+
+            return value;
+        }
+    }
+
     internal static class SessionFlowPluginPayload
     {
         public static bool IsGrabEventType(string eventType)
@@ -1428,6 +1669,43 @@ namespace TheraplyCore.Games.Runtime
                 default:
                     return string.Empty;
             }
+        }
+
+        public static bool IsTimelineEventType(string eventType)
+        {
+            return !string.IsNullOrWhiteSpace(eventType) &&
+                   eventType.Trim().StartsWith("TIMELINE_SEGMENT_", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static string ResolveTimelineActionIdFromEventType(string eventType)
+        {
+            if (string.IsNullOrWhiteSpace(eventType))
+            {
+                return string.Empty;
+            }
+
+            var normalized = eventType.Trim().ToUpperInvariant();
+            switch (normalized)
+            {
+                case "TIMELINE_SEGMENT_TICK":
+                case "TIMELINE_SEGMENT_COMPLETED":
+                case "TIMELINE_SEGMENT_INTERRUPTED":
+                case "TIMELINE_SEGMENT_SKIPPED":
+                    return "watch_timeline_segment";
+                default:
+                    return string.Empty;
+            }
+        }
+
+        public static string ResolveTimelineTargetId(IReadOnlyDictionary<string, object> payload)
+        {
+            var targetId = ReadString(payload, "targetId");
+            if (!string.IsNullOrWhiteSpace(targetId))
+            {
+                return targetId;
+            }
+
+            return ReadString(payload, "segmentId");
         }
 
         public static string ResolveAudioSourceTargetId(IReadOnlyDictionary<string, object> payload)
