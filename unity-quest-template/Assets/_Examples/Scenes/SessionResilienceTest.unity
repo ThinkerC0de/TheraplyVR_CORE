@@ -404,6 +404,8 @@ MonoBehaviour:
   _stunServers:
   - stun:stun.l.google.com:19302
   - stun:stun1.l.google.com:19302
+  _preferLanFirst: 1
+  _lanProbeTimeoutSeconds: 4
   _logStats: 1
   _logVerbose: 0
 --- !u!1 &1784697665
@@ -457,6 +459,10 @@ MonoBehaviour:
   _firebaseRequestTimeoutSeconds: 20
   _logFirebaseBackendPayloads: 1
   _logFirebaseBackendDiagnostics: 1
+  _rewriteLoopbackBackendHostOutsideEditor: 1
+  _useConnectedControllerIpForLoopbackRewrite: 1
+  _nonEditorLoopbackHostOverride: 
+  _tcpServerService: {fileID: 0}
   _persistCriticalSessionEventsLocally: 1
   _persistAllEventsToDurableStore: 1
   _preferSqliteWalStore: 1
@@ -466,6 +472,7 @@ MonoBehaviour:
   _sqliteStoreFileName: session_events.db
   _maxDurableStoreQueueSize: 2048
   _logLocalPersistence: 1
+  _allowVolatileQueueFallbackWhenDurableWriteFails: 1
   _sessionContext: {fileID: 1784697675}
   _enableOutboxSync: 1
   _outboxSyncIntervalSeconds: 2
@@ -519,6 +526,33 @@ MonoBehaviour:
   _defaultGameId: 
   _subscribeToStandardCommands: 1
   _syncStatusPollIntervalSeconds: 1
+  _enableContentDeliverySimulation: 0
+  _publishContentCatalogOnClientConnect: 0
+  _simulatedInstallDurationSeconds: 1.2
+  _defaultSimulatedContentVersion: 1.0.0
+  _simulatedContentCatalog:
+  - gameId: demo_cube_clicker
+    owned: 1
+    installedVersion: 1.1.0
+    targetVersion: 1.2.0
+    updateOptional: 0
+  _enableSessionWatchdog: 1
+  _watchdogHeartbeatIntervalSeconds: 2
+  _watchdogHungThresholdSeconds: 8
+  _watchdogAutoInterruptInProgress: 1
+  _watchdogEmitTelemetry: 1
+  _watchdogLogHeartbeat: 0
+  _enableStructuredCrashContext: 1
+  _captureUnityExceptionLogs: 1
+  _captureAppDomainUnhandledExceptions: 1
+  _captureUnityErrorLogs: 0
+  _persistCrashReportsLocally: 1
+  _emitCrashReportsToTelemetry: 1
+  _crashReportFolder: session_resilience
+  _crashReportFileName: crash_reports.ndjson
+  _maxCrashReportsPerFrame: 2
+  _maxPendingCrashSignals: 64
+  _logCrashCapture: 1
 --- !u!114 &1784697669
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -533,6 +567,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.GameRegistryService
   _entries: []
   _logMappings: 1
+  _autoDiscoverSceneModules: 1
+  _autoProvisionFallbackModuleWhenEmpty: 1
+  _autoProvisionFallbackGameId: 
+  _autoProvisionFallbackModuleTypeName: 
+  _autoProvisionHostObjectName: GameModuleRuntime
+  _enableOnDemandProvisioning: 1
+  _runtimeProvisionEntries: []
 --- !u!114 &1784697670
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -597,6 +638,8 @@ MonoBehaviour:
   _sessionContext: {fileID: 1784697675}
   _enrichPayloadWithSessionMetadata: 1
   _logTelemetry: 0
+  _maxPendingTelemetryFallback: 256
+  _logTelemetryFallback: 0
 --- !u!114 &1784697674
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -610,11 +653,16 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.GameCommandBus
   _tcpServerService: {fileID: 854900686}
-  _tcpConnectionService: {fileID: 0}
   _sessionContext: {fileID: 1784697675}
   _logInbound: 1
   _logOutbound: 1
   _logUnmappedIncoming: 0
+  _enableCommandJournal: 1
+  _commandJournalFolder: TheraplyRuntime
+  _commandJournalFileName: critical_commands.ndjson
+  _commandJournalMaxEntriesInMemory: 4096
+  _commandJournalMaxPendingWrites: 1024
+  _logCommandJournalVerbose: 0
 --- !u!114 &1784697675
 MonoBehaviour:
   m_ObjectHideFlags: 0

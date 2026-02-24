@@ -219,22 +219,24 @@ namespace TheraplyCore.Network.Connection
         public void DisconnectClient()
         {
             if (!_hasClient) return;
-            
+
             _hasClient = false;
-            
+
+            var streamToClose = _stream;
+            var clientToClose = _connectedClient;
+            _stream = null;
+            _connectedClient = null;
+
             try
             {
-                _stream?.Close();
-                _connectedClient?.Close();
+                streamToClose?.Close();
+                clientToClose?.Close();
             }
             catch (Exception e)
             {
                 Debug.LogWarning($"[TCPServer] Error disconnecting client: {e.Message}");
             }
-            
-            _stream = null;
-            _connectedClient = null;
-            
+
             if (_logConnections)
             {
                 Debug.Log("[TCPServer] Client disconnected");
@@ -261,16 +263,32 @@ namespace TheraplyCore.Network.Connection
         /// </summary>
         public async Task<bool> SendMessageAsync(NetworkMessage message)
         {
+            if (string.IsNullOrWhiteSpace(message.commandId))
+            {
+                Debug.LogError("[TCPServer] Cannot send - commandId is empty");
+                return false;
+            }
+
             if (!HasClient)
             {
                 Debug.LogWarning("[TCPServer] Cannot send - no client connected");
                 return false;
             }
-            
+
+            TcpClient targetClient = null;
+            NetworkStream targetStream = null;
+
             try
             {
                 await _sendLock.WaitAsync();
-                if (!HasClient || _stream == null)
+                targetClient = _connectedClient;
+                targetStream = _stream;
+
+                if (!_hasClient ||
+                    targetClient == null ||
+                    targetStream == null ||
+                    !ReferenceEquals(targetClient, _connectedClient) ||
+                    !ReferenceEquals(targetStream, _stream))
                 {
                     Debug.LogWarning("[TCPServer] Cannot send - client disconnected before write");
                     return false;
@@ -288,9 +306,9 @@ namespace TheraplyCore.Network.Connection
                 }
                 
                 // Send length + message
-                await _stream.WriteAsync(lengthPrefix, 0, 4);
-                await _stream.WriteAsync(messageData, 0, messageData.Length);
-                await _stream.FlushAsync();
+                await targetStream.WriteAsync(lengthPrefix, 0, 4);
+                await targetStream.WriteAsync(messageData, 0, messageData.Length);
+                await targetStream.FlushAsync();
                 
                 // Update stats
                 _messagesSent++;
@@ -308,7 +326,10 @@ namespace TheraplyCore.Network.Connection
                 Debug.LogError($"[TCPServer] Send error: {e.Message}");
                 
                 // Connection probably lost
-                DisconnectClient();
+                if (targetClient != null && ReferenceEquals(targetClient, _connectedClient))
+                {
+                    DisconnectClient();
+                }
                 
                 EnqueueMainThreadAction(() => OnError?.Invoke(e));
                 
@@ -391,7 +412,8 @@ namespace TheraplyCore.Network.Connection
                     client.NoDelay = true; // Disable Nagle's algorithm for low latency
                     
                     _connectedClient = client;
-                    _stream = client.GetStream();
+                    NetworkStream clientStream = client.GetStream();
+                    _stream = clientStream;
                     _hasClient = true;
                     
                     string clientIP = ((IPEndPoint)client.Client.RemoteEndPoint).Address.ToString();
@@ -415,7 +437,7 @@ namespace TheraplyCore.Network.Connection
                     });
                     
                     // Start receive loop for this client
-                    _ = ReceiveLoopAsync(cancellationToken);
+                    _ = ReceiveLoopAsync(client, clientStream, cancellationToken);
                 }
             }
             catch (OperationCanceledException)
@@ -445,16 +467,16 @@ namespace TheraplyCore.Network.Connection
         // RECEIVE LOOP
         // ============================================
         
-        private async Task ReceiveLoopAsync(CancellationToken cancellationToken)
+        private async Task ReceiveLoopAsync(TcpClient client, NetworkStream stream, CancellationToken cancellationToken)
         {
             byte[] lengthBuffer = new byte[4];
             
             try
             {
-                while (!cancellationToken.IsCancellationRequested && HasClient)
+                while (!cancellationToken.IsCancellationRequested && IsCurrentClientConnection(client, stream))
                 {
                     // Read length prefix (4 bytes)
-                    int bytesRead = await ReadExactAsync(_stream, lengthBuffer, 0, 4, cancellationToken);
+                    int bytesRead = await ReadExactAsync(stream, lengthBuffer, 0, 4, cancellationToken);
                     
                     if (bytesRead != 4)
                     {
@@ -481,7 +503,7 @@ namespace TheraplyCore.Network.Connection
                     
                     // Read message body
                     byte[] messageBuffer = new byte[messageLength];
-                    bytesRead = await ReadExactAsync(_stream, messageBuffer, 0, messageLength, cancellationToken);
+                    bytesRead = await ReadExactAsync(stream, messageBuffer, 0, messageLength, cancellationToken);
                     
                     if (bytesRead != messageLength)
                     {
@@ -520,9 +542,13 @@ namespace TheraplyCore.Network.Connection
             {
                 // Normal cancellation
             }
+            catch (ObjectDisposedException)
+            {
+                // Expected when connection is intentionally replaced/disposed.
+            }
             catch (Exception e)
             {
-                if (IsExpectedRemoteDisconnect(e))
+                if (IsExpectedRemoteDisconnect(e) || !IsCurrentClientConnection(client, stream))
                 {
                     if (_logConnections)
                     {
@@ -537,12 +563,44 @@ namespace TheraplyCore.Network.Connection
             }
             finally
             {
-                DisconnectClient();
+                if (ReferenceEquals(client, _connectedClient))
+                {
+                    DisconnectClient();
+                }
+                else
+                {
+                    CloseClientResources(client, stream);
+                }
+            }
+        }
+
+        private bool IsCurrentClientConnection(TcpClient client, NetworkStream stream)
+        {
+            return _hasClient &&
+                   ReferenceEquals(client, _connectedClient) &&
+                   ReferenceEquals(stream, _stream);
+        }
+
+        private void CloseClientResources(TcpClient client, NetworkStream stream)
+        {
+            try
+            {
+                stream?.Close();
+                client?.Close();
+            }
+            catch
+            {
+                // No-op during stale loop cleanup.
             }
         }
 
         private static bool IsExpectedRemoteDisconnect(Exception exception)
         {
+            if (exception is ObjectDisposedException)
+            {
+                return true;
+            }
+
             if (exception is IOException ioException &&
                 ioException.InnerException is SocketException innerSocketException)
             {

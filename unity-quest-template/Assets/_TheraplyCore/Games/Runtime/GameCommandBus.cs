@@ -19,6 +19,8 @@ namespace TheraplyCore.Games.Runtime
     [DisallowMultipleComponent]
     public class GameCommandBus : MonoBehaviour, GameContracts.ICommandBus
     {
+        private const string OwnershipLockHotfixRevision = "ownership-lock-hotfix-2026-02-23-r2";
+
         [Header("Dependencies")]
         [SerializeField] private TCPServerService _tcpServerService;
         [SerializeField] private GameSessionContext _sessionContext;
@@ -56,6 +58,7 @@ namespace TheraplyCore.Games.Runtime
 
             RegisterBuiltInCommandMappings();
             InitializeCommandJournal();
+            Logger.Info($"[GameCommandBus] Ownership lock revision: {OwnershipLockHotfixRevision}");
         }
 
         private void OnEnable()
@@ -684,7 +687,8 @@ namespace TheraplyCore.Games.Runtime
                 out var incomingTherapistId,
                 out var incomingStudentId,
                 out var incomingOwnerKeyRaw,
-                out var incomingSessionKeyRaw);
+                out var incomingSessionKeyRaw,
+                out var incomingReasonCode);
 
             if (string.IsNullOrWhiteSpace(incomingTherapistId) || string.IsNullOrWhiteSpace(incomingStudentId))
             {
@@ -697,6 +701,7 @@ namespace TheraplyCore.Games.Runtime
             var activeTherapistId = (_sessionContext.TherapistId ?? string.Empty).Trim();
             var activeStudentId = (_sessionContext.PatientId ?? string.Empty).Trim();
             var activeOwnerKey = BuildOwnerKey(activeTherapistId, activeStudentId);
+            var activeOwnershipIsBootstrapPlaceholder = IsBootstrapOwnershipPlaceholder(activeTherapistId, activeStudentId, activeState);
             if (string.IsNullOrWhiteSpace(activeOwnerKey))
             {
                 return true;
@@ -715,6 +720,30 @@ namespace TheraplyCore.Games.Runtime
 
             if (!string.Equals(activeOwnerKey, incomingOwnerKey, StringComparison.Ordinal))
             {
+                if (activeOwnershipIsBootstrapPlaceholder &&
+                    (string.Equals(commandId, GameCommandIds.SessionAttach, StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(commandId, GameCommandIds.EndSession, StringComparison.OrdinalIgnoreCase)))
+                {
+                    Logger.Warning(
+                        $"[GameCommandBus] Allowing {commandId} to replace bootstrap ownership placeholder. activeOwner={activeOwnerKey}, incomingOwner={incomingOwnerKey}, state={activeState}");
+                    return true;
+                }
+
+                if (string.IsNullOrWhiteSpace(incomingTherapistId))
+                {
+                    incomingTherapistId = ExtractTherapistIdFromOwnerKey(incomingOwnerKey);
+                }
+
+                if (string.Equals(commandId, GameCommandIds.EndSession, StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrWhiteSpace(activeTherapistId) &&
+                    !string.IsNullOrWhiteSpace(incomingTherapistId) &&
+                    string.Equals(activeTherapistId, incomingTherapistId, StringComparison.Ordinal))
+                {
+                    Logger.Warning(
+                        $"[GameCommandBus] Allowing END_SESSION despite ownership mismatch for same therapist. activeOwner={activeOwnerKey}, incomingOwner={incomingOwnerKey}, reason={incomingReasonCode}");
+                    return true;
+                }
+
                 Logger.Warning(
                     $"[GameCommandBus] Rejecting critical command due ownership mismatch. command={commandId}, session={envelopeSessionId}, activeOwner={activeOwnerKey}, incomingOwner={incomingOwnerKey}");
                 rejectReasonCode = AckReasonCodes.SessionOwnershipConflict;
@@ -822,12 +851,14 @@ namespace TheraplyCore.Games.Runtime
             out string therapistId,
             out string studentId,
             out string ownerKey,
-            out string sessionKey)
+            out string sessionKey,
+            out string reasonCode)
         {
             therapistId = string.Empty;
             studentId = string.Empty;
             ownerKey = string.Empty;
             sessionKey = string.Empty;
+            reasonCode = string.Empty;
 
             if (string.IsNullOrWhiteSpace(payloadJson))
             {
@@ -854,6 +885,7 @@ namespace TheraplyCore.Games.Runtime
 
                 ownerKey = (probe.ownerKey ?? string.Empty).Trim();
                 sessionKey = (probe.sessionKey ?? string.Empty).Trim();
+                reasonCode = (probe.reasonCode ?? string.Empty).Trim();
             }
             catch (Exception)
             {
@@ -871,6 +903,54 @@ namespace TheraplyCore.Games.Runtime
             }
 
             return $"{normalizedTherapistId}|{normalizedStudentId}";
+        }
+
+        private static bool IsBootstrapOwnershipPlaceholder(
+            string therapistId,
+            string studentId,
+            GameContracts.SessionLifecycleState activeState)
+        {
+            if (activeState != GameContracts.SessionLifecycleState.CREATED)
+            {
+                return false;
+            }
+
+            return IsPlaceholderIdentityToken(therapistId) && IsPlaceholderIdentityToken(studentId);
+        }
+
+        private static bool IsPlaceholderIdentityToken(string value)
+        {
+            var normalized = string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return true;
+            }
+
+            if (string.Equals(normalized, "unknown_therapist", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalized, "unknown_patient", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalized, "unknown_student", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return normalized.StartsWith("unknown_", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string ExtractTherapistIdFromOwnerKey(string ownerKey)
+        {
+            var normalizedOwnerKey = string.IsNullOrWhiteSpace(ownerKey) ? string.Empty : ownerKey.Trim();
+            if (string.IsNullOrWhiteSpace(normalizedOwnerKey))
+            {
+                return string.Empty;
+            }
+
+            var separatorIndex = normalizedOwnerKey.IndexOf('|');
+            if (separatorIndex <= 0)
+            {
+                return string.Empty;
+            }
+
+            return normalizedOwnerKey.Substring(0, separatorIndex).Trim();
         }
 
         private static string BuildSessionKey(string ownerKey, string sessionId)
@@ -948,6 +1028,7 @@ namespace TheraplyCore.Games.Runtime
             public string therapistId;
             public string ownerKey;
             public string sessionKey;
+            public string reasonCode;
         }
 
         private static class AckReasonCodes

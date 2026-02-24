@@ -318,6 +318,22 @@ namespace TheraplyCore.Network.Discovery
                     {
                         string jsonString = System.Text.Encoding.UTF8.GetString(result.Buffer);
                         DeviceInfo deviceInfo = JsonUtility.FromJson<DeviceInfo>(jsonString);
+
+                        // Drop stale announcements to avoid reviving timed-out devices from delayed packets.
+                        var timeoutSeconds = Mathf.Max(0.5f, _deviceTimeout);
+                        if (deviceInfo.timestamp > 0)
+                        {
+                            long nowUnixSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                            if (nowUnixSeconds - deviceInfo.timestamp > timeoutSeconds)
+                            {
+                                if (_logReceives)
+                                {
+                                    Debug.LogWarning(
+                                        $"[UDPDiscovery] Ignoring stale broadcast from {deviceInfo.deviceName} ({deviceInfo.ip}) age={nowUnixSeconds - deviceInfo.timestamp}s timeout={timeoutSeconds:0.##}s");
+                                }
+                                continue;
+                            }
+                        }
                         
                         // Ignore messages from self (check device ID)
                         if (deviceInfo.deviceId == _myDeviceInfo.deviceId)

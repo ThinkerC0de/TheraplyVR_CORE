@@ -3,12 +3,14 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Networking;
 using TheraplyCore.Games;
 using TheraplyCore.Games.Runtime;
+using TheraplyCore.Network.Connection;
 using Logger = TheraplyCore.Logging.Logger;
 
 namespace TheraplyCore.Firebase
@@ -39,6 +41,10 @@ namespace TheraplyCore.Firebase
         [SerializeField] [Range(3, 120)] private int _firebaseRequestTimeoutSeconds = 20;
         [SerializeField] private bool _logFirebaseBackendPayloads = false;
         [SerializeField] private bool _logFirebaseBackendDiagnostics = true;
+        [SerializeField] private bool _rewriteLoopbackBackendHostOutsideEditor = true;
+        [SerializeField] private bool _useConnectedControllerIpForLoopbackRewrite = true;
+        [SerializeField] private string _nonEditorLoopbackHostOverride = string.Empty;
+        [SerializeField] private TCPServerService _tcpServerService;
 
         [Header("Local Durability")]
         [SerializeField] private bool _persistCriticalSessionEventsLocally = true;
@@ -72,6 +78,7 @@ namespace TheraplyCore.Firebase
         private string _therapistId;
         private string _localDurablePath;
         private string _sqliteStorePath;
+        private string _connectedControllerIp;
         private DurableEventOutbox _durableEventOutbox;
 
         private int _pointsQueued = 0;
@@ -257,6 +264,11 @@ namespace TheraplyCore.Firebase
                 _sessionContext = FindFirstObjectByType<GameSessionContext>();
             }
 
+            if (_tcpServerService == null)
+            {
+                _tcpServerService = FindFirstObjectByType<TCPServerService>();
+            }
+
             if (_persistCriticalSessionEventsLocally)
             {
                 var folder = string.IsNullOrWhiteSpace(_localDurableFolder) ? "session_resilience" : _localDurableFolder.Trim();
@@ -275,6 +287,12 @@ namespace TheraplyCore.Firebase
             if (_sessionContext != null)
             {
                 _sessionContext.OnSessionChanged += HandleSessionChanged;
+            }
+
+            if (_tcpServerService != null)
+            {
+                _tcpServerService.OnClientConnected += HandleControllerConnected;
+                _tcpServerService.OnClientDisconnected += HandleControllerDisconnected;
             }
 
             InitializeDurableStore();
@@ -302,6 +320,12 @@ namespace TheraplyCore.Firebase
             if (_sessionContext != null)
             {
                 _sessionContext.OnSessionChanged -= HandleSessionChanged;
+            }
+
+            if (_tcpServerService != null)
+            {
+                _tcpServerService.OnClientConnected -= HandleControllerConnected;
+                _tcpServerService.OnClientDisconnected -= HandleControllerDisconnected;
             }
 
             DisposeDurableStore();
@@ -1689,8 +1713,81 @@ namespace TheraplyCore.Firebase
                 return false;
             }
 
+            if (_rewriteLoopbackBackendHostOutsideEditor &&
+                !Application.isEditor &&
+                IsLoopbackHost(parsed.Host))
+            {
+                if (!TryResolveNonEditorLoopbackHost(out var replacementHost))
+                {
+                    errorCode = "FIREBASE_ENDPOINT_DEVICE_HOST_NOT_CONFIGURED";
+                    return false;
+                }
+
+                var builder = new UriBuilder(parsed)
+                {
+                    Host = replacementHost,
+                };
+                parsed = builder.Uri;
+
+                if (_logFirebaseBackendDiagnostics || _logOutboxSync || _logFirebaseBackendPayloads)
+                {
+                    Logger.Info(
+                        $"[FirebaseData] Rewrote loopback backend endpoint for non-editor runtime: {trimmed} -> {parsed}");
+                }
+            }
+
             resolvedUrl = AppendApiKeyToEndpoint(parsed.ToString());
             return true;
+        }
+
+        private bool TryResolveNonEditorLoopbackHost(out string host)
+        {
+            host = (_nonEditorLoopbackHostOverride ?? string.Empty).Trim();
+            if (IsValidBackendHost(host))
+            {
+                return true;
+            }
+
+            if (_useConnectedControllerIpForLoopbackRewrite)
+            {
+                var discoveredHost = (_connectedControllerIp ?? string.Empty).Trim();
+                if (IsValidBackendHost(discoveredHost))
+                {
+                    host = discoveredHost;
+                    return true;
+                }
+            }
+
+            Logger.Warning(
+                "[FirebaseData] Non-editor runtime is using a loopback backend URL but no host override/controller IP is available. Set _nonEditorLoopbackHostOverride or connect controller first.");
+            return false;
+        }
+
+        private static bool IsValidBackendHost(string host)
+        {
+            var normalizedHost = string.IsNullOrWhiteSpace(host) ? string.Empty : host.Trim();
+            if (string.IsNullOrWhiteSpace(normalizedHost))
+            {
+                return false;
+            }
+
+            return Uri.CheckHostName(normalizedHost) != UriHostNameType.Unknown;
+        }
+
+        private static bool IsLoopbackHost(string host)
+        {
+            var normalizedHost = string.IsNullOrWhiteSpace(host) ? string.Empty : host.Trim();
+            if (string.IsNullOrWhiteSpace(normalizedHost))
+            {
+                return false;
+            }
+
+            if (string.Equals(normalizedHost, "localhost", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return IPAddress.TryParse(normalizedHost, out var parsedIp) && IPAddress.IsLoopback(parsedIp);
         }
 
         private string AppendApiKeyToEndpoint(string endpointUrl)
@@ -2385,6 +2482,27 @@ namespace TheraplyCore.Firebase
         private void HandleSessionChanged()
         {
             RefreshSessionMetadataFromContext();
+        }
+
+        private void HandleControllerConnected(string clientIp)
+        {
+            var normalized = string.IsNullOrWhiteSpace(clientIp) ? string.Empty : clientIp.Trim();
+            if (string.IsNullOrWhiteSpace(normalized) || IsLoopbackHost(normalized))
+            {
+                return;
+            }
+
+            _connectedControllerIp = normalized;
+
+            if (_logFirebaseBackendDiagnostics || _logOutboxSync || _logFirebaseBackendPayloads)
+            {
+                Logger.Info($"[FirebaseData] Controller IP learned from TCP handshake: {_connectedControllerIp}");
+            }
+        }
+
+        private void HandleControllerDisconnected()
+        {
+            _connectedControllerIp = string.Empty;
         }
 
         private void RefreshSessionMetadataFromContext()
