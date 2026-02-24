@@ -19,8 +19,8 @@ Use this when chat context is gone:
 Resume work from docs/05-Session-Resilience-Worklog.md and docs/03-Session-Resilience-Roadmap.md.
 Project main is C:\Users\licen\Projects\theraply-vr-framework.
 Reference projects are read-only:
-- C:\Users\licen\Focus&Calm_old\Focus&Calm
-- C:\Users\licen\Theraply_Playground_old_1
+- <external_reference_project_1>
+- <external_reference_project_2>
 Do not edit reference projects.
 Implement the next item with status TODO in Phase P0.
 After changes: run available validation, then update worklog.

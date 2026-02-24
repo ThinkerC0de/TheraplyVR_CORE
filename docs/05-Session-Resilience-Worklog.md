@@ -11,8 +11,8 @@
 - Start Date: 2026-02-17
 - Main Project: `C:\Users\licen\Projects\theraply-vr-framework`
 - Reference (read-only):
-  - `C:\Users\licen\Focus&Calm_old\Focus&Calm`
-  - `C:\Users\licen\Theraply_Playground_old_1`
+  - `<external_reference_project_1>`
+  - `<external_reference_project_2>`
 
 ## Completed
 1. `DONE` - `R-DOC-001` - Created resilience roadmap doc.

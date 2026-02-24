@@ -3,6 +3,8 @@
 ## Core
 - [01-System-Components-Guide.md](01-System-Components-Guide.md)
 - [02-Creating-Games.md](02-Creating-Games.md)
+- [33-Session-Flow-Action-Card.md](33-Session-Flow-Action-Card.md)
+- [34-Session-Flow-Implementation-Backlog.md](34-Session-Flow-Implementation-Backlog.md)
 
 ## Session Resilience Program
 - [03-Session-Resilience-Roadmap.md](03-Session-Resilience-Roadmap.md)
