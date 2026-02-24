@@ -430,6 +430,50 @@ namespace TheraplyCore.Interactions
                 targetValid: TryReadNullableBool(details, "targetValid"));
         }
 
+        public IReadOnlyDictionary<string, object> RecordDualHandTelemetry(IReadOnlyDictionary<string, object> payload)
+        {
+            var details = payload != null
+                ? new Dictionary<string, object>(payload)
+                : new Dictionary<string, object>();
+
+            var normalizedGameId = NormalizeOrFallback(
+                TryReadString(details, "gameId"),
+                ResolveActiveGameId(),
+                "unknown_game");
+            var eventType = ResolveDualHandEventType(details);
+            var sourceComponent = NormalizeOrFallback(
+                TryReadString(details, "sourceComponent"),
+                "DualHandTelemetry");
+            var attemptContext = ResolveAttemptContext(normalizedGameId, eventType);
+            var actionOutcome = ResolveDualHandOutcome(details, eventType);
+            var reasonCode = ResolveDualHandReasonCode(details, eventType);
+            var targetId = NormalizeOrFallback(
+                TryReadString(details, "targetId"),
+                TryReadString(details, "leftTargetId"),
+                TryReadString(details, "rightTargetId"));
+            var targetName = NormalizeOrFallback(
+                TryReadString(details, "targetName"),
+                TryReadString(details, "leftTargetName"),
+                TryReadString(details, "rightTargetName"));
+
+            return EmitCanonicalEvent(
+                normalizedGameId,
+                eventType,
+                "DUAL_HAND",
+                actionOutcome,
+                reasonCode,
+                sourceComponent,
+                attemptContext,
+                details,
+                inputHand: NormalizeOrFallback(TryReadString(details, "inputHand"), "BOTH_HANDS"),
+                inputSource: NormalizeOrFallback(TryReadString(details, "inputSource"), "DUAL_HAND"),
+                inputControl: TryReadString(details, "inputControl"),
+                inputValue: TryReadFloat(details, "inputValue"),
+                targetId: targetId,
+                targetName: targetName,
+                targetValid: TryReadNullableBool(details, "targetValid"));
+        }
+
         private IReadOnlyDictionary<string, object> EmitCanonicalEvent(
             string gameId,
             string eventType,
@@ -1197,6 +1241,105 @@ namespace TheraplyCore.Interactions
                     return "AUDIO_SOURCE_MISMATCH";
                 default:
                     return "AUDIO_SOURCE_EVENT_OBSERVED";
+            }
+        }
+
+        private static string ResolveDualHandEventType(IReadOnlyDictionary<string, object> payload)
+        {
+            var explicitEventType = TryReadString(payload, "dualHandEventType");
+            if (!string.IsNullOrWhiteSpace(explicitEventType))
+            {
+                return NormalizeEventToken(explicitEventType, "DUAL_HAND_EVENT");
+            }
+
+            var explicitActionId = TryReadString(payload, "actionId");
+            if (string.Equals(
+                    NormalizeEventToken(explicitActionId, string.Empty),
+                    "MARK_LEFT_AND_RIGHT_TARGETS",
+                    StringComparison.Ordinal))
+            {
+                var leftMarked = TryReadNullableBool(payload, "leftMarked");
+                var rightMarked = TryReadNullableBool(payload, "rightMarked");
+                var syncSatisfied = TryReadNullableBool(payload, "syncSatisfied");
+                var targetValid = TryReadNullableBool(payload, "targetValid");
+
+                if (targetValid.HasValue && !targetValid.Value)
+                {
+                    return "DUAL_HAND_MARK_INVALID";
+                }
+
+                if (leftMarked.GetValueOrDefault() && rightMarked.GetValueOrDefault())
+                {
+                    if (syncSatisfied.HasValue && !syncSatisfied.Value)
+                    {
+                        return "DUAL_HAND_MARK_OUT_OF_SYNC";
+                    }
+
+                    return "DUAL_HAND_MARK_SYNC";
+                }
+
+                if (leftMarked.GetValueOrDefault())
+                {
+                    return "DUAL_HAND_MARK_LEFT";
+                }
+
+                if (rightMarked.GetValueOrDefault())
+                {
+                    return "DUAL_HAND_MARK_RIGHT";
+                }
+            }
+
+            return "DUAL_HAND_EVENT";
+        }
+
+        private static string ResolveDualHandOutcome(
+            IReadOnlyDictionary<string, object> payload,
+            string dualHandEventType)
+        {
+            var explicitOutcome = TryReadString(payload, "actionOutcome");
+            if (!string.IsNullOrWhiteSpace(explicitOutcome))
+            {
+                return NormalizeEventToken(explicitOutcome, "OBSERVED");
+            }
+
+            switch (NormalizeEventToken(dualHandEventType, "DUAL_HAND_EVENT"))
+            {
+                case "DUAL_HAND_MARK_SYNC":
+                    return "CORRECT";
+                case "DUAL_HAND_MARK_INVALID":
+                case "DUAL_HAND_MARK_OUT_OF_SYNC":
+                    return "INCORRECT";
+                case "DUAL_HAND_MARK_LEFT":
+                case "DUAL_HAND_MARK_RIGHT":
+                    return "OBSERVED";
+                default:
+                    return "OBSERVED";
+            }
+        }
+
+        private static string ResolveDualHandReasonCode(
+            IReadOnlyDictionary<string, object> payload,
+            string dualHandEventType)
+        {
+            var explicitReason = ResolveReasonCode(payload, string.Empty);
+            if (!string.IsNullOrWhiteSpace(explicitReason))
+            {
+                return explicitReason;
+            }
+
+            switch (NormalizeEventToken(dualHandEventType, "DUAL_HAND_EVENT"))
+            {
+                case "DUAL_HAND_MARK_LEFT":
+                case "DUAL_HAND_MARK_RIGHT":
+                    return "DUAL_HAND_WAITING_FOR_SECOND_HAND";
+                case "DUAL_HAND_MARK_SYNC":
+                    return "DUAL_HAND_SYNC_CONFIRMED";
+                case "DUAL_HAND_MARK_INVALID":
+                    return "DUAL_HAND_TARGET_INVALID";
+                case "DUAL_HAND_MARK_OUT_OF_SYNC":
+                    return "DUAL_HAND_SYNC_WINDOW_EXCEEDED";
+                default:
+                    return "DUAL_HAND_EVENT_OBSERVED";
             }
         }
 

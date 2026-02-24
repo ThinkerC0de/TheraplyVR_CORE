@@ -39,6 +39,8 @@ namespace TheraplyCore.Games.Runtime
             registry.Register(new BreathCycleActionPlugin("perform_breath_cycle"), replaceExisting);
 
             registry.Register(new AudioSourceActionPlugin("identify_sound_source"), replaceExisting);
+
+            registry.Register(new DualHandActionPlugin("mark_left_and_right_targets"), replaceExisting);
         }
     }
 
@@ -720,6 +722,233 @@ namespace TheraplyCore.Games.Runtime
         }
     }
 
+    public sealed class DualHandActionPlugin : GameContracts.IActionPlugin
+    {
+        private readonly ActionValidator _validator = new ActionValidator();
+        private readonly string _actionId;
+
+        public DualHandActionPlugin(string actionId)
+        {
+            _actionId = string.IsNullOrWhiteSpace(actionId)
+                ? "mark_left_and_right_targets"
+                : actionId.Trim();
+        }
+
+        public string ActionId => _actionId;
+        public string ChannelId => GameContracts.SessionFlowChannelIds.DualHand;
+
+        public bool TryCreateIntent(
+            IReadOnlyDictionary<string, object> rawInput,
+            out GameContracts.ActionIntent intent)
+        {
+            intent = null;
+            if (!SessionFlowPluginPayload.TryReadString(rawInput, "eventType", out var eventType))
+            {
+                return false;
+            }
+
+            if (!SessionFlowPluginPayload.IsDualHandEventType(eventType))
+            {
+                return false;
+            }
+
+            var requestedActionId = SessionFlowPluginPayload.ReadRequestedActionId(rawInput);
+            var suggestedActionId = SessionFlowPluginPayload.ResolveDualHandActionIdFromEventType(eventType);
+            var effectiveActionId = !string.IsNullOrWhiteSpace(requestedActionId)
+                ? requestedActionId
+                : suggestedActionId;
+            if (string.IsNullOrWhiteSpace(effectiveActionId) ||
+                !string.Equals(effectiveActionId, ActionId, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            intent = new GameContracts.ActionIntent
+            {
+                actionId = effectiveActionId.Trim(),
+                channelId = ChannelId,
+                targetId = SessionFlowPluginPayload.ResolveDualHandTargetId(rawInput),
+                inputSource = SessionFlowPluginPayload.ReadString(rawInput, "inputSource"),
+                inputHand = SessionFlowPluginPayload.ReadString(rawInput, "inputHand"),
+                inputValue = SessionFlowPluginPayload.ReadFloat(rawInput, "inputValue"),
+                occurredAtElapsedSec = SessionFlowPluginPayload.ReadFloat(rawInput, "occurredAtElapsedSec"),
+                details = new List<GameContracts.KeyValuePairString>
+                {
+                    new GameContracts.KeyValuePairString { key = "eventType", value = eventType },
+                    new GameContracts.KeyValuePairString { key = "reasonCode", value = SessionFlowPluginPayload.ReadString(rawInput, "reasonCode") },
+                    new GameContracts.KeyValuePairString { key = "leftTargetId", value = SessionFlowPluginPayload.ReadString(rawInput, "leftTargetId") },
+                    new GameContracts.KeyValuePairString { key = "rightTargetId", value = SessionFlowPluginPayload.ReadString(rawInput, "rightTargetId") },
+                    new GameContracts.KeyValuePairString { key = "leftMatched", value = SessionFlowPluginPayload.ReadString(rawInput, "leftMatched") },
+                    new GameContracts.KeyValuePairString { key = "rightMatched", value = SessionFlowPluginPayload.ReadString(rawInput, "rightMatched") },
+                    new GameContracts.KeyValuePairString { key = "leftMarked", value = SessionFlowPluginPayload.ReadString(rawInput, "leftMarked") },
+                    new GameContracts.KeyValuePairString { key = "rightMarked", value = SessionFlowPluginPayload.ReadString(rawInput, "rightMarked") },
+                    new GameContracts.KeyValuePairString { key = "syncDeltaMs", value = SessionFlowPluginPayload.ReadString(rawInput, "syncDeltaMs") },
+                    new GameContracts.KeyValuePairString { key = "syncWindowMs", value = SessionFlowPluginPayload.ReadString(rawInput, "syncWindowMs") },
+                    new GameContracts.KeyValuePairString { key = "syncSatisfied", value = SessionFlowPluginPayload.ReadString(rawInput, "syncSatisfied") },
+                },
+            };
+            return true;
+        }
+
+        public GameContracts.ActionValidationResult Validate(
+            GameContracts.ActionIntent intent,
+            GameContracts.ActionContext context,
+            GameContracts.AllowedActionDefinition allowedAction)
+        {
+            var eventType = SessionFlowPluginPayload.ReadEventTypeFromIntent(intent);
+            if (eventType.IndexOf("DUAL_HAND_MARK_INVALID", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return GameContracts.ActionValidationResult.Rejected("DUAL_HAND_TARGET_INVALID");
+            }
+
+            if (eventType.IndexOf("DUAL_HAND_MARK_OUT_OF_SYNC", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return GameContracts.ActionValidationResult.Rejected("DUAL_HAND_SYNC_WINDOW_EXCEEDED");
+            }
+
+            if (eventType.IndexOf("DUAL_HAND_MARK_LEFT", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                eventType.IndexOf("DUAL_HAND_MARK_RIGHT", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return GameContracts.ActionValidationResult.Rejected("DUAL_HAND_MARK_INCOMPLETE");
+            }
+
+            if (eventType.IndexOf("DUAL_HAND_MARK_SYNC", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                return GameContracts.ActionValidationResult.Rejected("ACTION_EVENT_TYPE_MISMATCH");
+            }
+
+            if (TryReadDetailBool(intent, "leftMatched", out var leftMatched) && !leftMatched)
+            {
+                return GameContracts.ActionValidationResult.Rejected("DUAL_HAND_LEFT_TARGET_MISMATCH");
+            }
+
+            if (TryReadDetailBool(intent, "rightMatched", out var rightMatched) && !rightMatched)
+            {
+                return GameContracts.ActionValidationResult.Rejected("DUAL_HAND_RIGHT_TARGET_MISMATCH");
+            }
+
+            if (TryReadDetailBool(intent, "syncSatisfied", out var syncSatisfied) && !syncSatisfied)
+            {
+                return GameContracts.ActionValidationResult.Rejected("DUAL_HAND_SYNC_NOT_CONFIRMED");
+            }
+
+            if (TryReadDetailFloat(intent, "syncDeltaMs", out var syncDeltaMs))
+            {
+                var syncWindowMs = ResolveSyncWindowMs(allowedAction, intent);
+                if (syncWindowMs > 0f && syncDeltaMs > syncWindowMs)
+                {
+                    return GameContracts.ActionValidationResult.Rejected("DUAL_HAND_SYNC_WINDOW_EXCEEDED");
+                }
+            }
+
+            return _validator.Validate(intent, context, allowedAction);
+        }
+
+        public GameContracts.ActionApplyResult Apply(
+            GameContracts.ActionIntent intent,
+            GameContracts.ActionContext context,
+            GameContracts.AllowedActionDefinition allowedAction)
+        {
+            return SessionFlowPluginPayload.BuildAppliedResult(ActionId, ChannelId, "DUAL_HAND_ACTION_APPLIED");
+        }
+
+        private static float ResolveSyncWindowMs(
+            GameContracts.AllowedActionDefinition allowedAction,
+            GameContracts.ActionIntent intent)
+        {
+            var constraintWindow = ReadConstraintFloat(allowedAction, "syncWindowMs");
+            if (constraintWindow <= 0f)
+            {
+                constraintWindow = ReadConstraintFloat(allowedAction, "maxSyncDeltaMs");
+            }
+
+            if (constraintWindow > 0f)
+            {
+                return constraintWindow;
+            }
+
+            if (TryReadDetailFloat(intent, "syncWindowMs", out var detailWindow) && detailWindow > 0f)
+            {
+                return detailWindow;
+            }
+
+            return 0f;
+        }
+
+        private static float ReadConstraintFloat(GameContracts.AllowedActionDefinition allowedAction, string key)
+        {
+            if (allowedAction == null || allowedAction.constraints == null || string.IsNullOrWhiteSpace(key))
+            {
+                return 0f;
+            }
+
+            for (var i = 0; i < allowedAction.constraints.Count; i++)
+            {
+                var constraint = allowedAction.constraints[i];
+                if (constraint == null ||
+                    !string.Equals(constraint.key, key, StringComparison.OrdinalIgnoreCase) ||
+                    string.IsNullOrWhiteSpace(constraint.value))
+                {
+                    continue;
+                }
+
+                if (float.TryParse(
+                        constraint.value,
+                        NumberStyles.Float | NumberStyles.AllowThousands,
+                        CultureInfo.InvariantCulture,
+                        out var parsed))
+                {
+                    return parsed;
+                }
+            }
+
+            return 0f;
+        }
+
+        private static bool TryReadDetailBool(GameContracts.ActionIntent intent, string key, out bool value)
+        {
+            value = false;
+            var raw = SessionFlowPluginPayload.ReadDetailValueFromIntent(intent, key);
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return false;
+            }
+
+            if (bool.TryParse(raw, out value))
+            {
+                return true;
+            }
+
+            if (float.TryParse(
+                    raw,
+                    NumberStyles.Float | NumberStyles.AllowThousands,
+                    CultureInfo.InvariantCulture,
+                    out var numeric))
+            {
+                value = Math.Abs(numeric) > float.Epsilon;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryReadDetailFloat(GameContracts.ActionIntent intent, string key, out float value)
+        {
+            value = 0f;
+            var raw = SessionFlowPluginPayload.ReadDetailValueFromIntent(intent, key);
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return false;
+            }
+
+            return float.TryParse(
+                raw,
+                NumberStyles.Float | NumberStyles.AllowThousands,
+                CultureInfo.InvariantCulture,
+                out value);
+        }
+    }
+
     internal static class SessionFlowPluginPayload
     {
         public static bool IsGrabEventType(string eventType)
@@ -844,6 +1073,56 @@ namespace TheraplyCore.Games.Runtime
                 default:
                     return string.Empty;
             }
+        }
+
+        public static bool IsDualHandEventType(string eventType)
+        {
+            return !string.IsNullOrWhiteSpace(eventType) &&
+                   eventType.Trim().StartsWith("DUAL_HAND_", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static string ResolveDualHandActionIdFromEventType(string eventType)
+        {
+            if (string.IsNullOrWhiteSpace(eventType))
+            {
+                return string.Empty;
+            }
+
+            var normalized = eventType.Trim().ToUpperInvariant();
+            switch (normalized)
+            {
+                case "DUAL_HAND_MARK_LEFT":
+                case "DUAL_HAND_MARK_RIGHT":
+                case "DUAL_HAND_MARK_SYNC":
+                case "DUAL_HAND_MARK_OUT_OF_SYNC":
+                case "DUAL_HAND_MARK_INVALID":
+                    return "mark_left_and_right_targets";
+                default:
+                    return string.Empty;
+            }
+        }
+
+        public static string ResolveDualHandTargetId(IReadOnlyDictionary<string, object> payload)
+        {
+            var targetId = ReadString(payload, "targetId");
+            if (!string.IsNullOrWhiteSpace(targetId))
+            {
+                return targetId;
+            }
+
+            var leftTargetId = ReadString(payload, "leftTargetId");
+            var rightTargetId = ReadString(payload, "rightTargetId");
+            if (string.IsNullOrWhiteSpace(leftTargetId))
+            {
+                return rightTargetId;
+            }
+
+            if (string.IsNullOrWhiteSpace(rightTargetId))
+            {
+                return leftTargetId;
+            }
+
+            return leftTargetId + "|" + rightTargetId;
         }
 
         public static string ResolveAudioSourceTargetId(IReadOnlyDictionary<string, object> payload)
