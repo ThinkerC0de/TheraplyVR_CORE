@@ -32,6 +32,9 @@ namespace TheraplyCore.Games.Runtime
             registry.Register(new GrabPlaceActionPlugin("place_object_in_zone"), replaceExisting);
             registry.Register(new GrabPlaceActionPlugin("remove_object_from_zone"), replaceExisting);
             registry.Register(new GrabPlaceActionPlugin("collect_item_to_container"), replaceExisting);
+
+            registry.Register(new GazeActionPlugin("hold_gaze_on_target"), replaceExisting);
+            registry.Register(new GazeActionPlugin("select_target_with_gaze_and_tool"), replaceExisting);
         }
     }
 
@@ -400,6 +403,117 @@ namespace TheraplyCore.Games.Runtime
         }
     }
 
+    public sealed class GazeActionPlugin : GameContracts.IActionPlugin
+    {
+        private readonly ActionValidator _validator = new ActionValidator();
+        private readonly string _actionId;
+
+        public GazeActionPlugin(string actionId)
+        {
+            _actionId = string.IsNullOrWhiteSpace(actionId)
+                ? "hold_gaze_on_target"
+                : actionId.Trim();
+        }
+
+        public string ActionId => _actionId;
+        public string ChannelId => GameContracts.SessionFlowChannelIds.Gaze;
+
+        public bool TryCreateIntent(
+            IReadOnlyDictionary<string, object> rawInput,
+            out GameContracts.ActionIntent intent)
+        {
+            intent = null;
+            if (!SessionFlowPluginPayload.TryReadString(rawInput, "eventType", out var eventType))
+            {
+                return false;
+            }
+
+            if (!SessionFlowPluginPayload.IsGazeEventType(eventType))
+            {
+                return false;
+            }
+
+            var requestedActionId = SessionFlowPluginPayload.ReadRequestedActionId(rawInput);
+            var suggestedActionId = SessionFlowPluginPayload.ResolveGazeActionIdFromEventType(eventType);
+            var effectiveActionId = !string.IsNullOrWhiteSpace(requestedActionId)
+                ? requestedActionId
+                : suggestedActionId;
+            if (string.IsNullOrWhiteSpace(effectiveActionId) ||
+                !string.Equals(effectiveActionId, ActionId, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            intent = new GameContracts.ActionIntent
+            {
+                actionId = effectiveActionId.Trim(),
+                channelId = ChannelId,
+                targetId = SessionFlowPluginPayload.ReadString(rawInput, "targetId"),
+                inputSource = SessionFlowPluginPayload.ReadString(rawInput, "inputSource"),
+                inputHand = SessionFlowPluginPayload.ReadString(rawInput, "inputHand"),
+                inputValue = SessionFlowPluginPayload.ReadFloat(rawInput, "inputValue"),
+                occurredAtElapsedSec = SessionFlowPluginPayload.ReadFloat(rawInput, "occurredAtElapsedSec"),
+                details = new List<GameContracts.KeyValuePairString>
+                {
+                    new GameContracts.KeyValuePairString { key = "eventType", value = eventType },
+                    new GameContracts.KeyValuePairString { key = "reasonCode", value = SessionFlowPluginPayload.ReadString(rawInput, "reasonCode") },
+                    new GameContracts.KeyValuePairString { key = "dwellSec", value = SessionFlowPluginPayload.ReadString(rawInput, "dwellSec") },
+                    new GameContracts.KeyValuePairString { key = "requiredDwellSec", value = SessionFlowPluginPayload.ReadString(rawInput, "requiredDwellSec") },
+                },
+            };
+            return true;
+        }
+
+        public GameContracts.ActionValidationResult Validate(
+            GameContracts.ActionIntent intent,
+            GameContracts.ActionContext context,
+            GameContracts.AllowedActionDefinition allowedAction)
+        {
+            var eventType = SessionFlowPluginPayload.ReadEventTypeFromIntent(intent);
+
+            if (string.Equals(ActionId, "hold_gaze_on_target", StringComparison.OrdinalIgnoreCase))
+            {
+                if (eventType.IndexOf("GAZE_HOLD_INVALID", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return GameContracts.ActionValidationResult.Rejected("GAZE_TARGET_INVALID");
+                }
+
+                if (eventType.IndexOf("GAZE_HOLD_TICK", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return GameContracts.ActionValidationResult.Rejected("GAZE_DWELL_NOT_REACHED");
+                }
+
+                if (eventType.IndexOf("GAZE_HOLD_COMPLETED", StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    return GameContracts.ActionValidationResult.Rejected("ACTION_EVENT_TYPE_MISMATCH");
+                }
+            }
+
+            if (string.Equals(ActionId, "select_target_with_gaze_and_tool", StringComparison.OrdinalIgnoreCase))
+            {
+                if (eventType.IndexOf("GAZE_TOOL_SELECT_INVALID", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return GameContracts.ActionValidationResult.Rejected("GAZE_TOOL_INVALID");
+                }
+
+                if (eventType.IndexOf("GAZE_TOOL_SELECT", StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    return GameContracts.ActionValidationResult.Rejected("ACTION_EVENT_TYPE_MISMATCH");
+                }
+            }
+
+            return _validator.Validate(intent, context, allowedAction);
+        }
+
+        public GameContracts.ActionApplyResult Apply(
+            GameContracts.ActionIntent intent,
+            GameContracts.ActionContext context,
+            GameContracts.AllowedActionDefinition allowedAction)
+        {
+            return SessionFlowPluginPayload.BuildAppliedResult(ActionId, ChannelId, "GAZE_ACTION_APPLIED");
+        }
+    }
+
     internal static class SessionFlowPluginPayload
     {
         public static bool IsGrabEventType(string eventType)
@@ -442,6 +556,34 @@ namespace TheraplyCore.Games.Runtime
                 case "GRAB_OBJECT_COLLECTED":
                 case "HAND_GRAB_COLLECT":
                     return "collect_item_to_container";
+                default:
+                    return string.Empty;
+            }
+        }
+
+        public static bool IsGazeEventType(string eventType)
+        {
+            return !string.IsNullOrWhiteSpace(eventType) &&
+                   eventType.Trim().StartsWith("GAZE_", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static string ResolveGazeActionIdFromEventType(string eventType)
+        {
+            if (string.IsNullOrWhiteSpace(eventType))
+            {
+                return string.Empty;
+            }
+
+            var normalized = eventType.Trim().ToUpperInvariant();
+            switch (normalized)
+            {
+                case "GAZE_HOLD_TICK":
+                case "GAZE_HOLD_COMPLETED":
+                case "GAZE_HOLD_INVALID":
+                    return "hold_gaze_on_target";
+                case "GAZE_TOOL_SELECT":
+                case "GAZE_TOOL_SELECT_INVALID":
+                    return "select_target_with_gaze_and_tool";
                 default:
                     return string.Empty;
             }

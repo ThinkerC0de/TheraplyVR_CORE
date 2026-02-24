@@ -308,6 +308,48 @@ namespace TheraplyCore.Interactions
                 targetValid: TryReadNullableBool(details, "targetValid"));
         }
 
+        public IReadOnlyDictionary<string, object> RecordGazeTelemetry(IReadOnlyDictionary<string, object> payload)
+        {
+            var details = payload != null
+                ? new Dictionary<string, object>(payload)
+                : new Dictionary<string, object>();
+
+            var normalizedGameId = NormalizeOrFallback(
+                TryReadString(details, "gameId"),
+                ResolveActiveGameId(),
+                "unknown_game");
+            var eventType = ResolveGazeEventType(details);
+            var sourceComponent = NormalizeOrFallback(
+                TryReadString(details, "sourceComponent"),
+                "GazeTelemetry");
+            var attemptContext = ResolveAttemptContext(normalizedGameId, eventType);
+            var actionOutcome = ResolveGazeOutcome(details, eventType);
+            var reasonCode = ResolveGazeReasonCode(details, eventType);
+            var targetName = NormalizeOrFallback(
+                TryReadString(details, "targetName"),
+                TryReadString(details, "hitObjectName"));
+
+            return EmitCanonicalEvent(
+                normalizedGameId,
+                eventType,
+                "GAZE",
+                actionOutcome,
+                reasonCode,
+                sourceComponent,
+                attemptContext,
+                details,
+                inputHand: TryReadString(details, "inputHand"),
+                inputSource: NormalizeOrFallback(TryReadString(details, "inputSource"), "GAZE"),
+                inputControl: TryReadString(details, "inputControl"),
+                inputValue: TryReadFloat(details, "inputValue"),
+                targetId: NormalizeOrFallback(
+                    TryReadString(details, "targetId"),
+                    targetName,
+                    string.Empty),
+                targetName: targetName,
+                targetValid: TryReadNullableBool(details, "targetValid"));
+        }
+
         private IReadOnlyDictionary<string, object> EmitCanonicalEvent(
             string gameId,
             string eventType,
@@ -859,6 +901,81 @@ namespace TheraplyCore.Interactions
                     return "OBJECT_COLLECTED";
                 default:
                     return "GRAB_EVENT_OBSERVED";
+            }
+        }
+
+        private static string ResolveGazeEventType(IReadOnlyDictionary<string, object> payload)
+        {
+            var explicitEventType = TryReadString(payload, "gazeEventType");
+            if (!string.IsNullOrWhiteSpace(explicitEventType))
+            {
+                return NormalizeEventToken(explicitEventType, "GAZE_EVENT");
+            }
+
+            var explicitActionId = TryReadString(payload, "actionId");
+            if (!string.IsNullOrWhiteSpace(explicitActionId))
+            {
+                switch (NormalizeEventToken(explicitActionId, string.Empty))
+                {
+                    case "HOLD_GAZE_ON_TARGET":
+                        return "GAZE_HOLD_COMPLETED";
+                    case "SELECT_TARGET_WITH_GAZE_AND_TOOL":
+                        return "GAZE_TOOL_SELECT";
+                }
+            }
+
+            return "GAZE_EVENT";
+        }
+
+        private static string ResolveGazeOutcome(
+            IReadOnlyDictionary<string, object> payload,
+            string gazeEventType)
+        {
+            var explicitOutcome = TryReadString(payload, "actionOutcome");
+            if (!string.IsNullOrWhiteSpace(explicitOutcome))
+            {
+                return NormalizeEventToken(explicitOutcome, "OBSERVED");
+            }
+
+            switch (NormalizeEventToken(gazeEventType, "GAZE_EVENT"))
+            {
+                case "GAZE_HOLD_COMPLETED":
+                case "GAZE_TOOL_SELECT":
+                    return "CORRECT";
+                case "GAZE_HOLD_INVALID":
+                case "GAZE_TOOL_SELECT_INVALID":
+                    return "INCORRECT";
+                case "GAZE_HOLD_TICK":
+                    return "OBSERVED";
+                default:
+                    return "OBSERVED";
+            }
+        }
+
+        private static string ResolveGazeReasonCode(
+            IReadOnlyDictionary<string, object> payload,
+            string gazeEventType)
+        {
+            var explicitReason = ResolveReasonCode(payload, string.Empty);
+            if (!string.IsNullOrWhiteSpace(explicitReason))
+            {
+                return explicitReason;
+            }
+
+            switch (NormalizeEventToken(gazeEventType, "GAZE_EVENT"))
+            {
+                case "GAZE_HOLD_TICK":
+                    return "GAZE_DWELL_PROGRESS";
+                case "GAZE_HOLD_COMPLETED":
+                    return "GAZE_DWELL_REACHED";
+                case "GAZE_HOLD_INVALID":
+                    return "GAZE_TARGET_INVALID";
+                case "GAZE_TOOL_SELECT":
+                    return "GAZE_TOOL_CONFIRMED";
+                case "GAZE_TOOL_SELECT_INVALID":
+                    return "GAZE_TOOL_INVALID";
+                default:
+                    return "GAZE_EVENT_OBSERVED";
             }
         }
 
