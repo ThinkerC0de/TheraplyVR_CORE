@@ -57,7 +57,7 @@ Goal: implement the new framework direction end-to-end so no per-game core rewri
 | SF-C-008 | Add breath adapter/plugin | DONE | `perform_breath_cycle` supported with configurable thresholds/phases | SF-C-001 |
 | SF-C-009 | Add audio source adapter/plugin | DONE | `identify_sound_source` supported with active cue + selected source validation | SF-C-001 |
 | SF-C-010 | Add dual-hand adapter/plugin | DONE | `mark_left_and_right_targets` supported with sync window constraints | SF-C-001 |
-| SF-C-011 | Add pose/path adapter/plugin | TODO | `hold_pose` and `follow_path` with tolerance checks supported | SF-C-001 |
+| SF-C-011 | Add pose/path adapter/plugin | DONE | `hold_pose` and `follow_path` with tolerance checks supported | SF-C-001 |
 | SF-C-012 | Add timeline watch adapter/plugin | TODO | `watch_timeline_segment` progress/interrupt decisions supported | SF-C-001 |
 | SF-C-013 | Add sequence replay plugin | TODO | `repeat_visual_sequence`, `repeat_audio_sequence`, `select_sequence_in_order`, `match_pair` supported | SF-C-001 |
 

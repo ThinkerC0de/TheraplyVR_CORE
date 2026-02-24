@@ -474,6 +474,42 @@ namespace TheraplyCore.Interactions
                 targetValid: TryReadNullableBool(details, "targetValid"));
         }
 
+        public IReadOnlyDictionary<string, object> RecordPosePathTelemetry(IReadOnlyDictionary<string, object> payload)
+        {
+            var details = payload != null
+                ? new Dictionary<string, object>(payload)
+                : new Dictionary<string, object>();
+
+            var normalizedGameId = NormalizeOrFallback(
+                TryReadString(details, "gameId"),
+                ResolveActiveGameId(),
+                "unknown_game");
+            var eventType = ResolvePosePathEventType(details);
+            var sourceComponent = NormalizeOrFallback(
+                TryReadString(details, "sourceComponent"),
+                "PosePathTelemetry");
+            var attemptContext = ResolveAttemptContext(normalizedGameId, eventType);
+            var actionOutcome = ResolvePosePathOutcome(details, eventType);
+            var reasonCode = ResolvePosePathReasonCode(details, eventType);
+
+            return EmitCanonicalEvent(
+                normalizedGameId,
+                eventType,
+                "POSE_PATH",
+                actionOutcome,
+                reasonCode,
+                sourceComponent,
+                attemptContext,
+                details,
+                inputHand: NormalizeOrFallback(TryReadString(details, "inputHand"), string.Empty),
+                inputSource: NormalizeOrFallback(TryReadString(details, "inputSource"), "POSE_PATH"),
+                inputControl: TryReadString(details, "inputControl"),
+                inputValue: TryReadFloat(details, "inputValue"),
+                targetId: NormalizeOrFallback(TryReadString(details, "targetId"), string.Empty),
+                targetName: NormalizeOrFallback(TryReadString(details, "targetName"), string.Empty),
+                targetValid: TryReadNullableBool(details, "targetValid"));
+        }
+
         private IReadOnlyDictionary<string, object> EmitCanonicalEvent(
             string gameId,
             string eventType,
@@ -1340,6 +1376,116 @@ namespace TheraplyCore.Interactions
                     return "DUAL_HAND_SYNC_WINDOW_EXCEEDED";
                 default:
                     return "DUAL_HAND_EVENT_OBSERVED";
+            }
+        }
+
+        private static string ResolvePosePathEventType(IReadOnlyDictionary<string, object> payload)
+        {
+            var explicitEventType = TryReadString(payload, "posePathEventType");
+            if (!string.IsNullOrWhiteSpace(explicitEventType))
+            {
+                return NormalizeEventToken(explicitEventType, "POSE_PATH_EVENT");
+            }
+
+            var explicitActionId = TryReadString(payload, "actionId");
+            var normalizedActionId = NormalizeEventToken(explicitActionId, string.Empty);
+            var targetValid = TryReadNullableBool(payload, "targetValid");
+
+            if (string.Equals(normalizedActionId, "HOLD_POSE", StringComparison.Ordinal))
+            {
+                if (targetValid.HasValue && !targetValid.Value)
+                {
+                    return "POSE_PATH_HOLD_INVALID";
+                }
+
+                var holdProgress = TryReadFloat(payload, "holdProgress01");
+                var holdElapsedSec = TryReadFloat(payload, "holdElapsedSec");
+                var holdRequiredSec = TryReadFloat(payload, "holdRequiredSec");
+                if ((holdProgress.HasValue && holdProgress.Value >= 0.999f) ||
+                    (holdElapsedSec.HasValue &&
+                     holdRequiredSec.HasValue &&
+                     holdRequiredSec.Value > 0f &&
+                     holdElapsedSec.Value >= holdRequiredSec.Value))
+                {
+                    return "POSE_PATH_HOLD_COMPLETED";
+                }
+
+                return "POSE_PATH_HOLD_TICK";
+            }
+
+            if (string.Equals(normalizedActionId, "FOLLOW_PATH", StringComparison.Ordinal))
+            {
+                if (targetValid.HasValue && !targetValid.Value)
+                {
+                    return "POSE_PATH_FOLLOW_DEVIATION";
+                }
+
+                var pathProgress = TryReadFloat(payload, "pathProgress01");
+                var pathCoverage = TryReadFloat(payload, "pathCoverage01");
+                if ((pathCoverage.HasValue && pathCoverage.Value >= 0.999f) ||
+                    (pathProgress.HasValue && pathProgress.Value >= 0.999f))
+                {
+                    return "POSE_PATH_FOLLOW_COMPLETED";
+                }
+
+                return "POSE_PATH_FOLLOW_TICK";
+            }
+
+            return "POSE_PATH_EVENT";
+        }
+
+        private static string ResolvePosePathOutcome(
+            IReadOnlyDictionary<string, object> payload,
+            string posePathEventType)
+        {
+            var explicitOutcome = TryReadString(payload, "actionOutcome");
+            if (!string.IsNullOrWhiteSpace(explicitOutcome))
+            {
+                return NormalizeEventToken(explicitOutcome, "OBSERVED");
+            }
+
+            switch (NormalizeEventToken(posePathEventType, "POSE_PATH_EVENT"))
+            {
+                case "POSE_PATH_HOLD_COMPLETED":
+                case "POSE_PATH_FOLLOW_COMPLETED":
+                    return "CORRECT";
+                case "POSE_PATH_HOLD_INVALID":
+                case "POSE_PATH_FOLLOW_DEVIATION":
+                    return "INCORRECT";
+                case "POSE_PATH_HOLD_TICK":
+                case "POSE_PATH_FOLLOW_TICK":
+                    return "OBSERVED";
+                default:
+                    return "OBSERVED";
+            }
+        }
+
+        private static string ResolvePosePathReasonCode(
+            IReadOnlyDictionary<string, object> payload,
+            string posePathEventType)
+        {
+            var explicitReason = ResolveReasonCode(payload, string.Empty);
+            if (!string.IsNullOrWhiteSpace(explicitReason))
+            {
+                return explicitReason;
+            }
+
+            switch (NormalizeEventToken(posePathEventType, "POSE_PATH_EVENT"))
+            {
+                case "POSE_PATH_HOLD_TICK":
+                    return "POSE_HOLD_PROGRESS";
+                case "POSE_PATH_HOLD_COMPLETED":
+                    return "POSE_HOLD_COMPLETED";
+                case "POSE_PATH_HOLD_INVALID":
+                    return "POSE_TOLERANCE_EXCEEDED";
+                case "POSE_PATH_FOLLOW_TICK":
+                    return "PATH_PROGRESS";
+                case "POSE_PATH_FOLLOW_COMPLETED":
+                    return "PATH_FOLLOW_COMPLETED";
+                case "POSE_PATH_FOLLOW_DEVIATION":
+                    return "PATH_DEVIATION_EXCEEDED";
+                default:
+                    return "POSE_PATH_EVENT_OBSERVED";
             }
         }
 

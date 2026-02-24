@@ -41,6 +41,8 @@ namespace TheraplyCore.Games.Runtime
             registry.Register(new AudioSourceActionPlugin("identify_sound_source"), replaceExisting);
 
             registry.Register(new DualHandActionPlugin("mark_left_and_right_targets"), replaceExisting);
+            registry.Register(new PosePathActionPlugin("hold_pose"), replaceExisting);
+            registry.Register(new PosePathActionPlugin("follow_path"), replaceExisting);
         }
     }
 
@@ -949,6 +951,280 @@ namespace TheraplyCore.Games.Runtime
         }
     }
 
+    public sealed class PosePathActionPlugin : GameContracts.IActionPlugin
+    {
+        private readonly ActionValidator _validator = new ActionValidator();
+        private readonly string _actionId;
+
+        public PosePathActionPlugin(string actionId)
+        {
+            _actionId = string.IsNullOrWhiteSpace(actionId)
+                ? "hold_pose"
+                : actionId.Trim();
+        }
+
+        public string ActionId => _actionId;
+        public string ChannelId => GameContracts.SessionFlowChannelIds.PosePath;
+
+        public bool TryCreateIntent(
+            IReadOnlyDictionary<string, object> rawInput,
+            out GameContracts.ActionIntent intent)
+        {
+            intent = null;
+            if (!SessionFlowPluginPayload.TryReadString(rawInput, "eventType", out var eventType))
+            {
+                return false;
+            }
+
+            if (!SessionFlowPluginPayload.IsPosePathEventType(eventType))
+            {
+                return false;
+            }
+
+            var requestedActionId = SessionFlowPluginPayload.ReadRequestedActionId(rawInput);
+            var suggestedActionId = SessionFlowPluginPayload.ResolvePosePathActionIdFromEventType(eventType);
+            var effectiveActionId = !string.IsNullOrWhiteSpace(requestedActionId)
+                ? requestedActionId
+                : suggestedActionId;
+            if (string.IsNullOrWhiteSpace(effectiveActionId) ||
+                !string.Equals(effectiveActionId, ActionId, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            intent = new GameContracts.ActionIntent
+            {
+                actionId = effectiveActionId.Trim(),
+                channelId = ChannelId,
+                targetId = SessionFlowPluginPayload.ReadString(rawInput, "targetId"),
+                inputSource = SessionFlowPluginPayload.ReadString(rawInput, "inputSource"),
+                inputHand = SessionFlowPluginPayload.ReadString(rawInput, "inputHand"),
+                inputValue = SessionFlowPluginPayload.ReadFloat(rawInput, "inputValue"),
+                occurredAtElapsedSec = SessionFlowPluginPayload.ReadFloat(rawInput, "occurredAtElapsedSec"),
+                details = new List<GameContracts.KeyValuePairString>
+                {
+                    new GameContracts.KeyValuePairString { key = "eventType", value = eventType },
+                    new GameContracts.KeyValuePairString { key = "reasonCode", value = SessionFlowPluginPayload.ReadString(rawInput, "reasonCode") },
+                    new GameContracts.KeyValuePairString { key = "holdProgress01", value = SessionFlowPluginPayload.ReadString(rawInput, "holdProgress01") },
+                    new GameContracts.KeyValuePairString { key = "holdElapsedSec", value = SessionFlowPluginPayload.ReadString(rawInput, "holdElapsedSec") },
+                    new GameContracts.KeyValuePairString { key = "holdRequiredSec", value = SessionFlowPluginPayload.ReadString(rawInput, "holdRequiredSec") },
+                    new GameContracts.KeyValuePairString { key = "pathProgress01", value = SessionFlowPluginPayload.ReadString(rawInput, "pathProgress01") },
+                    new GameContracts.KeyValuePairString { key = "pathCoverage01", value = SessionFlowPluginPayload.ReadString(rawInput, "pathCoverage01") },
+                    new GameContracts.KeyValuePairString { key = "pathDeviation", value = SessionFlowPluginPayload.ReadString(rawInput, "pathDeviation") },
+                    new GameContracts.KeyValuePairString { key = "tolerance", value = SessionFlowPluginPayload.ReadString(rawInput, "tolerance") },
+                },
+            };
+            return true;
+        }
+
+        public GameContracts.ActionValidationResult Validate(
+            GameContracts.ActionIntent intent,
+            GameContracts.ActionContext context,
+            GameContracts.AllowedActionDefinition allowedAction)
+        {
+            var eventType = SessionFlowPluginPayload.ReadEventTypeFromIntent(intent);
+
+            if (string.Equals(ActionId, "hold_pose", StringComparison.OrdinalIgnoreCase))
+            {
+                if (eventType.IndexOf("POSE_PATH_HOLD_INVALID", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return GameContracts.ActionValidationResult.Rejected("POSE_TOLERANCE_EXCEEDED");
+                }
+
+                if (eventType.IndexOf("POSE_PATH_HOLD_TICK", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return GameContracts.ActionValidationResult.Rejected("POSE_HOLD_NOT_COMPLETED");
+                }
+
+                if (eventType.IndexOf("POSE_PATH_HOLD_COMPLETED", StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    return GameContracts.ActionValidationResult.Rejected("ACTION_EVENT_TYPE_MISMATCH");
+                }
+
+                var holdRequiredSec = ResolveHoldRequiredSec(allowedAction, intent);
+                if (holdRequiredSec > 0f &&
+                    TryReadDetailFloat(intent, "holdElapsedSec", out var holdElapsedSec) &&
+                    holdElapsedSec < holdRequiredSec)
+                {
+                    return GameContracts.ActionValidationResult.Rejected("POSE_HOLD_DURATION_TOO_SHORT");
+                }
+
+                var tolerance = ResolveTolerance(allowedAction, intent);
+                if (tolerance > 0f &&
+                    TryReadDetailFloat(intent, "pathDeviation", out var holdDeviation) &&
+                    holdDeviation > tolerance)
+                {
+                    return GameContracts.ActionValidationResult.Rejected("POSE_TOLERANCE_EXCEEDED");
+                }
+            }
+
+            if (string.Equals(ActionId, "follow_path", StringComparison.OrdinalIgnoreCase))
+            {
+                if (eventType.IndexOf("POSE_PATH_FOLLOW_DEVIATION", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return GameContracts.ActionValidationResult.Rejected("PATH_DEVIATION_EXCEEDED");
+                }
+
+                if (eventType.IndexOf("POSE_PATH_FOLLOW_TICK", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return GameContracts.ActionValidationResult.Rejected("PATH_FOLLOW_NOT_COMPLETED");
+                }
+
+                if (eventType.IndexOf("POSE_PATH_FOLLOW_COMPLETED", StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    return GameContracts.ActionValidationResult.Rejected("ACTION_EVENT_TYPE_MISMATCH");
+                }
+
+                var tolerance = ResolveTolerance(allowedAction, intent);
+                if (tolerance > 0f &&
+                    TryReadDetailFloat(intent, "pathDeviation", out var pathDeviation) &&
+                    pathDeviation > tolerance)
+                {
+                    return GameContracts.ActionValidationResult.Rejected("PATH_DEVIATION_EXCEEDED");
+                }
+
+                var minCoverage = ResolveMinPathCoverage(allowedAction, intent);
+                if (minCoverage > 0f &&
+                    TryReadDetailFloat(intent, "pathCoverage01", out var pathCoverage) &&
+                    pathCoverage < minCoverage)
+                {
+                    return GameContracts.ActionValidationResult.Rejected("PATH_COVERAGE_BELOW_MIN");
+                }
+            }
+
+            return _validator.Validate(intent, context, allowedAction);
+        }
+
+        public GameContracts.ActionApplyResult Apply(
+            GameContracts.ActionIntent intent,
+            GameContracts.ActionContext context,
+            GameContracts.AllowedActionDefinition allowedAction)
+        {
+            return SessionFlowPluginPayload.BuildAppliedResult(ActionId, ChannelId, "POSE_PATH_ACTION_APPLIED");
+        }
+
+        private static float ResolveHoldRequiredSec(
+            GameContracts.AllowedActionDefinition allowedAction,
+            GameContracts.ActionIntent intent)
+        {
+            var requiredSec = ReadConstraintFloat(allowedAction, "requiredHoldSec");
+            if (requiredSec <= 0f)
+            {
+                requiredSec = ReadConstraintFloat(allowedAction, "minHoldSec");
+            }
+
+            if (requiredSec > 0f)
+            {
+                return requiredSec;
+            }
+
+            return TryReadDetailFloat(intent, "holdRequiredSec", out var detailRequiredSec)
+                ? (detailRequiredSec > 0f ? detailRequiredSec : 0f)
+                : 0f;
+        }
+
+        private static float ResolveMinPathCoverage(
+            GameContracts.AllowedActionDefinition allowedAction,
+            GameContracts.ActionIntent intent)
+        {
+            var minCoverage = ReadConstraintFloat(allowedAction, "minPathCoverage");
+            if (minCoverage <= 0f)
+            {
+                minCoverage = ReadConstraintFloat(allowedAction, "requiredCoverage");
+            }
+
+            if (minCoverage > 0f)
+            {
+                return Clamp01(minCoverage);
+            }
+
+            return TryReadDetailFloat(intent, "pathCoverage01", out var detailCoverage)
+                ? Clamp01(detailCoverage)
+                : 0f;
+        }
+
+        private static float ResolveTolerance(
+            GameContracts.AllowedActionDefinition allowedAction,
+            GameContracts.ActionIntent intent)
+        {
+            var tolerance = ReadConstraintFloat(allowedAction, "tolerance");
+            if (tolerance <= 0f)
+            {
+                tolerance = ReadConstraintFloat(allowedAction, "maxDeviation");
+            }
+
+            if (tolerance > 0f)
+            {
+                return tolerance;
+            }
+
+            return TryReadDetailFloat(intent, "tolerance", out var detailTolerance)
+                ? (detailTolerance > 0f ? detailTolerance : 0f)
+                : 0f;
+        }
+
+        private static float ReadConstraintFloat(GameContracts.AllowedActionDefinition allowedAction, string key)
+        {
+            if (allowedAction == null || allowedAction.constraints == null || string.IsNullOrWhiteSpace(key))
+            {
+                return 0f;
+            }
+
+            for (var i = 0; i < allowedAction.constraints.Count; i++)
+            {
+                var constraint = allowedAction.constraints[i];
+                if (constraint == null ||
+                    !string.Equals(constraint.key, key, StringComparison.OrdinalIgnoreCase) ||
+                    string.IsNullOrWhiteSpace(constraint.value))
+                {
+                    continue;
+                }
+
+                if (float.TryParse(
+                        constraint.value,
+                        NumberStyles.Float | NumberStyles.AllowThousands,
+                        CultureInfo.InvariantCulture,
+                        out var parsed))
+                {
+                    return parsed;
+                }
+            }
+
+            return 0f;
+        }
+
+        private static bool TryReadDetailFloat(GameContracts.ActionIntent intent, string key, out float value)
+        {
+            value = 0f;
+            var raw = SessionFlowPluginPayload.ReadDetailValueFromIntent(intent, key);
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return false;
+            }
+
+            return float.TryParse(
+                raw,
+                NumberStyles.Float | NumberStyles.AllowThousands,
+                CultureInfo.InvariantCulture,
+                out value);
+        }
+
+        private static float Clamp01(float value)
+        {
+            if (value <= 0f)
+            {
+                return 0f;
+            }
+
+            if (value >= 1f)
+            {
+                return 1f;
+            }
+
+            return value;
+        }
+    }
+
     internal static class SessionFlowPluginPayload
     {
         public static bool IsGrabEventType(string eventType)
@@ -1123,6 +1399,35 @@ namespace TheraplyCore.Games.Runtime
             }
 
             return leftTargetId + "|" + rightTargetId;
+        }
+
+        public static bool IsPosePathEventType(string eventType)
+        {
+            return !string.IsNullOrWhiteSpace(eventType) &&
+                   eventType.Trim().StartsWith("POSE_PATH_", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static string ResolvePosePathActionIdFromEventType(string eventType)
+        {
+            if (string.IsNullOrWhiteSpace(eventType))
+            {
+                return string.Empty;
+            }
+
+            var normalized = eventType.Trim().ToUpperInvariant();
+            switch (normalized)
+            {
+                case "POSE_PATH_HOLD_TICK":
+                case "POSE_PATH_HOLD_COMPLETED":
+                case "POSE_PATH_HOLD_INVALID":
+                    return "hold_pose";
+                case "POSE_PATH_FOLLOW_TICK":
+                case "POSE_PATH_FOLLOW_COMPLETED":
+                case "POSE_PATH_FOLLOW_DEVIATION":
+                    return "follow_path";
+                default:
+                    return string.Empty;
+            }
         }
 
         public static string ResolveAudioSourceTargetId(IReadOnlyDictionary<string, object> payload)
