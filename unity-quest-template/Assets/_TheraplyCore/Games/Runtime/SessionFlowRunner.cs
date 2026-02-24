@@ -31,6 +31,7 @@ namespace TheraplyCore.Games.Runtime
         [SerializeField] private bool _logLifecycle;
 
         private readonly TaskGraphRunner _taskGraphRunner = new TaskGraphRunner();
+        private readonly ScoringRuntime _scoringRuntime = new ScoringRuntime();
         private GameContracts.GameDefinition _activeDefinition;
         private string _activeFlowId = string.Empty;
         private GameContracts.TaskGraphNodeDefinition _lastEnteredNode;
@@ -146,6 +147,7 @@ namespace TheraplyCore.Games.Runtime
             _activeFlowId = string.IsNullOrWhiteSpace(definition.gameId)
                 ? "session_flow"
                 : definition.gameId.Trim();
+            _scoringRuntime.Configure(definition);
 
             _taskGraphRunner.Reset();
             _taskGraphRunner.SetPluginRegistry(
@@ -236,6 +238,9 @@ namespace TheraplyCore.Games.Runtime
 
             var accepted = submitted && validationResult != null && validationResult.accepted;
             var reasonCode = ResolveDecisionReasonCode(validationResult, submitReasonCode, accepted);
+            _scoringRuntime.RecordActionDecision(accepted, reasonCode, reactionSec: 0f);
+            var scoringSnapshot = _scoringRuntime.GetSnapshot();
+            ApplyAdaptiveDifficultyState(scoringSnapshot);
             ExecuteNodeEffects(
                 nodeBeforeSubmit,
                 nodeBeforeSubmit == null
@@ -246,6 +251,13 @@ namespace TheraplyCore.Games.Runtime
                 intent.actionId,
                 accepted ? "accepted" : "rejected",
                 reasonCode);
+            if (scoringSnapshot.adaptiveChanged)
+            {
+                EmitFlowEvent(
+                    "adaptive_difficulty_updated",
+                    NormalizeOrFallback(scoringSnapshot.adaptiveReasonCode, "KEEP_DIFFICULTY"),
+                    BuildScoringDetails(scoringSnapshot));
+            }
             EmitActionTelemetry(
                 "action_evaluated",
                 intent,
@@ -318,6 +330,7 @@ namespace TheraplyCore.Games.Runtime
 
         private void HandleGraphCompleted(TaskGraphRunState terminalState, string reasonCode)
         {
+            var scoringSnapshot = _scoringRuntime.GetSnapshot();
             var activeNode = _taskGraphRunner.ActiveNode;
             if (IsTimeoutTransition(reasonCode))
             {
@@ -340,7 +353,8 @@ namespace TheraplyCore.Games.Runtime
 
                 EmitFlowEvent(
                     "flow_completed",
-                    NormalizeOrFallback(reasonCode, "FLOW_COMPLETED"));
+                    NormalizeOrFallback(reasonCode, "FLOW_COMPLETED"),
+                    BuildScoringDetails(scoringSnapshot));
             }
             else
             {
@@ -351,7 +365,8 @@ namespace TheraplyCore.Games.Runtime
 
                 EmitFlowEvent(
                     "flow_failed",
-                    NormalizeOrFallback(reasonCode, "FLOW_FAILED"));
+                    NormalizeOrFallback(reasonCode, "FLOW_FAILED"),
+                    BuildScoringDetails(scoringSnapshot));
             }
 
             EmitSessionTerminal();
@@ -362,6 +377,7 @@ namespace TheraplyCore.Games.Runtime
         private void HandleRuntimeFailure(string reasonCode)
         {
             var normalizedReason = NormalizeOrFallback(reasonCode, "FLOW_RUNTIME_FAILED");
+            var scoringSnapshot = _scoringRuntime.GetSnapshot();
             if (_sessionRuntimeBridge != null)
             {
                 _sessionRuntimeBridge.TryFailTechnicalSession(out _);
@@ -380,7 +396,7 @@ namespace TheraplyCore.Games.Runtime
                     normalizedReason);
             }
 
-            EmitFlowEvent("flow_failed", normalizedReason);
+            EmitFlowEvent("flow_failed", normalizedReason, BuildScoringDetails(scoringSnapshot));
             EmitSessionTerminal();
             _taskGraphRunner.Reset();
             _lastEnteredNode = null;
@@ -647,6 +663,49 @@ namespace TheraplyCore.Games.Runtime
         {
             return !string.IsNullOrWhiteSpace(reasonCode) &&
                    reasonCode.IndexOf("TIMEOUT", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private void ApplyAdaptiveDifficultyState(ScoringRuntime.ScoringSnapshot scoringSnapshot)
+        {
+            if (!scoringSnapshot.adaptiveEnabled)
+            {
+                return;
+            }
+
+            var activeNode = _taskGraphRunner.ActiveNode;
+            if (activeNode == null)
+            {
+                return;
+            }
+
+            if (!string.Equals(activeNode.nodeType, GameContracts.TaskGraphNodeTypes.Action, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            if (scoringSnapshot.cueTimeoutSec > 0f)
+            {
+                activeNode.timeoutSec = scoringSnapshot.cueTimeoutSec;
+            }
+        }
+
+        private static IReadOnlyDictionary<string, object> BuildScoringDetails(ScoringRuntime.ScoringSnapshot scoringSnapshot)
+        {
+            return new Dictionary<string, object>
+            {
+                { "scoreTotal", scoringSnapshot.scoreTotal },
+                { "correctCount", scoringSnapshot.correctCount },
+                { "wrongCount", scoringSnapshot.wrongCount },
+                { "livesRemaining", scoringSnapshot.livesRemaining },
+                { "successThresholdReached", scoringSnapshot.successThresholdReached },
+                { "adaptiveDifficultyState", NormalizeOrFallback(scoringSnapshot.adaptiveDifficultyState, string.Empty) },
+                { "adaptiveEnabled", scoringSnapshot.adaptiveEnabled },
+                { "adaptiveReasonCode", NormalizeOrFallback(scoringSnapshot.adaptiveReasonCode, string.Empty) },
+                { "targetSpeed", scoringSnapshot.targetSpeed },
+                { "targetScale", scoringSnapshot.targetScale },
+                { "cueTimeoutSec", scoringSnapshot.cueTimeoutSec },
+                { "difficulty", scoringSnapshot.difficulty },
+            };
         }
 
         private static string ResolveDecisionReasonCode(
