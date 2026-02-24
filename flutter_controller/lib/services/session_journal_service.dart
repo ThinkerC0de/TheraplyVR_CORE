@@ -165,6 +165,55 @@ class SessionJournalService {
     return records.first;
   }
 
+  static Future<TherapySessionRecord?> fetchLatestUnfinishedForTherapist({
+    required String therapistId,
+  }) async {
+    final normalizedTherapistId = therapistId.trim();
+    if (normalizedTherapistId.isEmpty) {
+      return null;
+    }
+
+    QuerySnapshot<Map<String, dynamic>> snapshot;
+    try {
+      snapshot = await _sessionsCollection
+          .where('therapistId', isEqualTo: normalizedTherapistId)
+          .where('unfinished', isEqualTo: true)
+          .orderBy('updatedAtUnixMs', descending: true)
+          .limit(1)
+          .get();
+    } catch (_) {
+      // Fallback for environments without a ready index yet.
+      snapshot = await _sessionsCollection
+          .where('therapistId', isEqualTo: normalizedTherapistId)
+          .limit(200)
+          .get();
+    }
+
+    if (snapshot.docs.isEmpty) {
+      return null;
+    }
+
+    final records = snapshot.docs
+        .map((doc) => TherapySessionRecord.fromFirestore(doc.data()))
+        .where((record) => record.sessionId.isNotEmpty)
+        .where((record) => record.therapistId == normalizedTherapistId)
+        .where((record) => record.requiresHandoffDecision)
+        .toList(growable: false);
+
+    if (records.isEmpty) {
+      return null;
+    }
+
+    records.sort((a, b) {
+      if (a.updatedAtUnixMs == b.updatedAtUnixMs) {
+        return b.sessionId.compareTo(a.sessionId);
+      }
+      return b.updatedAtUnixMs.compareTo(a.updatedAtUnixMs);
+    });
+
+    return records.first;
+  }
+
   static Future<void> upsertSessionState({
     required String sessionId,
     required String studentId,

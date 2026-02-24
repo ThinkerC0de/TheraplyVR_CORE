@@ -6,9 +6,11 @@ import 'package:flutter_controller/models/content_delivery_contract.dart';
 import 'package:flutter_controller/models/critical_command_envelope.dart';
 import 'package:flutter_controller/models/device_info.dart';
 import 'package:flutter_controller/models/entitlement_access.dart';
+import 'package:flutter_controller/models/game_catalog_entry.dart';
 import 'package:flutter_controller/models/ops_error_catalog.dart';
 import 'package:flutter_controller/models/parent_progress_snapshot.dart';
 import 'package:flutter_controller/models/runtime_status_signal.dart';
+import 'package:flutter_controller/models/session_attach_failure_policy.dart';
 import 'package:flutter_controller/models/session_fsm_contract.dart';
 import 'package:flutter_controller/models/session_recovery_manager.dart';
 import 'package:flutter_controller/models/session_ownership.dart';
@@ -21,6 +23,7 @@ import 'package:flutter_controller/services/discovery_service.dart';
 import 'package:flutter_controller/services/entitlement_service.dart';
 import 'package:flutter_controller/services/firebase_service.dart';
 import 'package:flutter_controller/services/foreground_service_bridge.dart';
+import 'package:flutter_controller/services/game_catalog_service.dart';
 import 'package:flutter_controller/services/operator_incident_popup_queue.dart';
 import 'package:flutter_controller/services/parent_progress_service.dart';
 import 'package:flutter_controller/services/session_journal_service.dart';
@@ -32,6 +35,8 @@ import 'package:flutter_controller/widgets/media_stream_widget.dart';
 enum _SessionGateAction { keepCurrent, resume, startNew }
 
 enum _WorkflowStep { gameCatalog, gameSetup }
+
+enum _CatalogFilterTab { installed, store }
 
 enum _ExitChoice { keepUnfinished, endSession, cancel }
 
@@ -53,16 +58,24 @@ class ControlScreen extends StatefulWidget {
 
 class _ControlScreenState extends State<ControlScreen>
     with WidgetsBindingObserver {
-  static final bool _contentDeliveryEnabled = false;
+  static final bool _contentDeliveryEnabled = true;
   static final bool _serverAuthoritativeHandoffGate = true;
-  static const List<_GameCatalogEntry> _gameCatalog = <_GameCatalogEntry>[
+  static const bool _showCatalogRescueTerminateButton = false;
+  static const List<_GameCatalogEntry> _fallbackGameCatalog =
+      <_GameCatalogEntry>[
     _GameCatalogEntry(
       gameId: 'demo_cube_clicker',
       title: 'Demo Cube Clicker',
       description:
           'Wersja pogladowa: klikaj poruszajace sie cubey, mierz czas i best score.',
       targetContentVersion: '1.2.0',
+      packageUri: '',
+      thumbnailUrl: '',
       supportsSaveResume: true,
+      availableForPurchase: false,
+      requiresExplicitLicense: false,
+      runtimeLaunchEnabled: true,
+      sortOrder: 10,
       previewLines: <String>[
         'Poziom basic: dowolny kolor.',
         'Poziom alternation: kolory na zmiane.',
@@ -75,11 +88,103 @@ class _ControlScreenState extends State<ControlScreen>
       description:
           'Sekwencja celow z adaptacja trudnosci i etykietowaniem task run.',
       targetContentVersion: '1.0.0',
+      packageUri: '',
+      thumbnailUrl: '',
       supportsSaveResume: false,
+      availableForPurchase: false,
+      requiresExplicitLicense: false,
+      runtimeLaunchEnabled: true,
+      sortOrder: 20,
       previewLines: <String>[
         'Klikaj aktywne cele zgodnie z sekwencja.',
         'Adaptive difficulty dopasowuje tempo i skale.',
         'Generuje TASK_OUTCOME_SUMMARY + TASK_LABEL_GENERATED.',
+      ],
+    ),
+    _GameCatalogEntry(
+      gameId: 'puzzle_paths',
+      title: 'Puzzle Paths',
+      description:
+          'Placeholder katalogowy pod sesje puzzli. Runtime launch jeszcze nieaktywny.',
+      targetContentVersion: '0.9.0',
+      packageUri: 'https://cdn.theraply.local/content/puzzle_paths_0_9_0',
+      thumbnailUrl: '',
+      supportsSaveResume: false,
+      availableForPurchase: true,
+      requiresExplicitLicense: true,
+      runtimeLaunchEnabled: false,
+      sortOrder: 30,
+      previewLines: <String>[
+        'Tryb demonstracyjny: karta katalogu + status instalacji.',
+        'Docelowo: panel dynamiczny z kontrolkami z Unity schema.',
+      ],
+    ),
+    _GameCatalogEntry(
+      gameId: 'memory_orchard',
+      title: 'Memory Orchard',
+      description:
+          'Placeholder katalogowy pod gre memory. Runtime launch jeszcze nieaktywny.',
+      targetContentVersion: '0.9.0',
+      packageUri: 'https://cdn.theraply.local/content/memory_orchard_0_9_0',
+      thumbnailUrl: '',
+      supportsSaveResume: false,
+      availableForPurchase: true,
+      requiresExplicitLicense: true,
+      runtimeLaunchEnabled: false,
+      sortOrder: 40,
+      previewLines: <String>[
+        'Kontrolki i konfiguracja beda ladowane po schema.',
+      ],
+    ),
+    _GameCatalogEntry(
+      gameId: 'sunflower_defense',
+      title: 'Sunflower Defense',
+      description:
+          'Placeholder katalogowy pod obrone slonecznikow. Runtime launch jeszcze nieaktywny.',
+      targetContentVersion: '0.9.0',
+      packageUri: 'https://cdn.theraply.local/content/sunflower_defense_0_9_0',
+      thumbnailUrl: '',
+      supportsSaveResume: false,
+      availableForPurchase: true,
+      requiresExplicitLicense: true,
+      runtimeLaunchEnabled: false,
+      sortOrder: 50,
+      previewLines: <String>[
+        'Sciezka pod test pipeline instalacji i statusow.',
+      ],
+    ),
+    _GameCatalogEntry(
+      gameId: 'coding_master',
+      title: 'Coding Master',
+      description:
+          'Placeholder katalogowy pod mistrza kodowania. Runtime launch jeszcze nieaktywny.',
+      targetContentVersion: '0.9.0',
+      packageUri: 'https://cdn.theraply.local/content/coding_master_0_9_0',
+      thumbnailUrl: '',
+      supportsSaveResume: false,
+      availableForPurchase: true,
+      requiresExplicitLicense: true,
+      runtimeLaunchEnabled: false,
+      sortOrder: 60,
+      previewLines: <String>[
+        'Karta katalogu gotowa pod future dynamic control schema.',
+      ],
+    ),
+    _GameCatalogEntry(
+      gameId: 'bilateral_markers',
+      title: 'Bilateral Markers',
+      description:
+          'Placeholder katalogowy pod zaznacz oburecz. Runtime launch jeszcze nieaktywny.',
+      targetContentVersion: '0.9.0',
+      packageUri: 'https://cdn.theraply.local/content/bilateral_markers_0_9_0',
+      thumbnailUrl: '',
+      supportsSaveResume: false,
+      availableForPurchase: true,
+      requiresExplicitLicense: true,
+      runtimeLaunchEnabled: false,
+      sortOrder: 70,
+      previewLines: <String>[
+        'Na ten etap: store/install/status UX + gotowosc pod schema.',
       ],
     ),
   ];
@@ -111,7 +216,9 @@ class _ControlScreenState extends State<ControlScreen>
 
   final ConnectionService _connection = ConnectionService();
   late final OperatorIncidentPopupQueue _incidentPopupQueue;
-  final Set<String> _expandedPreviewGameIds = <String>{};
+  final Set<String> _simulatedOwnedGameIds = <String>{};
+  List<_GameCatalogEntry> _remoteGameCatalog = const <_GameCatalogEntry>[];
+  _CatalogFilterTab _catalogFilterTab = _CatalogFilterTab.installed;
 
   bool _isConnected = false;
   bool _requiresSessionDecision = false;
@@ -139,6 +246,7 @@ class _ControlScreenState extends State<ControlScreen>
   StreamSubscription<bool>? _connectionSubscription;
   StreamSubscription<Map<String, dynamic>>? _messageSubscription;
   StreamSubscription<DeviceInfo>? _discoverySubscription;
+  StreamSubscription<List<GameCatalogEntry>>? _gameCatalogSubscription;
   Timer? _connectionLivenessTimer;
 
   late String _activeSessionId;
@@ -154,6 +262,7 @@ class _ControlScreenState extends State<ControlScreen>
   bool _parentInsightsLoading = false;
   bool _persistedSessionRefreshInFlight = false;
   bool _interruptedSessionAutoCloseInFlight = false;
+  bool _ownershipConflictRecoveryInFlight = false;
   DeviceInfo? _latestDiscoveryReconnectCandidate;
   DateTime? _latestDiscoveryReconnectSeenAt;
   DateTime? _connectedAtUtc;
@@ -188,6 +297,7 @@ class _ControlScreenState extends State<ControlScreen>
     );
 
     _connection.setDiscoveryService(widget.discoveryService);
+    _startGameCatalogSubscription();
     _activeSessionId = _buildLocalSessionId();
     _selectedGameId = _resolveInitialGameId();
     _bootstrapLocalContentStates();
@@ -217,6 +327,7 @@ class _ControlScreenState extends State<ControlScreen>
     _connectionSubscription?.cancel();
     _messageSubscription?.cancel();
     _discoverySubscription?.cancel();
+    _gameCatalogSubscription?.cancel();
     _connectionLivenessTimer?.cancel();
     unawaited(ForegroundServiceBridge.stop());
     _connection.dispose();
@@ -780,6 +891,7 @@ class _ControlScreenState extends State<ControlScreen>
       therapistIdOverride: therapistId,
     );
     _sessionAttachInFlight = true;
+    var retryAttachWithEndSessionOverride = false;
     if (mounted) {
       setState(() {});
     }
@@ -849,17 +961,97 @@ class _ControlScreenState extends State<ControlScreen>
         commandId: CriticalCommandIds.sessionAttach,
         sessionId: targetSessionId,
       );
-      _enqueueIncidentAlert(
-        title: 'Session attach failed',
-        message: 'Session attach failed [$attachReasonTag]: $errorSummary',
-        reasonCode: failureReasonCode,
-        severity: OperatorIncidentSeverity.error,
+
+      if (failureReasonCode == 'SESSION_OWNERSHIP_CONFLICT' &&
+          reasonCode != 'END_SESSION_OVERRIDE') {
+        final recovered = await _tryRecoverSessionOwnershipConflict(
+          targetSessionId: targetSessionId,
+        );
+        if (recovered) {
+          retryAttachWithEndSessionOverride = true;
+          _logAttachDecision(
+            decision: 'SESSION_ATTACH_RECOVERY_OWNERSHIP_OVERRIDE',
+            reasonCode: 'END_SESSION_OVERRIDE',
+            commandId: CriticalCommandIds.sessionAttach,
+            sessionId: targetSessionId,
+          );
+        }
+      }
+
+      if (retryAttachWithEndSessionOverride) {
+        return;
+      }
+
+      final shouldShowAttachFailurePopup =
+          SessionAttachFailurePolicy.shouldShowPopup(
+        attachReasonCode: reasonCode,
+        failureReasonCode: failureReasonCode,
+        isGameSetupWorkflow: _workflowStep == _WorkflowStep.gameSetup,
       );
+
+      if (shouldShowAttachFailurePopup) {
+        _enqueueIncidentAlert(
+          title: 'Session attach failed',
+          message: 'Session attach failed [$attachReasonTag]: $errorSummary',
+          reasonCode: failureReasonCode,
+          severity: OperatorIncidentSeverity.error,
+        );
+      } else {
+        _logAttachDecision(
+          decision: 'SESSION_ATTACH_FAILED_TRANSIENT_SUPPRESSED',
+          reasonCode: failureReasonCode,
+          commandId: CriticalCommandIds.sessionAttach,
+          sessionId: targetSessionId,
+        );
+      }
     } finally {
       _sessionAttachInFlight = false;
       if (mounted) {
         setState(() {});
       }
+      if (retryAttachWithEndSessionOverride && mounted) {
+        await _ensureSessionAttached(
+          reasonCode: 'END_SESSION_OVERRIDE',
+          force: true,
+          sessionIdOverride: targetSessionId,
+        );
+      }
+    }
+  }
+
+  Future<bool> _tryRecoverSessionOwnershipConflict({
+    required String targetSessionId,
+  }) async {
+    if (!_isConnected || _ownershipConflictRecoveryInFlight) {
+      return false;
+    }
+
+    _ownershipConflictRecoveryInFlight = true;
+    try {
+      final ended = await _sendEndSessionWithConfirmation(
+        reasonCode: 'END_SESSION_OVERRIDE',
+        extraPayload: const <String, dynamic>{
+          'reason': 'OwnershipConflictRecovery',
+          'reasonCode': 'END_SESSION_OVERRIDE',
+        },
+      );
+      if (!ended) {
+        return false;
+      }
+
+      if (!mounted) {
+        return false;
+      }
+
+      setState(() {
+        _sessionAttachReady = false;
+        _activeSessionId = targetSessionId;
+        _requiresSessionDecision = false;
+        _remoteSessionIdPendingDecision = null;
+      });
+      return true;
+    } finally {
+      _ownershipConflictRecoveryInFlight = false;
     }
   }
 
@@ -1611,7 +1803,7 @@ class _ControlScreenState extends State<ControlScreen>
     if (normalizedGameId.isEmpty) {
       return false;
     }
-    for (final entry in _gameCatalog) {
+    for (final entry in _effectiveGameCatalog) {
       if (entry.gameId == normalizedGameId) {
         return true;
       }
@@ -2234,41 +2426,102 @@ class _ControlScreenState extends State<ControlScreen>
     }
   }
 
-  String _resolveInitialGameId() {
-    final entitledCatalog = _entitledGameCatalog;
-    if (entitledCatalog.isNotEmpty) {
-      return entitledCatalog.first.gameId;
+  List<_GameCatalogEntry> get _effectiveGameCatalog {
+    if (_remoteGameCatalog.isNotEmpty) {
+      return _remoteGameCatalog;
     }
-    return _gameCatalog.first.gameId;
+    return _fallbackGameCatalog;
   }
 
-  List<_GameCatalogEntry> get _entitledGameCatalog {
+  void _startGameCatalogSubscription() {
+    _gameCatalogSubscription?.cancel();
+    _gameCatalogSubscription = GameCatalogService.watchActiveCatalog().listen(
+      (entries) {
+        if (!mounted) {
+          return;
+        }
+
+        final mapped = entries
+            .map(_GameCatalogEntry.fromRemoteEntry)
+            .where((entry) => entry.gameId.isNotEmpty)
+            .toList(growable: false);
+        setState(() {
+          _remoteGameCatalog = mapped;
+          _bootstrapLocalContentStates();
+          if (!_effectiveGameCatalog
+              .any((entry) => entry.gameId == _selectedGameId)) {
+            _selectedGameId = _resolveInitialGameId();
+          }
+        });
+      },
+      onError: (Object error) {
+        debugPrint('[ControlScreen] game_catalog stream failed: $error');
+      },
+    );
+  }
+
+  bool _isGameOwnedByEntitlement(
+    _GameCatalogEntry entry, {
+    DateTime? atUtc,
+  }) {
+    final normalizedGameId = entry.gameId.trim();
+    if (normalizedGameId.isEmpty) {
+      return false;
+    }
+
+    if (_simulatedOwnedGameIds.contains(normalizedGameId)) {
+      return true;
+    }
+
     final access = EntitlementService.activeAccess;
+    final nowUtc = atUtc ?? DateTime.now().toUtc();
     if (access == null) {
-      return _gameCatalog;
+      return false;
+    }
+
+    if (entry.requiresExplicitLicense) {
+      if (!access.hasAppAccess(nowUtc) ||
+          !access.isGameAllowedByPlan(normalizedGameId)) {
+        return false;
+      }
+
+      final gameGrant = access.gameLicenses[normalizedGameId];
+      return gameGrant != null && gameGrant.isActiveAt(nowUtc);
+    }
+
+    return EntitlementService.canLaunchGame(normalizedGameId, atUtc: nowUtc);
+  }
+
+  String _resolveInitialGameId() {
+    final catalog = _effectiveGameCatalog;
+    if (catalog.isEmpty) {
+      return _demoCubeGameId;
     }
 
     final nowUtc = DateTime.now().toUtc();
-    final filtered = <_GameCatalogEntry>[];
-    for (final entry in _gameCatalog) {
-      if (access.hasGameAccess(gameId: entry.gameId, atUtc: nowUtc) &&
-          access.isGameAllowedByPlan(entry.gameId)) {
-        filtered.add(entry);
+    for (final entry in catalog) {
+      if (_isGameOwnedByEntitlement(entry, atUtc: nowUtc)) {
+        return entry.gameId;
       }
     }
-    return filtered;
+
+    return catalog.first.gameId;
+  }
+
+  List<_GameCatalogEntry> get _entitledGameCatalog {
+    return _effectiveGameCatalog;
   }
 
   _GameCatalogEntry get _selectedGameEntry {
-    final entitledCatalog = _entitledGameCatalog;
-    if (entitledCatalog.isNotEmpty) {
-      for (final entry in entitledCatalog) {
+    final catalog = _effectiveGameCatalog;
+    if (catalog.isNotEmpty) {
+      for (final entry in catalog) {
         if (entry.gameId == _selectedGameId) {
           return entry;
         }
       }
 
-      final fallback = entitledCatalog.first;
+      final fallback = catalog.first;
       if (_selectedGameId != fallback.gameId) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted || _selectedGameId == fallback.gameId) {
@@ -2282,13 +2535,7 @@ class _ControlScreenState extends State<ControlScreen>
       return fallback;
     }
 
-    for (final entry in _gameCatalog) {
-      if (entry.gameId == _selectedGameId) {
-        return entry;
-      }
-    }
-
-    return _gameCatalog.first;
+    return _fallbackGameCatalog.first;
   }
 
   SubscriptionPlanTier get _activePlanTier {
@@ -2502,28 +2749,60 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   bool get _isSelectedGameLaunchable {
-    return _isLaunchableContentState(_selectedContentState);
+    final selectedEntry = _selectedGameEntry;
+    return selectedEntry.runtimeLaunchEnabled &&
+        _isLaunchableContentState(_selectedContentState);
   }
 
   void _bootstrapLocalContentStates() {
     final nowUtc = DateTime.now().toUtc();
-    for (final entry in _gameCatalog) {
-      final isOwnedByEntitlement = EntitlementService.canLaunchGame(
-        entry.gameId,
-        atUtc: nowUtc,
-      );
-      _contentStatesByGameId[entry.gameId] = PurchasedContentState(
-        gameId: entry.gameId,
+    final catalog = _effectiveGameCatalog;
+    final knownGameIds = <String>{};
+    for (final entry in catalog) {
+      knownGameIds.add(entry.gameId);
+      final isOwnedByEntitlement =
+          _isGameOwnedByEntitlement(entry, atUtc: nowUtc);
+      final existing = _contentStatesByGameId[entry.gameId];
+
+      final defaultInstalledVersion =
+          entry.requiresExplicitLicense ? null : entry.targetContentVersion;
+      final defaultRuntimeStatus = isOwnedByEntitlement
+          ? (entry.requiresExplicitLicense
+              ? ContentRuntimeStatus.notInstalled
+              : ContentRuntimeStatus.ready)
+          : ContentRuntimeStatus.notInstalled;
+      if (existing == null) {
+        _contentStatesByGameId[entry.gameId] = PurchasedContentState(
+          gameId: entry.gameId,
+          owned: isOwnedByEntitlement,
+          installedVersion: defaultInstalledVersion,
+          targetVersion: entry.targetContentVersion,
+          updateRequired: false,
+          updateOptional: false,
+          runtimeStatus: defaultRuntimeStatus,
+          lastError: null,
+          updatedAtUtc: nowUtc,
+        );
+        continue;
+      }
+
+      _contentStatesByGameId[entry.gameId] = existing.copyWith(
         owned: isOwnedByEntitlement,
-        installedVersion: entry.targetContentVersion,
         targetVersion: entry.targetContentVersion,
-        updateRequired: false,
-        updateOptional: false,
-        runtimeStatus: ContentRuntimeStatus.ready,
-        lastError: null,
+        installedVersion:
+            isOwnedByEntitlement ? existing.installedVersion : null,
+        runtimeStatus: isOwnedByEntitlement
+            ? existing.runtimeStatus
+            : ContentRuntimeStatus.notInstalled,
+        updateRequired: isOwnedByEntitlement ? existing.updateRequired : false,
+        lastError: isOwnedByEntitlement ? existing.lastError : null,
         updatedAtUtc: nowUtc,
       );
     }
+
+    _contentStatesByGameId.removeWhere(
+      (gameId, _) => !knownGameIds.contains(gameId),
+    );
   }
 
   PurchasedContentState _contentStateForGame(String gameId) {
@@ -2532,20 +2811,27 @@ class _ControlScreenState extends State<ControlScreen>
       return existing;
     }
 
-    final fallbackEntry = _gameCatalog.where((entry) => entry.gameId == gameId);
+    final fallbackEntry =
+        _effectiveGameCatalog.where((entry) => entry.gameId == gameId);
     if (fallbackEntry.isNotEmpty) {
-      final isOwnedByEntitlement = EntitlementService.canLaunchGame(
-        gameId,
+      final entry = fallbackEntry.first;
+      final isOwnedByEntitlement = _isGameOwnedByEntitlement(
+        entry,
         atUtc: DateTime.now().toUtc(),
       );
       return PurchasedContentState(
         gameId: gameId,
         owned: isOwnedByEntitlement,
-        installedVersion: fallbackEntry.first.targetContentVersion,
-        targetVersion: fallbackEntry.first.targetContentVersion,
+        installedVersion:
+            entry.requiresExplicitLicense ? null : entry.targetContentVersion,
+        targetVersion: entry.targetContentVersion,
         updateRequired: false,
         updateOptional: false,
-        runtimeStatus: ContentRuntimeStatus.ready,
+        runtimeStatus: isOwnedByEntitlement
+            ? (entry.requiresExplicitLicense
+                ? ContentRuntimeStatus.notInstalled
+                : ContentRuntimeStatus.ready)
+            : ContentRuntimeStatus.notInstalled,
         lastError: null,
         updatedAtUtc: DateTime.now().toUtc(),
       );
@@ -2655,6 +2941,13 @@ class _ControlScreenState extends State<ControlScreen>
       current: state.runtimeStatus,
       action: ContentDeliveryAction.requestInstallOrUpdate,
     );
+    String packageUri = '';
+    for (final entry in _effectiveGameCatalog) {
+      if (entry.gameId == state.gameId) {
+        packageUri = entry.packageUri;
+        break;
+      }
+    }
 
     setState(() {
       _contentActionsInFlight.add(state.gameId);
@@ -2673,6 +2966,7 @@ class _ControlScreenState extends State<ControlScreen>
           actorId: _resolveActorTherapistId(),
           gameId: state.gameId,
           targetVersion: state.targetVersion,
+          packageUri: packageUri,
         ),
       );
 
@@ -3284,7 +3578,7 @@ class _ControlScreenState extends State<ControlScreen>
       return null;
     }
 
-    for (final entry in _gameCatalog) {
+    for (final entry in _effectiveGameCatalog) {
       if (entry.gameId == remoteGameId) {
         return remoteGameId;
       }
@@ -3915,7 +4209,10 @@ class _ControlScreenState extends State<ControlScreen>
     });
   }
 
-  Future<bool> _sendEndSessionWithConfirmation() async {
+  Future<bool> _sendEndSessionWithConfirmation({
+    String reasonCode = 'THERAPIST_CONFIRMED_END',
+    Map<String, dynamic>? extraPayload,
+  }) async {
     if (!_isConnected) {
       if (!mounted) {
         return false;
@@ -3935,12 +4232,13 @@ class _ControlScreenState extends State<ControlScreen>
     );
     _logAttachDecision(
       decision: 'END_SESSION_REQUEST',
-      reasonCode: 'THERAPIST_CONFIRMED_END',
+      reasonCode: reasonCode,
       commandId: CriticalCommandIds.endSession,
       sessionId: sessionIdToEnd,
     );
     final ended = await _sendCommand(
       CriticalCommandIds.endSession,
+      extraPayload: extraPayload,
       showSuccessSnack: false,
     );
     if (!ended) {
@@ -3951,7 +4249,7 @@ class _ControlScreenState extends State<ControlScreen>
     _clearDeferredHandoff(
       sessionId: sessionIdToEnd,
       source: 'command',
-      reasonCode: 'THERAPIST_CONFIRMED_END',
+      reasonCode: reasonCode,
     );
     _markSessionAsRecentlyEnded(_lastSessionStateUpdateSessionId);
     _markSessionAsRecentlyEnded(_lastRuntimeStatusSessionId);
@@ -4857,7 +5155,7 @@ class _ControlScreenState extends State<ControlScreen>
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Only licensed games are shown here. Ask an admin to grant additional titles.',
+                  'Use Installed/Store tabs. Additional titles can be granted or seeded by admin.',
                   style: TextStyle(
                     color: Colors.grey.shade700,
                     fontSize: 12,
@@ -4886,8 +5184,8 @@ class _ControlScreenState extends State<ControlScreen>
         return AlertDialog(
           title: const Text('Add more games'),
           content: const Text(
-            'This catalog only shows games available under the current license. '
-            'Ask an admin operator to grant additional game access, then sync the catalog.',
+            'Store tab shows titles available to add. Installed tab shows games already owned. '
+            'If catalog is empty, ask admin to seed game_catalog and grant licenses, then tap Refresh.',
           ),
           actions: [
             TextButton(
@@ -4933,6 +5231,86 @@ class _ControlScreenState extends State<ControlScreen>
       }
 
       await _disconnectAndPop(returnToStudentSelection: true);
+    });
+  }
+
+  Future<void> _terminateActiveSessionFromCatalog() async {
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Terminate active session?'),
+            content: const Text(
+              'Use this when runtime keeps stale session ownership/lock. '
+              'The app will send END_SESSION and re-attach a new local session context.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Terminate'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!confirmed) {
+      return;
+    }
+
+    await _runPrimaryAction(() async {
+      final ended = await _sendEndSessionWithConfirmation(
+        reasonCode: 'END_SESSION_OVERRIDE',
+        extraPayload: const <String, dynamic>{
+          'reason': 'OwnershipConflictRecovery',
+          'reasonCode': 'END_SESSION_OVERRIDE',
+        },
+      );
+      if (!ended || !mounted) {
+        return;
+      }
+
+      final newSessionId = _buildLocalSessionId();
+      setState(() {
+        _activeSessionId = newSessionId;
+        _sessionAttachReady = false;
+        _requiresSessionDecision = false;
+        _remoteSessionIdPendingDecision = null;
+      });
+
+      await _ensureSessionAttached(
+        reasonCode: 'END_SESSION_OVERRIDE',
+        force: true,
+        sessionIdOverride: newSessionId,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (_sessionAttachReady) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Session terminated and new context attached.',
+            ),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Session terminated. Waiting for attach sync...',
+            ),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
     });
   }
 
@@ -5209,11 +5587,13 @@ class _ControlScreenState extends State<ControlScreen>
     final canStart = controlsReady &&
         !_isPrimaryActionInFlight &&
         !planLaunchBlocked &&
+        entry.runtimeLaunchEnabled &&
         _isLaunchableContentState(contentState) &&
         !_isGameRuntimeActive;
     final canRestart = controlsReady &&
         !_isPrimaryActionInFlight &&
         !planLaunchBlocked &&
+        entry.runtimeLaunchEnabled &&
         _isLaunchableContentState(contentState) &&
         _isGameRuntimeActive;
     final canPause = controlsReady &&
@@ -5318,13 +5698,37 @@ class _ControlScreenState extends State<ControlScreen>
               ),
             ),
           ],
+          if (!entry.runtimeLaunchEnabled) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Runtime launch for this game is disabled in current build.',
+              style: TextStyle(
+                color: Colors.orange.shade900,
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
   Widget _buildGameCatalogStep() {
-    final visibleCatalog = _entitledGameCatalog;
+    final catalog = _entitledGameCatalog;
+    final installedCatalog = <_GameCatalogEntry>[];
+    final storeCatalog = <_GameCatalogEntry>[];
+    for (final entry in catalog) {
+      final state = _contentStateForGame(entry.gameId);
+      if (state.owned) {
+        installedCatalog.add(entry);
+      } else if (entry.availableForPurchase) {
+        storeCatalog.add(entry);
+      }
+    }
+    final visibleCatalog = _catalogFilterTab == _CatalogFilterTab.installed
+        ? installedCatalog
+        : storeCatalog;
     final selectedEntry = _selectedGameEntry;
     final planGateBannerText = _planGateBannerText;
 
@@ -5370,6 +5774,43 @@ class _ControlScreenState extends State<ControlScreen>
           style: TextStyle(
             color: Colors.grey[700],
             fontSize: 12,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade200,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: FilledButton.tonal(
+                  onPressed: _catalogFilterTab == _CatalogFilterTab.installed
+                      ? null
+                      : () {
+                          setState(() {
+                            _catalogFilterTab = _CatalogFilterTab.installed;
+                          });
+                        },
+                  child: Text('Installed (${installedCatalog.length})'),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: FilledButton.tonal(
+                  onPressed: _catalogFilterTab == _CatalogFilterTab.store
+                      ? null
+                      : () {
+                          setState(() {
+                            _catalogFilterTab = _CatalogFilterTab.store;
+                          });
+                        },
+                  child: Text('Store (${storeCatalog.length})'),
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 6),
@@ -5418,6 +5859,14 @@ class _ControlScreenState extends State<ControlScreen>
             text: 'Selected game `${selectedEntry.title}` is ready to open.',
           ),
           const SizedBox(height: 6),
+        ] else if (!selectedEntry.runtimeLaunchEnabled) ...[
+          _buildStateBanner(
+            icon: Icons.hourglass_bottom,
+            color: Colors.orange.shade800,
+            text:
+                'Selected game `${selectedEntry.title}` is catalog-only for now. Runtime launch is not enabled yet.',
+          ),
+          const SizedBox(height: 6),
         ] else if (_contentDeliveryEnabled) ...[
           _buildStateBanner(
             icon: Icons.warning_amber_rounded,
@@ -5437,186 +5886,253 @@ class _ControlScreenState extends State<ControlScreen>
           child: visibleCatalog.isEmpty
               ? Center(
                   child: Text(
-                    'No games available under current entitlement plan.',
+                    _catalogFilterTab == _CatalogFilterTab.installed
+                        ? 'No installed games yet for this account.'
+                        : 'No store items available right now.',
                     style: TextStyle(color: Colors.grey[600]),
                   ),
                 )
-              : ListView.separated(
-                  itemCount: visibleCatalog.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    final entry = visibleCatalog[index];
-                    final selected = entry.gameId == _selectedGameId;
-                    final expanded =
-                        _expandedPreviewGameIds.contains(entry.gameId);
-                    final contentState = _contentStateForGame(entry.gameId);
-                    final actionInFlight =
-                        _contentActionsInFlight.contains(entry.gameId);
-                    final shouldInstallOrUpdate = contentState.owned &&
-                        (contentState.runtimeStatus ==
-                                ContentRuntimeStatus.notInstalled ||
-                            contentState.runtimeStatus ==
-                                ContentRuntimeStatus.updateRequired ||
-                            contentState.runtimeStatus ==
-                                ContentRuntimeStatus.failed ||
-                            contentState.updateRequired);
-
-                    return Card(
-                      elevation: selected ? 1.5 : 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        side: BorderSide(
-                          color: selected
-                              ? Colors.blue.shade300
-                              : Colors.grey.shade300,
-                        ),
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final maxWidth = constraints.maxWidth;
+                    final crossAxisCount = maxWidth >= 980
+                        ? 3
+                        : maxWidth >= 620
+                            ? 2
+                            : 1;
+                    return GridView.builder(
+                      itemCount: visibleCatalog.length,
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: crossAxisCount,
+                        crossAxisSpacing: 8,
+                        mainAxisSpacing: 8,
+                        childAspectRatio: 0.88,
                       ),
-                      child: Column(
-                        children: [
-                          ListTile(
+                      itemBuilder: (context, index) {
+                        final entry = visibleCatalog[index];
+                        final selected = entry.gameId == _selectedGameId;
+                        final contentState = _contentStateForGame(entry.gameId);
+                        final actionInFlight =
+                            _contentActionsInFlight.contains(entry.gameId);
+                        final shouldInstallOrUpdate = contentState.owned &&
+                            (contentState.runtimeStatus ==
+                                    ContentRuntimeStatus.notInstalled ||
+                                contentState.runtimeStatus ==
+                                    ContentRuntimeStatus.updateRequired ||
+                                contentState.runtimeStatus ==
+                                    ContentRuntimeStatus.failed ||
+                                contentState.updateRequired);
+                        final primaryStoreActionEnabled =
+                            !contentState.owned && entry.availableForPurchase;
+
+                        return Card(
+                          elevation: selected ? 2 : 0.5,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(
+                              color: selected
+                                  ? Colors.blue.shade300
+                                  : Colors.grey.shade300,
+                            ),
+                          ),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(12),
                             onTap: () {
                               setState(() {
                                 _selectedGameId = entry.gameId;
                               });
                             },
-                            leading: Icon(
-                              selected
-                                  ? Icons.check_circle
-                                  : Icons.radio_button_unchecked,
-                              color: selected ? Colors.blue : Colors.grey,
-                            ),
-                            title: Text(
-                              entry.title,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w700),
-                            ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                Text(entry.description),
-                                const SizedBox(height: 4),
-                                Wrap(
-                                  spacing: 6,
-                                  runSpacing: 6,
-                                  children: [
-                                    _buildContentStatusChip(contentState),
-                                    _buildVersionChip(contentState),
-                                  ],
+                                _buildCatalogArtwork(entry, selected: selected),
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(10, 10, 10, 4),
+                                  child: Text(
+                                    entry.title,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                  ),
+                                  child: Text(
+                                    entry.description.isEmpty
+                                        ? 'Description placeholder.'
+                                        : entry.description,
+                                    style: TextStyle(
+                                      color: Colors.grey.shade700,
+                                      fontSize: 12,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    10,
+                                    6,
+                                    10,
+                                    0,
+                                  ),
+                                  child: Wrap(
+                                    spacing: 6,
+                                    runSpacing: 6,
+                                    children: [
+                                      _buildContentStatusChip(contentState),
+                                      _buildVersionChip(contentState),
+                                    ],
+                                  ),
+                                ),
+                                if (entry.previewLines.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      10,
+                                      6,
+                                      10,
+                                      0,
+                                    ),
+                                    child: Text(
+                                      entry.previewLines.first,
+                                      style: TextStyle(
+                                        color: Colors.grey.shade600,
+                                        fontSize: 11,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                if (!entry.runtimeLaunchEnabled)
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      10,
+                                      6,
+                                      10,
+                                      0,
+                                    ),
+                                    child: Text(
+                                      'Catalog preview only (runtime launch pending).',
+                                      style: TextStyle(
+                                        color: Colors.orange.shade800,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                if (contentState.lastError != null &&
+                                    contentState.lastError!.trim().isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      10,
+                                      6,
+                                      10,
+                                      0,
+                                    ),
+                                    child: Text(
+                                      'Last issue: ${contentState.lastError}',
+                                      style: TextStyle(
+                                        color: Colors.red.shade700,
+                                        fontSize: 11,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                const Spacer(),
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    10,
+                                    8,
+                                    10,
+                                    10,
+                                  ),
+                                  child: _catalogFilterTab ==
+                                          _CatalogFilterTab.store
+                                      ? ElevatedButton.icon(
+                                          onPressed: primaryStoreActionEnabled
+                                              ? () => unawaited(
+                                                    _simulateStorePurchase(
+                                                      entry,
+                                                    ),
+                                                  )
+                                              : null,
+                                          icon: const Icon(
+                                            Icons.shopping_cart_checkout,
+                                          ),
+                                          label: Text(
+                                            contentState.owned
+                                                ? 'Owned'
+                                                : 'Buy (sim)',
+                                          ),
+                                        )
+                                      : (_contentDeliveryEnabled
+                                          ? Row(
+                                              children: [
+                                                Expanded(
+                                                  child: ElevatedButton.icon(
+                                                    onPressed: !_isConnected ||
+                                                            actionInFlight ||
+                                                            !shouldInstallOrUpdate
+                                                        ? null
+                                                        : () => unawaited(
+                                                              _requestInstallOrUpdate(
+                                                                contentState,
+                                                              ),
+                                                            ),
+                                                    icon: const Icon(
+                                                      Icons.download,
+                                                    ),
+                                                    label: Text(
+                                                      contentState.runtimeStatus ==
+                                                              ContentRuntimeStatus
+                                                                  .updateRequired
+                                                          ? 'Update'
+                                                          : contentState
+                                                                      .runtimeStatus ==
+                                                                  ContentRuntimeStatus
+                                                                      .failed
+                                                              ? 'Retry'
+                                                              : 'Install',
+                                                    ),
+                                                  ),
+                                                ),
+                                                if (contentState
+                                                    .isInstalled) ...[
+                                                  const SizedBox(width: 8),
+                                                  Expanded(
+                                                    child: OutlinedButton.icon(
+                                                      onPressed:
+                                                          !_isConnected ||
+                                                                  actionInFlight
+                                                              ? null
+                                                              : () => unawaited(
+                                                                    _requestUninstall(
+                                                                      contentState,
+                                                                    ),
+                                                                  ),
+                                                      icon: const Icon(
+                                                        Icons.delete_outline,
+                                                      ),
+                                                      label:
+                                                          const Text('Remove'),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
+                                            )
+                                          : const SizedBox.shrink()),
                                 ),
                               ],
                             ),
-                            trailing: IconButton(
-                              icon: Icon(
-                                expanded
-                                    ? Icons.expand_less
-                                    : Icons.expand_more,
-                              ),
-                              onPressed: () {
-                                setState(() {
-                                  if (expanded) {
-                                    _expandedPreviewGameIds
-                                        .remove(entry.gameId);
-                                  } else {
-                                    _expandedPreviewGameIds.add(entry.gameId);
-                                  }
-                                });
-                              },
-                            ),
                           ),
-                          if (expanded)
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Preview',
-                                    style: TextStyle(
-                                      color: Colors.grey[800],
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  for (final line in entry.previewLines)
-                                    Padding(
-                                      padding: const EdgeInsets.only(bottom: 2),
-                                      child: Text(
-                                        '- $line',
-                                        style: TextStyle(
-                                          color: Colors.grey[700],
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ),
-                                  if (contentState.lastError != null &&
-                                      contentState.lastError!.trim().isNotEmpty)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 6),
-                                      child: Text(
-                                        'Last issue: ${contentState.lastError}',
-                                        style: TextStyle(
-                                          color: Colors.red[700],
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                            child: _contentDeliveryEnabled
-                                ? Row(
-                                    children: [
-                                      Expanded(
-                                        child: ElevatedButton.icon(
-                                          onPressed: !_isConnected ||
-                                                  actionInFlight ||
-                                                  !shouldInstallOrUpdate
-                                              ? null
-                                              : () => unawaited(
-                                                    _requestInstallOrUpdate(
-                                                        contentState),
-                                                  ),
-                                          icon: const Icon(Icons.download),
-                                          label: Text(
-                                            contentState.runtimeStatus ==
-                                                    ContentRuntimeStatus
-                                                        .updateRequired
-                                                ? 'Update'
-                                                : contentState.runtimeStatus ==
-                                                        ContentRuntimeStatus
-                                                            .failed
-                                                    ? 'Retry install'
-                                                    : 'Install',
-                                          ),
-                                        ),
-                                      ),
-                                      if (contentState.isInstalled) ...[
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: OutlinedButton.icon(
-                                            onPressed:
-                                                !_isConnected || actionInFlight
-                                                    ? null
-                                                    : () => unawaited(
-                                                          _requestUninstall(
-                                                              contentState),
-                                                        ),
-                                            icon: const Icon(
-                                                Icons.delete_outline),
-                                            label: const Text('Uninstall'),
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  )
-                                : const SizedBox.shrink(),
-                          ),
-                        ],
-                      ),
+                        );
+                      },
                     );
                   },
                 ),
@@ -5624,6 +6140,21 @@ class _ControlScreenState extends State<ControlScreen>
         const SizedBox(height: 8),
         _buildMoreGamesHint(),
         const SizedBox(height: 8),
+        if (_showCatalogRescueTerminateButton) ...[
+          OutlinedButton.icon(
+            onPressed: _isConnected && !_isPrimaryActionInFlight
+                ? () => unawaited(_terminateActiveSessionFromCatalog())
+                : null,
+            icon: const Icon(Icons.power_settings_new),
+            label: const Text('Terminate active session (rescue)'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.deepOrange.shade700,
+              side: BorderSide(color: Colors.deepOrange.shade300),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
         ElevatedButton.icon(
           onPressed: _isConnected &&
                   _sessionAttachReady &&
@@ -5645,11 +6176,13 @@ class _ControlScreenState extends State<ControlScreen>
                     ? 'Headset not in active VR app yet'
                     : _isPlanBlockingLaunch
                         ? 'Current plan blocks launching this session'
-                        : _isSelectedGameLaunchable
-                            ? 'Open game session'
-                            : _contentDeliveryEnabled
-                                ? 'Install or update selected game first'
-                                : 'Select available game first',
+                        : !selectedEntry.runtimeLaunchEnabled
+                            ? 'Selected game is catalog-only for now'
+                            : _isSelectedGameLaunchable
+                                ? 'Open game session'
+                                : _contentDeliveryEnabled
+                                    ? 'Install or update selected game first'
+                                    : 'Select available game first',
           ),
           style: ElevatedButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -5791,6 +6324,98 @@ class _ControlScreenState extends State<ControlScreen>
           ),
         ),
       ],
+    );
+  }
+
+  Future<void> _simulateStorePurchase(_GameCatalogEntry entry) async {
+    if (entry.gameId.trim().isEmpty) {
+      return;
+    }
+
+    final nowUtc = DateTime.now().toUtc();
+    final currentState = _contentStateForGame(entry.gameId);
+    setState(() {
+      _simulatedOwnedGameIds.add(entry.gameId);
+      _catalogFilterTab = _CatalogFilterTab.installed;
+      _selectedGameId = entry.gameId;
+      _contentStatesByGameId[entry.gameId] = currentState.copyWith(
+        owned: true,
+        targetVersion: entry.targetContentVersion,
+        installedVersion:
+            entry.requiresExplicitLicense ? null : entry.targetContentVersion,
+        runtimeStatus: entry.requiresExplicitLicense
+            ? ContentRuntimeStatus.notInstalled
+            : ContentRuntimeStatus.ready,
+        updateRequired: false,
+        lastError: null,
+        updatedAtUtc: nowUtc,
+      );
+    });
+
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Simulated purchase completed for ${entry.title}.'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  Widget _buildCatalogArtwork(
+    _GameCatalogEntry entry, {
+    required bool selected,
+  }) {
+    final borderColor = selected ? Colors.blue.shade300 : Colors.grey.shade300;
+    final imageUrl = entry.thumbnailUrl.trim();
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+        border: Border(bottom: BorderSide(color: borderColor)),
+      ),
+      child: AspectRatio(
+        aspectRatio: 16 / 9,
+        child: ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+          child: imageUrl.isEmpty
+              ? Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: <Color>[
+                        Colors.blueGrey.shade200,
+                        Colors.blueGrey.shade100,
+                      ],
+                    ),
+                  ),
+                  child: Center(
+                    child: Icon(
+                      Icons.videogame_asset,
+                      size: 36,
+                      color: Colors.blueGrey.shade700,
+                    ),
+                  ),
+                )
+              : Image.network(
+                  imageUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    color: Colors.blueGrey.shade100,
+                    child: Center(
+                      child: Icon(
+                        Icons.broken_image_outlined,
+                        size: 28,
+                        color: Colors.blueGrey.shade700,
+                      ),
+                    ),
+                  ),
+                ),
+        ),
+      ),
     );
   }
 
@@ -6014,7 +6639,13 @@ class _GameCatalogEntry {
   final String title;
   final String description;
   final String targetContentVersion;
+  final String packageUri;
+  final String thumbnailUrl;
   final bool supportsSaveResume;
+  final bool availableForPurchase;
+  final bool requiresExplicitLicense;
+  final bool runtimeLaunchEnabled;
+  final int sortOrder;
   final List<String> previewLines;
 
   const _GameCatalogEntry({
@@ -6022,7 +6653,30 @@ class _GameCatalogEntry {
     required this.title,
     required this.description,
     required this.targetContentVersion,
+    required this.packageUri,
+    required this.thumbnailUrl,
     required this.supportsSaveResume,
+    required this.availableForPurchase,
+    required this.requiresExplicitLicense,
+    required this.runtimeLaunchEnabled,
+    required this.sortOrder,
     required this.previewLines,
   });
+
+  factory _GameCatalogEntry.fromRemoteEntry(GameCatalogEntry entry) {
+    return _GameCatalogEntry(
+      gameId: entry.gameId,
+      title: entry.title,
+      description: entry.description,
+      targetContentVersion: entry.targetContentVersion,
+      packageUri: entry.packageUri,
+      thumbnailUrl: entry.thumbnailUrl,
+      supportsSaveResume: entry.supportsSaveResume,
+      availableForPurchase: entry.availableForPurchase,
+      requiresExplicitLicense: entry.requiresExplicitLicense,
+      runtimeLaunchEnabled: entry.runtimeLaunchEnabled,
+      sortOrder: entry.sortOrder,
+      previewLines: List<String>.from(entry.previewLines),
+    );
+  }
 }

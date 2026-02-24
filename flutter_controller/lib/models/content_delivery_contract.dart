@@ -71,7 +71,8 @@ class PurchasedContentState {
     required this.updatedAtUtc,
   });
 
-  bool get isInstalled => installedVersion != null && installedVersion!.isNotEmpty;
+  bool get isInstalled =>
+      installedVersion != null && installedVersion!.isNotEmpty;
 
   bool get isLaunchable => owned && runtimeStatus == ContentRuntimeStatus.ready;
 
@@ -87,9 +88,9 @@ class PurchasedContentState {
         json['runtimeStatus'] as String?,
       ),
       lastError: json['lastError'] as String?,
-      updatedAtUtc: DateTime.tryParse(json['updatedAtUtc'] as String? ?? '')
-              ?.toUtc() ??
-          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      updatedAtUtc:
+          DateTime.tryParse(json['updatedAtUtc'] as String? ?? '')?.toUtc() ??
+              DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
     );
   }
 
@@ -128,7 +129,9 @@ class PurchasedContentState {
       updateRequired: updateRequired ?? this.updateRequired,
       updateOptional: updateOptional ?? this.updateOptional,
       runtimeStatus: runtimeStatus ?? this.runtimeStatus,
-      lastError: identical(lastError, _sentinel) ? this.lastError : lastError as String?,
+      lastError: identical(lastError, _sentinel)
+          ? this.lastError
+          : lastError as String?,
       updatedAtUtc: updatedAtUtc ?? this.updatedAtUtc,
     );
   }
@@ -212,9 +215,8 @@ class ContentDeliveryRequests {
     return <String, dynamic>{
       'actorId': actorId,
       'role': role ?? 'THERAPIST',
-      'issuedAtUtc': (issuedAtUtc ?? DateTime.now().toUtc())
-          .toUtc()
-          .toIso8601String(),
+      'issuedAtUtc':
+          (issuedAtUtc ?? DateTime.now().toUtc()).toUtc().toIso8601String(),
     };
   }
 
@@ -222,16 +224,20 @@ class ContentDeliveryRequests {
     required String actorId,
     required String gameId,
     required String targetVersion,
+    String? packageUri,
     DateTime? issuedAtUtc,
   }) {
-    return <String, dynamic>{
+    final payload = <String, dynamic>{
       'actorId': actorId,
       'gameId': gameId,
       'targetVersion': targetVersion,
-      'issuedAtUtc': (issuedAtUtc ?? DateTime.now().toUtc())
-          .toUtc()
-          .toIso8601String(),
+      'issuedAtUtc':
+          (issuedAtUtc ?? DateTime.now().toUtc()).toUtc().toIso8601String(),
     };
+    if (packageUri != null && packageUri.trim().isNotEmpty) {
+      payload['packageUri'] = packageUri.trim();
+    }
+    return payload;
   }
 
   static Map<String, dynamic> buildUninstallRequest({
@@ -242,9 +248,8 @@ class ContentDeliveryRequests {
     return <String, dynamic>{
       'actorId': actorId,
       'gameId': gameId,
-      'issuedAtUtc': (issuedAtUtc ?? DateTime.now().toUtc())
-          .toUtc()
-          .toIso8601String(),
+      'issuedAtUtc':
+          (issuedAtUtc ?? DateTime.now().toUtc()).toUtc().toIso8601String(),
     };
   }
 }

@@ -120,6 +120,74 @@ void main() {
       final stream = SessionJournalService.watchSessionTimeline(sessionId: ' ');
       await expectLater(stream, emits(isEmpty));
     });
+
+    test('fetchLatestUnfinishedForTherapist returns latest unfinished session',
+        () async {
+      await firestore
+          .collection('therapy_sessions')
+          .doc('session-old')
+          .set(_sessionPayload(
+            sessionId: 'session-old',
+            studentId: 'student-a',
+            therapistId: 'therapist-a',
+            state: SessionLifecycleState.inProgress.wireValue,
+            unfinished: true,
+            updatedAtUnixMs: 1000,
+          ));
+      await firestore
+          .collection('therapy_sessions')
+          .doc('session-new')
+          .set(_sessionPayload(
+            sessionId: 'session-new',
+            studentId: 'student-b',
+            therapistId: 'therapist-a',
+            state: SessionLifecycleState.paused.wireValue,
+            unfinished: true,
+            updatedAtUnixMs: 2000,
+          ));
+      await firestore
+          .collection('therapy_sessions')
+          .doc('session-terminal')
+          .set(_sessionPayload(
+            sessionId: 'session-terminal',
+            studentId: 'student-c',
+            therapistId: 'therapist-a',
+            state: SessionLifecycleState.completed.wireValue,
+            unfinished: false,
+            updatedAtUnixMs: 3000,
+          ));
+
+      final latest =
+          await SessionJournalService.fetchLatestUnfinishedForTherapist(
+        therapistId: 'therapist-a',
+      );
+
+      expect(latest, isNotNull);
+      expect(latest!.sessionId, 'session-new');
+      expect(latest.studentId, 'student-b');
+    });
+
+    test('fetchLatestUnfinishedForTherapist returns null when none active',
+        () async {
+      await firestore
+          .collection('therapy_sessions')
+          .doc('session-complete')
+          .set(_sessionPayload(
+            sessionId: 'session-complete',
+            studentId: 'student-a',
+            therapistId: 'therapist-a',
+            state: SessionLifecycleState.completed.wireValue,
+            unfinished: false,
+            updatedAtUnixMs: 1000,
+          ));
+
+      final latest =
+          await SessionJournalService.fetchLatestUnfinishedForTherapist(
+        therapistId: 'therapist-a',
+      );
+
+      expect(latest, isNull);
+    });
   });
 }
 
@@ -150,5 +218,48 @@ Map<String, dynamic> _timelinePayload({
     'eventAtUtc': eventAtUtc,
     'eventAtUnixMs': eventAtUnixMs,
     'createdAtUtc': eventAtUtc,
+  };
+}
+
+Map<String, dynamic> _sessionPayload({
+  required String sessionId,
+  required String studentId,
+  required String therapistId,
+  required String state,
+  required bool unfinished,
+  required int updatedAtUnixMs,
+}) {
+  final updatedAtUtc = DateTime.fromMillisecondsSinceEpoch(
+    updatedAtUnixMs,
+    isUtc: true,
+  );
+  final ownerKey = SessionOwnership.ownerKey(
+    therapistId: therapistId,
+    studentId: studentId,
+  );
+  final sessionKey = SessionOwnership.sessionKey(
+    therapistId: therapistId,
+    studentId: studentId,
+    sessionId: sessionId,
+  );
+
+  return <String, dynamic>{
+    'sessionId': sessionId,
+    'studentId': studentId,
+    'therapistId': therapistId,
+    'ownerKey': ownerKey,
+    'sessionKey': sessionKey,
+    'state': state,
+    'unfinished': unfinished,
+    'isTerminal': !unfinished,
+    'latestGameId': 'demo_cube_clicker',
+    'reasonCode': '',
+    'updatedAtUtc': updatedAtUtc.toIso8601String(),
+    'updatedAtUnixMs': updatedAtUnixMs,
+    'createdAtUtc': updatedAtUtc.toIso8601String(),
+    'createdAtUnixMs': updatedAtUnixMs,
+    'startedAtUtc': updatedAtUtc.toIso8601String(),
+    'startedAtUnixMs': updatedAtUnixMs,
+    'metadata': <String, dynamic>{},
   };
 }

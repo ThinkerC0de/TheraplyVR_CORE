@@ -22,7 +22,7 @@ class MediaStreamWidget extends StatefulWidget {
 }
 
 class _MediaStreamWidgetState extends State<MediaStreamWidget> {
-  static const bool _playQuestAudioOnMobile = false;
+  static const bool _suppressQuestMonitorDuringPtt = true;
 
   WebRTCMediaService? _webrtcService;
   StreamSubscription<MediaStream>? _streamSub;
@@ -31,6 +31,7 @@ class _MediaStreamWidgetState extends State<MediaStreamWidget> {
   String? _error;
   bool _rendererReady = false;
   bool _pttPressed = false;
+  bool _questAudioEnabled = false;
 
   @override
   void initState() {
@@ -52,11 +53,10 @@ class _MediaStreamWidgetState extends State<MediaStreamWidget> {
     _webrtcService!.start();
     _streamSub = _webrtcService!.onRemoteStream.listen((stream) {
       if (mounted) {
-        if (!_playQuestAudioOnMobile) {
-          for (final track in stream.getAudioTracks()) {
-            track.enabled = false;
-          }
-        }
+        _applyRemoteAudioState(
+          stream,
+          enabled: _resolveEffectiveQuestAudioEnabled(),
+        );
         setState(() => _renderer?.srcObject = stream);
       }
     });
@@ -107,42 +107,87 @@ class _MediaStreamWidgetState extends State<MediaStreamWidget> {
                 Positioned(
                   right: 12,
                   bottom: 12,
-                  child: GestureDetector(
-                    onTapDown: (_) => _setPtt(true),
-                    onTapUp: (_) => _setPtt(false),
-                    onTapCancel: () => _setPtt(false),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 100),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: _pttPressed ? Colors.red : Colors.black54,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color:
-                              _pttPressed ? Colors.redAccent : Colors.white24,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            _pttPressed ? Icons.mic : Icons.mic_none,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            _pttPressed ? 'Talking...' : 'Hold to Talk',
-                            style: const TextStyle(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Tooltip(
+                        message: _questAudioEnabled
+                            ? 'Mute Quest audio'
+                            : 'Unmute Quest audio',
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(10),
+                          onTap: _toggleQuestAudio,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 120),
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: _questAudioEnabled
+                                  ? Colors.blueGrey.shade700
+                                  : Colors.black54,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: _questAudioEnabled
+                                    ? Colors.blue.shade300
+                                    : Colors.white24,
+                              ),
+                            ),
+                            child: Icon(
+                              _questAudioEnabled
+                                  ? Icons.volume_up
+                                  : Icons.volume_off,
                               color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
+                              size: 18,
                             ),
                           ),
-                        ],
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      Listener(
+                        behavior: HitTestBehavior.opaque,
+                        onPointerDown: (_) => _setPtt(true),
+                        onPointerUp: (_) => _setPtt(false),
+                        onPointerCancel: (_) => _setPtt(false),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 100),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: _pttPressed ? Colors.red : Colors.black54,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: _pttPressed
+                                  ? Colors.redAccent
+                                  : Colors.white24,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _pttPressed ? Icons.mic : Icons.mic_none,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                _pttPressed
+                                    ? (_resolveEffectiveQuestAudioEnabled(
+                                        pttPressedOverride: true,
+                                      )
+                                        ? 'Talking...'
+                                        : 'Talking... (monitor muted)')
+                                    : 'Hold to Talk',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -155,8 +200,54 @@ class _MediaStreamWidgetState extends State<MediaStreamWidget> {
 
   Future<void> _setPtt(bool enabled) async {
     if (_pttPressed == enabled) return;
+
+    final stream = _renderer?.srcObject;
+    if (stream is MediaStream && _suppressQuestMonitorDuringPtt) {
+      _applyRemoteAudioState(
+        stream,
+        enabled: _resolveEffectiveQuestAudioEnabled(
+          pttPressedOverride: enabled,
+        ),
+      );
+    }
+
     setState(() => _pttPressed = enabled);
     await _webrtcService?.setTalkbackEnabled(enabled);
+  }
+
+  void _toggleQuestAudio() {
+    final next = !_questAudioEnabled;
+    final stream = _renderer?.srcObject;
+    if (stream is MediaStream) {
+      _applyRemoteAudioState(
+        stream,
+        enabled: _resolveEffectiveQuestAudioEnabled(
+          questAudioEnabledOverride: next,
+        ),
+      );
+    }
+    setState(() {
+      _questAudioEnabled = next;
+    });
+  }
+
+  bool _resolveEffectiveQuestAudioEnabled({
+    bool? questAudioEnabledOverride,
+    bool? pttPressedOverride,
+  }) {
+    final effectiveQuestAudioEnabled =
+        questAudioEnabledOverride ?? _questAudioEnabled;
+    final effectivePttPressed = pttPressedOverride ?? _pttPressed;
+    if (_suppressQuestMonitorDuringPtt && effectivePttPressed) {
+      return false;
+    }
+    return effectiveQuestAudioEnabled;
+  }
+
+  void _applyRemoteAudioState(MediaStream stream, {required bool enabled}) {
+    for (final track in stream.getAudioTracks()) {
+      track.enabled = enabled;
+    }
   }
 
   Widget _buildWaiting() {

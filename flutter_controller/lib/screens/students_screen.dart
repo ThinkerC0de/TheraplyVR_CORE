@@ -2,12 +2,16 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_controller/models/entitlement_access.dart';
+import 'package:flutter_controller/models/ops_error_catalog.dart';
+import 'package:flutter_controller/models/session_fsm_contract.dart';
 import 'package:flutter_controller/models/student.dart';
 import 'package:flutter_controller/models/student_roster_sync.dart';
 import 'package:flutter_controller/models/therapist_session_settings.dart';
+import 'package:flutter_controller/models/therapy_session_record.dart';
 import 'package:flutter_controller/services/student_service.dart';
 import 'package:flutter_controller/services/firebase_service.dart';
 import 'package:flutter_controller/services/entitlement_service.dart';
+import 'package:flutter_controller/services/session_journal_service.dart';
 import 'package:flutter_controller/services/therapist_session_settings_service.dart';
 import 'package:flutter_controller/services/operator_incident_popup_queue.dart';
 import 'package:flutter_controller/screens/login_screen.dart';
@@ -20,21 +24,41 @@ class StudentsScreen extends StatefulWidget {
   State<StudentsScreen> createState() => _StudentsScreenState();
 }
 
-class _StudentsScreenState extends State<StudentsScreen> {
+class _StudentsScreenState extends State<StudentsScreen>
+    with WidgetsBindingObserver {
   String? _selectedStudentId;
   TherapistSessionSettings _therapistSessionSettings =
       TherapistSessionSettings.defaults();
   late final OperatorIncidentPopupQueue _incidentPopupQueue;
   bool _therapistSettingsLoading = true;
+  bool _activeSessionBannerLoading = true;
+  bool _activeSessionEndInFlight = false;
+  TherapySessionRecord? _latestActiveSession;
+  Student? _latestActiveSessionStudent;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _incidentPopupQueue = OperatorIncidentPopupQueue(
       queueName: 'students_screen',
       languageResolver: () => _therapistSessionSettings.operatorUiLanguage,
     );
     unawaited(_loadTherapistSessionSettings());
+    unawaited(_refreshActiveSessionBanner());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_refreshActiveSessionBanner());
+    }
   }
 
   @override
@@ -137,6 +161,11 @@ class _StudentsScreenState extends State<StudentsScreen> {
               ),
             ),
           ),
+          if (_activeSessionBannerLoading || _latestActiveSession != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: _buildActiveSessionBanner(),
+            ),
           StreamBuilder<int>(
             stream: StudentService.watchPendingWritesCount(),
             builder: (context, snapshot) {
@@ -377,6 +406,343 @@ class _StudentsScreenState extends State<StudentsScreen> {
     );
   }
 
+  Future<void> _refreshActiveSessionBanner() async {
+    final therapistId = FirebaseService.currentUser?.uid.trim() ?? '';
+    if (therapistId.isEmpty) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _activeSessionBannerLoading = false;
+        _latestActiveSession = null;
+        _latestActiveSessionStudent = null;
+      });
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _activeSessionBannerLoading = true;
+      });
+    }
+
+    try {
+      final session =
+          await SessionJournalService.fetchLatestUnfinishedForTherapist(
+        therapistId: therapistId,
+      );
+      Student? student;
+      if (session != null && session.studentId.trim().isNotEmpty) {
+        student = await StudentService.getStudent(session.studentId);
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _latestActiveSession = session;
+        _latestActiveSessionStudent = student;
+        _activeSessionBannerLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _activeSessionBannerLoading = false;
+      });
+      _enqueueIncidentAlert(
+        title: 'Active session banner refresh failed',
+        message: '$e',
+        reasonCode: OpsErrorCatalog.tryExtractReasonCode(e) ?? 'UNSPECIFIED',
+        severity: OperatorIncidentSeverity.warning,
+      );
+    }
+  }
+
+  Widget _buildActiveSessionBanner() {
+    if (_activeSessionBannerLoading) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.blueGrey.shade50,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.blueGrey.shade100),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Checking active session state...',
+                style: TextStyle(
+                  color: Colors.blueGrey.shade800,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final session = _latestActiveSession;
+    if (session == null) {
+      return const SizedBox.shrink();
+    }
+
+    final studentLabel =
+        _latestActiveSessionStudent?.fullName.trim().isNotEmpty == true
+            ? _latestActiveSessionStudent!.fullName
+            : session.studentId;
+    final stateLabel = _formatSessionState(session);
+    final latestGameId = session.latestGameId.trim();
+    final hasGameLabel = latestGameId.isNotEmpty;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.orange.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.orange.shade800),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Active session detected',
+                  style: TextStyle(
+                    color: Colors.orange.shade900,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: _activeSessionEndInFlight
+                    ? null
+                    : () => unawaited(_refreshActiveSessionBanner()),
+                icon: const Icon(Icons.refresh, size: 18),
+                tooltip: 'Refresh active session',
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'You have an active session with $studentLabel.',
+            style: TextStyle(
+              color: Colors.orange.shade900,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            hasGameLabel
+                ? 'State: $stateLabel | Game: $latestGameId'
+                : 'State: $stateLabel',
+            style: TextStyle(
+              color: Colors.orange.shade900,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              OutlinedButton.icon(
+                onPressed: _activeSessionEndInFlight
+                    ? null
+                    : _openActiveSessionFromBanner,
+                icon: const Icon(Icons.open_in_new, size: 16),
+                label: const Text('Open'),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: _activeSessionEndInFlight
+                    ? null
+                    : _endActiveSessionFromBanner,
+                icon: _activeSessionEndInFlight
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.flag, size: 16),
+                label: Text(
+                  _activeSessionEndInFlight ? 'Ending...' : 'End session',
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepOrange.shade700,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'If headset runtime still keeps stale lock, connect to device and use "Terminate active session (rescue)".',
+            style: TextStyle(
+              color: Colors.orange.shade800,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatSessionState(TherapySessionRecord session) {
+    final state = session.state;
+    if (state != null) {
+      switch (state) {
+        case SessionLifecycleState.created:
+          return 'CREATED';
+        case SessionLifecycleState.inProgress:
+          return 'IN_PROGRESS';
+        case SessionLifecycleState.paused:
+          return 'PAUSED';
+        case SessionLifecycleState.interrupted:
+          return 'INTERRUPTED';
+        case SessionLifecycleState.completed:
+          return 'COMPLETED';
+        case SessionLifecycleState.abortedByTherapist:
+          return 'ABORTED_BY_THERAPIST';
+        case SessionLifecycleState.failedTechnical:
+          return 'FAILED_TECHNICAL';
+      }
+    }
+
+    final wire = session.stateWire.trim();
+    if (wire.isNotEmpty) {
+      return wire;
+    }
+    return 'UNKNOWN';
+  }
+
+  Future<void> _openActiveSessionFromBanner() async {
+    final session = _latestActiveSession;
+    if (session == null) {
+      return;
+    }
+
+    final student = _latestActiveSessionStudent ??
+        await StudentService.getStudent(session.studentId);
+    if (student == null || !mounted) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Student profile not found for this active session.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    await _selectStudent(student);
+  }
+
+  Future<void> _endActiveSessionFromBanner() async {
+    final session = _latestActiveSession;
+    if (session == null || _activeSessionEndInFlight) {
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('End active session?'),
+            content: const Text(
+              'This closes the active session in session journal from setup screen. '
+              'If runtime lock remains, use rescue end after device connect.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('End Session'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!confirmed || !mounted) {
+      return;
+    }
+
+    final therapistId =
+        (FirebaseService.currentUser?.uid.trim().isNotEmpty ?? false)
+            ? FirebaseService.currentUser!.uid.trim()
+            : session.therapistId;
+
+    setState(() {
+      _activeSessionEndInFlight = true;
+    });
+
+    try {
+      await SessionJournalService.markSessionCompletedByTherapist(
+        sessionId: session.sessionId,
+        studentId: session.studentId,
+        therapistId: therapistId,
+        latestGameId: session.latestGameId,
+        reasonCode: 'THERAPIST_CONFIRMED_END_FROM_SETUP',
+        metadata: const <String, dynamic>{
+          'source': 'students_setup',
+          'action': 'manual_end_active_session',
+        },
+      );
+      await SessionJournalService.appendSessionEvent(
+        sessionId: session.sessionId,
+        studentId: session.studentId,
+        therapistId: therapistId,
+        eventType: 'SESSION_ENDED_FROM_SETUP',
+        gameId: session.latestGameId,
+        details: const <String, dynamic>{
+          'reasonCode': 'THERAPIST_CONFIRMED_END_FROM_SETUP',
+        },
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Active session marked as ended.'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        _enqueueIncidentAlert(
+          title: 'End active session failed',
+          message: '$e',
+          reasonCode: OpsErrorCatalog.tryExtractReasonCode(e) ?? 'UNSPECIFIED',
+          severity: OperatorIncidentSeverity.error,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _activeSessionEndInFlight = false;
+        });
+      }
+      await _refreshActiveSessionBanner();
+    }
+  }
+
   void _enqueueIncidentAlert({
     required String title,
     required String message,
@@ -535,22 +901,28 @@ class _StudentsScreenState extends State<StudentsScreen> {
             ),
           ],
         ),
-        onTap: () => _selectStudent(student),
+        onTap: () => unawaited(_selectStudent(student)),
       ),
     );
   }
 
-  void _selectStudent(Student student) {
+  Future<void> _selectStudent(Student student) async {
     setState(() {
       _selectedStudentId = student.id;
     });
 
-    Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => ScannerScreen(student: student),
       ),
     );
+
+    if (!mounted) {
+      return;
+    }
+
+    await _refreshActiveSessionBanner();
   }
 
   void _showStudentDialog(BuildContext context, {Student? student}) {
@@ -812,11 +1184,13 @@ class _StudentsScreenState extends State<StudentsScreen> {
             report.failed > 0 ? Colors.orange.shade700 : Colors.green.shade700,
       ),
     );
+    await _refreshActiveSessionBanner();
   }
 
   Future<void> _refreshFromServer() async {
     await StudentService.refreshStudentsFromServer();
     await _runReconciliation();
+    await _refreshActiveSessionBanner();
   }
 
   void _showWriteResultSnackbar(
