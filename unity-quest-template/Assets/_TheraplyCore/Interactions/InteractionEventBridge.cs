@@ -350,6 +350,42 @@ namespace TheraplyCore.Interactions
                 targetValid: TryReadNullableBool(details, "targetValid"));
         }
 
+        public IReadOnlyDictionary<string, object> RecordBreathTelemetry(IReadOnlyDictionary<string, object> payload)
+        {
+            var details = payload != null
+                ? new Dictionary<string, object>(payload)
+                : new Dictionary<string, object>();
+
+            var normalizedGameId = NormalizeOrFallback(
+                TryReadString(details, "gameId"),
+                ResolveActiveGameId(),
+                "unknown_game");
+            var eventType = ResolveBreathEventType(details);
+            var sourceComponent = NormalizeOrFallback(
+                TryReadString(details, "sourceComponent"),
+                "BreathTelemetry");
+            var attemptContext = ResolveAttemptContext(normalizedGameId, eventType);
+            var actionOutcome = ResolveBreathOutcome(details, eventType);
+            var reasonCode = ResolveBreathReasonCode(details, eventType);
+
+            return EmitCanonicalEvent(
+                normalizedGameId,
+                eventType,
+                "BREATH",
+                actionOutcome,
+                reasonCode,
+                sourceComponent,
+                attemptContext,
+                details,
+                inputHand: TryReadString(details, "inputHand"),
+                inputSource: NormalizeOrFallback(TryReadString(details, "inputSource"), "BREATH"),
+                inputControl: TryReadString(details, "inputControl"),
+                inputValue: TryReadFloat(details, "inputValue"),
+                targetId: NormalizeOrFallback(TryReadString(details, "targetId"), string.Empty),
+                targetName: NormalizeOrFallback(TryReadString(details, "targetName"), string.Empty),
+                targetValid: TryReadNullableBool(details, "targetValid"));
+        }
+
         private IReadOnlyDictionary<string, object> EmitCanonicalEvent(
             string gameId,
             string eventType,
@@ -976,6 +1012,78 @@ namespace TheraplyCore.Interactions
                     return "GAZE_TOOL_INVALID";
                 default:
                     return "GAZE_EVENT_OBSERVED";
+            }
+        }
+
+        private static string ResolveBreathEventType(IReadOnlyDictionary<string, object> payload)
+        {
+            var explicitEventType = TryReadString(payload, "breathEventType");
+            if (!string.IsNullOrWhiteSpace(explicitEventType))
+            {
+                return NormalizeEventToken(explicitEventType, "BREATH_EVENT");
+            }
+
+            var explicitActionId = TryReadString(payload, "actionId");
+            if (string.Equals(
+                    NormalizeEventToken(explicitActionId, string.Empty),
+                    "PERFORM_BREATH_CYCLE",
+                    StringComparison.Ordinal))
+            {
+                return "BREATH_CYCLE_COMPLETED";
+            }
+
+            return "BREATH_EVENT";
+        }
+
+        private static string ResolveBreathOutcome(
+            IReadOnlyDictionary<string, object> payload,
+            string breathEventType)
+        {
+            var explicitOutcome = TryReadString(payload, "actionOutcome");
+            if (!string.IsNullOrWhiteSpace(explicitOutcome))
+            {
+                return NormalizeEventToken(explicitOutcome, "OBSERVED");
+            }
+
+            switch (NormalizeEventToken(breathEventType, "BREATH_EVENT"))
+            {
+                case "BREATH_CYCLE_COMPLETED":
+                    return "CORRECT";
+                case "BREATH_CYCLE_INVALID":
+                    return "INCORRECT";
+                case "BREATH_PHASE_INHALE":
+                case "BREATH_PHASE_HOLD":
+                case "BREATH_PHASE_EXHALE":
+                    return "OBSERVED";
+                default:
+                    return "OBSERVED";
+            }
+        }
+
+        private static string ResolveBreathReasonCode(
+            IReadOnlyDictionary<string, object> payload,
+            string breathEventType)
+        {
+            var explicitReason = ResolveReasonCode(payload, string.Empty);
+            if (!string.IsNullOrWhiteSpace(explicitReason))
+            {
+                return explicitReason;
+            }
+
+            switch (NormalizeEventToken(breathEventType, "BREATH_EVENT"))
+            {
+                case "BREATH_PHASE_INHALE":
+                    return "BREATH_PHASE_INHALE";
+                case "BREATH_PHASE_HOLD":
+                    return "BREATH_PHASE_HOLD";
+                case "BREATH_PHASE_EXHALE":
+                    return "BREATH_PHASE_EXHALE";
+                case "BREATH_CYCLE_COMPLETED":
+                    return "BREATH_CYCLE_COMPLETED";
+                case "BREATH_CYCLE_INVALID":
+                    return "BREATH_CYCLE_INVALID";
+                default:
+                    return "BREATH_EVENT_OBSERVED";
             }
         }
 

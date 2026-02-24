@@ -35,6 +35,8 @@ namespace TheraplyCore.Games.Runtime
 
             registry.Register(new GazeActionPlugin("hold_gaze_on_target"), replaceExisting);
             registry.Register(new GazeActionPlugin("select_target_with_gaze_and_tool"), replaceExisting);
+
+            registry.Register(new BreathCycleActionPlugin("perform_breath_cycle"), replaceExisting);
         }
     }
 
@@ -514,6 +516,101 @@ namespace TheraplyCore.Games.Runtime
         }
     }
 
+    public sealed class BreathCycleActionPlugin : GameContracts.IActionPlugin
+    {
+        private readonly ActionValidator _validator = new ActionValidator();
+        private readonly string _actionId;
+
+        public BreathCycleActionPlugin(string actionId)
+        {
+            _actionId = string.IsNullOrWhiteSpace(actionId)
+                ? "perform_breath_cycle"
+                : actionId.Trim();
+        }
+
+        public string ActionId => _actionId;
+        public string ChannelId => GameContracts.SessionFlowChannelIds.Breath;
+
+        public bool TryCreateIntent(
+            IReadOnlyDictionary<string, object> rawInput,
+            out GameContracts.ActionIntent intent)
+        {
+            intent = null;
+            if (!SessionFlowPluginPayload.TryReadString(rawInput, "eventType", out var eventType))
+            {
+                return false;
+            }
+
+            if (!SessionFlowPluginPayload.IsBreathEventType(eventType))
+            {
+                return false;
+            }
+
+            var requestedActionId = SessionFlowPluginPayload.ReadRequestedActionId(rawInput);
+            var suggestedActionId = SessionFlowPluginPayload.ResolveBreathActionIdFromEventType(eventType);
+            var effectiveActionId = !string.IsNullOrWhiteSpace(requestedActionId)
+                ? requestedActionId
+                : suggestedActionId;
+            if (string.IsNullOrWhiteSpace(effectiveActionId) ||
+                !string.Equals(effectiveActionId, ActionId, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            intent = new GameContracts.ActionIntent
+            {
+                actionId = effectiveActionId.Trim(),
+                channelId = ChannelId,
+                targetId = SessionFlowPluginPayload.ReadString(rawInput, "targetId"),
+                inputSource = SessionFlowPluginPayload.ReadString(rawInput, "inputSource"),
+                inputHand = SessionFlowPluginPayload.ReadString(rawInput, "inputHand"),
+                inputValue = SessionFlowPluginPayload.ReadFloat(rawInput, "inputValue"),
+                occurredAtElapsedSec = SessionFlowPluginPayload.ReadFloat(rawInput, "occurredAtElapsedSec"),
+                details = new List<GameContracts.KeyValuePairString>
+                {
+                    new GameContracts.KeyValuePairString { key = "eventType", value = eventType },
+                    new GameContracts.KeyValuePairString { key = "reasonCode", value = SessionFlowPluginPayload.ReadString(rawInput, "reasonCode") },
+                    new GameContracts.KeyValuePairString { key = "cycleIndex", value = SessionFlowPluginPayload.ReadString(rawInput, "cycleIndex") },
+                    new GameContracts.KeyValuePairString { key = "targetCycleCount", value = SessionFlowPluginPayload.ReadString(rawInput, "targetCycleCount") },
+                    new GameContracts.KeyValuePairString { key = "phaseDurationSec", value = SessionFlowPluginPayload.ReadString(rawInput, "phaseDurationSec") },
+                },
+            };
+            return true;
+        }
+
+        public GameContracts.ActionValidationResult Validate(
+            GameContracts.ActionIntent intent,
+            GameContracts.ActionContext context,
+            GameContracts.AllowedActionDefinition allowedAction)
+        {
+            var eventType = SessionFlowPluginPayload.ReadEventTypeFromIntent(intent);
+            if (eventType.IndexOf("BREATH_CYCLE_INVALID", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return GameContracts.ActionValidationResult.Rejected("BREATH_CYCLE_INVALID");
+            }
+
+            if (eventType.IndexOf("BREATH_PHASE_", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return GameContracts.ActionValidationResult.Rejected("BREATH_CYCLE_NOT_COMPLETED");
+            }
+
+            if (eventType.IndexOf("BREATH_CYCLE_COMPLETED", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                return GameContracts.ActionValidationResult.Rejected("ACTION_EVENT_TYPE_MISMATCH");
+            }
+
+            return _validator.Validate(intent, context, allowedAction);
+        }
+
+        public GameContracts.ActionApplyResult Apply(
+            GameContracts.ActionIntent intent,
+            GameContracts.ActionContext context,
+            GameContracts.AllowedActionDefinition allowedAction)
+        {
+            return SessionFlowPluginPayload.BuildAppliedResult(ActionId, ChannelId, "BREATH_ACTION_APPLIED");
+        }
+    }
+
     internal static class SessionFlowPluginPayload
     {
         public static bool IsGrabEventType(string eventType)
@@ -584,6 +681,33 @@ namespace TheraplyCore.Games.Runtime
                 case "GAZE_TOOL_SELECT":
                 case "GAZE_TOOL_SELECT_INVALID":
                     return "select_target_with_gaze_and_tool";
+                default:
+                    return string.Empty;
+            }
+        }
+
+        public static bool IsBreathEventType(string eventType)
+        {
+            return !string.IsNullOrWhiteSpace(eventType) &&
+                   eventType.Trim().StartsWith("BREATH_", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static string ResolveBreathActionIdFromEventType(string eventType)
+        {
+            if (string.IsNullOrWhiteSpace(eventType))
+            {
+                return string.Empty;
+            }
+
+            var normalized = eventType.Trim().ToUpperInvariant();
+            switch (normalized)
+            {
+                case "BREATH_PHASE_INHALE":
+                case "BREATH_PHASE_HOLD":
+                case "BREATH_PHASE_EXHALE":
+                case "BREATH_CYCLE_COMPLETED":
+                case "BREATH_CYCLE_INVALID":
+                    return "perform_breath_cycle";
                 default:
                     return string.Empty;
             }
