@@ -259,6 +259,55 @@ namespace TheraplyCore.Interactions
                 targetValid: TryReadNullableBool(details, "targetValid"));
         }
 
+        public IReadOnlyDictionary<string, object> RecordGrabTelemetry(IReadOnlyDictionary<string, object> payload)
+        {
+            var details = payload != null
+                ? new Dictionary<string, object>(payload)
+                : new Dictionary<string, object>();
+
+            var normalizedGameId = NormalizeOrFallback(
+                TryReadString(details, "gameId"),
+                ResolveActiveGameId(),
+                "unknown_game");
+            var eventType = ResolveGrabEventType(details);
+            var sourceComponent = NormalizeOrFallback(
+                TryReadString(details, "sourceComponent"),
+                "GrabTelemetry");
+            var attemptContext = ResolveAttemptContext(normalizedGameId, eventType);
+            var actionOutcome = ResolveGrabOutcome(details, eventType);
+            var reasonCode = ResolveGrabReasonCode(details, eventType);
+
+            var zoneName = NormalizeOrFallback(
+                TryReadString(details, "zoneName"),
+                TryReadString(details, "targetName"));
+            var zoneId = NormalizeOrFallback(
+                TryReadString(details, "zoneId"),
+                TryReadString(details, "targetId"));
+            var objectName = NormalizeOrFallback(
+                TryReadString(details, "objectName"),
+                TryReadString(details, "itemName"));
+            var objectId = NormalizeOrFallback(
+                TryReadString(details, "objectId"),
+                TryReadString(details, "itemId"));
+
+            return EmitCanonicalEvent(
+                normalizedGameId,
+                eventType,
+                "GRAB",
+                actionOutcome,
+                reasonCode,
+                sourceComponent,
+                attemptContext,
+                details,
+                inputHand: TryReadString(details, "inputHand"),
+                inputSource: NormalizeOrFallback(TryReadString(details, "inputSource"), "HAND_GRAB"),
+                inputControl: TryReadString(details, "inputControl"),
+                inputValue: TryReadFloat(details, "inputValue"),
+                targetId: NormalizeOrFallback(zoneId, objectId, string.Empty),
+                targetName: NormalizeOrFallback(zoneName, objectName, string.Empty),
+                targetValid: TryReadNullableBool(details, "targetValid"));
+        }
+
         private IReadOnlyDictionary<string, object> EmitCanonicalEvent(
             string gameId,
             string eventType,
@@ -711,6 +760,105 @@ namespace TheraplyCore.Interactions
                     return "TARGET_NOT_FOUND";
                 default:
                     return "HAND_EVENT_OBSERVED";
+            }
+        }
+
+        private static string ResolveGrabEventType(IReadOnlyDictionary<string, object> payload)
+        {
+            var explicitEventType = TryReadString(payload, "grabEventType");
+            if (!string.IsNullOrWhiteSpace(explicitEventType))
+            {
+                return NormalizeEventToken(explicitEventType, "GRAB_EVENT");
+            }
+
+            var explicitActionId = TryReadString(payload, "actionId");
+            if (string.IsNullOrWhiteSpace(explicitActionId))
+            {
+                return "GRAB_EVENT";
+            }
+
+            switch (NormalizeEventToken(explicitActionId, string.Empty))
+            {
+                case "GRAB_OBJECT":
+                    return "GRAB_OBJECT_START";
+                case "RELEASE_OBJECT":
+                    return "GRAB_OBJECT_RELEASE";
+                case "PLACE_OBJECT_IN_ZONE":
+                    return "GRAB_OBJECT_PLACED";
+                case "REMOVE_OBJECT_FROM_ZONE":
+                    return "GRAB_OBJECT_REMOVED";
+                case "COLLECT_ITEM_TO_CONTAINER":
+                    return "GRAB_OBJECT_COLLECTED";
+                default:
+                    return "GRAB_EVENT";
+            }
+        }
+
+        private static string ResolveGrabOutcome(
+            IReadOnlyDictionary<string, object> payload,
+            string grabEventType)
+        {
+            var explicitOutcome = TryReadString(payload, "actionOutcome");
+            if (!string.IsNullOrWhiteSpace(explicitOutcome))
+            {
+                return NormalizeEventToken(explicitOutcome, "OBSERVED");
+            }
+
+            var normalizedEventType = NormalizeEventToken(grabEventType, "GRAB_EVENT");
+            if (normalizedEventType.IndexOf("INVALID", StringComparison.Ordinal) >= 0 ||
+                normalizedEventType.IndexOf("FAILED", StringComparison.Ordinal) >= 0)
+            {
+                return "INCORRECT";
+            }
+
+            if (normalizedEventType.IndexOf("MISS", StringComparison.Ordinal) >= 0)
+            {
+                return "OMITTED";
+            }
+
+            if (normalizedEventType.IndexOf("GRAB_OBJECT_", StringComparison.Ordinal) >= 0 ||
+                normalizedEventType.IndexOf("HAND_GRAB_", StringComparison.Ordinal) >= 0)
+            {
+                return "CORRECT";
+            }
+
+            return "OBSERVED";
+        }
+
+        private static string ResolveGrabReasonCode(
+            IReadOnlyDictionary<string, object> payload,
+            string grabEventType)
+        {
+            var explicitReason = ResolveReasonCode(payload, string.Empty);
+            if (!string.IsNullOrWhiteSpace(explicitReason))
+            {
+                return explicitReason;
+            }
+
+            switch (NormalizeEventToken(grabEventType, "GRAB_EVENT"))
+            {
+                case "GRAB_OBJECT_START":
+                    return "OBJECT_GRABBED";
+                case "GRAB_OBJECT_RELEASE":
+                    return "OBJECT_RELEASED";
+                case "GRAB_OBJECT_PLACED":
+                    return "OBJECT_PLACED";
+                case "GRAB_OBJECT_REMOVED":
+                    return "OBJECT_REMOVED";
+                case "GRAB_OBJECT_COLLECTED":
+                    return "OBJECT_COLLECTED";
+                case "HAND_GRAB_START":
+                    return "OBJECT_GRABBED";
+                case "HAND_GRAB_RELEASE":
+                    return "OBJECT_RELEASED";
+                case "HAND_GRAB_PLACE":
+                    return "OBJECT_PLACED";
+                case "HAND_GRAB_REMOVE":
+                    return "OBJECT_REMOVED";
+                case "HAND_GRAB_COLLECT":
+                    return "OBJECT_COLLECTED";
+                default:
+                    return "GRAB_EVENT_OBSERVED";
             }
         }
 

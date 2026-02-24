@@ -26,6 +26,12 @@ namespace TheraplyCore.Games.Runtime
             registry.Register(new ToolImpactActionPlugin("avoid_hazard_contact", allowImplicitActionId: false), replaceExisting);
 
             registry.Register(new HandContactActionPlugin("touch_target_with_hand", allowImplicitActionId: true), replaceExisting);
+
+            registry.Register(new GrabPlaceActionPlugin("grab_object"), replaceExisting);
+            registry.Register(new GrabPlaceActionPlugin("release_object"), replaceExisting);
+            registry.Register(new GrabPlaceActionPlugin("place_object_in_zone"), replaceExisting);
+            registry.Register(new GrabPlaceActionPlugin("remove_object_from_zone"), replaceExisting);
+            registry.Register(new GrabPlaceActionPlugin("collect_item_to_container"), replaceExisting);
         }
     }
 
@@ -304,8 +310,189 @@ namespace TheraplyCore.Games.Runtime
         }
     }
 
+    public sealed class GrabPlaceActionPlugin : GameContracts.IActionPlugin
+    {
+        private readonly ActionValidator _validator = new ActionValidator();
+        private readonly string _actionId;
+
+        public GrabPlaceActionPlugin(string actionId)
+        {
+            _actionId = string.IsNullOrWhiteSpace(actionId)
+                ? "grab_object"
+                : actionId.Trim();
+        }
+
+        public string ActionId => _actionId;
+        public string ChannelId => GameContracts.SessionFlowChannelIds.HandGrab;
+
+        public bool TryCreateIntent(
+            IReadOnlyDictionary<string, object> rawInput,
+            out GameContracts.ActionIntent intent)
+        {
+            intent = null;
+            if (!SessionFlowPluginPayload.TryReadString(rawInput, "eventType", out var eventType))
+            {
+                return false;
+            }
+
+            if (!SessionFlowPluginPayload.IsGrabEventType(eventType))
+            {
+                return false;
+            }
+
+            var requestedActionId = SessionFlowPluginPayload.ReadRequestedActionId(rawInput);
+            var suggestedActionId = SessionFlowPluginPayload.ResolveGrabActionIdFromEventType(eventType);
+            var effectiveActionId = !string.IsNullOrWhiteSpace(requestedActionId)
+                ? requestedActionId
+                : suggestedActionId;
+            if (string.IsNullOrWhiteSpace(effectiveActionId) ||
+                !string.Equals(effectiveActionId, ActionId, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            intent = new GameContracts.ActionIntent
+            {
+                actionId = effectiveActionId.Trim(),
+                channelId = ChannelId,
+                targetId = SessionFlowPluginPayload.ResolveGrabTargetId(rawInput, effectiveActionId),
+                inputSource = SessionFlowPluginPayload.ReadString(rawInput, "inputSource"),
+                inputHand = SessionFlowPluginPayload.ReadString(rawInput, "inputHand"),
+                inputValue = SessionFlowPluginPayload.ReadFloat(rawInput, "inputValue"),
+                occurredAtElapsedSec = SessionFlowPluginPayload.ReadFloat(rawInput, "occurredAtElapsedSec"),
+                details = new List<GameContracts.KeyValuePairString>
+                {
+                    new GameContracts.KeyValuePairString { key = "eventType", value = eventType },
+                    new GameContracts.KeyValuePairString { key = "reasonCode", value = SessionFlowPluginPayload.ReadString(rawInput, "reasonCode") },
+                    new GameContracts.KeyValuePairString { key = "objectId", value = SessionFlowPluginPayload.ReadString(rawInput, "objectId") },
+                    new GameContracts.KeyValuePairString { key = "zoneId", value = SessionFlowPluginPayload.ReadString(rawInput, "zoneId") },
+                },
+            };
+            return true;
+        }
+
+        public GameContracts.ActionValidationResult Validate(
+            GameContracts.ActionIntent intent,
+            GameContracts.ActionContext context,
+            GameContracts.AllowedActionDefinition allowedAction)
+        {
+            var eventType = SessionFlowPluginPayload.ReadEventTypeFromIntent(intent);
+            if (eventType.IndexOf("INVALID", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                eventType.IndexOf("FAILED", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return GameContracts.ActionValidationResult.Rejected("TARGET_INVALID");
+            }
+
+            if (eventType.IndexOf("MISS", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return GameContracts.ActionValidationResult.Rejected("TARGET_NOT_FOUND");
+            }
+
+            return _validator.Validate(intent, context, allowedAction);
+        }
+
+        public GameContracts.ActionApplyResult Apply(
+            GameContracts.ActionIntent intent,
+            GameContracts.ActionContext context,
+            GameContracts.AllowedActionDefinition allowedAction)
+        {
+            return SessionFlowPluginPayload.BuildAppliedResult(ActionId, ChannelId, "GRAB_ACTION_APPLIED");
+        }
+    }
+
     internal static class SessionFlowPluginPayload
     {
+        public static bool IsGrabEventType(string eventType)
+        {
+            if (string.IsNullOrWhiteSpace(eventType))
+            {
+                return false;
+            }
+
+            var normalized = eventType.Trim();
+            return normalized.StartsWith("GRAB_OBJECT_", StringComparison.OrdinalIgnoreCase) ||
+                   normalized.StartsWith("HAND_GRAB_", StringComparison.OrdinalIgnoreCase) ||
+                   normalized.StartsWith("TOOL_GRIP_", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static string ResolveGrabActionIdFromEventType(string eventType)
+        {
+            if (string.IsNullOrWhiteSpace(eventType))
+            {
+                return string.Empty;
+            }
+
+            var normalized = eventType.Trim().ToUpperInvariant();
+            switch (normalized)
+            {
+                case "GRAB_OBJECT_START":
+                case "HAND_GRAB_START":
+                case "TOOL_GRIP_START":
+                    return "grab_object";
+                case "GRAB_OBJECT_RELEASE":
+                case "HAND_GRAB_RELEASE":
+                case "TOOL_GRIP_END":
+                    return "release_object";
+                case "GRAB_OBJECT_PLACED":
+                case "HAND_GRAB_PLACE":
+                    return "place_object_in_zone";
+                case "GRAB_OBJECT_REMOVED":
+                case "HAND_GRAB_REMOVE":
+                    return "remove_object_from_zone";
+                case "GRAB_OBJECT_COLLECTED":
+                case "HAND_GRAB_COLLECT":
+                    return "collect_item_to_container";
+                default:
+                    return string.Empty;
+            }
+        }
+
+        public static string ResolveGrabTargetId(
+            IReadOnlyDictionary<string, object> payload,
+            string actionId)
+        {
+            var targetId = ReadString(payload, "targetId");
+            if (!string.IsNullOrWhiteSpace(targetId))
+            {
+                return targetId;
+            }
+
+            if (string.Equals(actionId, "grab_object", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(actionId, "release_object", StringComparison.OrdinalIgnoreCase))
+            {
+                return ReadString(payload, "objectId");
+            }
+
+            var zoneId = ReadString(payload, "zoneId");
+            if (!string.IsNullOrWhiteSpace(zoneId))
+            {
+                return zoneId;
+            }
+
+            return ReadString(payload, "objectId");
+        }
+
+        public static string ReadEventTypeFromIntent(GameContracts.ActionIntent intent)
+        {
+            if (intent == null || intent.details == null)
+            {
+                return string.Empty;
+            }
+
+            for (var i = 0; i < intent.details.Count; i++)
+            {
+                var detail = intent.details[i];
+                if (detail == null || !string.Equals(detail.key, "eventType", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                return detail.value ?? string.Empty;
+            }
+
+            return string.Empty;
+        }
+
         public static string ReadRequestedActionId(IReadOnlyDictionary<string, object> payload)
         {
             var explicitActionId = ReadString(payload, "actionId");
