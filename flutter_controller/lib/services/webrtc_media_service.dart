@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'connection_service.dart';
 
@@ -26,13 +27,37 @@ class WebRTCMediaService {
   bool _disposed = false;
   MediaStream? _localMicStream;
   MediaStreamTrack? _localMicTrack;
+  RTCRtpSender? _localMicSender;
   bool _talkbackEnabled = false;
+  bool _talkbackDesiredEnabled = false;
+  bool _audioSessionReady = false;
+  bool _audioSessionApiUnsupported = false;
   bool _stunFallbackArmed = false;
   bool _usingLanOnlyThisPeer = false;
   bool _connectedInCurrentPeer = false;
   Timer? _lanProbeTimer;
+  Timer? _talkbackStatsTimer;
+  Map<String, _OfferAudioMline> _offerAudioMlinesByMid = {};
 
   bool get talkbackEnabled => _talkbackEnabled;
+
+  static bool get _supportsEnsureAudioSession {
+    if (kIsWeb) {
+      return false;
+    }
+
+    return defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS;
+  }
+
+  static bool get _supportsNativeMicrophoneMute {
+    if (kIsWeb) {
+      return false;
+    }
+
+    return defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS;
+  }
 
   /// Extract payload string from message
   /// Unity sends payload as Base64 string in JSON
@@ -69,6 +94,7 @@ class WebRTCMediaService {
     if (_messageSub != null) return;
     _messageSub = _connection.messages.listen(_onMessage);
     print('[WebRTCMedia] Listening for WEBRTC_OFFER / WEBRTC_ICE_CANDIDATE');
+    unawaited(_ensureAudioSessionReady());
 
     // Replay signaling messages that may have arrived before this service subscribed.
     final buffered = _connection.drainBufferedWebRtcSignaling();
@@ -112,6 +138,19 @@ class WebRTCMediaService {
         return;
       }
 
+      final offerAudioMlines = _parseOfferAudioMlines(sdp);
+      _offerAudioMlinesByMid = {
+        for (final item in offerAudioMlines) item.mid: item,
+      };
+      if (offerAudioMlines.isEmpty) {
+        print('[WebRTCMedia] ⚠️ Offer does not include any audio m-line.');
+      } else {
+        final summary = offerAudioMlines
+            .map((item) => 'mid=${item.mid},dir=${item.direction}')
+            .join(' | ');
+        print('[WebRTCMedia] Offer audio m-lines: $summary');
+      }
+
       final iceMode = (offerMap['iceMode'] as String?)?.toUpperCase();
       final serverRequestsStun = iceMode == 'STUN';
       if (serverRequestsStun && !_stunFallbackArmed) {
@@ -141,8 +180,6 @@ class WebRTCMediaService {
       } else {
         _cancelLanProbeTimer();
       }
-
-      await _ensureTalkbackTrack();
 
       _peerConnection!.onTrack = (event) {
         final kind = event.track.kind;
@@ -194,6 +231,9 @@ class WebRTCMediaService {
 
       print('[WebRTCMedia] Setting remote description...');
       await _peerConnection!.setRemoteDescription(offer);
+
+      await _ensureAudioSessionReady();
+      await _ensureTalkbackTrack();
 
       print('[WebRTCMedia] Creating answer...');
       final answer = await _peerConnection!.createAnswer();
@@ -302,17 +342,54 @@ class WebRTCMediaService {
     print('[WebRTCMedia] 📤 Sent ICE candidate');
   }
 
+  Future<void> _ensureAudioSessionReady() async {
+    if (_audioSessionReady || _audioSessionApiUnsupported) {
+      return;
+    }
+
+    if (!_supportsEnsureAudioSession) {
+      _audioSessionReady = true;
+      return;
+    }
+
+    try {
+      await Helper.ensureAudioSession();
+      _audioSessionReady = true;
+      print('[WebRTCMedia] ✅ Audio session ready');
+    } on MissingPluginException {
+      _audioSessionApiUnsupported = true;
+      _audioSessionReady = true;
+      print(
+          '[WebRTCMedia] ensureAudioSession not available on this platform build - skipping.');
+    } catch (e) {
+      print('[WebRTCMedia] Audio session setup failed: $e');
+    }
+  }
+
   Future<void> _ensureTalkbackTrack() async {
     if (_peerConnection == null) return;
 
     // Recreate per-peer to avoid sender reuse issues after renegotiation/reconnect.
     await _disposeTalkbackTrack();
+    await _ensureAudioSessionReady();
 
     try {
-      _localMicStream = await navigator.mediaDevices.getUserMedia({
-        'audio': true,
-        'video': false,
-      });
+      try {
+        _localMicStream = await navigator.mediaDevices.getUserMedia({
+          'audio': {
+            'echoCancellation': true,
+            'noiseSuppression': true,
+            'autoGainControl': true,
+          },
+          'video': false,
+        });
+      } catch (_) {
+        // Fallback for platforms/devices that reject advanced constraints.
+        _localMicStream = await navigator.mediaDevices.getUserMedia({
+          'audio': true,
+          'video': false,
+        });
+      }
 
       if (_localMicStream == null ||
           _localMicStream!.getAudioTracks().isEmpty) {
@@ -321,15 +398,247 @@ class WebRTCMediaService {
       }
 
       _localMicTrack = _localMicStream!.getAudioTracks().first;
-      _localMicTrack!.enabled = false; // push-to-talk: disabled by default
-      await _peerConnection!.addTrack(_localMicTrack!, _localMicStream!);
-      print('[WebRTCMedia] 🎤 Talkback track added (PTT ready)');
+      await _clearLegacyAndroidGlobalMicMute();
+      final attachedToOfferAudioMline =
+          await _attachTalkbackTrackToOfferAudioMline();
+      if (!attachedToOfferAudioMline) {
+        _localMicSender = await _peerConnection!.addTrack(
+          _localMicTrack!,
+          _localMicStream!,
+        );
+      }
+      await _applyTalkbackMuteState(!_talkbackDesiredEnabled);
+      _talkbackEnabled = _talkbackDesiredEnabled;
+      print(
+        '[WebRTCMedia] 🎤 Talkback track added (PTT ready, desired=${_talkbackDesiredEnabled ? 'ON' : 'OFF'})',
+      );
     } catch (e) {
       print('[WebRTCMedia] Talkback init failed: $e');
     }
   }
 
+  Future<void> _applyTalkbackMuteState(bool muted) async {
+    if (_localMicTrack == null) {
+      return;
+    }
+
+    if (_supportsNativeMicrophoneMute) {
+      try {
+        await Helper.setMicrophoneMute(muted, _localMicTrack!);
+      } catch (e) {
+        print('[WebRTCMedia] setMicrophoneMute failed: $e');
+      }
+    }
+
+    // Keep explicit track.enabled state in sync for deterministic behavior across devices.
+    _localMicTrack!.enabled = !muted;
+  }
+
+  Future<void> _clearLegacyAndroidGlobalMicMute() async {
+    if (kIsWeb ||
+        defaultTargetPlatform != TargetPlatform.android ||
+        _localMicTrack == null) {
+      return;
+    }
+
+    try {
+      // Best-effort recovery path for older builds that used global AudioManager mic mute.
+      await Helper.setMicrophoneMute(false, _localMicTrack!);
+      print(
+          '[WebRTCMedia] Android global microphone mute reset (legacy compatibility).');
+    } catch (_) {
+      // No-op: not critical for normal track.enabled-based PTT flow.
+    }
+  }
+
+  void _startTalkbackStatsLogging() {
+    _stopTalkbackStatsLogging();
+    _talkbackStatsTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      unawaited(_logTalkbackSenderStats());
+    });
+  }
+
+  void _stopTalkbackStatsLogging() {
+    _talkbackStatsTimer?.cancel();
+    _talkbackStatsTimer = null;
+  }
+
+  Future<void> _logTalkbackSenderStats() async {
+    if (!_talkbackEnabled || _localMicSender == null) {
+      return;
+    }
+
+    try {
+      final reports = await _localMicSender!.getStats();
+      var outboundLogged = false;
+      for (final report in reports) {
+        final type = report.type.toLowerCase();
+        if (type != 'outbound-rtp') {
+          continue;
+        }
+
+        final values = report.values;
+        final kind = (values['kind'] ?? values['mediaType'] ?? '')
+            .toString()
+            .toLowerCase();
+        if (kind.isNotEmpty && kind != 'audio') {
+          continue;
+        }
+
+        final packetsSent = values['packetsSent'];
+        final bytesSent = values['bytesSent'];
+        print(
+          '[WebRTCMedia] 🎤 Outbound audio RTP: packetsSent=$packetsSent, bytesSent=$bytesSent, trackEnabled=${_localMicTrack?.enabled}',
+        );
+        outboundLogged = true;
+      }
+
+      if (!outboundLogged) {
+        print(
+          '[WebRTCMedia] 🎤 Talkback sender stats had no outbound-rtp audio entries (trackEnabled=${_localMicTrack?.enabled}).',
+        );
+      }
+    } catch (e) {
+      print('[WebRTCMedia] Failed to read talkback sender stats: $e');
+    }
+  }
+
+  Future<bool> _attachTalkbackTrackToOfferAudioMline() async {
+    if (_peerConnection == null || _localMicTrack == null) {
+      return false;
+    }
+
+    try {
+      final transceivers = await _peerConnection!.getTransceivers();
+      RTCRtpTransceiver? fallbackAudioTransceiver;
+
+      for (final transceiver in transceivers) {
+        final mid = transceiver.mid;
+        final offerAudioMline = _offerAudioMlinesByMid[mid];
+        final receiverTrack = transceiver.receiver.track;
+        final senderTrack = transceiver.sender.track;
+        final hasAudioKind = receiverTrack?.kind == 'audio' ||
+            senderTrack?.kind == 'audio' ||
+            offerAudioMline != null;
+
+        if (!hasAudioKind) {
+          continue;
+        }
+
+        fallbackAudioTransceiver ??= transceiver;
+
+        if (offerAudioMline == null ||
+            !offerAudioMline.remoteCanReceiveLocalAudio) {
+          continue;
+        }
+
+        final preferredDirection = offerAudioMline.direction == 'recvonly'
+            ? TransceiverDirection.SendOnly
+            : TransceiverDirection.SendRecv;
+        try {
+          await transceiver.setDirection(preferredDirection);
+        } catch (e) {
+          print(
+            '[WebRTCMedia] Failed to set transceiver direction on mid=$mid: $e',
+          );
+        }
+
+        await transceiver.sender.replaceTrack(_localMicTrack);
+        _localMicSender = transceiver.sender;
+        print(
+          '[WebRTCMedia] 🎤 Talkback bound to offer audio m-line mid=$mid (offerDir=${offerAudioMline.direction})',
+        );
+        return true;
+      }
+
+      if (fallbackAudioTransceiver != null) {
+        final mid = fallbackAudioTransceiver.mid;
+        await fallbackAudioTransceiver.sender.replaceTrack(_localMicTrack);
+        _localMicSender = fallbackAudioTransceiver.sender;
+        print(
+          '[WebRTCMedia] ⚠️ Fallback talkback bind used on audio transceiver mid=$mid (offer mapping unavailable).',
+        );
+        return true;
+      }
+
+      if (_offerAudioMlinesByMid.isNotEmpty) {
+        final unsupported = _offerAudioMlinesByMid.values
+            .where((item) => !item.remoteCanReceiveLocalAudio)
+            .map((item) => 'mid=${item.mid},dir=${item.direction}')
+            .join(' | ');
+        if (unsupported.isNotEmpty) {
+          print(
+            '[WebRTCMedia] ⚠️ Offer has audio m-lines that cannot carry mobile uplink: $unsupported',
+          );
+        }
+      }
+
+      print(
+        '[WebRTCMedia] ⚠️ No suitable audio transceiver found for talkback uplink.',
+      );
+    } catch (e) {
+      print('[WebRTCMedia] Failed to bind talkback transceiver: $e');
+    }
+
+    return false;
+  }
+
+  static List<_OfferAudioMline> _parseOfferAudioMlines(String sdp) {
+    final lines = sdp.split(RegExp(r'\r?\n'));
+    final items = <_OfferAudioMline>[];
+    String? currentMedia;
+    String? currentMid;
+    var sessionDirection = 'sendrecv';
+    var currentDirection = sessionDirection;
+
+    void flushCurrent() {
+      final mid = currentMid;
+      if (currentMedia != 'audio' || mid == null || mid.isEmpty) {
+        return;
+      }
+      items.add(_OfferAudioMline(mid: mid, direction: currentDirection));
+    }
+
+    for (final rawLine in lines) {
+      final line = rawLine.trim();
+      if (line.isEmpty) {
+        continue;
+      }
+
+      if (line.startsWith('m=')) {
+        flushCurrent();
+        final mediaParts = line.substring(2).split(' ');
+        currentMedia = mediaParts.isEmpty ? null : mediaParts.first;
+        currentMid = null;
+        currentDirection = sessionDirection;
+        continue;
+      }
+
+      if (line == 'a=sendrecv' ||
+          line == 'a=sendonly' ||
+          line == 'a=recvonly' ||
+          line == 'a=inactive') {
+        final direction = line.substring(2);
+        if (currentMedia == null) {
+          sessionDirection = direction;
+        } else {
+          currentDirection = direction;
+        }
+        continue;
+      }
+
+      if (line.startsWith('a=mid:')) {
+        currentMid = line.substring('a=mid:'.length);
+      }
+    }
+
+    flushCurrent();
+    return items;
+  }
+
   Future<void> setTalkbackEnabled(bool enabled) async {
+    _talkbackDesiredEnabled = enabled;
+
     if (enabled && _localMicTrack == null) {
       await _ensureTalkbackTrack();
     }
@@ -339,15 +648,40 @@ class WebRTCMediaService {
       return;
     }
 
-    _localMicTrack!.enabled = enabled;
+    await _applyTalkbackMuteState(!enabled);
+
+    if (_localMicSender != null &&
+        _localMicSender!.track?.id != _localMicTrack!.id) {
+      try {
+        await _localMicSender!.replaceTrack(_localMicTrack);
+      } catch (e) {
+        print('[WebRTCMedia] Failed to rebind mic track to sender: $e');
+      }
+    }
+
     _talkbackEnabled = enabled;
-    print('[WebRTCMedia] ${enabled ? '🎙️ Talkback ON' : '🔇 Talkback OFF'}');
+    if (_talkbackEnabled) {
+      _startTalkbackStatsLogging();
+    } else {
+      _stopTalkbackStatsLogging();
+    }
+    print(
+      '[WebRTCMedia] ${enabled ? '🎙️ Talkback ON' : '🔇 Talkback OFF'} (trackEnabled=${_localMicTrack!.enabled})',
+    );
   }
 
   Future<void> _disposeTalkbackTrack() async {
     try {
-      _localMicTrack?.enabled = false;
-      _localMicTrack?.stop();
+      if (_supportsNativeMicrophoneMute && _localMicTrack != null) {
+        await Helper.setMicrophoneMute(true, _localMicTrack!);
+      }
+    } catch (_) {}
+    try {
+      await _localMicSender?.replaceTrack(null);
+    } catch (_) {}
+    _localMicSender = null;
+    try {
+      await _localMicTrack?.stop();
     } catch (_) {}
     _localMicTrack = null;
     try {
@@ -355,18 +689,22 @@ class WebRTCMediaService {
     } catch (_) {}
     _localMicStream = null;
     _talkbackEnabled = false;
+    _stopTalkbackStatsLogging();
   }
 
   void stop() {
     _messageSub?.cancel();
     _messageSub = null;
     _cancelLanProbeTimer();
+    _stopTalkbackStatsLogging();
     _stunFallbackArmed = false;
     _usingLanOnlyThisPeer = false;
     _connectedInCurrentPeer = false;
     _peerConnection?.close();
     _peerConnection = null;
+    _offerAudioMlinesByMid = {};
     _pendingRemoteCandidates.clear();
+    _talkbackDesiredEnabled = false;
     unawaited(_disposeTalkbackTrack());
   }
 
@@ -375,4 +713,17 @@ class WebRTCMediaService {
     stop();
     _remoteStreamController.close();
   }
+}
+
+class _OfferAudioMline {
+  _OfferAudioMline({
+    required this.mid,
+    required this.direction,
+  });
+
+  final String mid;
+  final String direction;
+
+  bool get remoteCanReceiveLocalAudio =>
+      direction == 'recvonly' || direction == 'sendrecv';
 }

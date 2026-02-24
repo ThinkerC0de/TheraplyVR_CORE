@@ -62,12 +62,16 @@ namespace TheraplyCore.Streaming
         private MediaStream _mediaStream;
         private VideoStreamTrack _videoTrack;
         private AudioStreamTrack _audioTrack;
+        private RTCRtpTransceiver _incomingTherapistVoiceTransceiver;
         private RenderTexture _renderTexture;
         private Camera _captureCamera;
         private GameObject _captureCameraGo;
         private AudioStreamTrack _remoteAudioTrack;
         private AudioSource _remoteVoiceAudioSource;
         private GameObject _remoteVoiceAudioGo;
+        private ulong _lastInboundAudioPacketsReceived;
+        private ulong _lastInboundAudioBytesReceived;
+        private double _lastInboundAudioLevel;
         
         private bool _isStreaming = false;
         private bool _isLanOnlyModeActive = false;
@@ -88,6 +92,8 @@ namespace TheraplyCore.Streaming
         
         private void Awake()
         {
+            // Keep media + audio active even when the editor/player window loses focus.
+            Application.runInBackground = true;
             _webrtcUpdateCoroutine = StartCoroutine(WebRTC.Update());
         }
         
@@ -258,7 +264,9 @@ namespace TheraplyCore.Streaming
                 _sourceCamera.targetTexture = _renderTexture;
             }
             
-            Debug.Log($"[MediaStreamService] Initialized capture: {_streamWidth}x{_streamHeight} @ {_targetFps}fps");
+            var configuredBitrateBps = Mathf.Max(100000, _targetBitrate);
+            Debug.Log(
+                $"[MediaStreamService] Initialized capture: {_streamWidth}x{_streamHeight} @ {_targetFps}fps (target bitrate={configuredBitrateBps}bps)");
             Debug.Log($"[MediaStreamService] RenderTexture source camera: {(_captureCamera != null ? _captureCamera.name : _sourceCamera.name)}");
         }
         
@@ -311,6 +319,32 @@ namespace TheraplyCore.Streaming
                 _isLanOnlyModeActive = _preferLanFirst && !forceStun;
                 var config = BuildIceConfiguration(_isLanOnlyModeActive);
                 _peerConnection = new RTCPeerConnection(ref config);
+
+                // Ensure offer contains a dedicated audio m-line for mobile -> Quest talkback.
+                // Keep this explicit even when Quest -> mobile audio is enabled to avoid
+                // direction ambiguity on renegotiation/reconnect.
+                if (_receiveTherapistVoice)
+                {
+                    var talkbackInit = new RTCRtpTransceiverInit
+                    {
+                        direction = RTCRtpTransceiverDirection.RecvOnly
+                    };
+                    _incomingTherapistVoiceTransceiver =
+                        _peerConnection.AddTransceiver(TrackKind.Audio, talkbackInit);
+                    if (_incomingTherapistVoiceTransceiver != null)
+                    {
+                        Debug.Log("[MediaStreamService] Added RecvOnly audio transceiver for therapist talkback.");
+                    }
+                    else
+                    {
+                        Debug.LogWarning("[MediaStreamService] Failed to add RecvOnly talkback transceiver.");
+                    }
+                }
+                else
+                {
+                    _incomingTherapistVoiceTransceiver = null;
+                }
+
                 foreach (var track in _mediaStream.GetTracks())
                     _peerConnection.AddTrack(track, _mediaStream);
                 _peerConnection.OnIceCandidate = OnIceCandidate;
@@ -319,6 +353,9 @@ namespace TheraplyCore.Streaming
                 _peerConnection.OnTrack = OnTrack;
                 _isStreaming = true;
                 _framesSent = 0;
+                _lastInboundAudioPacketsReceived = 0;
+                _lastInboundAudioBytesReceived = 0;
+                _lastInboundAudioLevel = 0d;
                 if (_isLanOnlyModeActive)
                 {
                     Debug.Log("[MediaStreamService] LAN-first mode active (host ICE only, STUN fallback armed).");
@@ -344,12 +381,16 @@ namespace TheraplyCore.Streaming
             _isStreaming = false;
             _isLanOnlyModeActive = false;
             _stunFallbackRequestedForCurrentPeer = false;
+            _lastInboundAudioPacketsReceived = 0;
+            _lastInboundAudioBytesReceived = 0;
+            _lastInboundAudioLevel = 0d;
             if (_peerConnection != null)
             {
                 _peerConnection.Close();
                 _peerConnection.Dispose();
                 _peerConnection = null;
             }
+            _incomingTherapistVoiceTransceiver = null;
             if (_videoTrack != null)
             {
                 _videoTrack.Dispose();
@@ -390,7 +431,8 @@ namespace TheraplyCore.Streaming
         /// </summary>
         public IEnumerator CreateOffer(Action<RTCSessionDescription> onOfferCreated)
         {
-            if (_peerConnection == null)
+            var peer = _peerConnection;
+            if (peer == null || !_isStreaming)
             {
                 Debug.LogError("[MediaStreamService] Cannot create offer - no peer connection!");
                 yield break;
@@ -401,8 +443,14 @@ namespace TheraplyCore.Streaming
                 iceRestart = false
             };
             
-            var op = _peerConnection.CreateOffer(ref offerOptions);
+            var op = peer.CreateOffer(ref offerOptions);
             yield return op;
+
+            if (!_isStreaming || !ReferenceEquals(peer, _peerConnection))
+            {
+                Debug.LogWarning("[MediaStreamService] Skipping stale offer creation result after peer swap.");
+                yield break;
+            }
             
             if (op.IsError)
             {
@@ -411,8 +459,14 @@ namespace TheraplyCore.Streaming
             }
             
             var offer = op.Desc;
-            var setLocalOp = _peerConnection.SetLocalDescription(ref offer);
+            var setLocalOp = peer.SetLocalDescription(ref offer);
             yield return setLocalOp;
+
+            if (!_isStreaming || !ReferenceEquals(peer, _peerConnection))
+            {
+                Debug.LogWarning("[MediaStreamService] Skipping stale SetLocalDescription result after peer swap.");
+                yield break;
+            }
             
             if (setLocalOp.IsError)
             {
@@ -438,14 +492,21 @@ namespace TheraplyCore.Streaming
         /// </summary>
         public IEnumerator SetRemoteAnswer(RTCSessionDescription answer)
         {
-            if (_peerConnection == null)
+            var peer = _peerConnection;
+            if (peer == null || !_isStreaming)
             {
                 Debug.LogError("[MediaStreamService] Cannot set answer - no peer connection!");
                 yield break;
             }
             
-            var op = _peerConnection.SetRemoteDescription(ref answer);
+            var op = peer.SetRemoteDescription(ref answer);
             yield return op;
+
+            if (!_isStreaming || !ReferenceEquals(peer, _peerConnection))
+            {
+                Debug.LogWarning("[MediaStreamService] Ignoring stale remote answer after peer swap.");
+                yield break;
+            }
             
             if (op.IsError)
             {
@@ -461,13 +522,14 @@ namespace TheraplyCore.Streaming
         /// </summary>
         public void AddIceCandidate(RTCIceCandidate candidate)
         {
-            if (_peerConnection == null)
+            var peer = _peerConnection;
+            if (peer == null || !_isStreaming)
             {
                 Debug.LogWarning("[MediaStreamService] Cannot add ICE candidate - no peer connection!");
                 return;
             }
             
-            _peerConnection.AddIceCandidate(candidate);
+            peer.AddIceCandidate(candidate);
             
             if (_logVerbose)
             {
@@ -644,10 +706,24 @@ namespace TheraplyCore.Streaming
                     _remoteVoiceAudioSource.loop = true;
                     _remoteVoiceAudioSource.spatialBlend = 0f;
                     _remoteVoiceAudioSource.volume = 1f;
+                    _remoteVoiceAudioSource.mute = false;
+                    _remoteVoiceAudioSource.ignoreListenerPause = true;
+                    _remoteVoiceAudioSource.ignoreListenerVolume = true;
+                    _remoteVoiceAudioSource.bypassListenerEffects = true;
+                    _remoteVoiceAudioSource.bypassReverbZones = true;
                 }
 
                 _remoteVoiceAudioSource.SetTrack(incomingAudioTrack);
-                Debug.Log("[MediaStreamService] 🎤 Therapist voice track connected.");
+                if (!_remoteVoiceAudioSource.isPlaying)
+                {
+                    _remoteVoiceAudioSource.Play();
+                }
+                var audioListenerCount = FindObjectsByType<AudioListener>(FindObjectsSortMode.None).Length;
+                Debug.Log(
+                    "[MediaStreamService] 🎤 Therapist voice track connected. " +
+                    $"playing={_remoteVoiceAudioSource.isPlaying}, mute={_remoteVoiceAudioSource.mute}, " +
+                    $"volume={_remoteVoiceAudioSource.volume:0.00}, ignoreListenerPause={_remoteVoiceAudioSource.ignoreListenerPause}, " +
+                    $"listeners={audioListenerCount}, listenerPause={AudioListener.pause}, listenerVolume={AudioListener.volume:0.00}");
             }
         }
         
@@ -663,14 +739,95 @@ namespace TheraplyCore.Streaming
                 
                 if (_peerConnection != null)
                 {
-                    var stats = _peerConnection.GetStats();
-                    
-                    // Log basic stats
+                    var statsOp = _peerConnection.GetStats();
+                    yield return statsOp;
+
+                    if (statsOp == null || statsOp.IsError || statsOp.Value == null)
+                    {
+                        Debug.LogWarning("[MediaStreamService] Failed to read WebRTC stats report.");
+                    }
+                    else
+                    {
+                        try
+                        {
+                            LogInboundAudioStats(statsOp.Value);
+                        }
+                        finally
+                        {
+                            statsOp.Value.Dispose();
+                        }
+                    }
+
                     Debug.Log($"[MediaStreamService] Stats: Connection={_peerConnection.ConnectionState}, ICE={_peerConnection.IceConnectionState}");
-                    
-                    // TODO: Parse detailed stats (bitrate, packet loss, etc.)
                 }
             }
+        }
+
+        private void LogInboundAudioStats(RTCStatsReport report)
+        {
+            if (report == null)
+            {
+                return;
+            }
+
+            var streamCount = 0;
+            ulong packetsReceived = 0;
+            ulong bytesReceived = 0;
+            var maxAudioLevel = 0d;
+
+            foreach (var pair in report.Stats)
+            {
+                if (pair.Value is RTCInboundRTPStreamStats inbound &&
+                    string.Equals(inbound.kind, "audio", StringComparison.OrdinalIgnoreCase))
+                {
+                    streamCount++;
+                    packetsReceived += inbound.packetsReceived;
+                    bytesReceived += inbound.bytesReceived;
+                    maxAudioLevel = Math.Max(maxAudioLevel, inbound.audioLevel);
+                }
+            }
+
+            if (streamCount == 0)
+            {
+                if (_remoteAudioTrack != null)
+                {
+                    Debug.LogWarning("[MediaStreamService] Inbound audio diagnostics: remote track exists, but no inbound audio RTP stats were reported.");
+                }
+                return;
+            }
+
+            var packetsDelta = packetsReceived >= _lastInboundAudioPacketsReceived
+                ? packetsReceived - _lastInboundAudioPacketsReceived
+                : packetsReceived;
+            var bytesDelta = bytesReceived >= _lastInboundAudioBytesReceived
+                ? bytesReceived - _lastInboundAudioBytesReceived
+                : bytesReceived;
+
+            _lastInboundAudioPacketsReceived = packetsReceived;
+            _lastInboundAudioBytesReceived = bytesReceived;
+            _lastInboundAudioLevel = maxAudioLevel;
+
+            var outputPeak = 0f;
+            if (_remoteVoiceAudioSource != null && _remoteVoiceAudioSource.isPlaying)
+            {
+                var outputSamples = new float[256];
+                _remoteVoiceAudioSource.GetOutputData(outputSamples, 0);
+                for (var i = 0; i < outputSamples.Length; i++)
+                {
+                    var abs = Mathf.Abs(outputSamples[i]);
+                    if (abs > outputPeak)
+                    {
+                        outputPeak = abs;
+                    }
+                }
+            }
+
+            Debug.Log(
+                "[MediaStreamService] Inbound audio diagnostics: " +
+                $"streams={streamCount}, packets={packetsReceived} (+{packetsDelta}), " +
+                $"bytes={bytesReceived} (+{bytesDelta}), audioLevel={_lastInboundAudioLevel:0.000}, " +
+                $"sourcePlaying={(_remoteVoiceAudioSource != null && _remoteVoiceAudioSource.isPlaying)}, " +
+                $"outputPeak={outputPeak:0.0000}");
         }
         
         // ============================================
