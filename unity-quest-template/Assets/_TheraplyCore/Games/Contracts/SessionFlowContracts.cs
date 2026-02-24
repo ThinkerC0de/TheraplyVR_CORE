@@ -313,6 +313,9 @@ namespace TheraplyCore.Games.Contracts
         public float timeoutSec = 0f;
         public List<EffectDefinition> onEnterEffects = new List<EffectDefinition>();
         public List<EffectDefinition> onExitEffects = new List<EffectDefinition>();
+        public List<EffectDefinition> onAcceptedEffects = new List<EffectDefinition>();
+        public List<EffectDefinition> onRejectedEffects = new List<EffectDefinition>();
+        public List<EffectDefinition> onTimeoutEffects = new List<EffectDefinition>();
         public string nextOnSuccess = string.Empty;
         public string nextOnFail = string.Empty;
         public string nextOnTimeout = string.Empty;

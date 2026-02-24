@@ -40,6 +40,7 @@ namespace TheraplyCore.Games.Runtime
 
         public TaskGraphRunState State => _state;
         public string ActiveNodeId => _activeNode == null ? string.Empty : _activeNode.nodeId;
+        public GameContracts.TaskGraphNodeDefinition ActiveNode => _activeNode;
 
         public void SetPluginRegistry(ActionPluginRegistry pluginRegistry)
         {

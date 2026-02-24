@@ -17,6 +17,7 @@ namespace TheraplyCore.Games.Runtime
         [SerializeField] private FlowConfigProvider _flowConfigProvider;
         [SerializeField] private SessionRuntimeBridge _sessionRuntimeBridge;
         [SerializeField] private ActionAdapterRegistry _actionAdapterRegistry;
+        [SerializeField] private EffectRunner _effectRunner;
         [SerializeField] private InteractionEventBridge _interactionEventBridge;
 
         [Header("Startup")]
@@ -32,6 +33,7 @@ namespace TheraplyCore.Games.Runtime
         private readonly TaskGraphRunner _taskGraphRunner = new TaskGraphRunner();
         private GameContracts.GameDefinition _activeDefinition;
         private string _activeFlowId = string.Empty;
+        private GameContracts.TaskGraphNodeDefinition _lastEnteredNode;
 
         public TaskGraphRunState GraphState => _taskGraphRunner.State;
         public string ActiveNodeId => _taskGraphRunner.ActiveNodeId;
@@ -153,6 +155,14 @@ namespace TheraplyCore.Games.Runtime
                 _activeFlowId,
                 ResolveSessionId(),
                 ResolveControlMode(_activeDefinition));
+            if (_effectRunner != null)
+            {
+                _effectRunner.SetRuntimeContext(
+                    ResolveGameId(),
+                    _activeFlowId,
+                    ResolveSessionId());
+            }
+            _lastEnteredNode = null;
 
             if (!_taskGraphRunner.Initialize(definition.taskGraph, out reasonCode))
             {
@@ -184,7 +194,18 @@ namespace TheraplyCore.Games.Runtime
                 return false;
             }
 
+            var activeNode = _taskGraphRunner.ActiveNode;
+            ExecuteNodeEffects(
+                activeNode,
+                activeNode == null ? null : activeNode.onExitEffects,
+                "on_exit",
+                "FLOW_INTERRUPTED",
+                string.Empty,
+                string.Empty,
+                "FLOW_INTERRUPTED");
+
             _taskGraphRunner.Reset();
+            _lastEnteredNode = null;
             EmitFlowEvent("flow_stopped", "FLOW_INTERRUPTED");
             MaybeLog("FLOW_INTERRUPTED", reasonCode);
             return true;
@@ -198,6 +219,7 @@ namespace TheraplyCore.Games.Runtime
             }
 
             var now = Time.realtimeSinceStartup;
+            var nodeBeforeSubmit = _taskGraphRunner.ActiveNode;
             EmitActionTelemetry("action_received", intent, null, "ACTION_RECEIVED");
 
             _taskGraphRunner.SetRuntimeContext(
@@ -214,6 +236,16 @@ namespace TheraplyCore.Games.Runtime
 
             var accepted = submitted && validationResult != null && validationResult.accepted;
             var reasonCode = ResolveDecisionReasonCode(validationResult, submitReasonCode, accepted);
+            ExecuteNodeEffects(
+                nodeBeforeSubmit,
+                nodeBeforeSubmit == null
+                    ? null
+                    : (accepted ? nodeBeforeSubmit.onAcceptedEffects : nodeBeforeSubmit.onRejectedEffects),
+                accepted ? "on_accepted" : "on_rejected",
+                accepted ? "NODE_ACTION_ACCEPTED" : "NODE_ACTION_REJECTED",
+                intent.actionId,
+                accepted ? "accepted" : "rejected",
+                reasonCode);
             EmitActionTelemetry(
                 "action_evaluated",
                 intent,
@@ -233,6 +265,46 @@ namespace TheraplyCore.Games.Runtime
                 return;
             }
 
+            var normalizedTransitionReason = NormalizeOrFallback(transitionReason, "UNSPECIFIED_TRANSITION");
+
+            if (_lastEnteredNode != null &&
+                !string.Equals(
+                    NormalizeOrFallback(_lastEnteredNode.nodeId, string.Empty),
+                    NormalizeOrFallback(node.nodeId, string.Empty),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                if (IsTimeoutTransition(normalizedTransitionReason))
+                {
+                    ExecuteNodeEffects(
+                        _lastEnteredNode,
+                        _lastEnteredNode.onTimeoutEffects,
+                        "on_timeout",
+                        normalizedTransitionReason,
+                        string.Empty,
+                        string.Empty,
+                        "NODE_TIMEOUT");
+                }
+
+                ExecuteNodeEffects(
+                    _lastEnteredNode,
+                    _lastEnteredNode.onExitEffects,
+                    "on_exit",
+                    normalizedTransitionReason,
+                    string.Empty,
+                    string.Empty,
+                    string.Empty);
+            }
+
+            ExecuteNodeEffects(
+                node,
+                node.onEnterEffects,
+                "on_enter",
+                normalizedTransitionReason,
+                string.Empty,
+                string.Empty,
+                string.Empty);
+            _lastEnteredNode = node;
+
             EmitFlowEvent(
                 "step_entered",
                 "STEP_ENTERED",
@@ -240,12 +312,25 @@ namespace TheraplyCore.Games.Runtime
                 {
                     { "nodeId", node.nodeId ?? string.Empty },
                     { "nodeType", node.nodeType ?? string.Empty },
-                    { "transitionReason", NormalizeOrFallback(transitionReason, "UNSPECIFIED_TRANSITION") },
+                    { "transitionReason", normalizedTransitionReason },
                 });
         }
 
         private void HandleGraphCompleted(TaskGraphRunState terminalState, string reasonCode)
         {
+            var activeNode = _taskGraphRunner.ActiveNode;
+            if (IsTimeoutTransition(reasonCode))
+            {
+                ExecuteNodeEffects(
+                    activeNode,
+                    activeNode == null ? null : activeNode.onTimeoutEffects,
+                    "on_timeout",
+                    reasonCode,
+                    string.Empty,
+                    string.Empty,
+                    "NODE_TIMEOUT");
+            }
+
             if (terminalState == TaskGraphRunState.Completed)
             {
                 if (_sessionRuntimeBridge != null)
@@ -270,6 +355,7 @@ namespace TheraplyCore.Games.Runtime
             }
 
             EmitSessionTerminal();
+            _lastEnteredNode = activeNode;
             MaybeLog("FLOW_TERMINAL", reasonCode);
         }
 
@@ -281,9 +367,23 @@ namespace TheraplyCore.Games.Runtime
                 _sessionRuntimeBridge.TryFailTechnicalSession(out _);
             }
 
+            var activeNode = _taskGraphRunner.ActiveNode;
+            if (IsTimeoutTransition(normalizedReason))
+            {
+                ExecuteNodeEffects(
+                    activeNode,
+                    activeNode == null ? null : activeNode.onTimeoutEffects,
+                    "on_timeout",
+                    normalizedReason,
+                    string.Empty,
+                    string.Empty,
+                    normalizedReason);
+            }
+
             EmitFlowEvent("flow_failed", normalizedReason);
             EmitSessionTerminal();
             _taskGraphRunner.Reset();
+            _lastEnteredNode = null;
             MaybeLog("FLOW_RUNTIME_FAILED", normalizedReason);
         }
 
@@ -330,6 +430,15 @@ namespace TheraplyCore.Games.Runtime
                 if (_actionAdapterRegistry == null)
                 {
                     _actionAdapterRegistry = FindFirstObjectByType<ActionAdapterRegistry>();
+                }
+            }
+
+            if (_effectRunner == null)
+            {
+                _effectRunner = GetComponent<EffectRunner>();
+                if (_effectRunner == null)
+                {
+                    _effectRunner = FindFirstObjectByType<EffectRunner>();
                 }
             }
 
@@ -499,6 +608,45 @@ namespace TheraplyCore.Games.Runtime
             return _sessionRuntimeBridge == null
                 ? string.Empty
                 : _sessionRuntimeBridge.SessionState.ToString();
+        }
+
+        private void ExecuteNodeEffects(
+            GameContracts.TaskGraphNodeDefinition node,
+            IReadOnlyList<GameContracts.EffectDefinition> effects,
+            string trigger,
+            string transitionReason,
+            string actionId,
+            string actionDecision,
+            string actionReasonCode)
+        {
+            if (_effectRunner == null || node == null || effects == null || effects.Count == 0)
+            {
+                return;
+            }
+
+            _effectRunner.SetRuntimeContext(
+                ResolveGameId(),
+                _activeFlowId,
+                ResolveSessionId());
+            if (!_effectRunner.ExecuteEffects(
+                    node.nodeId,
+                    trigger,
+                    effects,
+                    transitionReason,
+                    actionId,
+                    actionDecision,
+                    actionReasonCode,
+                    out var effectReasonCode) &&
+                !string.IsNullOrWhiteSpace(effectReasonCode))
+            {
+                MaybeLog("EFFECT_EXECUTION_FAILED", effectReasonCode);
+            }
+        }
+
+        private static bool IsTimeoutTransition(string reasonCode)
+        {
+            return !string.IsNullOrWhiteSpace(reasonCode) &&
+                   reasonCode.IndexOf("TIMEOUT", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static string ResolveDecisionReasonCode(

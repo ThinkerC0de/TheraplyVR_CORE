@@ -65,9 +65,9 @@ Goal: implement the new framework direction end-to-end so no per-game core rewri
 
 | ID | Task | Status | Acceptance Criteria | Depends On |
 | --- | --- | --- | --- | --- |
-| SF-D-001 | Implement `EffectRunner` | TODO | Executes enter/exit/accepted/rejected/timeout effect hooks | SF-B-005 |
-| SF-D-002 | Implement effect plugin interface | TODO | Effect handlers resolve by `effectId` | SF-D-001 |
-| SF-D-003 | Implement base effect plugins | TODO | `show/hide/spawn/despawn/play_audio/stop_audio/play_sfx/play_vfx/set_animator_trigger/play_timeline/stop_timeline/enable_interaction/disable_interaction/set_ui_text/update_score/fade_screen/teleport_actor/emit_hint` available | SF-D-002 |
+| SF-D-001 | Implement `EffectRunner` | DONE | Executes enter/exit/accepted/rejected/timeout effect hooks | SF-B-005 |
+| SF-D-002 | Implement effect plugin interface | DONE | Effect handlers resolve by `effectId` | SF-D-001 |
+| SF-D-003 | Implement base effect plugins | DONE | `show/hide/spawn/despawn/play_audio/stop_audio/play_sfx/play_vfx/set_animator_trigger/play_timeline/stop_timeline/enable_interaction/disable_interaction/set_ui_text/update_score/fade_screen/teleport_actor/emit_hint` available | SF-D-002 |
 | SF-D-004 | Implement `ScoringRuntime` | TODO | Outputs `scoreTotal/correctCount/wrongCount/livesRemaining/successThresholdReached/adaptiveDifficultyState` | SF-A-003 |
 | SF-D-005 | Integrate adaptive difficulty policy | TODO | Policy can adjust speed/count/timeout based on performance | SF-D-004 |
 
