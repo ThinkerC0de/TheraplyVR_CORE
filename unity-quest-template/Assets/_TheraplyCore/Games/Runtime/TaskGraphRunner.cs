@@ -24,6 +24,11 @@ namespace TheraplyCore.Games.Runtime
             new Dictionary<string, GameContracts.TaskGraphNodeDefinition>(StringComparer.OrdinalIgnoreCase);
         private readonly ActionGate _actionGate = new ActionGate();
         private readonly TransitionEngine _transitionEngine = new TransitionEngine();
+        private ActionPluginRegistry _pluginRegistry;
+        private string _runtimeGameId = string.Empty;
+        private string _runtimeFlowId = string.Empty;
+        private string _runtimeSessionId = string.Empty;
+        private string _runtimeControlMode = GameContracts.SessionFlowControlModes.Hybrid;
 
         private GameContracts.TaskGraphDefinition _graph;
         private GameContracts.TaskGraphNodeDefinition _activeNode;
@@ -35,6 +40,23 @@ namespace TheraplyCore.Games.Runtime
 
         public TaskGraphRunState State => _state;
         public string ActiveNodeId => _activeNode == null ? string.Empty : _activeNode.nodeId;
+
+        public void SetPluginRegistry(ActionPluginRegistry pluginRegistry)
+        {
+            _pluginRegistry = pluginRegistry;
+        }
+
+        public void SetRuntimeContext(
+            string gameId,
+            string flowId,
+            string sessionId,
+            string controlMode)
+        {
+            _runtimeGameId = Normalize(gameId);
+            _runtimeFlowId = Normalize(flowId);
+            _runtimeSessionId = Normalize(sessionId);
+            _runtimeControlMode = GameContracts.SessionFlowControlModes.NormalizeOrDefault(controlMode);
+        }
 
         public bool Initialize(GameContracts.TaskGraphDefinition graph, out string reasonCode)
         {
@@ -92,6 +114,19 @@ namespace TheraplyCore.Games.Runtime
             _graph = graph;
             _state = TaskGraphRunState.Ready;
             return true;
+        }
+
+        public void Reset()
+        {
+            _nodesById.Clear();
+            _graph = null;
+            _activeNode = null;
+            _activeNodeEnteredAtSec = 0f;
+            _runtimeGameId = string.Empty;
+            _runtimeFlowId = string.Empty;
+            _runtimeSessionId = string.Empty;
+            _runtimeControlMode = GameContracts.SessionFlowControlModes.Hybrid;
+            _state = TaskGraphRunState.NotInitialized;
         }
 
         public bool Start(float nowElapsedSec, out string reasonCode)
@@ -157,6 +192,10 @@ namespace TheraplyCore.Games.Runtime
             }
             var actionContext = new GameContracts.ActionContext
             {
+                gameId = _runtimeGameId,
+                flowId = _runtimeFlowId,
+                sessionId = _runtimeSessionId,
+                controlMode = _runtimeControlMode,
                 nodeId = _activeNode == null ? string.Empty : _activeNode.nodeId,
                 stepId = _activeNode == null ? string.Empty : _activeNode.nodeId,
             };
@@ -165,6 +204,44 @@ namespace TheraplyCore.Games.Runtime
             if (validationResult == null || !validationResult.accepted)
             {
                 return true;
+            }
+
+            var allowedAction = ResolveAllowedAction(_activeNode, intent == null ? string.Empty : intent.actionId);
+            if (_pluginRegistry != null &&
+                intent != null &&
+                _pluginRegistry.TryResolve(intent.actionId, out var plugin) &&
+                plugin != null)
+            {
+                validationResult = plugin.Validate(intent, actionContext, allowedAction);
+                reasonCode = validationResult == null ? "PLUGIN_VALIDATE_FAILED" : validationResult.reasonCode;
+                if (validationResult == null || !validationResult.accepted)
+                {
+                    return true;
+                }
+
+                var applyResult = plugin.Apply(intent, actionContext, allowedAction);
+                if (applyResult != null)
+                {
+                    if (applyResult.stepFailed)
+                    {
+                        return RouteByTrigger(TransitionTrigger.Fail, nowElapsedSec, "NODE_PLUGIN_FAIL", out reasonCode);
+                    }
+
+                    if (applyResult.stepTimedOut)
+                    {
+                        return RouteByTrigger(TransitionTrigger.Timeout, nowElapsedSec, "NODE_PLUGIN_TIMEOUT", out reasonCode);
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(applyResult.nextNodeId))
+                    {
+                        return TryEnterNode(applyResult.nextNodeId, nowElapsedSec, "NODE_PLUGIN_NEXT", out reasonCode);
+                    }
+
+                    if (!applyResult.stepCompleted)
+                    {
+                        return true;
+                    }
+                }
             }
 
             if (!RouteByTrigger(TransitionTrigger.Success, nowElapsedSec, "NODE_SUCCESS", out reasonCode))
@@ -271,6 +348,36 @@ namespace TheraplyCore.Games.Runtime
         private static string Normalize(string value)
         {
             return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+        }
+
+        private static GameContracts.AllowedActionDefinition ResolveAllowedAction(
+            GameContracts.TaskGraphNodeDefinition node,
+            string actionId)
+        {
+            if (node == null || node.allowedActions == null || node.allowedActions.Count == 0 || string.IsNullOrWhiteSpace(actionId))
+            {
+                return null;
+            }
+
+            var normalizedActionId = Normalize(actionId);
+            for (var i = 0; i < node.allowedActions.Count; i++)
+            {
+                var allowedAction = node.allowedActions[i];
+                if (allowedAction == null || string.IsNullOrWhiteSpace(allowedAction.actionId))
+                {
+                    continue;
+                }
+
+                if (string.Equals(
+                        Normalize(allowedAction.actionId),
+                        normalizedActionId,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    return allowedAction;
+                }
+            }
+
+            return null;
         }
     }
 }

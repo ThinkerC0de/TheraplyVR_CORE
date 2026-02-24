@@ -41,16 +41,17 @@ Goal: implement the new framework direction end-to-end so no per-game core rewri
 | SF-B-006 | Implement `ActionGate` | DONE | Every action receives `accepted/rejected` decision with reason code | SF-A-004 |
 | SF-B-007 | Implement `ActionValidator` | DONE | Validates target/tool/sequence/time/channel/control-mode constraints | SF-A-004 |
 | SF-B-008 | Implement `TransitionEngine` | DONE | Success/fail/timeout/branch transitions deterministic and logged | SF-A-002 |
+| SF-B-009 | Implement `SessionFlowRunner` host | DONE | Binds definition + session bridge + adapters + task graph and emits flow/action telemetry | SF-B-005 |
 
 ## Phase C - Action Plugin System
 
 | ID | Task | Status | Acceptance Criteria | Depends On |
 | --- | --- | --- | --- | --- |
-| SF-C-001 | Implement `IActionPlugin` interface and registry | TODO | Plugins can register/resolve by `actionId` at runtime | SF-A-004 |
-| SF-C-002 | Implement adapter registry | TODO | Channel adapters publish normalized intents into gate/graph flow | SF-A-005 |
-| SF-C-003 | Add pointer plugin path | TODO | `point_and_select_target`, `confirm_choice`, `choose_reward` resolve through plugin flow | SF-C-001 |
-| SF-C-004 | Add tool impact plugin path | TODO | `touch_target_with_tool`, `intercept_moving_target`, `avoid_hazard_contact` resolve through plugin flow | SF-C-001 |
-| SF-C-005 | Add hand contact adapter/plugin | TODO | `touch_target_with_hand` supported end-to-end | SF-C-001 |
+| SF-C-001 | Implement `IActionPlugin` interface and registry | DONE | Plugins can register/resolve by `actionId` at runtime | SF-A-004 |
+| SF-C-002 | Implement adapter registry | DONE | Channel adapters publish normalized intents into gate/graph flow | SF-A-005 |
+| SF-C-003 | Add pointer plugin path | DONE | `point_and_select_target`, `confirm_choice`, `choose_reward` resolve through plugin flow | SF-C-001 |
+| SF-C-004 | Add tool impact plugin path | DONE | `touch_target_with_tool`, `intercept_moving_target`, `avoid_hazard_contact` resolve through plugin flow | SF-C-001 |
+| SF-C-005 | Add hand contact adapter/plugin | DONE | `touch_target_with_hand` supported end-to-end | SF-C-001 |
 | SF-C-006 | Add grab/place adapter/plugin | TODO | `grab_object`, `release_object`, `place_object_in_zone`, `remove_object_from_zone`, `collect_item_to_container` supported | SF-C-001 |
 | SF-C-007 | Add gaze adapter/plugin | TODO | `hold_gaze_on_target`, `select_target_with_gaze_and_tool` supported | SF-C-001 |
 | SF-C-008 | Add breath adapter/plugin | TODO | `perform_breath_cycle` supported with configurable thresholds/phases | SF-C-001 |

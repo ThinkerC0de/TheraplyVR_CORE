@@ -1,0 +1,425 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using GameContracts = TheraplyCore.Games.Contracts;
+
+namespace TheraplyCore.Games.Runtime
+{
+    /// <summary>
+    /// Built-in action plugins for core channels.
+    /// </summary>
+    public static class SessionFlowBuiltInPlugins
+    {
+        public static void RegisterBuiltIns(ActionPluginRegistry registry, bool replaceExisting = true)
+        {
+            if (registry == null)
+            {
+                return;
+            }
+
+            registry.Register(new PointerSelectActionPlugin("point_and_select_target", allowImplicitActionId: true), replaceExisting);
+            registry.Register(new PointerSelectActionPlugin("confirm_choice", allowImplicitActionId: false), replaceExisting);
+            registry.Register(new PointerSelectActionPlugin("choose_reward", allowImplicitActionId: false), replaceExisting);
+
+            registry.Register(new ToolImpactActionPlugin("touch_target_with_tool", allowImplicitActionId: true), replaceExisting);
+            registry.Register(new ToolImpactActionPlugin("intercept_moving_target", allowImplicitActionId: false), replaceExisting);
+            registry.Register(new ToolImpactActionPlugin("avoid_hazard_contact", allowImplicitActionId: false), replaceExisting);
+
+            registry.Register(new HandContactActionPlugin("touch_target_with_hand", allowImplicitActionId: true), replaceExisting);
+        }
+    }
+
+    public sealed class PointerSelectActionPlugin : GameContracts.IActionPlugin
+    {
+        private readonly ActionValidator _validator = new ActionValidator();
+        private readonly string _actionId;
+        private readonly bool _allowImplicitActionId;
+
+        public PointerSelectActionPlugin(string actionId, bool allowImplicitActionId)
+        {
+            _actionId = string.IsNullOrWhiteSpace(actionId)
+                ? "point_and_select_target"
+                : actionId.Trim();
+            _allowImplicitActionId = allowImplicitActionId;
+        }
+
+        public string ActionId => _actionId;
+        public string ChannelId => GameContracts.SessionFlowChannelIds.Pointer;
+
+        public bool TryCreateIntent(
+            IReadOnlyDictionary<string, object> rawInput,
+            out GameContracts.ActionIntent intent)
+        {
+            intent = null;
+            if (!SessionFlowPluginPayload.TryReadString(rawInput, "eventType", out var eventType))
+            {
+                return false;
+            }
+
+            if (!string.Equals(eventType, "POINTER_SELECT", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(eventType, "POINTER_SELECT_INVALID", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var requestedActionId = SessionFlowPluginPayload.ReadRequestedActionId(rawInput);
+            if (!IsRequestedActionSupported(requestedActionId))
+            {
+                return false;
+            }
+
+            intent = new GameContracts.ActionIntent
+            {
+                actionId = string.IsNullOrWhiteSpace(requestedActionId) ? ActionId : requestedActionId,
+                channelId = ChannelId,
+                targetId = SessionFlowPluginPayload.ReadString(rawInput, "targetId"),
+                inputSource = SessionFlowPluginPayload.ReadString(rawInput, "inputSource"),
+                inputHand = SessionFlowPluginPayload.ReadString(rawInput, "inputHand"),
+                inputValue = SessionFlowPluginPayload.ReadFloat(rawInput, "inputValue"),
+                occurredAtElapsedSec = SessionFlowPluginPayload.ReadFloat(rawInput, "occurredAtElapsedSec"),
+                details = new List<GameContracts.KeyValuePairString>
+                {
+                    new GameContracts.KeyValuePairString { key = "eventType", value = eventType },
+                    new GameContracts.KeyValuePairString { key = "reasonCode", value = SessionFlowPluginPayload.ReadString(rawInput, "reasonCode") },
+                },
+            };
+            return true;
+        }
+
+        public GameContracts.ActionValidationResult Validate(
+            GameContracts.ActionIntent intent,
+            GameContracts.ActionContext context,
+            GameContracts.AllowedActionDefinition allowedAction)
+        {
+            if (SessionFlowPluginPayload.IsEventType(intent, "POINTER_SELECT_INVALID"))
+            {
+                return GameContracts.ActionValidationResult.Rejected("TARGET_INVALID");
+            }
+
+            return _validator.Validate(intent, context, allowedAction);
+        }
+
+        public GameContracts.ActionApplyResult Apply(
+            GameContracts.ActionIntent intent,
+            GameContracts.ActionContext context,
+            GameContracts.AllowedActionDefinition allowedAction)
+        {
+            return SessionFlowPluginPayload.BuildAppliedResult(ActionId, ChannelId, "POINTER_ACTION_APPLIED");
+        }
+
+        private bool IsRequestedActionSupported(string requestedActionId)
+        {
+            if (string.IsNullOrWhiteSpace(requestedActionId))
+            {
+                return _allowImplicitActionId;
+            }
+
+            return string.Equals(requestedActionId.Trim(), ActionId, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    public sealed class ToolImpactActionPlugin : GameContracts.IActionPlugin
+    {
+        private readonly ActionValidator _validator = new ActionValidator();
+        private readonly string _actionId;
+        private readonly bool _allowImplicitActionId;
+
+        public ToolImpactActionPlugin(string actionId, bool allowImplicitActionId)
+        {
+            _actionId = string.IsNullOrWhiteSpace(actionId)
+                ? "touch_target_with_tool"
+                : actionId.Trim();
+            _allowImplicitActionId = allowImplicitActionId;
+        }
+
+        public string ActionId => _actionId;
+        public string ChannelId => GameContracts.SessionFlowChannelIds.ToolImpact;
+
+        public bool TryCreateIntent(
+            IReadOnlyDictionary<string, object> rawInput,
+            out GameContracts.ActionIntent intent)
+        {
+            intent = null;
+            if (!SessionFlowPluginPayload.TryReadString(rawInput, "eventType", out var eventType))
+            {
+                return false;
+            }
+
+            if (!eventType.StartsWith("TOOL_IMPACT_", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var requestedActionId = SessionFlowPluginPayload.ReadRequestedActionId(rawInput);
+            if (!IsRequestedActionSupported(requestedActionId))
+            {
+                return false;
+            }
+
+            intent = new GameContracts.ActionIntent
+            {
+                actionId = string.IsNullOrWhiteSpace(requestedActionId) ? ActionId : requestedActionId,
+                channelId = ChannelId,
+                targetId = SessionFlowPluginPayload.ReadString(rawInput, "targetId"),
+                inputSource = SessionFlowPluginPayload.ReadString(rawInput, "inputSource"),
+                inputHand = SessionFlowPluginPayload.ReadString(rawInput, "inputHand"),
+                inputValue = SessionFlowPluginPayload.ReadFloat(rawInput, "inputValue"),
+                occurredAtElapsedSec = SessionFlowPluginPayload.ReadFloat(rawInput, "occurredAtElapsedSec"),
+                details = new List<GameContracts.KeyValuePairString>
+                {
+                    new GameContracts.KeyValuePairString { key = "eventType", value = eventType },
+                    new GameContracts.KeyValuePairString { key = "reasonCode", value = SessionFlowPluginPayload.ReadString(rawInput, "reasonCode") },
+                },
+            };
+            return true;
+        }
+
+        public GameContracts.ActionValidationResult Validate(
+            GameContracts.ActionIntent intent,
+            GameContracts.ActionContext context,
+            GameContracts.AllowedActionDefinition allowedAction)
+        {
+            if (SessionFlowPluginPayload.IsEventType(intent, "TOOL_IMPACT_INVALID"))
+            {
+                return GameContracts.ActionValidationResult.Rejected("TARGET_INVALID");
+            }
+
+            if (SessionFlowPluginPayload.IsEventType(intent, "TOOL_IMPACT_MISS"))
+            {
+                return GameContracts.ActionValidationResult.Rejected("TARGET_NOT_FOUND");
+            }
+
+            return _validator.Validate(intent, context, allowedAction);
+        }
+
+        public GameContracts.ActionApplyResult Apply(
+            GameContracts.ActionIntent intent,
+            GameContracts.ActionContext context,
+            GameContracts.AllowedActionDefinition allowedAction)
+        {
+            return SessionFlowPluginPayload.BuildAppliedResult(ActionId, ChannelId, "TOOL_ACTION_APPLIED");
+        }
+
+        private bool IsRequestedActionSupported(string requestedActionId)
+        {
+            if (string.IsNullOrWhiteSpace(requestedActionId))
+            {
+                return _allowImplicitActionId;
+            }
+
+            return string.Equals(requestedActionId.Trim(), ActionId, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    public sealed class HandContactActionPlugin : GameContracts.IActionPlugin
+    {
+        private readonly ActionValidator _validator = new ActionValidator();
+        private readonly string _actionId;
+        private readonly bool _allowImplicitActionId;
+
+        public HandContactActionPlugin(string actionId, bool allowImplicitActionId)
+        {
+            _actionId = string.IsNullOrWhiteSpace(actionId)
+                ? "touch_target_with_hand"
+                : actionId.Trim();
+            _allowImplicitActionId = allowImplicitActionId;
+        }
+
+        public string ActionId => _actionId;
+        public string ChannelId => GameContracts.SessionFlowChannelIds.HandContact;
+
+        public bool TryCreateIntent(
+            IReadOnlyDictionary<string, object> rawInput,
+            out GameContracts.ActionIntent intent)
+        {
+            intent = null;
+            if (!SessionFlowPluginPayload.TryReadString(rawInput, "eventType", out var eventType))
+            {
+                return false;
+            }
+
+            if (!eventType.StartsWith("HAND_CONTACT_", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var requestedActionId = SessionFlowPluginPayload.ReadRequestedActionId(rawInput);
+            if (!IsRequestedActionSupported(requestedActionId))
+            {
+                return false;
+            }
+
+            intent = new GameContracts.ActionIntent
+            {
+                actionId = string.IsNullOrWhiteSpace(requestedActionId) ? ActionId : requestedActionId,
+                channelId = ChannelId,
+                targetId = SessionFlowPluginPayload.ReadString(rawInput, "targetId"),
+                inputSource = SessionFlowPluginPayload.ReadString(rawInput, "inputSource"),
+                inputHand = SessionFlowPluginPayload.ReadString(rawInput, "inputHand"),
+                inputValue = SessionFlowPluginPayload.ReadFloat(rawInput, "inputValue"),
+                occurredAtElapsedSec = SessionFlowPluginPayload.ReadFloat(rawInput, "occurredAtElapsedSec"),
+                details = new List<GameContracts.KeyValuePairString>
+                {
+                    new GameContracts.KeyValuePairString { key = "eventType", value = eventType },
+                    new GameContracts.KeyValuePairString { key = "reasonCode", value = SessionFlowPluginPayload.ReadString(rawInput, "reasonCode") },
+                },
+            };
+            return true;
+        }
+
+        public GameContracts.ActionValidationResult Validate(
+            GameContracts.ActionIntent intent,
+            GameContracts.ActionContext context,
+            GameContracts.AllowedActionDefinition allowedAction)
+        {
+            if (SessionFlowPluginPayload.IsEventType(intent, "HAND_CONTACT_INVALID"))
+            {
+                return GameContracts.ActionValidationResult.Rejected("TARGET_INVALID");
+            }
+
+            if (SessionFlowPluginPayload.IsEventType(intent, "HAND_CONTACT_MISS"))
+            {
+                return GameContracts.ActionValidationResult.Rejected("TARGET_NOT_FOUND");
+            }
+
+            return _validator.Validate(intent, context, allowedAction);
+        }
+
+        public GameContracts.ActionApplyResult Apply(
+            GameContracts.ActionIntent intent,
+            GameContracts.ActionContext context,
+            GameContracts.AllowedActionDefinition allowedAction)
+        {
+            return SessionFlowPluginPayload.BuildAppliedResult(ActionId, ChannelId, "HAND_ACTION_APPLIED");
+        }
+
+        private bool IsRequestedActionSupported(string requestedActionId)
+        {
+            if (string.IsNullOrWhiteSpace(requestedActionId))
+            {
+                return _allowImplicitActionId;
+            }
+
+            return string.Equals(requestedActionId.Trim(), ActionId, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    internal static class SessionFlowPluginPayload
+    {
+        public static string ReadRequestedActionId(IReadOnlyDictionary<string, object> payload)
+        {
+            var explicitActionId = ReadString(payload, "actionId");
+            if (!string.IsNullOrWhiteSpace(explicitActionId))
+            {
+                return explicitActionId;
+            }
+
+            return ReadString(payload, "flowActionId");
+        }
+
+        public static bool IsEventType(GameContracts.ActionIntent intent, string expected)
+        {
+            if (intent == null || intent.details == null)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < intent.details.Count; i++)
+            {
+                var detail = intent.details[i];
+                if (detail == null || !string.Equals(detail.key, "eventType", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                return string.Equals(detail.value, expected, StringComparison.OrdinalIgnoreCase);
+            }
+
+            return false;
+        }
+
+        public static bool TryReadString(IReadOnlyDictionary<string, object> payload, string key, out string value)
+        {
+            value = ReadString(payload, key);
+            return !string.IsNullOrWhiteSpace(value);
+        }
+
+        public static string ReadString(IReadOnlyDictionary<string, object> payload, string key)
+        {
+            if (payload == null || string.IsNullOrWhiteSpace(key))
+            {
+                return string.Empty;
+            }
+
+            if (!payload.TryGetValue(key, out var value) || value == null)
+            {
+                return string.Empty;
+            }
+
+            var converted = Convert.ToString(value, CultureInfo.InvariantCulture);
+            return string.IsNullOrWhiteSpace(converted) ? string.Empty : converted.Trim();
+        }
+
+        public static float ReadFloat(IReadOnlyDictionary<string, object> payload, string key)
+        {
+            if (payload == null || string.IsNullOrWhiteSpace(key))
+            {
+                return 0f;
+            }
+
+            if (!payload.TryGetValue(key, out var value) || value == null)
+            {
+                return 0f;
+            }
+
+            if (value is float floatValue)
+            {
+                return floatValue;
+            }
+
+            if (value is double doubleValue)
+            {
+                return (float)doubleValue;
+            }
+
+            if (value is int intValue)
+            {
+                return intValue;
+            }
+
+            var converted = Convert.ToString(value, CultureInfo.InvariantCulture);
+            if (string.IsNullOrWhiteSpace(converted))
+            {
+                return 0f;
+            }
+
+            return float.TryParse(
+                converted,
+                NumberStyles.Float | NumberStyles.AllowThousands,
+                CultureInfo.InvariantCulture,
+                out var parsed)
+                ? parsed
+                : 0f;
+        }
+
+        public static GameContracts.ActionApplyResult BuildAppliedResult(
+            string actionId,
+            string channelId,
+            string reasonCode)
+        {
+            return new GameContracts.ActionApplyResult
+            {
+                stepCompleted = true,
+                stepFailed = false,
+                stepTimedOut = false,
+                nextNodeId = string.Empty,
+                reasonCode = string.IsNullOrWhiteSpace(reasonCode) ? "ACTION_APPLIED" : reasonCode.Trim(),
+                metrics = new List<GameContracts.KeyValuePairString>
+                {
+                    new GameContracts.KeyValuePairString { key = "channelId", value = channelId ?? string.Empty },
+                    new GameContracts.KeyValuePairString { key = "actionId", value = actionId ?? string.Empty },
+                },
+            };
+        }
+    }
+}

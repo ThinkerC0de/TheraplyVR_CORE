@@ -217,6 +217,48 @@ namespace TheraplyCore.Interactions
                 targetValid: TryReadNullableBool(details, "targetValid"));
         }
 
+        public IReadOnlyDictionary<string, object> RecordHandTelemetry(IReadOnlyDictionary<string, object> payload)
+        {
+            var details = payload != null
+                ? new Dictionary<string, object>(payload)
+                : new Dictionary<string, object>();
+
+            var normalizedGameId = NormalizeOrFallback(
+                TryReadString(details, "gameId"),
+                ResolveActiveGameId(),
+                "unknown_game");
+            var eventType = ResolveHandEventType(details);
+            var sourceComponent = NormalizeOrFallback(
+                TryReadString(details, "sourceComponent"),
+                "HandContactTelemetry");
+            var attemptContext = ResolveAttemptContext(normalizedGameId, eventType);
+            var actionOutcome = ResolveHandOutcome(details, eventType);
+            var reasonCode = ResolveHandReasonCode(details, eventType);
+            var targetName = NormalizeOrFallback(
+                TryReadString(details, "targetName"),
+                TryReadString(details, "hitObjectName"));
+
+            return EmitCanonicalEvent(
+                normalizedGameId,
+                eventType,
+                "HAND",
+                actionOutcome,
+                reasonCode,
+                sourceComponent,
+                attemptContext,
+                details,
+                inputHand: TryReadString(details, "inputHand"),
+                inputSource: NormalizeOrFallback(TryReadString(details, "inputSource"), "HAND"),
+                inputControl: TryReadString(details, "inputControl"),
+                inputValue: TryReadFloat(details, "inputValue"),
+                targetId: NormalizeOrFallback(
+                    TryReadString(details, "targetId"),
+                    targetName,
+                    string.Empty),
+                targetName: targetName,
+                targetValid: TryReadNullableBool(details, "targetValid"));
+        }
+
         private IReadOnlyDictionary<string, object> EmitCanonicalEvent(
             string gameId,
             string eventType,
@@ -599,6 +641,76 @@ namespace TheraplyCore.Interactions
                     return "TOOL_GRIP_RELEASED";
                 default:
                     return "TOOL_EVENT_OBSERVED";
+            }
+        }
+
+        private static string ResolveHandEventType(IReadOnlyDictionary<string, object> payload)
+        {
+            var explicitEventType = TryReadString(payload, "handEventType");
+            if (!string.IsNullOrWhiteSpace(explicitEventType))
+            {
+                return NormalizeEventToken(explicitEventType, "HAND_EVENT");
+            }
+
+            var hitAny = TryReadBool(payload, "hitAnyCollider");
+            var targetValid = TryReadNullableBool(payload, "targetValid");
+
+            if (!hitAny)
+            {
+                return "HAND_CONTACT_MISS";
+            }
+
+            if (targetValid.HasValue)
+            {
+                return targetValid.Value ? "HAND_CONTACT_HIT" : "HAND_CONTACT_INVALID";
+            }
+
+            return "HAND_EVENT";
+        }
+
+        private static string ResolveHandOutcome(
+            IReadOnlyDictionary<string, object> payload,
+            string handEventType)
+        {
+            var explicitOutcome = TryReadString(payload, "actionOutcome");
+            if (!string.IsNullOrWhiteSpace(explicitOutcome))
+            {
+                return NormalizeEventToken(explicitOutcome, "OBSERVED");
+            }
+
+            switch (NormalizeEventToken(handEventType, "HAND_EVENT"))
+            {
+                case "HAND_CONTACT_HIT":
+                    return "CORRECT";
+                case "HAND_CONTACT_INVALID":
+                    return "INCORRECT";
+                case "HAND_CONTACT_MISS":
+                    return "OMITTED";
+                default:
+                    return "OBSERVED";
+            }
+        }
+
+        private static string ResolveHandReasonCode(
+            IReadOnlyDictionary<string, object> payload,
+            string handEventType)
+        {
+            var explicitReason = ResolveReasonCode(payload, string.Empty);
+            if (!string.IsNullOrWhiteSpace(explicitReason))
+            {
+                return explicitReason;
+            }
+
+            switch (NormalizeEventToken(handEventType, "HAND_EVENT"))
+            {
+                case "HAND_CONTACT_HIT":
+                    return "TARGET_VALIDATED";
+                case "HAND_CONTACT_INVALID":
+                    return "TARGET_INVALID";
+                case "HAND_CONTACT_MISS":
+                    return "TARGET_NOT_FOUND";
+                default:
+                    return "HAND_EVENT_OBSERVED";
             }
         }
 
