@@ -37,6 +37,8 @@ namespace TheraplyCore.Games.Runtime
             registry.Register(new GazeActionPlugin("select_target_with_gaze_and_tool"), replaceExisting);
 
             registry.Register(new BreathCycleActionPlugin("perform_breath_cycle"), replaceExisting);
+
+            registry.Register(new AudioSourceActionPlugin("identify_sound_source"), replaceExisting);
         }
     }
 
@@ -611,6 +613,113 @@ namespace TheraplyCore.Games.Runtime
         }
     }
 
+    public sealed class AudioSourceActionPlugin : GameContracts.IActionPlugin
+    {
+        private readonly ActionValidator _validator = new ActionValidator();
+        private readonly string _actionId;
+
+        public AudioSourceActionPlugin(string actionId)
+        {
+            _actionId = string.IsNullOrWhiteSpace(actionId)
+                ? "identify_sound_source"
+                : actionId.Trim();
+        }
+
+        public string ActionId => _actionId;
+        public string ChannelId => GameContracts.SessionFlowChannelIds.AudioSource;
+
+        public bool TryCreateIntent(
+            IReadOnlyDictionary<string, object> rawInput,
+            out GameContracts.ActionIntent intent)
+        {
+            intent = null;
+            if (!SessionFlowPluginPayload.TryReadString(rawInput, "eventType", out var eventType))
+            {
+                return false;
+            }
+
+            if (!SessionFlowPluginPayload.IsAudioSourceEventType(eventType))
+            {
+                return false;
+            }
+
+            var requestedActionId = SessionFlowPluginPayload.ReadRequestedActionId(rawInput);
+            var suggestedActionId = SessionFlowPluginPayload.ResolveAudioSourceActionIdFromEventType(eventType);
+            var effectiveActionId = !string.IsNullOrWhiteSpace(requestedActionId)
+                ? requestedActionId
+                : suggestedActionId;
+            if (string.IsNullOrWhiteSpace(effectiveActionId) ||
+                !string.Equals(effectiveActionId, ActionId, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            intent = new GameContracts.ActionIntent
+            {
+                actionId = effectiveActionId.Trim(),
+                channelId = ChannelId,
+                targetId = SessionFlowPluginPayload.ResolveAudioSourceTargetId(rawInput),
+                inputSource = SessionFlowPluginPayload.ReadString(rawInput, "inputSource"),
+                inputHand = SessionFlowPluginPayload.ReadString(rawInput, "inputHand"),
+                inputValue = SessionFlowPluginPayload.ReadFloat(rawInput, "inputValue"),
+                occurredAtElapsedSec = SessionFlowPluginPayload.ReadFloat(rawInput, "occurredAtElapsedSec"),
+                details = new List<GameContracts.KeyValuePairString>
+                {
+                    new GameContracts.KeyValuePairString { key = "eventType", value = eventType },
+                    new GameContracts.KeyValuePairString { key = "reasonCode", value = SessionFlowPluginPayload.ReadString(rawInput, "reasonCode") },
+                    new GameContracts.KeyValuePairString { key = "cueId", value = SessionFlowPluginPayload.ReadString(rawInput, "cueId") },
+                    new GameContracts.KeyValuePairString { key = "activeSourceId", value = SessionFlowPluginPayload.ReadString(rawInput, "activeSourceId") },
+                    new GameContracts.KeyValuePairString { key = "selectedSourceId", value = SessionFlowPluginPayload.ReadString(rawInput, "selectedSourceId") },
+                },
+            };
+            return true;
+        }
+
+        public GameContracts.ActionValidationResult Validate(
+            GameContracts.ActionIntent intent,
+            GameContracts.ActionContext context,
+            GameContracts.AllowedActionDefinition allowedAction)
+        {
+            var eventType = SessionFlowPluginPayload.ReadEventTypeFromIntent(intent);
+            if (eventType.IndexOf("AUDIO_SOURCE_SELECTED_INVALID", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return GameContracts.ActionValidationResult.Rejected("AUDIO_SOURCE_MISMATCH");
+            }
+
+            if (eventType.IndexOf("AUDIO_SOURCE_SELECTED", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                return GameContracts.ActionValidationResult.Rejected("SOURCE_SELECTION_NOT_MADE");
+            }
+
+            var activeSourceId = SessionFlowPluginPayload.ReadDetailValueFromIntent(intent, "activeSourceId");
+            var selectedSourceId = SessionFlowPluginPayload.ReadDetailValueFromIntent(intent, "selectedSourceId");
+            if (string.IsNullOrWhiteSpace(activeSourceId))
+            {
+                return GameContracts.ActionValidationResult.Rejected("AUDIO_CUE_MISSING");
+            }
+
+            if (string.IsNullOrWhiteSpace(selectedSourceId))
+            {
+                return GameContracts.ActionValidationResult.Rejected("SOURCE_SELECTION_MISSING");
+            }
+
+            if (!string.Equals(activeSourceId.Trim(), selectedSourceId.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                return GameContracts.ActionValidationResult.Rejected("AUDIO_SOURCE_MISMATCH");
+            }
+
+            return _validator.Validate(intent, context, allowedAction);
+        }
+
+        public GameContracts.ActionApplyResult Apply(
+            GameContracts.ActionIntent intent,
+            GameContracts.ActionContext context,
+            GameContracts.AllowedActionDefinition allowedAction)
+        {
+            return SessionFlowPluginPayload.BuildAppliedResult(ActionId, ChannelId, "AUDIO_SOURCE_ACTION_APPLIED");
+        }
+    }
+
     internal static class SessionFlowPluginPayload
     {
         public static bool IsGrabEventType(string eventType)
@@ -713,6 +822,47 @@ namespace TheraplyCore.Games.Runtime
             }
         }
 
+        public static bool IsAudioSourceEventType(string eventType)
+        {
+            return !string.IsNullOrWhiteSpace(eventType) &&
+                   eventType.Trim().StartsWith("AUDIO_SOURCE_", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static string ResolveAudioSourceActionIdFromEventType(string eventType)
+        {
+            if (string.IsNullOrWhiteSpace(eventType))
+            {
+                return string.Empty;
+            }
+
+            var normalized = eventType.Trim().ToUpperInvariant();
+            switch (normalized)
+            {
+                case "AUDIO_SOURCE_SELECTED":
+                case "AUDIO_SOURCE_SELECTED_INVALID":
+                    return "identify_sound_source";
+                default:
+                    return string.Empty;
+            }
+        }
+
+        public static string ResolveAudioSourceTargetId(IReadOnlyDictionary<string, object> payload)
+        {
+            var targetId = ReadString(payload, "targetId");
+            if (!string.IsNullOrWhiteSpace(targetId))
+            {
+                return targetId;
+            }
+
+            var selectedSourceId = ReadString(payload, "selectedSourceId");
+            if (!string.IsNullOrWhiteSpace(selectedSourceId))
+            {
+                return selectedSourceId;
+            }
+
+            return ReadString(payload, "activeSourceId");
+        }
+
         public static string ResolveGrabTargetId(
             IReadOnlyDictionary<string, object> payload,
             string actionId)
@@ -749,6 +899,27 @@ namespace TheraplyCore.Games.Runtime
             {
                 var detail = intent.details[i];
                 if (detail == null || !string.Equals(detail.key, "eventType", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                return detail.value ?? string.Empty;
+            }
+
+            return string.Empty;
+        }
+
+        public static string ReadDetailValueFromIntent(GameContracts.ActionIntent intent, string key)
+        {
+            if (intent == null || intent.details == null || string.IsNullOrWhiteSpace(key))
+            {
+                return string.Empty;
+            }
+
+            for (var i = 0; i < intent.details.Count; i++)
+            {
+                var detail = intent.details[i];
+                if (detail == null || !string.Equals(detail.key, key, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }

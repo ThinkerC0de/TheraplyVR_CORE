@@ -386,6 +386,50 @@ namespace TheraplyCore.Interactions
                 targetValid: TryReadNullableBool(details, "targetValid"));
         }
 
+        public IReadOnlyDictionary<string, object> RecordAudioSourceTelemetry(IReadOnlyDictionary<string, object> payload)
+        {
+            var details = payload != null
+                ? new Dictionary<string, object>(payload)
+                : new Dictionary<string, object>();
+
+            var normalizedGameId = NormalizeOrFallback(
+                TryReadString(details, "gameId"),
+                ResolveActiveGameId(),
+                "unknown_game");
+            var eventType = ResolveAudioSourceEventType(details);
+            var sourceComponent = NormalizeOrFallback(
+                TryReadString(details, "sourceComponent"),
+                "AudioSourceTelemetry");
+            var attemptContext = ResolveAttemptContext(normalizedGameId, eventType);
+            var actionOutcome = ResolveAudioSourceOutcome(details, eventType);
+            var reasonCode = ResolveAudioSourceReasonCode(details, eventType);
+            var targetId = NormalizeOrFallback(
+                TryReadString(details, "targetId"),
+                TryReadString(details, "selectedSourceId"),
+                TryReadString(details, "activeSourceId"));
+            var targetName = NormalizeOrFallback(
+                TryReadString(details, "targetName"),
+                TryReadString(details, "selectedSourceName"),
+                TryReadString(details, "activeSourceName"));
+
+            return EmitCanonicalEvent(
+                normalizedGameId,
+                eventType,
+                "AUDIO_SOURCE",
+                actionOutcome,
+                reasonCode,
+                sourceComponent,
+                attemptContext,
+                details,
+                inputHand: TryReadString(details, "inputHand"),
+                inputSource: NormalizeOrFallback(TryReadString(details, "inputSource"), "AUDIO_SOURCE"),
+                inputControl: TryReadString(details, "inputControl"),
+                inputValue: TryReadFloat(details, "inputValue"),
+                targetId: targetId,
+                targetName: targetName,
+                targetValid: TryReadNullableBool(details, "targetValid"));
+        }
+
         private IReadOnlyDictionary<string, object> EmitCanonicalEvent(
             string gameId,
             string eventType,
@@ -1084,6 +1128,75 @@ namespace TheraplyCore.Interactions
                     return "BREATH_CYCLE_INVALID";
                 default:
                     return "BREATH_EVENT_OBSERVED";
+            }
+        }
+
+        private static string ResolveAudioSourceEventType(IReadOnlyDictionary<string, object> payload)
+        {
+            var explicitEventType = TryReadString(payload, "audioSourceEventType");
+            if (!string.IsNullOrWhiteSpace(explicitEventType))
+            {
+                return NormalizeEventToken(explicitEventType, "AUDIO_SOURCE_EVENT");
+            }
+
+            var explicitActionId = TryReadString(payload, "actionId");
+            if (string.Equals(
+                    NormalizeEventToken(explicitActionId, string.Empty),
+                    "IDENTIFY_SOUND_SOURCE",
+                    StringComparison.Ordinal))
+            {
+                var targetValid = TryReadNullableBool(payload, "targetValid");
+                return targetValid.HasValue && !targetValid.Value
+                    ? "AUDIO_SOURCE_SELECTED_INVALID"
+                    : "AUDIO_SOURCE_SELECTED";
+            }
+
+            return "AUDIO_SOURCE_EVENT";
+        }
+
+        private static string ResolveAudioSourceOutcome(
+            IReadOnlyDictionary<string, object> payload,
+            string audioEventType)
+        {
+            var explicitOutcome = TryReadString(payload, "actionOutcome");
+            if (!string.IsNullOrWhiteSpace(explicitOutcome))
+            {
+                return NormalizeEventToken(explicitOutcome, "OBSERVED");
+            }
+
+            switch (NormalizeEventToken(audioEventType, "AUDIO_SOURCE_EVENT"))
+            {
+                case "AUDIO_SOURCE_CUE_ACTIVE":
+                    return "OBSERVED";
+                case "AUDIO_SOURCE_SELECTED":
+                    return "CORRECT";
+                case "AUDIO_SOURCE_SELECTED_INVALID":
+                    return "INCORRECT";
+                default:
+                    return "OBSERVED";
+            }
+        }
+
+        private static string ResolveAudioSourceReasonCode(
+            IReadOnlyDictionary<string, object> payload,
+            string audioEventType)
+        {
+            var explicitReason = ResolveReasonCode(payload, string.Empty);
+            if (!string.IsNullOrWhiteSpace(explicitReason))
+            {
+                return explicitReason;
+            }
+
+            switch (NormalizeEventToken(audioEventType, "AUDIO_SOURCE_EVENT"))
+            {
+                case "AUDIO_SOURCE_CUE_ACTIVE":
+                    return "AUDIO_CUE_ACTIVE";
+                case "AUDIO_SOURCE_SELECTED":
+                    return "AUDIO_SOURCE_IDENTIFIED";
+                case "AUDIO_SOURCE_SELECTED_INVALID":
+                    return "AUDIO_SOURCE_MISMATCH";
+                default:
+                    return "AUDIO_SOURCE_EVENT_OBSERVED";
             }
         }
 
