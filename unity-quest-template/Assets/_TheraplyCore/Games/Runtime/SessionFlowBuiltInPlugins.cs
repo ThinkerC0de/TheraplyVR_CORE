@@ -44,6 +44,10 @@ namespace TheraplyCore.Games.Runtime
             registry.Register(new PosePathActionPlugin("hold_pose"), replaceExisting);
             registry.Register(new PosePathActionPlugin("follow_path"), replaceExisting);
             registry.Register(new TimelineWatchActionPlugin("watch_timeline_segment"), replaceExisting);
+            registry.Register(new SequenceReplayActionPlugin("repeat_visual_sequence"), replaceExisting);
+            registry.Register(new SequenceReplayActionPlugin("repeat_audio_sequence"), replaceExisting);
+            registry.Register(new SequenceReplayActionPlugin("select_sequence_in_order"), replaceExisting);
+            registry.Register(new SequenceReplayActionPlugin("match_pair"), replaceExisting);
         }
     }
 
@@ -1466,6 +1470,226 @@ namespace TheraplyCore.Games.Runtime
         }
     }
 
+    public sealed class SequenceReplayActionPlugin : GameContracts.IActionPlugin
+    {
+        private readonly ActionValidator _validator = new ActionValidator();
+        private readonly string _actionId;
+
+        public SequenceReplayActionPlugin(string actionId)
+        {
+            _actionId = string.IsNullOrWhiteSpace(actionId)
+                ? "repeat_visual_sequence"
+                : actionId.Trim();
+        }
+
+        public string ActionId => _actionId;
+        public string ChannelId => GameContracts.SessionFlowChannelIds.Sequence;
+
+        public bool TryCreateIntent(
+            IReadOnlyDictionary<string, object> rawInput,
+            out GameContracts.ActionIntent intent)
+        {
+            intent = null;
+            if (!SessionFlowPluginPayload.TryReadString(rawInput, "eventType", out var eventType))
+            {
+                return false;
+            }
+
+            if (!SessionFlowPluginPayload.IsSequenceEventType(eventType))
+            {
+                return false;
+            }
+
+            var requestedActionId = SessionFlowPluginPayload.ReadRequestedActionId(rawInput);
+            var suggestedActionId = SessionFlowPluginPayload.ResolveSequenceActionIdFromEventType(eventType);
+            var effectiveActionId = !string.IsNullOrWhiteSpace(requestedActionId)
+                ? requestedActionId
+                : suggestedActionId;
+            if (string.IsNullOrWhiteSpace(effectiveActionId) ||
+                !string.Equals(effectiveActionId, ActionId, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            intent = new GameContracts.ActionIntent
+            {
+                actionId = effectiveActionId.Trim(),
+                channelId = ChannelId,
+                targetId = SessionFlowPluginPayload.ResolveSequenceTargetId(rawInput),
+                inputSource = SessionFlowPluginPayload.ReadString(rawInput, "inputSource"),
+                inputHand = SessionFlowPluginPayload.ReadString(rawInput, "inputHand"),
+                inputValue = SessionFlowPluginPayload.ReadFloat(rawInput, "inputValue"),
+                occurredAtElapsedSec = SessionFlowPluginPayload.ReadFloat(rawInput, "occurredAtElapsedSec"),
+                details = new List<GameContracts.KeyValuePairString>
+                {
+                    new GameContracts.KeyValuePairString { key = "eventType", value = eventType },
+                    new GameContracts.KeyValuePairString { key = "reasonCode", value = SessionFlowPluginPayload.ReadString(rawInput, "reasonCode") },
+                    new GameContracts.KeyValuePairString { key = "stepIndex", value = SessionFlowPluginPayload.ReadString(rawInput, "stepIndex") },
+                    new GameContracts.KeyValuePairString { key = "expectedIndex", value = SessionFlowPluginPayload.ReadString(rawInput, "expectedIndex") },
+                    new GameContracts.KeyValuePairString { key = "expectedValue", value = SessionFlowPluginPayload.ReadString(rawInput, "expectedValue") },
+                    new GameContracts.KeyValuePairString { key = "actualValue", value = SessionFlowPluginPayload.ReadString(rawInput, "actualValue") },
+                    new GameContracts.KeyValuePairString { key = "matchedPairs", value = SessionFlowPluginPayload.ReadString(rawInput, "matchedPairs") },
+                    new GameContracts.KeyValuePairString { key = "totalPairs", value = SessionFlowPluginPayload.ReadString(rawInput, "totalPairs") },
+                },
+            };
+            return true;
+        }
+
+        public GameContracts.ActionValidationResult Validate(
+            GameContracts.ActionIntent intent,
+            GameContracts.ActionContext context,
+            GameContracts.AllowedActionDefinition allowedAction)
+        {
+            var eventType = SessionFlowPluginPayload.ReadEventTypeFromIntent(intent);
+            if (eventType.IndexOf("_WRONG", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return GameContracts.ActionValidationResult.Rejected("WRONG_SEQUENCE_ORDER");
+            }
+
+            if (eventType.IndexOf("_MISMATCH", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return GameContracts.ActionValidationResult.Rejected("PAIR_MISMATCH");
+            }
+
+            if (eventType.IndexOf("_STEP_CORRECT", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                eventType.IndexOf("_PAIR_MATCHED", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return GameContracts.ActionValidationResult.Rejected("SEQUENCE_NOT_COMPLETED");
+            }
+
+            if (eventType.IndexOf("_COMPLETED", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                return GameContracts.ActionValidationResult.Rejected("ACTION_EVENT_TYPE_MISMATCH");
+            }
+
+            if (string.Equals(ActionId, "match_pair", StringComparison.OrdinalIgnoreCase))
+            {
+                var requiredPairs = ResolveRequiredPairs(allowedAction, intent);
+                if (requiredPairs > 0f &&
+                    TryReadDetailFloat(intent, "matchedPairs", out var matchedPairs) &&
+                    matchedPairs < requiredPairs)
+                {
+                    return GameContracts.ActionValidationResult.Rejected("PAIRS_NOT_ALL_MATCHED");
+                }
+            }
+            else
+            {
+                var requiredLength = ResolveRequiredLength(allowedAction, intent);
+                if (requiredLength > 0f &&
+                    TryReadDetailFloat(intent, "stepIndex", out var stepIndex) &&
+                    stepIndex < requiredLength)
+                {
+                    return GameContracts.ActionValidationResult.Rejected("SEQUENCE_LENGTH_NOT_REACHED");
+                }
+
+                var expectedValue = SessionFlowPluginPayload.ReadDetailValueFromIntent(intent, "expectedValue");
+                var actualValue = SessionFlowPluginPayload.ReadDetailValueFromIntent(intent, "actualValue");
+                if (!string.IsNullOrWhiteSpace(expectedValue) &&
+                    !string.IsNullOrWhiteSpace(actualValue) &&
+                    !string.Equals(expectedValue.Trim(), actualValue.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    return GameContracts.ActionValidationResult.Rejected("WRONG_SEQUENCE_ORDER");
+                }
+            }
+
+            return _validator.Validate(intent, context, allowedAction);
+        }
+
+        public GameContracts.ActionApplyResult Apply(
+            GameContracts.ActionIntent intent,
+            GameContracts.ActionContext context,
+            GameContracts.AllowedActionDefinition allowedAction)
+        {
+            return SessionFlowPluginPayload.BuildAppliedResult(ActionId, ChannelId, "SEQUENCE_ACTION_APPLIED");
+        }
+
+        private static float ResolveRequiredLength(
+            GameContracts.AllowedActionDefinition allowedAction,
+            GameContracts.ActionIntent intent)
+        {
+            var requiredLength = ReadConstraintFloat(allowedAction, "requiredLength");
+            if (requiredLength <= 0f)
+            {
+                requiredLength = ReadConstraintFloat(allowedAction, "sequenceLength");
+            }
+
+            if (requiredLength > 0f)
+            {
+                return requiredLength;
+            }
+
+            return TryReadDetailFloat(intent, "expectedIndex", out var detailExpectedIndex)
+                ? (detailExpectedIndex > 0f ? detailExpectedIndex : 0f)
+                : 0f;
+        }
+
+        private static float ResolveRequiredPairs(
+            GameContracts.AllowedActionDefinition allowedAction,
+            GameContracts.ActionIntent intent)
+        {
+            var requiredPairs = ReadConstraintFloat(allowedAction, "requiredPairs");
+            if (requiredPairs <= 0f)
+            {
+                requiredPairs = ReadConstraintFloat(allowedAction, "minPairs");
+            }
+
+            if (requiredPairs > 0f)
+            {
+                return requiredPairs;
+            }
+
+            return TryReadDetailFloat(intent, "totalPairs", out var totalPairs)
+                ? (totalPairs > 0f ? totalPairs : 0f)
+                : 0f;
+        }
+
+        private static float ReadConstraintFloat(GameContracts.AllowedActionDefinition allowedAction, string key)
+        {
+            if (allowedAction == null || allowedAction.constraints == null || string.IsNullOrWhiteSpace(key))
+            {
+                return 0f;
+            }
+
+            for (var i = 0; i < allowedAction.constraints.Count; i++)
+            {
+                var constraint = allowedAction.constraints[i];
+                if (constraint == null ||
+                    !string.Equals(constraint.key, key, StringComparison.OrdinalIgnoreCase) ||
+                    string.IsNullOrWhiteSpace(constraint.value))
+                {
+                    continue;
+                }
+
+                if (float.TryParse(
+                        constraint.value,
+                        NumberStyles.Float | NumberStyles.AllowThousands,
+                        CultureInfo.InvariantCulture,
+                        out var parsed))
+                {
+                    return parsed;
+                }
+            }
+
+            return 0f;
+        }
+
+        private static bool TryReadDetailFloat(GameContracts.ActionIntent intent, string key, out float value)
+        {
+            value = 0f;
+            var raw = SessionFlowPluginPayload.ReadDetailValueFromIntent(intent, key);
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return false;
+            }
+
+            return float.TryParse(
+                raw,
+                NumberStyles.Float | NumberStyles.AllowThousands,
+                CultureInfo.InvariantCulture,
+                out value);
+        }
+    }
+
     internal static class SessionFlowPluginPayload
     {
         public static bool IsGrabEventType(string eventType)
@@ -1706,6 +1930,60 @@ namespace TheraplyCore.Games.Runtime
             }
 
             return ReadString(payload, "segmentId");
+        }
+
+        public static bool IsSequenceEventType(string eventType)
+        {
+            return !string.IsNullOrWhiteSpace(eventType) &&
+                   eventType.Trim().StartsWith("SEQUENCE_", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static string ResolveSequenceActionIdFromEventType(string eventType)
+        {
+            if (string.IsNullOrWhiteSpace(eventType))
+            {
+                return string.Empty;
+            }
+
+            var normalized = eventType.Trim().ToUpperInvariant();
+            if (normalized.StartsWith("SEQUENCE_VISUAL_", StringComparison.Ordinal))
+            {
+                return "repeat_visual_sequence";
+            }
+
+            if (normalized.StartsWith("SEQUENCE_AUDIO_", StringComparison.Ordinal))
+            {
+                return "repeat_audio_sequence";
+            }
+
+            if (normalized.StartsWith("SEQUENCE_ORDER_", StringComparison.Ordinal))
+            {
+                return "select_sequence_in_order";
+            }
+
+            if (normalized.StartsWith("SEQUENCE_PAIR_", StringComparison.Ordinal))
+            {
+                return "match_pair";
+            }
+
+            return string.Empty;
+        }
+
+        public static string ResolveSequenceTargetId(IReadOnlyDictionary<string, object> payload)
+        {
+            var targetId = ReadString(payload, "targetId");
+            if (!string.IsNullOrWhiteSpace(targetId))
+            {
+                return targetId;
+            }
+
+            var expectedValue = ReadString(payload, "expectedValue");
+            if (!string.IsNullOrWhiteSpace(expectedValue))
+            {
+                return expectedValue;
+            }
+
+            return ReadString(payload, "actualValue");
         }
 
         public static string ResolveAudioSourceTargetId(IReadOnlyDictionary<string, object> payload)

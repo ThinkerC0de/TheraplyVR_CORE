@@ -28,7 +28,7 @@ This document defines the core workflow for building new scenes without adding p
 Open implementation items (expected):
 
 - runtime scaffolding classes are specified but not all implemented yet.
-- adapter coverage is still partial for hand/gaze/audio/breath/dual-hand/pose/timeline channels.
+- action adapter/plugin coverage includes pointer/tool/hand/grab/gaze/breath/audio-source/dual-hand/pose-path/timeline/sequence channels.
 
 ## Design Rules
 
@@ -227,6 +227,8 @@ Registration model:
 | `breath` | inhale/hold/exhale signal | mic amplitude/sensor |
 | `audio_source` | sound localization choice | pointer/hand selection after cue |
 | `dual_hand` | synchronized left-right actions | both controllers/hands |
+| `pose_path` | pose hold and path-follow checks | tracked transforms/anchors |
+| `sequence` | sequence replay and pair matching | sequence adapters and step events |
 | `timeline` | passive segment watch state | playable director callbacks |
 
 ## Policy Catalog
@@ -367,15 +369,15 @@ This is the explicit component set for scene workflow. Keep it per activity, not
 | `PointerActionAdapter` | `point_and_select_target`, `confirm_choice`, `choose_reward` | Partial (via existing pointer telemetry path) |
 | `ToolImpactActionAdapter` | `touch_target_with_tool`, `intercept_moving_target`, `avoid_hazard_contact` | Partial (via existing tool impact path) |
 | `ToolGripActionAdapter` | `grab_object` (start), `release_object` | Partial (grip lifecycle exists, object semantics missing) |
-| `HandContactActionAdapter` | `touch_target_with_hand` | To add |
-| `GrabPlaceActionAdapter` | `grab_object`, `place_object_in_zone`, `remove_object_from_zone`, `collect_item_to_container` | To add |
-| `GazeActionAdapter` | `hold_gaze_on_target`, `select_target_with_gaze_and_tool` | To add |
-| `AudioSourceLocalizationAdapter` | `identify_sound_source` | To add |
-| `BreathCycleAdapter` | `perform_breath_cycle` | To add |
-| `DualHandSyncAdapter` | `mark_left_and_right_targets` | To add |
-| `PosePathAdapter` | `hold_pose`, `follow_path` | To add |
-| `SequenceReplayAdapter` | `repeat_visual_sequence`, `repeat_audio_sequence`, `select_sequence_in_order`, `match_pair` | To add |
-| `TimelineWatchAdapter` | `watch_timeline_segment` | To add |
+| `HandContactActionAdapter` | `touch_target_with_hand` | Implemented in core plugin path |
+| `GrabPlaceActionAdapter` | `grab_object`, `place_object_in_zone`, `remove_object_from_zone`, `collect_item_to_container` | Implemented in core plugin path |
+| `GazeActionAdapter` | `hold_gaze_on_target`, `select_target_with_gaze_and_tool` | Implemented in core plugin path |
+| `AudioSourceLocalizationAdapter` | `identify_sound_source` | Implemented in core plugin path |
+| `BreathCycleAdapter` | `perform_breath_cycle` | Implemented in core plugin path |
+| `DualHandSyncAdapter` | `mark_left_and_right_targets` | Implemented in core plugin path |
+| `PosePathAdapter` | `hold_pose`, `follow_path` | Implemented in core plugin path |
+| `SequenceReplayAdapter` | `repeat_visual_sequence`, `repeat_audio_sequence`, `select_sequence_in_order`, `match_pair` | Implemented in core plugin path |
+| `TimelineWatchAdapter` | `watch_timeline_segment` | Implemented in core plugin path |
 
 ### Scene Composition Template
 

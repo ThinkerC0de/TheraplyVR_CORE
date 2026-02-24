@@ -46,6 +46,7 @@ namespace TheraplyCore.Games.Contracts
         public const string AudioSource = "audio_source";
         public const string DualHand = "dual_hand";
         public const string PosePath = "pose_path";
+        public const string Sequence = "sequence";
         public const string Timeline = "timeline";
 
         private static readonly HashSet<string> SupportedChannels =
@@ -60,6 +61,7 @@ namespace TheraplyCore.Games.Contracts
                 AudioSource,
                 DualHand,
                 PosePath,
+                Sequence,
                 Timeline,
             };
 
@@ -419,6 +421,7 @@ namespace TheraplyCore.Games.Contracts
                 new SessionFlowChannelConfig { channelId = SessionFlowChannelIds.AudioSource, enabled = false },
                 new SessionFlowChannelConfig { channelId = SessionFlowChannelIds.DualHand, enabled = false },
                 new SessionFlowChannelConfig { channelId = SessionFlowChannelIds.PosePath, enabled = false },
+                new SessionFlowChannelConfig { channelId = SessionFlowChannelIds.Sequence, enabled = false },
                 new SessionFlowChannelConfig { channelId = SessionFlowChannelIds.Timeline, enabled = false },
             };
         }

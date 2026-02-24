@@ -554,6 +554,42 @@ namespace TheraplyCore.Interactions
                 targetValid: TryReadNullableBool(details, "targetValid"));
         }
 
+        public IReadOnlyDictionary<string, object> RecordSequenceTelemetry(IReadOnlyDictionary<string, object> payload)
+        {
+            var details = payload != null
+                ? new Dictionary<string, object>(payload)
+                : new Dictionary<string, object>();
+
+            var normalizedGameId = NormalizeOrFallback(
+                TryReadString(details, "gameId"),
+                ResolveActiveGameId(),
+                "unknown_game");
+            var eventType = ResolveSequenceEventType(details);
+            var sourceComponent = NormalizeOrFallback(
+                TryReadString(details, "sourceComponent"),
+                "SequenceTelemetry");
+            var attemptContext = ResolveAttemptContext(normalizedGameId, eventType);
+            var actionOutcome = ResolveSequenceOutcome(details, eventType);
+            var reasonCode = ResolveSequenceReasonCode(details, eventType);
+
+            return EmitCanonicalEvent(
+                normalizedGameId,
+                eventType,
+                "SEQUENCE",
+                actionOutcome,
+                reasonCode,
+                sourceComponent,
+                attemptContext,
+                details,
+                inputHand: NormalizeOrFallback(TryReadString(details, "inputHand"), string.Empty),
+                inputSource: NormalizeOrFallback(TryReadString(details, "inputSource"), "SEQUENCE"),
+                inputControl: TryReadString(details, "inputControl"),
+                inputValue: TryReadFloat(details, "inputValue"),
+                targetId: NormalizeOrFallback(TryReadString(details, "targetId"), string.Empty),
+                targetName: NormalizeOrFallback(TryReadString(details, "targetName"), string.Empty),
+                targetValid: TryReadNullableBool(details, "targetValid"));
+        }
+
         private IReadOnlyDictionary<string, object> EmitCanonicalEvent(
             string gameId,
             string eventType,
@@ -1624,6 +1660,157 @@ namespace TheraplyCore.Interactions
                     return "TIMELINE_SEGMENT_SKIPPED";
                 default:
                     return "TIMELINE_EVENT_OBSERVED";
+            }
+        }
+
+        private static string ResolveSequenceEventType(IReadOnlyDictionary<string, object> payload)
+        {
+            var explicitEventType = TryReadString(payload, "sequenceEventType");
+            if (!string.IsNullOrWhiteSpace(explicitEventType))
+            {
+                return NormalizeEventToken(explicitEventType, "SEQUENCE_EVENT");
+            }
+
+            var normalizedActionId = NormalizeEventToken(TryReadString(payload, "actionId"), string.Empty);
+            var targetValid = TryReadNullableBool(payload, "targetValid");
+            var stepIndex = TryReadFloat(payload, "stepIndex");
+            var expectedIndex = TryReadFloat(payload, "expectedIndex");
+            var matchedPairs = TryReadFloat(payload, "matchedPairs");
+            var totalPairs = TryReadFloat(payload, "totalPairs");
+
+            switch (normalizedActionId)
+            {
+                case "REPEAT_VISUAL_SEQUENCE":
+                    if (targetValid.HasValue && !targetValid.Value)
+                    {
+                        return "SEQUENCE_VISUAL_WRONG";
+                    }
+
+                    if (stepIndex.HasValue &&
+                        expectedIndex.HasValue &&
+                        stepIndex.Value >= expectedIndex.Value &&
+                        expectedIndex.Value > 0f)
+                    {
+                        return "SEQUENCE_VISUAL_COMPLETED";
+                    }
+
+                    return "SEQUENCE_VISUAL_STEP_CORRECT";
+
+                case "REPEAT_AUDIO_SEQUENCE":
+                    if (targetValid.HasValue && !targetValid.Value)
+                    {
+                        return "SEQUENCE_AUDIO_WRONG";
+                    }
+
+                    if (stepIndex.HasValue &&
+                        expectedIndex.HasValue &&
+                        stepIndex.Value >= expectedIndex.Value &&
+                        expectedIndex.Value > 0f)
+                    {
+                        return "SEQUENCE_AUDIO_COMPLETED";
+                    }
+
+                    return "SEQUENCE_AUDIO_STEP_CORRECT";
+
+                case "SELECT_SEQUENCE_IN_ORDER":
+                    if (targetValid.HasValue && !targetValid.Value)
+                    {
+                        return "SEQUENCE_ORDER_WRONG";
+                    }
+
+                    if (stepIndex.HasValue &&
+                        expectedIndex.HasValue &&
+                        stepIndex.Value >= expectedIndex.Value &&
+                        expectedIndex.Value > 0f)
+                    {
+                        return "SEQUENCE_ORDER_COMPLETED";
+                    }
+
+                    return "SEQUENCE_ORDER_STEP_CORRECT";
+
+                case "MATCH_PAIR":
+                    if (targetValid.HasValue && !targetValid.Value)
+                    {
+                        return "SEQUENCE_PAIR_MISMATCH";
+                    }
+
+                    if (matchedPairs.HasValue &&
+                        totalPairs.HasValue &&
+                        totalPairs.Value > 0f &&
+                        matchedPairs.Value >= totalPairs.Value)
+                    {
+                        return "SEQUENCE_PAIR_COMPLETED";
+                    }
+
+                    return "SEQUENCE_PAIR_MATCHED";
+            }
+
+            return "SEQUENCE_EVENT";
+        }
+
+        private static string ResolveSequenceOutcome(
+            IReadOnlyDictionary<string, object> payload,
+            string sequenceEventType)
+        {
+            var explicitOutcome = TryReadString(payload, "actionOutcome");
+            if (!string.IsNullOrWhiteSpace(explicitOutcome))
+            {
+                return NormalizeEventToken(explicitOutcome, "OBSERVED");
+            }
+
+            switch (NormalizeEventToken(sequenceEventType, "SEQUENCE_EVENT"))
+            {
+                case "SEQUENCE_VISUAL_COMPLETED":
+                case "SEQUENCE_AUDIO_COMPLETED":
+                case "SEQUENCE_ORDER_COMPLETED":
+                case "SEQUENCE_PAIR_COMPLETED":
+                    return "CORRECT";
+                case "SEQUENCE_VISUAL_WRONG":
+                case "SEQUENCE_AUDIO_WRONG":
+                case "SEQUENCE_ORDER_WRONG":
+                case "SEQUENCE_PAIR_MISMATCH":
+                    return "INCORRECT";
+                case "SEQUENCE_VISUAL_STEP_CORRECT":
+                case "SEQUENCE_AUDIO_STEP_CORRECT":
+                case "SEQUENCE_ORDER_STEP_CORRECT":
+                case "SEQUENCE_PAIR_MATCHED":
+                    return "OBSERVED";
+                default:
+                    return "OBSERVED";
+            }
+        }
+
+        private static string ResolveSequenceReasonCode(
+            IReadOnlyDictionary<string, object> payload,
+            string sequenceEventType)
+        {
+            var explicitReason = ResolveReasonCode(payload, string.Empty);
+            if (!string.IsNullOrWhiteSpace(explicitReason))
+            {
+                return explicitReason;
+            }
+
+            switch (NormalizeEventToken(sequenceEventType, "SEQUENCE_EVENT"))
+            {
+                case "SEQUENCE_VISUAL_STEP_CORRECT":
+                case "SEQUENCE_AUDIO_STEP_CORRECT":
+                case "SEQUENCE_ORDER_STEP_CORRECT":
+                    return "SEQUENCE_STEP_CORRECT";
+                case "SEQUENCE_VISUAL_COMPLETED":
+                case "SEQUENCE_AUDIO_COMPLETED":
+                case "SEQUENCE_ORDER_COMPLETED":
+                case "SEQUENCE_PAIR_COMPLETED":
+                    return "SEQUENCE_COMPLETED";
+                case "SEQUENCE_VISUAL_WRONG":
+                case "SEQUENCE_AUDIO_WRONG":
+                case "SEQUENCE_ORDER_WRONG":
+                    return "WRONG_SEQUENCE_ORDER";
+                case "SEQUENCE_PAIR_MATCHED":
+                    return "PAIR_MATCHED";
+                case "SEQUENCE_PAIR_MISMATCH":
+                    return "PAIR_MISMATCH";
+                default:
+                    return "SEQUENCE_EVENT_OBSERVED";
             }
         }
 

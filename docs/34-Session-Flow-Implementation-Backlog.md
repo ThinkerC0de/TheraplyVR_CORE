@@ -59,7 +59,7 @@ Goal: implement the new framework direction end-to-end so no per-game core rewri
 | SF-C-010 | Add dual-hand adapter/plugin | DONE | `mark_left_and_right_targets` supported with sync window constraints | SF-C-001 |
 | SF-C-011 | Add pose/path adapter/plugin | DONE | `hold_pose` and `follow_path` with tolerance checks supported | SF-C-001 |
 | SF-C-012 | Add timeline watch adapter/plugin | DONE | `watch_timeline_segment` progress/interrupt decisions supported | SF-C-001 |
-| SF-C-013 | Add sequence replay plugin | TODO | `repeat_visual_sequence`, `repeat_audio_sequence`, `select_sequence_in_order`, `match_pair` supported | SF-C-001 |
+| SF-C-013 | Add sequence replay plugin | DONE | `repeat_visual_sequence`, `repeat_audio_sequence`, `select_sequence_in_order`, `match_pair` supported | SF-C-001 |
 
 ## Phase D - Effects and Scoring
 
