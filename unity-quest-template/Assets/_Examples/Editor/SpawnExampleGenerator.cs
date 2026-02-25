@@ -141,33 +141,8 @@ namespace TheraplyExamples.Editor
                                     new KeyValuePairString { key = "areaSizeY", value = "1.2" },
                                     new KeyValuePairString { key = "areaSizeZ", value = "2.8" },
                                     new KeyValuePairString { key = "randomYaw", value = "true" },
-                                },
-                            },
-                        },
-                        onExitEffects = new List<EffectDefinition>(),
-                        onAcceptedEffects = new List<EffectDefinition>(),
-                        onRejectedEffects = new List<EffectDefinition>(),
-                        onTimeoutEffects = new List<EffectDefinition>(),
-                        nextOnSuccess = "random_color",
-                        nextOnFail = "fail",
-                        nextOnTimeout = "random_color",
-                    },
-                    new TaskGraphNodeDefinition
-                    {
-                        nodeId = "random_color",
-                        nodeType = TaskGraphNodeTypes.Timer,
-                        allowedActions = new List<AllowedActionDefinition>(),
-                        conditions = new List<ConditionDefinition>(),
-                        timeoutSec = 0.5f,
-                        onEnterEffects = new List<EffectDefinition>
-                        {
-                            new EffectDefinition
-                            {
-                                effectId = "set_random_material_color",
-                                parameters = new List<KeyValuePairString>
-                                {
-                                    new KeyValuePairString { key = "spawnBindingPrefix", value = "targets" },
-                                    new KeyValuePairString { key = "includeInactive", value = "true" },
+                                    new KeyValuePairString { key = "randomColorOnSpawn", value = "true" },
+                                    new KeyValuePairString { key = "colorIncludeInactive", value = "true" },
                                     new KeyValuePairString { key = "minHue", value = "0.0" },
                                     new KeyValuePairString { key = "maxHue", value = "1.0" },
                                     new KeyValuePairString { key = "minSaturation", value = "0.55" },

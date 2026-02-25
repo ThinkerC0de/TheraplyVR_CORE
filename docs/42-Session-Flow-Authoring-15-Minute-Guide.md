@@ -73,6 +73,12 @@ Use effect id: `spawn_prefab_wave`
 - `durationSec`: total spawn duration (`0` = instant batch).
 - `areaSizeX`, `areaSizeY`, `areaSizeZ`: spawn box size around `spawnPointKey`.
 - `randomYaw`: random Y rotation per spawned instance.
+- `randomColorOnSpawn`: if `true`, each spawned instance gets random material color immediately at spawn time.
+- `colorIncludeInactive`: include inactive child renderers when applying color on spawn.
+- `minHue`, `maxHue`: hue range in `[0..1]` used by on-spawn randomization.
+- `minSaturation`, `maxSaturation`: saturation range in `[0..1]` used by on-spawn randomization.
+- `minValue`, `maxValue`: value/brightness range in `[0..1]` used by on-spawn randomization.
+- `alpha`: output alpha in `[0..1]` used by on-spawn randomization.
 
 ## Random Material Color Parameters
 
@@ -126,7 +132,6 @@ flutter test test/widget_test.dart test/game_catalog_service_test.dart test/mobi
 - Flow asset: `Assets/_YourGames/Samples/SessionFlow/SpawnExampleFlowDefinition.asset`.
 - Nodes in sample graph:
   - `start` (`Action`, timeout to next node)
-  - `spawn_wave` (`Timer`, on-enter `spawn_prefab_wave`)
-  - `random_color` (`Timer`, on-enter `set_random_material_color`)
+  - `spawn_wave` (`Timer`, on-enter `spawn_prefab_wave` with `randomColorOnSpawn=true`)
   - `complete` (`Complete`)
   - `fail` (`Fail`)

@@ -390,6 +390,15 @@ namespace TheraplyCore.Games.Runtime
             int count,
             float durationSec,
             bool randomYaw,
+            bool randomColorOnSpawn,
+            bool colorIncludeInactive,
+            float colorMinHue,
+            float colorMaxHue,
+            float colorMinSaturation,
+            float colorMaxSaturation,
+            float colorMinValue,
+            float colorMaxValue,
+            float colorAlpha,
             out string reasonCode)
         {
             reasonCode = string.Empty;
@@ -430,6 +439,10 @@ namespace TheraplyCore.Games.Runtime
                 Mathf.Max(0f, areaSize.y),
                 Mathf.Max(0f, areaSize.z));
             var normalizedBindingPrefix = NormalizeOrFallback(bindingKeyPrefix, string.Empty);
+            Normalize01Range(ref colorMinHue, ref colorMaxHue);
+            Normalize01Range(ref colorMinSaturation, ref colorMaxSaturation);
+            Normalize01Range(ref colorMinValue, ref colorMaxValue);
+            var normalizedColorAlpha = Mathf.Clamp01(colorAlpha);
 
             if (count == 1 || durationSec <= 0f)
             {
@@ -443,6 +456,15 @@ namespace TheraplyCore.Games.Runtime
                             spawnPoint,
                             safeAreaSize,
                             randomYaw,
+                            randomColorOnSpawn,
+                            colorIncludeInactive,
+                            colorMinHue,
+                            colorMaxHue,
+                            colorMinSaturation,
+                            colorMaxSaturation,
+                            colorMinValue,
+                            colorMaxValue,
+                            normalizedColorAlpha,
                             out reasonCode))
                     {
                         return false;
@@ -467,7 +489,16 @@ namespace TheraplyCore.Games.Runtime
                     durationSec,
                     spawnPoint,
                     safeAreaSize,
-                    randomYaw));
+                    randomYaw,
+                    randomColorOnSpawn,
+                    colorIncludeInactive,
+                    colorMinHue,
+                    colorMaxHue,
+                    colorMinSaturation,
+                    colorMaxSaturation,
+                    colorMinValue,
+                    colorMaxValue,
+                    normalizedColorAlpha));
 
             reasonCode = "SPAWN_WAVE_SCHEDULED";
             return true;
@@ -657,7 +688,16 @@ namespace TheraplyCore.Games.Runtime
             float durationSec,
             Transform spawnPoint,
             Vector3 areaSize,
-            bool randomYaw)
+            bool randomYaw,
+            bool randomColorOnSpawn,
+            bool colorIncludeInactive,
+            float colorMinHue,
+            float colorMaxHue,
+            float colorMinSaturation,
+            float colorMaxSaturation,
+            float colorMinValue,
+            float colorMaxValue,
+            float colorAlpha)
         {
             var intervalSec = count <= 1 ? 0f : durationSec / (count - 1);
             for (var i = 0; i < count; i++)
@@ -670,6 +710,15 @@ namespace TheraplyCore.Games.Runtime
                         spawnPoint,
                         areaSize,
                         randomYaw,
+                        randomColorOnSpawn,
+                        colorIncludeInactive,
+                        colorMinHue,
+                        colorMaxHue,
+                        colorMinSaturation,
+                        colorMaxSaturation,
+                        colorMinValue,
+                        colorMaxValue,
+                        colorAlpha,
                         out _))
                 {
                     yield break;
@@ -690,6 +739,15 @@ namespace TheraplyCore.Games.Runtime
             Transform spawnPoint,
             Vector3 areaSize,
             bool randomYaw,
+            bool randomColorOnSpawn,
+            bool colorIncludeInactive,
+            float colorMinHue,
+            float colorMaxHue,
+            float colorMinSaturation,
+            float colorMaxSaturation,
+            float colorMinValue,
+            float colorMaxValue,
+            float colorAlpha,
             out string reasonCode)
         {
             reasonCode = string.Empty;
@@ -715,6 +773,21 @@ namespace TheraplyCore.Games.Runtime
                 bindingKey = BuildSpawnBindingKey(bindingKeyPrefix, index, totalCount),
                 instance = instance,
             };
+
+            if (randomColorOnSpawn)
+            {
+                TryApplyRandomMaterialColor(
+                    instance,
+                    colorIncludeInactive,
+                    colorMinHue,
+                    colorMaxHue,
+                    colorMinSaturation,
+                    colorMaxSaturation,
+                    colorMinValue,
+                    colorMaxValue,
+                    colorAlpha,
+                    out _);
+            }
 
             MaybeLog("SPAWN:" + instanceId);
             return true;

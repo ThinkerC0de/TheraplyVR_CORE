@@ -134,25 +134,9 @@ MonoBehaviour:
             value: 2.8
           - key: randomYaw
             value: true
-        onExitEffects: []
-        onAcceptedEffects: []
-        onRejectedEffects: []
-        onTimeoutEffects: []
-        nextOnSuccess: random_color
-        nextOnFail: fail
-        nextOnTimeout: random_color
-      - nodeId: random_color
-        nodeType: Timer
-        allowedActions: []
-        conditions: []
-        timeoutSec: 0.5
-        onEnterEffects:
-        - effectId: set_random_material_color
-          binding: 
-          parameters:
-          - key: spawnBindingPrefix
-            value: targets
-          - key: includeInactive
+          - key: randomColorOnSpawn
+            value: true
+          - key: colorIncludeInactive
             value: true
           - key: minHue
             value: 0.0

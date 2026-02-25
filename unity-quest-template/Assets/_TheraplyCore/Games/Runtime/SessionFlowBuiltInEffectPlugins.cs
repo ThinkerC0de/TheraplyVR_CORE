@@ -188,6 +188,19 @@ namespace TheraplyCore.Games.Runtime
                 Mathf.Max(0f, ReadFloatParameter(effect, "areaSizeY", 0f)),
                 Mathf.Max(0f, ReadFloatParameter(effect, "areaSizeZ", 0f)));
             var randomYaw = ReadBoolParameter(effect, "randomYaw", true);
+            var randomColorOnSpawn = ReadBoolParameter(effect, "randomColorOnSpawn", false);
+            var colorIncludeInactive = ReadBoolParameter(effect, "colorIncludeInactive", true);
+            var colorMinHue = ReadFloatParameter(effect, "minHue", 0f);
+            var colorMaxHue = ReadFloatParameter(effect, "maxHue", 1f);
+            var colorMinSaturation = ReadFloatParameter(effect, "minSaturation", 0.55f);
+            var colorMaxSaturation = ReadFloatParameter(effect, "maxSaturation", 0.95f);
+            var colorMinValue = ReadFloatParameter(effect, "minValue", 0.6f);
+            var colorMaxValue = ReadFloatParameter(effect, "maxValue", 1f);
+            var colorAlpha = Clamp01(ReadFloatParameter(effect, "alpha", 1f));
+
+            Normalize01Range(ref colorMinHue, ref colorMaxHue);
+            Normalize01Range(ref colorMinSaturation, ref colorMaxSaturation);
+            Normalize01Range(ref colorMinValue, ref colorMaxValue);
 
             return services.sceneRuntime.TrySpawnWave(
                 bindingKeyPrefix,
@@ -197,6 +210,15 @@ namespace TheraplyCore.Games.Runtime
                 count,
                 durationSec,
                 randomYaw,
+                randomColorOnSpawn,
+                colorIncludeInactive,
+                colorMinHue,
+                colorMaxHue,
+                colorMinSaturation,
+                colorMaxSaturation,
+                colorMinValue,
+                colorMaxValue,
+                colorAlpha,
                 out reasonCode);
         }
 

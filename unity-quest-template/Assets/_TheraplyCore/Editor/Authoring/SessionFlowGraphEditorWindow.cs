@@ -1379,6 +1379,15 @@ namespace TheraplyCore.Editor.Authoring
                     new KeyValuePairString { key = "areaSizeY", value = "0.0" },
                     new KeyValuePairString { key = "areaSizeZ", value = "2.0" },
                     new KeyValuePairString { key = "randomYaw", value = "true" },
+                    new KeyValuePairString { key = "randomColorOnSpawn", value = "false" },
+                    new KeyValuePairString { key = "colorIncludeInactive", value = "true" },
+                    new KeyValuePairString { key = "minHue", value = "0.0" },
+                    new KeyValuePairString { key = "maxHue", value = "1.0" },
+                    new KeyValuePairString { key = "minSaturation", value = "0.55" },
+                    new KeyValuePairString { key = "maxSaturation", value = "0.95" },
+                    new KeyValuePairString { key = "minValue", value = "0.60" },
+                    new KeyValuePairString { key = "maxValue", value = "1.0" },
+                    new KeyValuePairString { key = "alpha", value = "1.0" },
                 },
             };
         }
