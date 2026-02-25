@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_controller/models/guided_session_plan.dart';
 import 'package:flutter_controller/models/entitlement_access.dart';
 import 'package:flutter_controller/models/ops_error_catalog.dart';
 import 'package:flutter_controller/models/session_fsm_contract.dart';
@@ -1240,11 +1241,13 @@ class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
   late final TextEditingController _criticalRetriesController;
   late final TextEditingController _criticalAckTimeoutController;
   late final TextEditingController _quickNotesController;
+  late final TextEditingController _guidedPlanStepsController;
 
   late bool _autoCloseInterruptedSessionsEnabled;
   late bool _requireResumeConfirmationAfterRecoveryWindow;
   late bool _keepScreenAwakeWhenForeground;
   late TherapistUiLanguage _operatorUiLanguage;
+  late GuidedSessionContinuationPolicy _guidedSessionContinuationPolicy;
 
   bool _isSaving = false;
   String? _validationError;
@@ -1268,6 +1271,11 @@ class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
     _quickNotesController = TextEditingController(
       text: initial.timelineQuickNoteTemplates.join('\n'),
     );
+    _guidedPlanStepsController = TextEditingController(
+      text: GuidedSessionPlanEditorCodec.serializeStepLines(
+        initial.guidedSessionPlanSteps,
+      ),
+    );
 
     _autoCloseInterruptedSessionsEnabled =
         initial.autoCloseInterruptedSessionsEnabled;
@@ -1275,6 +1283,7 @@ class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
         initial.requireResumeConfirmationAfterRecoveryWindow;
     _keepScreenAwakeWhenForeground = initial.keepScreenAwakeWhenForeground;
     _operatorUiLanguage = initial.operatorUiLanguage;
+    _guidedSessionContinuationPolicy = initial.guidedSessionContinuationPolicy;
   }
 
   @override
@@ -1284,6 +1293,7 @@ class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
     _criticalRetriesController.dispose();
     _criticalAckTimeoutController.dispose();
     _quickNotesController.dispose();
+    _guidedPlanStepsController.dispose();
     super.dispose();
   }
 
@@ -1331,6 +1341,8 @@ class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
     _criticalAckTimeoutController.text =
         defaults.criticalCommandAckTimeoutMs.toString();
     _quickNotesController.text = defaults.timelineQuickNoteTemplates.join('\n');
+    _guidedPlanStepsController.text = GuidedSessionPlanEditorCodec
+        .serializeStepLines(defaults.guidedSessionPlanSteps);
     setState(() {
       _autoCloseInterruptedSessionsEnabled =
           defaults.autoCloseInterruptedSessionsEnabled;
@@ -1338,6 +1350,8 @@ class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
           defaults.requireResumeConfirmationAfterRecoveryWindow;
       _keepScreenAwakeWhenForeground = defaults.keepScreenAwakeWhenForeground;
       _operatorUiLanguage = defaults.operatorUiLanguage;
+      _guidedSessionContinuationPolicy =
+          defaults.guidedSessionContinuationPolicy;
       _validationError = null;
     });
   }
@@ -1400,6 +1414,26 @@ class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
         .where((entry) => templateSet.add(entry))
         .toList(growable: false);
 
+    List<GuidedSessionPlanStep> guidedSessionPlanSteps;
+    try {
+      guidedSessionPlanSteps = GuidedSessionPlanEditorCodec.parseStepLines(
+        _guidedPlanStepsController.text,
+      );
+    } on FormatException catch (e) {
+      setState(() {
+        _validationError = e.message;
+      });
+      return;
+    }
+
+    if (guidedSessionPlanSteps.isEmpty) {
+      setState(() {
+        _validationError =
+            'Guided session plan requires at least one game step.';
+      });
+      return;
+    }
+
     final settings = TherapistSessionSettings.fromMap(
       <String, dynamic>{
         'sessionRecoveryWindowMinutes': sessionRecoveryWindowMinutes,
@@ -1418,6 +1452,11 @@ class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
         'keepScreenAwakeWhenForeground': _keepScreenAwakeWhenForeground,
         'operatorUiLanguage': _operatorUiLanguage.wireValue,
         'timelineQuickNoteTemplates': timelineQuickNoteTemplates,
+        'defaultGuidedSessionPlanId': 'default_parent_guided_plan',
+        'guidedSessionContinuationPolicy':
+            _guidedSessionContinuationPolicy.wireValue,
+        'guidedSessionPlanSteps':
+            guidedSessionPlanSteps.map((step) => step.toMap()).toList(),
       },
     );
 
@@ -1569,6 +1608,53 @@ class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
                 decoration: const InputDecoration(
                   labelText: 'Timeline Quick Notes Templates',
                   hintText: 'One template per line',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<GuidedSessionContinuationPolicy>(
+                initialValue: _guidedSessionContinuationPolicy,
+                decoration: const InputDecoration(
+                  labelText: 'Guided continuation policy',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem<GuidedSessionContinuationPolicy>(
+                    value: GuidedSessionContinuationPolicy.manual,
+                    child: Text('Manual decision'),
+                  ),
+                  DropdownMenuItem<GuidedSessionContinuationPolicy>(
+                    value:
+                        GuidedSessionContinuationPolicy.resumeUnderRecoveryWindow,
+                    child: Text('Auto resume under window'),
+                  ),
+                  DropdownMenuItem<GuidedSessionContinuationPolicy>(
+                    value: GuidedSessionContinuationPolicy.resumeAlways,
+                    child: Text('Always auto resume'),
+                  ),
+                ],
+                onChanged: _isSaving
+                    ? null
+                    : (value) {
+                        if (value == null) {
+                          return;
+                        }
+                        setState(() {
+                          _guidedSessionContinuationPolicy = value;
+                        });
+                      },
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _guidedPlanStepsController,
+                minLines: 3,
+                maxLines: 8,
+                decoration: const InputDecoration(
+                  labelText: 'Guided plan steps',
+                  hintText:
+                      'One step per line: gameId|{"presetKey":"value"}',
+                  helperText:
+                      'Example: demo_cube_clicker|{"cubeCount":10,"cubeSpeed":0.7}',
                   border: OutlineInputBorder(),
                 ),
               ),

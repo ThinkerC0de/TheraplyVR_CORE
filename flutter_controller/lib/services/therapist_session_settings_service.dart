@@ -48,29 +48,46 @@ class TherapistSessionSettingsService {
   static Future<TherapistSessionSettings>
       fetchCurrentTherapistSettings() async {
     final therapistId = _resolveCurrentTherapistId();
-    if (therapistId.isEmpty) {
+    return fetchSettingsForTherapistId(therapistId);
+  }
+
+  static Future<TherapistSessionSettings> fetchSettingsForTherapistId(
+    String therapistId, {
+    bool publishResult = true,
+  }) async {
+    final normalizedTherapistId = therapistId.trim();
+    if (normalizedTherapistId.isEmpty) {
       final defaults = TherapistSessionSettings.defaults();
-      _publishSettings(defaults);
+      if (publishResult) {
+        _publishSettings(defaults);
+      }
       return defaults;
     }
 
     try {
-      final snapshot = await _entitlementsCollection.doc(therapistId).get();
+      final snapshot =
+          await _entitlementsCollection.doc(normalizedTherapistId).get();
       if (!snapshot.exists) {
         final defaults = TherapistSessionSettings.defaults();
-        _publishSettings(defaults);
+        if (publishResult) {
+          _publishSettings(defaults);
+        }
         return defaults;
       }
 
       final settings = TherapistSessionSettings.fromMap(snapshot.data());
-      _publishSettings(settings);
+      if (publishResult) {
+        _publishSettings(settings);
+      }
       return settings;
     } catch (e) {
       debugPrint(
         '[TherapistSessionSettingsService] Failed to load therapist settings: $e',
       );
       final defaults = TherapistSessionSettings.defaults();
-      _publishSettings(defaults);
+      if (publishResult) {
+        _publishSettings(defaults);
+      }
       return defaults;
     }
   }

@@ -1,4 +1,5 @@
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
+import 'package:flutter_controller/models/guided_session_plan.dart';
 import 'package:flutter_controller/models/therapist_session_settings.dart';
 import 'package:flutter_controller/services/therapist_session_settings_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -143,6 +144,35 @@ void main() {
               TherapistSessionSettings.defaults());
 
       expect(saved, isFalse);
+    });
+
+    test('fetches settings for explicit therapist id (parent guided read)',
+        () async {
+      await firestore.collection('user_entitlements').doc('therapist-owner').set(
+        <String, dynamic>{
+          'sessionRecoveryWindowMinutes': 88,
+          'guidedSessionContinuationPolicy': 'resume_always',
+          'guidedSessionPlanSteps': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'stepId': 'step_1_demo',
+              'gameId': 'demo_cube_clicker',
+              'displayName': 'Demo',
+              'configPreset': <String, dynamic>{'cubeCount': 9},
+            },
+          ],
+        },
+      );
+
+      final settings = await TherapistSessionSettingsService
+          .fetchSettingsForTherapistId('therapist-owner');
+
+      expect(settings.sessionRecoveryWindowMinutes, 88);
+      expect(
+        settings.guidedSessionContinuationPolicy.wireValue,
+        'resume_always',
+      );
+      expect(settings.guidedSessionPlanSteps, isNotEmpty);
+      expect(settings.guidedSessionPlanSteps.first.gameId, 'demo_cube_clicker');
     });
   });
 }

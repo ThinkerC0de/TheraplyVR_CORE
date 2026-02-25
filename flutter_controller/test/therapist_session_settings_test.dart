@@ -1,3 +1,4 @@
+import 'package:flutter_controller/models/guided_session_plan.dart';
 import 'package:flutter_controller/models/therapist_session_settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -37,6 +38,11 @@ void main() {
       expect(
         settings.operatorUiLanguage,
         TherapistSessionSettings.defaultOperatorUiLanguage,
+      );
+      expect(settings.guidedSessionPlanSteps, isNotEmpty);
+      expect(
+        settings.guidedSessionContinuationPolicy.wireValue,
+        'resume_under_recovery_window',
       );
     });
 
@@ -78,6 +84,15 @@ void main() {
         'keepScreenAwakeWhenForeground': true,
         'operatorUiLanguage': 'pl',
         'timelineQuickNoteTemplates': <dynamic>['A', ' ', 'B'],
+        'guidedSessionContinuationPolicy': 'resume_always',
+        'guidedSessionPlanSteps': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'stepId': 'step-1',
+            'gameId': 'demo_cube_clicker',
+            'displayName': 'Demo',
+            'configPreset': <String, dynamic>{'cubeCount': 9},
+          },
+        ],
       });
 
       expect(settings.autoCloseInterruptedSessionsEnabled, isFalse);
@@ -85,6 +100,12 @@ void main() {
       expect(settings.keepScreenAwakeWhenForeground, isTrue);
       expect(settings.operatorUiLanguage, TherapistUiLanguage.polish);
       expect(settings.timelineQuickNoteTemplates, <String>['A', 'B']);
+      expect(
+        settings.guidedSessionContinuationPolicy.wireValue,
+        'resume_always',
+      );
+      expect(settings.guidedSessionPlanSteps.length, 1);
+      expect(settings.guidedSessionPlanSteps.first.gameId, 'demo_cube_clicker');
     });
 
     test('serializes and deserializes stable settings map', () {
@@ -101,6 +122,21 @@ void main() {
         'keepScreenAwakeWhenForeground': true,
         'operatorUiLanguage': 'pl',
         'timelineQuickNoteTemplates': <String>['Template A', 'Template B'],
+        'guidedSessionContinuationPolicy': 'manual',
+        'guidedSessionPlanSteps': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'stepId': 'step-a',
+            'gameId': 'demo_cube_clicker',
+            'displayName': 'Demo',
+            'configPreset': <String, dynamic>{'cubeCount': 10},
+          },
+          <String, dynamic>{
+            'stepId': 'step-b',
+            'gameId': 'pulse_target_tap',
+            'displayName': 'Pulse',
+            'configPreset': <String, dynamic>{'targetCount': 7},
+          },
+        ],
       });
 
       final roundtrip = TherapistSessionSettings.fromMap(source.toMap());
@@ -120,6 +156,9 @@ void main() {
         roundtrip.timelineQuickNoteTemplates,
         <String>['Template A', 'Template B'],
       );
+      expect(roundtrip.guidedSessionContinuationPolicy.wireValue, 'manual');
+      expect(roundtrip.guidedSessionPlanSteps.length, 2);
+      expect(roundtrip.guidedSessionPlanSteps.first.gameId, 'demo_cube_clicker');
     });
 
     test('copyWith overrides selected fields only', () {
@@ -134,6 +173,8 @@ void main() {
         keepScreenAwakeWhenForeground: true,
         operatorUiLanguage: TherapistUiLanguage.polish,
         timelineQuickNoteTemplates: <String>['Custom quick note'],
+        guidedSessionContinuationPolicy:
+            GuidedSessionContinuationPolicy.resumeAlways,
       );
 
       expect(updated.sessionRecoveryWindowMinutes, 90);
@@ -150,6 +191,10 @@ void main() {
       expect(
         updated.timelineQuickNoteTemplates,
         <String>['Custom quick note'],
+      );
+      expect(
+        updated.guidedSessionContinuationPolicy,
+        GuidedSessionContinuationPolicy.resumeAlways,
       );
     });
   });

@@ -7,6 +7,8 @@ import 'package:flutter_controller/models/critical_command_envelope.dart';
 import 'package:flutter_controller/models/device_info.dart';
 import 'package:flutter_controller/models/entitlement_access.dart';
 import 'package:flutter_controller/models/game_catalog_entry.dart';
+import 'package:flutter_controller/models/guided_session_continuation_policy.dart';
+import 'package:flutter_controller/models/guided_session_plan.dart';
 import 'package:flutter_controller/models/mobile_control_schema.dart';
 import 'package:flutter_controller/models/ops_error_catalog.dart';
 import 'package:flutter_controller/models/parent_progress_snapshot.dart';
@@ -1574,8 +1576,12 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   Future<void> _loadTherapistSessionSettings() async {
-    final settings =
-        await TherapistSessionSettingsService.fetchCurrentTherapistSettings();
+    final studentOwnerTherapistId = widget.student.therapistId.trim();
+    final settings = _isParentRole && studentOwnerTherapistId.isNotEmpty
+        ? await TherapistSessionSettingsService.fetchSettingsForTherapistId(
+            studentOwnerTherapistId,
+          )
+        : await TherapistSessionSettingsService.fetchCurrentTherapistSettings();
     if (!mounted) {
       return;
     }
@@ -4373,6 +4379,225 @@ class _ControlScreenState extends State<ControlScreen>
     }
   }
 
+  GuidedSessionPlanStep? _resolveDefaultGuidedPlanStep() {
+    final steps = _therapistSessionSettings.guidedSessionPlanSteps;
+    if (steps.isEmpty) {
+      return null;
+    }
+
+    final knownGameIds = _effectiveGameCatalog
+        .map((entry) => entry.gameId)
+        .where((gameId) => gameId.trim().isNotEmpty)
+        .toSet();
+    for (final step in steps) {
+      final gameId = step.gameId.trim();
+      if (gameId.isNotEmpty && knownGameIds.contains(gameId)) {
+        return step;
+      }
+    }
+
+    return null;
+  }
+
+  void _applyGuidedPlanStepPreset(GuidedSessionPlanStep step) {
+    final gameId = step.gameId.trim();
+    if (gameId.isEmpty) {
+      return;
+    }
+
+    if (_selectedGameId != gameId && mounted) {
+      setState(() {
+        _selectedGameId = gameId;
+      });
+    } else if (_selectedGameId != gameId) {
+      _selectedGameId = gameId;
+    }
+
+    final preset = step.configPreset;
+    if (preset.isEmpty) {
+      return;
+    }
+
+    final schema = _selectedGameEntry.mobileControlSchema;
+    if (schema != null) {
+      _ensureDynamicControlValuesForSelectedSchema();
+      for (final control in schema.controls) {
+        if (!preset.containsKey(control.controlId)) {
+          continue;
+        }
+        _dynamicControlValuesByControlId[control.controlId] = _coerceSchemaValue(
+          control.binding.valueType,
+          preset[control.controlId],
+        );
+      }
+      return;
+    }
+
+    if (_selectedGameId == _demoCubeGameId) {
+      final cubeCount = _tryReadIntPreset(preset, const ['cubeCount']);
+      final cubeSpeed = _tryReadDoublePreset(preset, const ['cubeSpeed']);
+      final levelMode = _tryReadStringPreset(preset, const ['levelMode']);
+      if (mounted) {
+        setState(() {
+          if (cubeCount != null) {
+            _demoCubeCount = cubeCount.clamp(4, 64).toInt();
+          }
+          if (cubeSpeed != null) {
+            _demoCubeSpeed = cubeSpeed.clamp(0.2, 3.0).toDouble();
+          }
+          if (levelMode != null && _demoLevelModes.contains(levelMode)) {
+            _demoLevelMode = levelMode;
+          }
+        });
+      }
+      return;
+    }
+
+    if (_selectedGameId == _pulseTargetGameId && mounted) {
+      final targetCount = _tryReadIntPreset(preset, const ['targetCount']);
+      final targetSpeed = _tryReadDoublePreset(preset, const ['targetSpeed']);
+      final targetScale = _tryReadDoublePreset(preset, const ['targetScale']);
+      setState(() {
+        if (targetCount != null) {
+          _pulseTargetCount = targetCount.clamp(2, 64).toInt();
+        }
+        if (targetSpeed != null) {
+          _pulseTargetSpeed = targetSpeed.clamp(0.2, 3.0).toDouble();
+        }
+        if (targetScale != null) {
+          _pulseTargetScale = targetScale.clamp(0.1, 1.5).toDouble();
+        }
+      });
+    }
+  }
+
+  int? _tryReadIntPreset(Map<String, dynamic> preset, List<String> keys) {
+    for (final key in keys) {
+      if (!preset.containsKey(key)) {
+        continue;
+      }
+      final value = preset[key];
+      if (value is int) {
+        return value;
+      }
+      if (value is num) {
+        return value.round();
+      }
+      if (value is String) {
+        final parsed = int.tryParse(value.trim());
+        if (parsed != null) {
+          return parsed;
+        }
+      }
+    }
+    return null;
+  }
+
+  double? _tryReadDoublePreset(Map<String, dynamic> preset, List<String> keys) {
+    for (final key in keys) {
+      if (!preset.containsKey(key)) {
+        continue;
+      }
+      final value = preset[key];
+      if (value is double) {
+        return value;
+      }
+      if (value is num) {
+        return value.toDouble();
+      }
+      if (value is String) {
+        final parsed = double.tryParse(value.trim());
+        if (parsed != null) {
+          return parsed;
+        }
+      }
+    }
+    return null;
+  }
+
+  String? _tryReadStringPreset(Map<String, dynamic> preset, List<String> keys) {
+    for (final key in keys) {
+      if (!preset.containsKey(key)) {
+        continue;
+      }
+      final value = preset[key]?.toString().trim() ?? '';
+      if (value.isNotEmpty) {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  Future<bool> _applyGuidedContinuationPolicyForUnfinishedSession() async {
+    final persisted = _latestPersistedSession;
+    if (persisted == null || !persisted.requiresHandoffDecision) {
+      return true;
+    }
+
+    final persistedSessionId = persisted.sessionId.trim();
+    if (persistedSessionId.isEmpty || _wasSessionRecentlyEnded(persistedSessionId)) {
+      return true;
+    }
+
+    final activeSessionId = _activeSessionId.trim();
+    if (activeSessionId == persistedSessionId) {
+      return true;
+    }
+
+    final policy = _therapistSessionSettings.guidedSessionContinuationPolicy;
+    final decision = GuidedSessionContinuationEvaluator.evaluate(
+      policy: policy,
+      hasUnfinishedSession: persisted.requiresHandoffDecision,
+      sessionRecentlyEnded: _wasSessionRecentlyEnded(persistedSessionId),
+      sessionState: persisted.state,
+      nowUtc: DateTime.now().toUtc(),
+      interruptedAtUtc: persisted.interruptedAtUtc,
+      recoveryWindowMinutes:
+          _therapistSessionSettings.sessionRecoveryWindowMinutes,
+    );
+    if (decision != GuidedSessionContinuationDecision.autoContinueUnfinished) {
+      return true;
+    }
+
+    _logSessionDecision(
+      source: 'parent_guided',
+      decision: 'AUTO_CONTINUE_UNFINISHED',
+      sessionId: persistedSessionId,
+      reason: 'GUIDED_CONTINUATION_${policy.wireValue.toUpperCase()}',
+    );
+
+    if (mounted) {
+      setState(() {
+        _activeSessionId = persistedSessionId;
+        _sessionAttachReady = false;
+        _requiresSessionDecision = false;
+        _remoteSessionIdPendingDecision = null;
+      });
+    } else {
+      _activeSessionId = persistedSessionId;
+      _sessionAttachReady = false;
+      _requiresSessionDecision = false;
+      _remoteSessionIdPendingDecision = null;
+    }
+
+    await _ensureSessionAttached(
+      reasonCode: 'GUIDED_CONTINUATION_POLICY',
+      force: true,
+      sessionIdOverride: persistedSessionId,
+    );
+
+    if (!_sessionAttachReady && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Waiting for headset session attach before guided resume.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+
+    return _sessionAttachReady;
+  }
+
   Future<void> _startParentGuidedSession() async {
     if (!_isParentRole) {
       return;
@@ -4415,6 +4640,28 @@ class _ControlScreenState extends State<ControlScreen>
           backgroundColor: Colors.orange,
         ),
       );
+      return;
+    }
+
+    final guidedStep = _resolveDefaultGuidedPlanStep();
+    if (guidedStep == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Guided plan is empty. Therapist must configure guided plan steps first.',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+    _applyGuidedPlanStepPreset(guidedStep);
+
+    final continuationApplied =
+        await _applyGuidedContinuationPolicyForUnfinishedSession();
+    if (!continuationApplied) {
       return;
     }
 
@@ -5747,11 +5994,24 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   Widget _buildParentQuickStartPanel() {
+    final guidedStep = _resolveDefaultGuidedPlanStep();
+    var guidedStepLaunchable = false;
+    if (guidedStep != null) {
+      final gameId = guidedStep.gameId.trim();
+      for (final entry in _effectiveGameCatalog) {
+        if (entry.gameId != gameId) {
+          continue;
+        }
+        guidedStepLaunchable = entry.runtimeLaunchEnabled &&
+            _isLaunchableContentState(_contentStateForGame(gameId));
+        break;
+      }
+    }
     final canStartNow = _isConnected &&
         _sessionAttachReady &&
         !_isHeadsetPresenceBlocking &&
         !_isPlanBlockingLaunch &&
-        _isSelectedGameLaunchable &&
+        guidedStepLaunchable &&
         !_isPrimaryActionInFlight;
 
     return Container(
@@ -5785,6 +6045,20 @@ class _ControlScreenState extends State<ControlScreen>
             style: TextStyle(
               color: Colors.green.shade900,
               fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            guidedStep == null
+                ? 'No guided plan steps configured.'
+                : 'Plan step: ${guidedStep.gameId} | '
+                    'continuation: ${_therapistSessionSettings.guidedSessionContinuationPolicy.wireValue}',
+            style: TextStyle(
+              color: guidedStep == null
+                  ? Colors.orange.shade900
+                  : Colors.green.shade900,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 8),

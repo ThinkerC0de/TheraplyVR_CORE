@@ -1,3 +1,5 @@
+import 'package:flutter_controller/models/guided_session_plan.dart';
+
 enum TherapistUiLanguage {
   english('en'),
   polish('pl');
@@ -61,6 +63,9 @@ class TherapistSessionSettings {
   final bool keepScreenAwakeWhenForeground;
   final TherapistUiLanguage operatorUiLanguage;
   final List<String> timelineQuickNoteTemplates;
+  final String defaultGuidedSessionPlanId;
+  final GuidedSessionContinuationPolicy guidedSessionContinuationPolicy;
+  final List<GuidedSessionPlanStep> guidedSessionPlanSteps;
 
   const TherapistSessionSettings({
     required this.sessionRecoveryWindowMinutes,
@@ -75,6 +80,9 @@ class TherapistSessionSettings {
     required this.keepScreenAwakeWhenForeground,
     required this.operatorUiLanguage,
     required this.timelineQuickNoteTemplates,
+    required this.defaultGuidedSessionPlanId,
+    required this.guidedSessionContinuationPolicy,
+    required this.guidedSessionPlanSteps,
   });
 
   factory TherapistSessionSettings.defaults() {
@@ -96,6 +104,21 @@ class TherapistSessionSettings {
         'Need short break',
         'Reduced focus',
         'Helped with instruction',
+      ],
+      defaultGuidedSessionPlanId: 'default_parent_guided_plan',
+      guidedSessionContinuationPolicy:
+          GuidedSessionContinuationPolicy.resumeUnderRecoveryWindow,
+      guidedSessionPlanSteps: <GuidedSessionPlanStep>[
+        GuidedSessionPlanStep(
+          stepId: 'step_1_demo_cube_clicker',
+          gameId: 'demo_cube_clicker',
+          displayName: 'Demo Cube Clicker',
+          configPreset: <String, dynamic>{
+            'cubeCount': 12,
+            'cubeSpeed': 0.7,
+            'levelMode': 'basic',
+          },
+        ),
       ],
     );
   }
@@ -163,6 +186,20 @@ class TherapistSessionSettings {
         source['timelineQuickNoteTemplates'],
         fallback: defaults.timelineQuickNoteTemplates,
       ),
+      defaultGuidedSessionPlanId: _asString(
+        source['defaultGuidedSessionPlanId'],
+        fallback: defaults.defaultGuidedSessionPlanId,
+      ),
+      guidedSessionContinuationPolicy: source
+              .containsKey('guidedSessionContinuationPolicy')
+          ? GuidedSessionContinuationPolicyCodec.fromWire(
+              source['guidedSessionContinuationPolicy'] as String?,
+            )
+          : defaults.guidedSessionContinuationPolicy,
+      guidedSessionPlanSteps: _asGuidedSessionPlanSteps(
+        source['guidedSessionPlanSteps'],
+        fallback: defaults.guidedSessionPlanSteps,
+      ),
     );
   }
 
@@ -179,6 +216,9 @@ class TherapistSessionSettings {
     bool? keepScreenAwakeWhenForeground,
     TherapistUiLanguage? operatorUiLanguage,
     List<String>? timelineQuickNoteTemplates,
+    String? defaultGuidedSessionPlanId,
+    GuidedSessionContinuationPolicy? guidedSessionContinuationPolicy,
+    List<GuidedSessionPlanStep>? guidedSessionPlanSteps,
   }) {
     return TherapistSessionSettings(
       sessionRecoveryWindowMinutes:
@@ -206,6 +246,13 @@ class TherapistSessionSettings {
       timelineQuickNoteTemplates: List<String>.from(
         timelineQuickNoteTemplates ?? this.timelineQuickNoteTemplates,
       ),
+      defaultGuidedSessionPlanId:
+          defaultGuidedSessionPlanId ?? this.defaultGuidedSessionPlanId,
+      guidedSessionContinuationPolicy: guidedSessionContinuationPolicy ??
+          this.guidedSessionContinuationPolicy,
+      guidedSessionPlanSteps: List<GuidedSessionPlanStep>.from(
+        guidedSessionPlanSteps ?? this.guidedSessionPlanSteps,
+      ),
     );
   }
 
@@ -226,6 +273,11 @@ class TherapistSessionSettings {
       'operatorUiLanguage': operatorUiLanguage.wireValue,
       'timelineQuickNoteTemplates':
           List<String>.from(timelineQuickNoteTemplates),
+      'defaultGuidedSessionPlanId': defaultGuidedSessionPlanId,
+      'guidedSessionContinuationPolicy':
+          guidedSessionContinuationPolicy.wireValue,
+      'guidedSessionPlanSteps':
+          guidedSessionPlanSteps.map((step) => step.toMap()).toList(),
     };
   }
 
@@ -311,6 +363,47 @@ class TherapistSessionSettings {
     }
 
     return List<String>.from(fallback);
+  }
+
+  static String _asString(dynamic value, {required String fallback}) {
+    if (value is String) {
+      final normalized = value.trim();
+      if (normalized.isNotEmpty) {
+        return normalized;
+      }
+    }
+    return fallback;
+  }
+
+  static List<GuidedSessionPlanStep> _asGuidedSessionPlanSteps(
+    dynamic value, {
+    required List<GuidedSessionPlanStep> fallback,
+  }) {
+    if (value is List) {
+      final steps = <GuidedSessionPlanStep>[];
+      for (var i = 0; i < value.length; i++) {
+        final rawStep = value[i];
+        if (rawStep is Map<String, dynamic>) {
+          final step = GuidedSessionPlanStep.fromMap(rawStep);
+          if (step.gameId.trim().isNotEmpty) {
+            steps.add(step);
+          }
+          continue;
+        }
+        if (rawStep is Map) {
+          final step =
+              GuidedSessionPlanStep.fromMap(Map<String, dynamic>.from(rawStep));
+          if (step.gameId.trim().isNotEmpty) {
+            steps.add(step);
+          }
+        }
+      }
+      if (steps.isNotEmpty) {
+        return List<GuidedSessionPlanStep>.unmodifiable(steps);
+      }
+    }
+
+    return List<GuidedSessionPlanStep>.from(fallback);
   }
 
   static TherapistUiLanguage _asOperatorUiLanguage(
