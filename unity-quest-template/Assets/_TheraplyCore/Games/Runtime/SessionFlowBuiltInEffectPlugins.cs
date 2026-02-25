@@ -80,6 +80,9 @@ namespace TheraplyCore.Games.Runtime
             registry.Register(new DelegateEffectPlugin("narrator_set_attachment", ExecuteNarratorSetAttachment), replaceExisting);
             registry.Register(new DelegateEffectPlugin("set_binding_active_by_calendar_event", ExecuteSetBindingActiveByCalendarEvent), replaceExisting);
             registry.Register(new DelegateEffectPlugin("trigger_sequence_by_calendar_event", ExecuteTriggerSequenceByCalendarEvent), replaceExisting);
+            registry.Register(new DelegateEffectPlugin("load_scene", ExecuteLoadScene), replaceExisting);
+            registry.Register(new DelegateEffectPlugin("unload_scene", ExecuteUnloadScene), replaceExisting);
+            registry.Register(new DelegateEffectPlugin("reset_scene", ExecuteResetScene), replaceExisting);
         }
 
         private static bool ExecuteShowObject(
@@ -495,6 +498,77 @@ namespace TheraplyCore.Games.Runtime
             }
 
             return services.sceneRuntime.TryTeleportAnchor(anchorKey, poseKey, out reasonCode);
+        }
+
+        private static bool ExecuteLoadScene(
+            GameContracts.EffectDefinition effect,
+            EffectExecutionContext context,
+            EffectRuntimeServices services,
+            out string reasonCode)
+        {
+            reasonCode = string.Empty;
+            if (services == null || services.sceneRuntime == null)
+            {
+                reasonCode = "SCENE_RUNTIME_MISSING";
+                return false;
+            }
+
+            var sceneName = ReadParameter(effect, "sceneName", effect == null ? string.Empty : effect.binding);
+            if (string.IsNullOrWhiteSpace(sceneName))
+            {
+                reasonCode = "SCENE_NAME_REQUIRED";
+                return false;
+            }
+
+            var mode = ReadParameter(effect, "mode", "single");
+            return services.sceneRuntime.TryLoadScene(sceneName, mode, out reasonCode);
+        }
+
+        private static bool ExecuteUnloadScene(
+            GameContracts.EffectDefinition effect,
+            EffectExecutionContext context,
+            EffectRuntimeServices services,
+            out string reasonCode)
+        {
+            reasonCode = string.Empty;
+            if (services == null || services.sceneRuntime == null)
+            {
+                reasonCode = "SCENE_RUNTIME_MISSING";
+                return false;
+            }
+
+            var sceneName = ReadParameter(effect, "sceneName", effect == null ? string.Empty : effect.binding);
+            if (string.IsNullOrWhiteSpace(sceneName))
+            {
+                reasonCode = "SCENE_NAME_REQUIRED";
+                return false;
+            }
+
+            return services.sceneRuntime.TryUnloadScene(sceneName, out reasonCode);
+        }
+
+        private static bool ExecuteResetScene(
+            GameContracts.EffectDefinition effect,
+            EffectExecutionContext context,
+            EffectRuntimeServices services,
+            out string reasonCode)
+        {
+            reasonCode = string.Empty;
+            if (services == null || services.sceneRuntime == null)
+            {
+                reasonCode = "SCENE_RUNTIME_MISSING";
+                return false;
+            }
+
+            var sceneName = ReadParameter(effect, "sceneName", effect == null ? string.Empty : effect.binding);
+            if (string.IsNullOrWhiteSpace(sceneName))
+            {
+                reasonCode = "SCENE_NAME_REQUIRED";
+                return false;
+            }
+
+            var mode = ReadParameter(effect, "mode", "single");
+            return services.sceneRuntime.TryResetScene(sceneName, mode, out reasonCode);
         }
 
         private static bool ExecuteEmitHint(

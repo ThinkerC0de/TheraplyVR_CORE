@@ -69,6 +69,11 @@ namespace TheraplyCore.Games.Runtime
             {
                 _calendarRuntime.SetRuntimeContext(_runtimeGameId, _runtimeFlowId, _runtimeSessionId);
             }
+
+            if (_sceneRuntimeController != null)
+            {
+                _sceneRuntimeController.SetRuntimeContext(_runtimeGameId, _runtimeFlowId, _runtimeSessionId);
+            }
         }
 
         public bool RegisterPlugin(IEffectPlugin plugin, bool replaceExisting = true)

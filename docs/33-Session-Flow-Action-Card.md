@@ -329,6 +329,9 @@ Actions are compositions of atoms; games are compositions of actions.
 | `effect_timeline_play` | Play timeline |
 | `effect_timeline_stop` | Stop timeline |
 | `effect_hint_emit` | Show hint/narrator message |
+| `effect_scene_load` | Request scene load |
+| `effect_scene_unload` | Request scene unload |
+| `effect_scene_reset` | Request scene reset |
 
 ### Telemetry Atoms
 
@@ -340,6 +343,9 @@ Actions are compositions of atoms; games are compositions of actions.
 | `telemetry_step_completed` | Step completed |
 | `telemetry_step_timed_out` | Step timeout |
 | `telemetry_effect_executed` | Effect execution emitted |
+| `telemetry_scene_load_requested` | Scene load request accepted/rejected |
+| `telemetry_scene_unload_requested` | Scene unload request accepted/rejected |
+| `telemetry_scene_reset_requested` | Scene reset request accepted/rejected |
 | `telemetry_trace_ref` | Compact trace artifact linked |
 
 ### Action = Atom Composition Examples
@@ -610,6 +616,9 @@ These actions cover target therapeutic gameplay mechanics for this framework.
 | `fade_screen` | Fade in/out transition |
 | `teleport_actor` | Move helper/avatar/guide actor |
 | `emit_hint` | Show hint or narrator message |
+| `load_scene` | Request scene load (`single`/`additive`) |
+| `unload_scene` | Request scene unload |
+| `reset_scene` | Request scene unload + load |
 | `set_locale` | Switch active locale at runtime |
 | `narrator_speak` | Queue one narrator line by key |
 | `narrator_play_sequence` | Queue narrator line sequence |
@@ -661,6 +670,9 @@ To answer "what, when, how, and why", log all of the events below.
 | `flow_failed` | `flowId`, `failedStepId`, `reasonCode` |
 | `session_terminal` | `sessionId`, `terminalState`, `reasonCode` |
 | `effect_executed` | `flowId`, `stepId`, `effectId`, `trigger` |
+| `scene_load_requested` | `sessionId`, `flowId`, `sceneName`, `mode`, `accepted`, `reasonCode`, `sessionState` |
+| `scene_unload_requested` | `sessionId`, `flowId`, `sceneName`, `accepted`, `reasonCode`, `sessionState` |
+| `scene_reset_requested` | `sessionId`, `flowId`, `sceneName`, `mode`, `accepted`, `reasonCode`, `sessionState` |
 | `locale_change_requested` | `sessionId`, `source`, `locale`, `requestId` |
 | `locale_change_applied` | `sessionId`, `source`, `locale`, `previousLocale` |
 | `locale_change_rejected` | `sessionId`, `source`, `locale`, `reasonCode` |

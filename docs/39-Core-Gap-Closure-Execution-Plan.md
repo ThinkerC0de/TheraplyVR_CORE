@@ -301,6 +301,31 @@ Expose scene lifecycle operations as first-class effects.
 - What we changed: "Added scene lifecycle effect plugins backed by SceneRuntime."
 - What it gives: "Flow can orchestrate scene swaps/resets without framework rewrites."
 
+### Implementation Update (2026-02-25)
+
+Status: `DONE`
+
+Delivered:
+
+1. Added built-in effect plugins:
+   - `load_scene`,
+   - `unload_scene`,
+   - `reset_scene`.
+2. Extended `SceneRuntimeController` with strict scene operation guards:
+   - session-state safety gate (`SCENE_OPERATION_NOT_ALLOWED_IN_SESSION_STATE`),
+   - explicit load mode validation (`single` or `additive`, otherwise `SCENE_LOAD_MODE_INVALID`),
+   - idempotent repeated-operation behavior (`SCENE_ALREADY_LOADED`, `SCENE_ALREADY_ACTIVE`, `SCENE_ALREADY_UNLOADED`).
+3. Added canonical scene request telemetry emissions:
+   - `scene_load_requested`,
+   - `scene_unload_requested`,
+   - `scene_reset_requested`,
+   with acceptance and reason codes.
+4. Wired runtime context propagation (`gameId`, `flowId`, `sessionId`) from `EffectRunner` to `SceneRuntimeController`.
+5. Added dedicated validation:
+   - `SceneLifecycleEffectsValidation` for effect wiring, invalid-state rejection, and idempotency behavior.
+6. Added validation pack step integration:
+   - `scripts/unity_session_flow_validation_pack.ps1` now runs `SceneLifecycleEffectsValidation`.
+
 ## Point 5 - Mobile Settings Locale Sync
 
 ### Target
