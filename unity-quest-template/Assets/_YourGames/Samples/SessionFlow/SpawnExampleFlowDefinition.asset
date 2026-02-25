@@ -1,0 +1,185 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 34db9a22f10e48bb8d2a62f9fd822e05, type: 3}
+  m_Name: SpawnExampleFlowDefinition
+  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Contracts.GameDefinitionAsset
+  definition:
+    gameId: spawn_example
+    displayName: Spawn Example
+    commentVersion: 2026-02-25 spawn example scene
+    controlMode: local_only
+    config:
+      difficulty: basic
+      timeLimitSec: 30
+      targetCount: 5
+      extras:
+      - key: sample
+        value: spawn_example
+    bindings:
+      objects: []
+      zones: []
+      audio: []
+      timeline: []
+    channels:
+    - channelId: pointer
+      enabled: 1
+    - channelId: tool_impact
+      enabled: 1
+    - channelId: hand_contact
+      enabled: 0
+    - channelId: hand_grab
+      enabled: 0
+    - channelId: gaze
+      enabled: 0
+    - channelId: breath
+      enabled: 0
+    - channelId: audio_source
+      enabled: 0
+    - channelId: dual_hand
+      enabled: 0
+    - channelId: pose_path
+      enabled: 0
+    - channelId: sequence
+      enabled: 0
+    - channelId: timeline
+      enabled: 0
+    policies:
+      wrongActionPolicy: warn
+      retryPolicy:
+        maxRetries: 3
+        cooldownSec: 0.5
+      timeoutPolicy:
+        defaultTimeoutSec: 15
+      branchPolicy:
+        precedence: first_match
+      scoringPolicy:
+        lives: 3
+        pointsPerCorrect: 1
+        pointsPerWrong: -1
+      difficultyPolicy:
+        adaptiveEnabled: 1
+      safetyPolicy:
+        emergencyStopEnabled: 1
+        rejectDisabledChannels: 1
+      controlPolicy:
+        mode: local_only
+      telemetryPolicy:
+        requireDecisionForEveryAction: 1
+      localizationPolicy:
+        defaultLocale: en-US
+        fallbackToLanguageCode: 1
+        fallbackLocales: []
+      calendarPolicy:
+        timezoneId: UTC
+        fallbackToUtcWhenTimezoneInvalid: 1
+        allowQaTimeOverride: 1
+        defaultProfileDateKey: profile_birthday
+        conflictPolicy: highest_priority
+        rules: []
+        events: []
+    taskGraph:
+      entryNodeId: start
+      nodes:
+      - nodeId: start
+        nodeType: Action
+        allowedActions: []
+        conditions: []
+        timeoutSec: 0.1
+        onEnterEffects:
+        - effectId: emit_hint
+          binding: 
+          parameters:
+          - key: message
+            value: Starting SpawnExample...
+        onExitEffects: []
+        onAcceptedEffects: []
+        onRejectedEffects: []
+        onTimeoutEffects: []
+        nextOnSuccess: spawn_wave
+        nextOnFail: fail
+        nextOnTimeout: spawn_wave
+      - nodeId: spawn_wave
+        nodeType: Timer
+        allowedActions: []
+        conditions: []
+        timeoutSec: 8
+        onEnterEffects:
+        - effectId: spawn_prefab_wave
+          binding: 
+          parameters:
+          - key: prefabKey
+            value: target_prefab
+          - key: bindingKeyPrefix
+            value: targets
+          - key: spawnPointKey
+            value: spawn_center
+          - key: count
+            value: 8
+          - key: durationSec
+            value: 3.0
+          - key: areaSizeX
+            value: 2.8
+          - key: areaSizeY
+            value: 1.2
+          - key: areaSizeZ
+            value: 2.8
+          - key: randomYaw
+            value: true
+        onExitEffects: []
+        onAcceptedEffects: []
+        onRejectedEffects: []
+        onTimeoutEffects: []
+        nextOnSuccess: complete
+        nextOnFail: fail
+        nextOnTimeout: complete
+      - nodeId: complete
+        nodeType: Complete
+        allowedActions: []
+        conditions: []
+        timeoutSec: 0
+        onEnterEffects: []
+        onExitEffects: []
+        onAcceptedEffects: []
+        onRejectedEffects: []
+        onTimeoutEffects: []
+        nextOnSuccess: 
+        nextOnFail: 
+        nextOnTimeout: 
+      - nodeId: fail
+        nodeType: Fail
+        allowedActions: []
+        conditions: []
+        timeoutSec: 0
+        onEnterEffects: []
+        onExitEffects: []
+        onAcceptedEffects: []
+        onRejectedEffects: []
+        onTimeoutEffects: []
+        nextOnSuccess: 
+        nextOnFail: 
+        nextOnTimeout: 
+    mobileControlSchema:
+      schema: THERAPLY_MOBILE_CONTROL_SCHEMA
+      schemaVersion: 2026-02-25
+      gameId: 
+      title: 
+      description: 
+      layout:
+        mode: stack
+        columns: 1
+      payload:
+        target: game_config
+        gameConfigType: 
+        gameConfigVersion: 1
+        includeVersionInGameConfig: 1
+      sections: []
+      controls: []

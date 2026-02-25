@@ -105,3 +105,14 @@ flutter test test/widget_test.dart test/game_catalog_service_test.dart test/mobi
 - Flutter setup renders controls dynamically from schema.
 - `START_GAME` and optional `UPDATE_CONFIG` payloads are schema-driven.
 - Core runtime stays generic (no per-game branch logic).
+
+## SpawnExample Local Test
+
+- Generate from menu: `Theraply/Examples/Generate Spawn Example`.
+- Scene: `Assets/_Examples/Scenes/SpawnExample.unity`.
+- Flow asset: `Assets/_YourGames/Samples/SessionFlow/SpawnExampleFlowDefinition.asset`.
+- Nodes in sample graph:
+  - `start` (`Action`, timeout to next node)
+  - `spawn_wave` (`Timer`, on-enter `spawn_prefab_wave`)
+  - `complete` (`Complete`)
+  - `fail` (`Fail`)
