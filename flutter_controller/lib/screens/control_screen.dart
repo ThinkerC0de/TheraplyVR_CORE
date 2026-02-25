@@ -3034,44 +3034,30 @@ class _ControlScreenState extends State<ControlScreen>
       _contentSyncInFlight = true;
     });
 
-    try {
-      await _connection.sendCommand(
-        ContentDeliveryCommandIds.syncCatalog,
-        ContentDeliveryRequests.buildSyncCatalogRequest(
-          actorId: _resolveActorTherapistId(),
-          role: (EntitlementService.activeAccess?.role ??
-                  EntitlementRole.therapist)
-              .wireValue,
-        ),
-      );
+    final success = await _sendCommand(
+      ContentDeliveryCommandIds.syncCatalog,
+      extraPayload: ContentDeliveryRequests.buildSyncCatalogRequest(
+        actorId: _resolveActorTherapistId(),
+        role:
+            (EntitlementService.activeAccess?.role ?? EntitlementRole.therapist)
+                .wireValue,
+      ),
+      showSuccessSnack: false,
+    );
 
-      if (!mounted || silent) {
-        return;
-      }
+    if (mounted) {
+      setState(() {
+        _contentSyncInFlight = false;
+      });
+    }
 
+    if (success && mounted && !silent) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Catalog sync requested'),
           duration: Duration(seconds: 1),
         ),
       );
-    } catch (e) {
-      if (!mounted || silent) {
-        return;
-      }
-
-      _enqueueIncidentAlert(
-        title: 'Catalog sync failed',
-        message: 'Catalog sync failed: $e',
-        reasonCode: OpsErrorCatalog.tryExtractReasonCode(e) ?? 'UNSPECIFIED',
-        severity: OperatorIncidentSeverity.error,
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _contentSyncInFlight = false;
-        });
-      }
     }
   }
 
@@ -3106,48 +3092,39 @@ class _ControlScreenState extends State<ControlScreen>
       );
     });
 
-    try {
-      await _connection.sendCommand(
-        ContentDeliveryCommandIds.installGame,
-        ContentDeliveryRequests.buildInstallRequest(
-          actorId: _resolveActorTherapistId(),
-          gameId: state.gameId,
-          targetVersion: state.targetVersion,
-          packageUri: packageUri,
-        ),
-      );
+    final success = await _sendCommand(
+      ContentDeliveryCommandIds.installGame,
+      extraPayload: ContentDeliveryRequests.buildInstallRequest(
+        actorId: _resolveActorTherapistId(),
+        gameId: state.gameId,
+        targetVersion: state.targetVersion,
+        packageUri: packageUri,
+      ),
+      showSuccessSnack: false,
+    );
 
-      if (!mounted) {
-        return;
-      }
+    if (!mounted) {
+      return;
+    }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Install/update requested for ${state.gameId}'),
-          duration: const Duration(seconds: 1),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) {
-        return;
-      }
-
+    if (!success) {
       setState(() {
         _contentStatesByGameId[state.gameId] = state.copyWith(
           runtimeStatus: ContentRuntimeStatus.failed,
-          lastError: e.toString(),
+          lastError: 'INSTALL_COMMAND_FAILED',
           updatedAtUtc: DateTime.now().toUtc(),
         );
         _contentActionsInFlight.remove(state.gameId);
       });
-
-      _enqueueIncidentAlert(
-        title: 'Install/update failed',
-        message: 'Install/update failed for ${state.gameId}: $e',
-        reasonCode: OpsErrorCatalog.tryExtractReasonCode(e) ?? 'UNSPECIFIED',
-        severity: OperatorIncidentSeverity.error,
-      );
+      return;
     }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Install/update requested for ${state.gameId}'),
+        duration: const Duration(seconds: 1),
+      ),
+    );
   }
 
   Future<void> _requestUninstall(PurchasedContentState state) async {
@@ -3163,19 +3140,20 @@ class _ControlScreenState extends State<ControlScreen>
       _contentActionsInFlight.add(state.gameId);
     });
 
-    try {
-      await _connection.sendCommand(
-        ContentDeliveryCommandIds.uninstallGame,
-        ContentDeliveryRequests.buildUninstallRequest(
-          actorId: _resolveActorTherapistId(),
-          gameId: state.gameId,
-        ),
-      );
+    final success = await _sendCommand(
+      ContentDeliveryCommandIds.uninstallGame,
+      extraPayload: ContentDeliveryRequests.buildUninstallRequest(
+        actorId: _resolveActorTherapistId(),
+        gameId: state.gameId,
+      ),
+      showSuccessSnack: false,
+    );
 
-      if (!mounted) {
-        return;
-      }
+    if (!mounted) {
+      return;
+    }
 
+    if (success) {
       setState(() {
         _contentStatesByGameId[state.gameId] = state.copyWith(
           installedVersion: null,
@@ -3193,31 +3171,20 @@ class _ControlScreenState extends State<ControlScreen>
           duration: const Duration(seconds: 1),
         ),
       );
-    } catch (e) {
-      if (!mounted) {
-        return;
-      }
-
+    } else {
       setState(() {
         _contentStatesByGameId[state.gameId] = state.copyWith(
           runtimeStatus: ContentRuntimeStatus.failed,
-          lastError: e.toString(),
+          lastError: 'UNINSTALL_COMMAND_FAILED',
           updatedAtUtc: DateTime.now().toUtc(),
         );
       });
+    }
 
-      _enqueueIncidentAlert(
-        title: 'Uninstall failed',
-        message: 'Uninstall failed for ${state.gameId}: $e',
-        reasonCode: OpsErrorCatalog.tryExtractReasonCode(e) ?? 'UNSPECIFIED',
-        severity: OperatorIncidentSeverity.error,
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _contentActionsInFlight.remove(state.gameId);
-        });
-      }
+    if (mounted) {
+      setState(() {
+        _contentActionsInFlight.remove(state.gameId);
+      });
     }
   }
 
@@ -3967,7 +3934,7 @@ class _ControlScreenState extends State<ControlScreen>
           expiresAtUtc: DateTime.now().toUtc().add(const Duration(seconds: 30)),
         );
       } else {
-        await _connection.sendCommand(command, null);
+        await _connection.sendCommand(command, extraPayload);
       }
 
       if (mounted) {

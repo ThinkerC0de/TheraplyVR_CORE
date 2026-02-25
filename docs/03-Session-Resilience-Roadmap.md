@@ -205,7 +205,7 @@ Deliverables:
 2. Mobile game selection screen backed by catalog + runtime availability state.
 3. Entitlements service for role/license (`THERAPIST_FULL`, `PARENT_PURCHASED_PACKS`) with offline cache and expiration policy.
 4. Quest content lifecycle for on-demand game delivery (manifest check, download, verify, install/activate, rollback).
-5. Protocol commands/events for catalog and content state (`SYNC_CATALOG`, `INSTALL_GAME`, `UNINSTALL_GAME`, `GAME_INSTALL_STATUS`).
+5. Protocol commands/events for catalog and content state (`SYNC_CATALOG`, `INSTALL_GAME`, `UNINSTALL_GAME`, `GAME_INSTALL_STATUS`) with critical ACK/NACK transport semantics (`R-P6-005` delivered on 2026-02-25).
 6. Therapist program builder for reusable session templates and per-game parameter presets.
 7. Parent one-button guided mode that runs therapist-defined plans with adaptive fallback when a child stops early.
 8. Session closure invariant enforcement: no new child session can start until previous session is explicitly ended/aborted.

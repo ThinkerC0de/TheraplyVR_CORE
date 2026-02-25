@@ -8,6 +8,9 @@ class CriticalCommandIds {
   static const String resumeGame = 'RESUME_GAME';
   static const String stopGame = 'STOP_GAME';
   static const String endSession = 'END_SESSION';
+  static const String syncCatalog = 'SYNC_CATALOG';
+  static const String installGame = 'INSTALL_GAME';
+  static const String uninstallGame = 'UNINSTALL_GAME';
 
   static const Set<String> values = <String>{
     sessionAttach,
@@ -16,6 +19,9 @@ class CriticalCommandIds {
     resumeGame,
     stopGame,
     endSession,
+    syncCatalog,
+    installGame,
+    uninstallGame,
   };
 
   static bool isCritical(String commandId) => values.contains(commandId);

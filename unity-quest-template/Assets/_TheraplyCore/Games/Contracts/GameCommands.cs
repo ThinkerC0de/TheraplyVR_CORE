@@ -40,6 +40,9 @@ namespace TheraplyCore.Games.Contracts
                 GameCommandIds.ResumeGame,
                 GameCommandIds.StopGame,
                 GameCommandIds.EndSession,
+                GameCommandIds.SyncCatalog,
+                GameCommandIds.InstallGame,
+                GameCommandIds.UninstallGame,
             };
 
         public static bool IsCritical(string commandId)
