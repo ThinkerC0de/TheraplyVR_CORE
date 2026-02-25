@@ -302,7 +302,6 @@ namespace TheraplyCore.Games.Runtime
         {
             return eventType == "FLOW_COMPLETED" ||
                    eventType == "FLOW_FAILED" ||
-                   eventType == "FLOW_STOPPED" ||
                    eventType == "GAME_STOPPED";
         }
 

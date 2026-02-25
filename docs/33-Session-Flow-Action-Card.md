@@ -27,7 +27,6 @@ This document defines the core workflow for building new scenes without adding p
 
 Open implementation items (expected):
 
-- `ControlRuntimeGateway` and explicit remote/local fallback orchestration are pending (Phase F).
 - adapter integration tests and full hardening suite are pending (Phase G).
 
 ## Design Rules
@@ -63,7 +62,7 @@ Open implementation items (expected):
 | `EffectRuntime` | Narrator/audio/haptics/vfx/ui hint | `EffectRunner` + effect plugins | Implemented |
 | `ScoringRuntime` | points/errors/lives/success thresholds/adaptive difficulty | `ScoringRuntime`, policy evaluators | Implemented |
 | `TelemetryRuntime` | canonical append-only log + outbox + retries + dedupe | `TelemetryLedger`, existing event store/outbox path | Implemented (with export quality gates) |
-| `ControlRuntime` | mobile controller mode and local mode | `ControlRuntimeGateway` + control mode policy | Pending (Phase F) |
+| `ControlRuntime` | mobile controller mode and local mode | `ControlRuntimeGateway` + control mode policy | Implemented |
 
 `SessionRuntime` canonical state path:
 

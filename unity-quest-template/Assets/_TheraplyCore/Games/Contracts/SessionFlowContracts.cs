@@ -454,6 +454,14 @@ namespace TheraplyCore.Games.Contracts
                 return false;
             }
 
+            if (definition.policies != null &&
+                definition.policies.controlPolicy != null &&
+                !SessionFlowControlModes.IsSupported(definition.policies.controlPolicy.mode))
+            {
+                reasonCode = SessionFlowDefinitionReasonCodes.ControlModeUnsupported;
+                return false;
+            }
+
             if (definition.channels == null || definition.channels.Count == 0)
             {
                 reasonCode = SessionFlowDefinitionReasonCodes.ChannelsRequired;

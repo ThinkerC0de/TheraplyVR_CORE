@@ -87,10 +87,10 @@ Goal: implement the new framework direction end-to-end so no per-game core rewri
 
 | ID | Task | Status | Acceptance Criteria | Depends On |
 | --- | --- | --- | --- | --- |
-| SF-F-001 | Implement `ControlRuntimeGateway` | TODO | Supports `remote_only`, `local_only`, `hybrid` control modes | SF-A-003 |
-| SF-F-002 | Integrate remote command path | TODO | Runtime start/pause/resume/stop works with controller transport | SF-F-001 |
-| SF-F-003 | Integrate local fallback path | TODO | Session can run fully without remote controller when policy allows | SF-F-001 |
-| SF-F-004 | Validate control-mode safety constraints | TODO | Disallowed control source is rejected with explicit reason code | SF-B-006 |
+| SF-F-001 | Implement `ControlRuntimeGateway` | DONE | Supports `remote_only`, `local_only`, `hybrid` control modes | SF-A-003 |
+| SF-F-002 | Integrate remote command path | DONE | Runtime start/pause/resume/stop works with controller transport | SF-F-001 |
+| SF-F-003 | Integrate local fallback path | DONE | Session can run fully without remote controller when policy allows | SF-F-001 |
+| SF-F-004 | Validate control-mode safety constraints | DONE | Disallowed control source is rejected with explicit reason code | SF-B-006 |
 
 ## Phase G - Validation and Hardening
 

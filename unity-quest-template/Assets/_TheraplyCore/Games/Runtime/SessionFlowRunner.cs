@@ -39,10 +39,12 @@ namespace TheraplyCore.Games.Runtime
         private GameContracts.GameDefinition _activeDefinition;
         private string _activeFlowId = string.Empty;
         private GameContracts.TaskGraphNodeDefinition _lastEnteredNode;
+        private bool _isFlowPaused;
 
         public TaskGraphRunState GraphState => _taskGraphRunner.State;
         public string ActiveNodeId => _taskGraphRunner.ActiveNodeId;
         public string ActiveFlowId => _activeFlowId;
+        public bool IsPaused => _isFlowPaused;
         public bool IsRunning => _taskGraphRunner.State == TaskGraphRunState.Running;
 
         private void Awake()
@@ -78,7 +80,7 @@ namespace TheraplyCore.Games.Runtime
 
         private void Update()
         {
-            if (!IsRunning)
+            if (!IsRunning || _isFlowPaused)
             {
                 return;
             }
@@ -153,6 +155,7 @@ namespace TheraplyCore.Games.Runtime
                 : definition.gameId.Trim();
             _scoringRuntime.Configure(definition);
             _pendingActionDecisionByAttemptId.Clear();
+            _isFlowPaused = false;
 
             _taskGraphRunner.Reset();
             _taskGraphRunner.SetPluginRegistry(
@@ -218,8 +221,8 @@ namespace TheraplyCore.Games.Runtime
             _taskGraphRunner.Reset();
             _lastEnteredNode = null;
             _pendingActionDecisionByAttemptId.Clear();
+            _isFlowPaused = false;
             EmitFlowEvent("flow_stopped", "FLOW_INTERRUPTED");
-            EmitSessionTerminal("FLOW_INTERRUPTED");
             if (_motionTraceRecorder != null)
             {
                 _motionTraceRecorder.StopAndPublish("FLOW_INTERRUPTED");
@@ -228,10 +231,115 @@ namespace TheraplyCore.Games.Runtime
             return true;
         }
 
+        public bool TryStopFlow(out string reasonCode)
+        {
+            reasonCode = string.Empty;
+            if (!IsRunning)
+            {
+                reasonCode = "FLOW_NOT_RUNNING";
+                return false;
+            }
+
+            if (_sessionRuntimeBridge != null &&
+                !_sessionRuntimeBridge.TryAbortSession(out reasonCode))
+            {
+                return false;
+            }
+
+            var activeNode = _taskGraphRunner.ActiveNode;
+            ExecuteNodeEffects(
+                activeNode,
+                activeNode == null ? null : activeNode.onExitEffects,
+                "on_exit",
+                "FLOW_STOPPED_BY_CONTROL",
+                string.Empty,
+                string.Empty,
+                "FLOW_STOPPED_BY_CONTROL");
+
+            _taskGraphRunner.Reset();
+            _lastEnteredNode = null;
+            _pendingActionDecisionByAttemptId.Clear();
+            _isFlowPaused = false;
+            EmitFlowEvent("flow_stopped", "FLOW_STOPPED_BY_CONTROL");
+            EmitSessionTerminal("FLOW_STOPPED_BY_CONTROL");
+            if (_motionTraceRecorder != null)
+            {
+                _motionTraceRecorder.StopAndPublish("FLOW_STOPPED_BY_CONTROL");
+            }
+            MaybeLog("FLOW_STOPPED_BY_CONTROL", reasonCode);
+            return true;
+        }
+
+        public bool TryPauseFlow(out string reasonCode)
+        {
+            reasonCode = string.Empty;
+            if (!IsRunning)
+            {
+                reasonCode = "FLOW_NOT_RUNNING";
+                return false;
+            }
+
+            if (_isFlowPaused)
+            {
+                reasonCode = "FLOW_ALREADY_PAUSED";
+                return false;
+            }
+
+            if (_sessionRuntimeBridge != null &&
+                !_sessionRuntimeBridge.TryPauseSession(out reasonCode))
+            {
+                return false;
+            }
+
+            _isFlowPaused = true;
+            EmitFlowEvent("flow_paused", "FLOW_PAUSED");
+            MaybeLog("FLOW_PAUSED", reasonCode);
+            return true;
+        }
+
+        public bool TryResumeFlow(out string reasonCode)
+        {
+            reasonCode = string.Empty;
+            if (!IsRunning)
+            {
+                reasonCode = "FLOW_NOT_RUNNING";
+                return false;
+            }
+
+            if (!_isFlowPaused)
+            {
+                reasonCode = "FLOW_NOT_PAUSED";
+                return false;
+            }
+
+            if (_sessionRuntimeBridge != null &&
+                !_sessionRuntimeBridge.TryResumeSession(out reasonCode))
+            {
+                return false;
+            }
+
+            _isFlowPaused = false;
+            EmitFlowEvent("flow_resumed", "FLOW_RESUMED");
+            MaybeLog("FLOW_RESUMED", reasonCode);
+            return true;
+        }
+
         private void HandleIntent(GameContracts.ActionIntent intent)
         {
             if (intent == null)
             {
+                return;
+            }
+
+            if (!IsRunning)
+            {
+                EmitBlockedActionTelemetry(intent, "FLOW_NOT_RUNNING_ACTION_BLOCKED");
+                return;
+            }
+
+            if (_isFlowPaused)
+            {
+                EmitBlockedActionTelemetry(intent, "FLOW_PAUSED_ACTION_BLOCKED");
                 return;
             }
 
@@ -438,6 +546,7 @@ namespace TheraplyCore.Games.Runtime
                 _motionTraceRecorder.StopAndPublish(reasonCode);
             }
             _pendingActionDecisionByAttemptId.Clear();
+            _isFlowPaused = false;
             _lastEnteredNode = activeNode;
             MaybeLog("FLOW_TERMINAL", reasonCode);
         }
@@ -475,6 +584,7 @@ namespace TheraplyCore.Games.Runtime
             }
             _taskGraphRunner.Reset();
             _pendingActionDecisionByAttemptId.Clear();
+            _isFlowPaused = false;
             _lastEnteredNode = null;
             MaybeLog("FLOW_RUNTIME_FAILED", normalizedReason);
         }
@@ -595,6 +705,25 @@ namespace TheraplyCore.Games.Runtime
                 ResolveSessionStateToken(),
                 payload,
                 nameof(SessionFlowRunner));
+        }
+
+        private void EmitBlockedActionTelemetry(GameContracts.ActionIntent intent, string reasonCode)
+        {
+            if (intent == null)
+            {
+                return;
+            }
+
+            var actionAttemptId = Guid.NewGuid().ToString("N");
+            MarkActionReceived(actionAttemptId);
+            EmitActionTelemetry("action_received", intent, null, "ACTION_RECEIVED", actionAttemptId);
+            EmitActionTelemetry(
+                "action_evaluated",
+                intent,
+                "rejected",
+                NormalizeOrFallback(reasonCode, "ACTION_BLOCKED"),
+                actionAttemptId);
+            MarkActionEvaluated(actionAttemptId);
         }
 
         private void EmitActionTelemetry(

@@ -145,7 +145,15 @@ namespace TheraplyCore.Games.Runtime
                 return false;
             }
 
-            _activeControlMode = GameContracts.SessionFlowControlModes.NormalizeOrDefault(definition.controlMode);
+            var resolvedMode = definition.controlMode;
+            if (definition.policies != null &&
+                definition.policies.controlPolicy != null &&
+                GameContracts.SessionFlowControlModes.IsSupported(definition.policies.controlPolicy.mode))
+            {
+                resolvedMode = definition.policies.controlPolicy.mode;
+            }
+
+            _activeControlMode = GameContracts.SessionFlowControlModes.NormalizeOrDefault(resolvedMode);
             return true;
         }
 
