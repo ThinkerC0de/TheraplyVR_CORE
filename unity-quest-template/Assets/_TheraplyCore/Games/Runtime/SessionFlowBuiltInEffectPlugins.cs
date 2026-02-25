@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Reflection;
 using UnityEngine;
@@ -72,6 +73,11 @@ namespace TheraplyCore.Games.Runtime
             registry.Register(new DelegateEffectPlugin("fade_screen", ExecuteFadeScreen), replaceExisting);
             registry.Register(new DelegateEffectPlugin("teleport_actor", ExecuteTeleportActor), replaceExisting);
             registry.Register(new DelegateEffectPlugin("emit_hint", ExecuteEmitHint), replaceExisting);
+            registry.Register(new DelegateEffectPlugin("set_locale", ExecuteSetLocale), replaceExisting);
+            registry.Register(new DelegateEffectPlugin("narrator_speak", ExecuteNarratorSpeak), replaceExisting);
+            registry.Register(new DelegateEffectPlugin("narrator_play_sequence", ExecuteNarratorPlaySequence), replaceExisting);
+            registry.Register(new DelegateEffectPlugin("narrator_play_animation", ExecuteNarratorPlayAnimation), replaceExisting);
+            registry.Register(new DelegateEffectPlugin("narrator_set_attachment", ExecuteNarratorSetAttachment), replaceExisting);
         }
 
         private static bool ExecuteShowObject(
@@ -364,7 +370,21 @@ namespace TheraplyCore.Games.Runtime
                 return false;
             }
 
-            var text = ReadParameter(effect, "text", string.Empty);
+            var text = string.Empty;
+            var textKey = ReadParameter(effect, "textKey", string.Empty);
+            if (!string.IsNullOrWhiteSpace(textKey) &&
+                services != null &&
+                services.localization != null &&
+                services.localization.TryResolve(textKey, out var localizedText, out _, out _))
+            {
+                text = NormalizeOrFallback(localizedText, string.Empty);
+            }
+
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                text = ReadParameter(effect, "text", string.Empty);
+            }
+
             if (string.IsNullOrWhiteSpace(text))
             {
                 text = ReadParameter(effect, "value", string.Empty);
@@ -494,8 +514,204 @@ namespace TheraplyCore.Games.Runtime
                 return false;
             }
 
-            services.feedback.ShowHint(messageKey.Trim());
+            var hintValue = messageKey.Trim();
+            if (services.localization != null &&
+                services.localization.TryResolve(messageKey, out var localizedHint, out _, out _))
+            {
+                hintValue = NormalizeOrFallback(localizedHint, hintValue);
+            }
+
+            services.feedback.ShowHint(hintValue);
             reasonCode = string.Empty;
+            return true;
+        }
+
+        private static bool ExecuteSetLocale(
+            GameContracts.EffectDefinition effect,
+            EffectExecutionContext context,
+            EffectRuntimeServices services,
+            out string reasonCode)
+        {
+            reasonCode = string.Empty;
+            if (services == null || services.localization == null)
+            {
+                reasonCode = "LOCALIZATION_SERVICE_MISSING";
+                return false;
+            }
+
+            var locale = ReadParameter(effect, "locale", effect == null ? string.Empty : effect.binding);
+            if (string.IsNullOrWhiteSpace(locale))
+            {
+                reasonCode = "LOCALIZATION_LOCALE_REQUIRED";
+                return false;
+            }
+
+            return services.localization.TrySetLocale(locale.Trim(), out reasonCode);
+        }
+
+        private static bool ExecuteNarratorSpeak(
+            GameContracts.EffectDefinition effect,
+            EffectExecutionContext context,
+            EffectRuntimeServices services,
+            out string reasonCode)
+        {
+            reasonCode = string.Empty;
+            if (services == null || services.narrator == null)
+            {
+                reasonCode = "NARRATOR_SERVICE_MISSING";
+                return false;
+            }
+
+            if (!TryBuildNarratorLineRequest(effect, out var narratorLineRequest, out reasonCode))
+            {
+                return false;
+            }
+
+            return services.narrator.TrySpeak(narratorLineRequest, out reasonCode);
+        }
+
+        private static bool ExecuteNarratorPlaySequence(
+            GameContracts.EffectDefinition effect,
+            EffectExecutionContext context,
+            EffectRuntimeServices services,
+            out string reasonCode)
+        {
+            reasonCode = string.Empty;
+            if (services == null || services.narrator == null)
+            {
+                reasonCode = "NARRATOR_SERVICE_MISSING";
+                return false;
+            }
+
+            var lineKeysRaw = ReadParameter(effect, "lineKeys", effect == null ? string.Empty : effect.binding);
+            if (string.IsNullOrWhiteSpace(lineKeysRaw))
+            {
+                reasonCode = "NARRATOR_SEQUENCE_KEYS_REQUIRED";
+                return false;
+            }
+
+            var lineKeys = SplitLineKeys(lineKeysRaw);
+            if (lineKeys.Count <= 0)
+            {
+                reasonCode = "NARRATOR_SEQUENCE_KEYS_REQUIRED";
+                return false;
+            }
+
+            var priority = ReadIntParameter(effect, "priority", 0);
+            var interruptIfBusy = ReadBoolParameter(effect, "interruptIfBusy", false);
+            var simulatedDurationSec = ReadFloatParameter(effect, "simulatedDurationSec", 0f);
+            var fallbackTextPrefix = ReadParameter(effect, "fallbackTextPrefix", string.Empty);
+
+            var requests = new List<GameContracts.NarratorLineRequest>(lineKeys.Count);
+            for (var i = 0; i < lineKeys.Count; i++)
+            {
+                var lineKey = lineKeys[i];
+                if (string.IsNullOrWhiteSpace(lineKey))
+                {
+                    continue;
+                }
+
+                requests.Add(
+                    new GameContracts.NarratorLineRequest
+                    {
+                        lineKey = lineKey,
+                        priority = priority,
+                        interruptIfBusy = i == 0 && interruptIfBusy,
+                        simulatedDurationSec = simulatedDurationSec,
+                        fallbackText = string.IsNullOrWhiteSpace(fallbackTextPrefix)
+                            ? string.Empty
+                            : fallbackTextPrefix.Trim() + " " + lineKey,
+                    });
+            }
+
+            if (requests.Count <= 0)
+            {
+                reasonCode = "NARRATOR_SEQUENCE_KEYS_REQUIRED";
+                return false;
+            }
+
+            return services.narrator.TrySpeakSequence(requests, out reasonCode);
+        }
+
+        private static bool ExecuteNarratorPlayAnimation(
+            GameContracts.EffectDefinition effect,
+            EffectExecutionContext context,
+            EffectRuntimeServices services,
+            out string reasonCode)
+        {
+            reasonCode = string.Empty;
+            if (services == null || services.narrator == null)
+            {
+                reasonCode = "NARRATOR_SERVICE_MISSING";
+                return false;
+            }
+
+            var actorBindingKey = ReadParameter(effect, "actorBindingKey", effect == null ? string.Empty : effect.binding);
+            var trigger = ReadParameter(effect, "trigger", string.Empty);
+            if (string.IsNullOrWhiteSpace(trigger))
+            {
+                trigger = ReadParameter(effect, "animationTrigger", string.Empty);
+            }
+
+            if (string.IsNullOrWhiteSpace(trigger))
+            {
+                reasonCode = "NARRATOR_ANIMATION_TRIGGER_REQUIRED";
+                return false;
+            }
+
+            return services.narrator.TryPlayAnimation(actorBindingKey, trigger, out reasonCode);
+        }
+
+        private static bool ExecuteNarratorSetAttachment(
+            GameContracts.EffectDefinition effect,
+            EffectExecutionContext context,
+            EffectRuntimeServices services,
+            out string reasonCode)
+        {
+            reasonCode = string.Empty;
+            if (services == null || services.narrator == null)
+            {
+                reasonCode = "NARRATOR_SERVICE_MISSING";
+                return false;
+            }
+
+            var attachmentBindingKey = ReadParameter(effect, "attachmentBindingKey", effect == null ? string.Empty : effect.binding);
+            if (string.IsNullOrWhiteSpace(attachmentBindingKey))
+            {
+                reasonCode = "NARRATOR_ATTACHMENT_BINDING_REQUIRED";
+                return false;
+            }
+
+            var visible = ReadBoolParameter(effect, "visible", true);
+            return services.narrator.TrySetAttachment(attachmentBindingKey, visible, out reasonCode);
+        }
+
+        private static bool TryBuildNarratorLineRequest(
+            GameContracts.EffectDefinition effect,
+            out GameContracts.NarratorLineRequest narratorLineRequest,
+            out string reasonCode)
+        {
+            narratorLineRequest = null;
+            reasonCode = string.Empty;
+
+            var lineKey = ReadParameter(effect, "lineKey", effect == null ? string.Empty : effect.binding);
+            if (string.IsNullOrWhiteSpace(lineKey))
+            {
+                reasonCode = "NARRATOR_LINE_KEY_REQUIRED";
+                return false;
+            }
+
+            narratorLineRequest = new GameContracts.NarratorLineRequest
+            {
+                lineKey = lineKey,
+                textKey = ReadParameter(effect, "textKey", string.Empty),
+                audioBindingKey = ReadParameter(effect, "audioBindingKey", string.Empty),
+                fallbackText = ReadParameter(effect, "fallbackText", string.Empty),
+                priority = ReadIntParameter(effect, "priority", 0),
+                interruptIfBusy = ReadBoolParameter(effect, "interruptIfBusy", false),
+                simulatedDurationSec = ReadFloatParameter(effect, "simulatedDurationSec", 0f),
+            };
+
             return true;
         }
 
@@ -647,6 +863,46 @@ namespace TheraplyCore.Games.Runtime
                 out var parsed)
                 ? parsed
                 : fallback;
+        }
+
+        private static int ReadIntParameter(GameContracts.EffectDefinition effect, string key, int fallback)
+        {
+            var raw = ReadParameter(effect, key, string.Empty);
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return fallback;
+            }
+
+            return int.TryParse(
+                raw,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out var parsed)
+                ? parsed
+                : fallback;
+        }
+
+        private static List<string> SplitLineKeys(string rawLineKeys)
+        {
+            var lineKeys = new List<string>();
+            if (string.IsNullOrWhiteSpace(rawLineKeys))
+            {
+                return lineKeys;
+            }
+
+            var parts = rawLineKeys.Split(new[] { ',', '|', ';' }, StringSplitOptions.RemoveEmptyEntries);
+            for (var i = 0; i < parts.Length; i++)
+            {
+                var normalized = NormalizeOrFallback(parts[i], string.Empty);
+                if (string.IsNullOrWhiteSpace(normalized))
+                {
+                    continue;
+                }
+
+                lineKeys.Add(normalized);
+            }
+
+            return lineKeys;
         }
 
         private static void SetInteractionEnabled(GameObject target, bool enabled)

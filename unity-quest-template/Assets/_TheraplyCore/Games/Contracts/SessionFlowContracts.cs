@@ -234,6 +234,7 @@ namespace TheraplyCore.Games.Contracts
         public SafetyPolicy safetyPolicy = new SafetyPolicy();
         public ControlPolicy controlPolicy = new ControlPolicy();
         public TelemetryPolicy telemetryPolicy = new TelemetryPolicy();
+        public LocalizationPolicy localizationPolicy = new LocalizationPolicy();
 
         public static SessionFlowPolicies CreateDefault()
         {
@@ -314,6 +315,14 @@ namespace TheraplyCore.Games.Contracts
     public sealed class TelemetryPolicy
     {
         public bool requireDecisionForEveryAction = true;
+    }
+
+    [Serializable]
+    public sealed class LocalizationPolicy
+    {
+        public string defaultLocale = "en-US";
+        public bool fallbackToLanguageCode = true;
+        public List<string> fallbackLocales = new List<string>();
     }
 
     [Serializable]

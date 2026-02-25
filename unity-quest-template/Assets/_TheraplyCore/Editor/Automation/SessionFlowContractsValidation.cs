@@ -69,6 +69,12 @@ namespace TheraplyCore.Editor.Automation
                 BranchPrecedenceModes.NormalizeOrDefault(BranchPrecedenceModes.LastMatch),
                 "Branch precedence should keep last_match mode.");
 
+            var localizationPolicy = sampleDefinition.policies.localizationPolicy;
+            AssertTrue(localizationPolicy != null, "Localization policy should exist in default policies.");
+            AssertTrue(
+                !string.IsNullOrWhiteSpace(localizationPolicy.defaultLocale),
+                "Localization policy default locale should not be empty.");
+
             var actionValidator = new ActionValidator();
             var allowedAction = new AllowedActionDefinition
             {
@@ -108,7 +114,7 @@ namespace TheraplyCore.Editor.Automation
             AssertTrue(validResult.accepted, "Expected action acceptance for valid control mode and input range.");
             AssertEqual("ACTION_ACCEPTED", validResult.reasonCode, "Unexpected reason code for valid action.");
 
-            return "definitionValidation=OK; conditionContracts=OK; actionValidator=OK";
+            return "definitionValidation=OK; conditionContracts=OK; localizationPolicy=OK; actionValidator=OK";
         }
 
         private static void PersistValidationResult(string status, string details)

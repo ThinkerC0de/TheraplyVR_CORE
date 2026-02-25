@@ -36,5 +36,7 @@ namespace TheraplyCore.Games.Runtime
         public FlowBindingRegistry bindings;
         public SceneRuntimeController sceneRuntime;
         public GameFeedbackService feedback;
+        public GameContracts.INarratorService narrator;
+        public GameContracts.ILocalizationService localization;
     }
 }

@@ -103,6 +103,39 @@ namespace TheraplyCore.Games.Contracts
         void ShowHint(string messageKey);
     }
 
+    public sealed class NarratorLineRequest
+    {
+        public string lineKey = string.Empty;
+        public string textKey = string.Empty;
+        public string audioBindingKey = string.Empty;
+        public string fallbackText = string.Empty;
+        public int priority;
+        public bool interruptIfBusy;
+        public float simulatedDurationSec;
+    }
+
+    public interface INarratorService
+    {
+        bool IsSpeaking { get; }
+        string ActiveLocale { get; }
+
+        bool TrySpeak(NarratorLineRequest request, out string reasonCode);
+        bool TrySpeakSequence(IReadOnlyList<NarratorLineRequest> requests, out string reasonCode);
+        bool TryPlayAnimation(string actorBindingKey, string trigger, out string reasonCode);
+        bool TrySetAttachment(string attachmentBindingKey, bool visible, out string reasonCode);
+        bool TryInterrupt(string reasonCode = "NARRATOR_INTERRUPTED");
+    }
+
+    public interface ILocalizationService
+    {
+        string CurrentLocale { get; }
+        string DefaultLocale { get; }
+
+        bool TrySetLocale(string locale, out string reasonCode);
+        bool TryResolve(string key, out string value, out string resolvedLocale, out string reasonCode);
+        IReadOnlyList<string> BuildFallbackChain(string locale);
+    }
+
     /// <summary>
     /// Canonical session lifecycle states shared by runtime and signaling layers.
     /// Use these exact wire-safe values.

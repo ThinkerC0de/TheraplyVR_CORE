@@ -17,6 +17,8 @@ namespace TheraplyCore.Games.Runtime
         [SerializeField] private FlowBindingRegistry _flowBindingRegistry;
         [SerializeField] private SceneRuntimeController _sceneRuntimeController;
         [SerializeField] private GameFeedbackService _gameFeedbackService;
+        [SerializeField] private NarratorRuntime _narratorRuntime;
+        [SerializeField] private LocalizationRuntime _localizationRuntime;
         [SerializeField] private InteractionEventBridge _interactionEventBridge;
 
         [Header("Registration")]
@@ -50,6 +52,17 @@ namespace TheraplyCore.Games.Runtime
             _runtimeGameId = NormalizeOrFallback(gameId, string.Empty);
             _runtimeFlowId = NormalizeOrFallback(flowId, string.Empty);
             _runtimeSessionId = NormalizeOrFallback(sessionId, string.Empty);
+
+            ResolveDependencies();
+            if (_narratorRuntime != null)
+            {
+                _narratorRuntime.SetRuntimeContext(_runtimeGameId, _runtimeFlowId, _runtimeSessionId);
+            }
+
+            if (_localizationRuntime != null)
+            {
+                _localizationRuntime.SetRuntimeContext(_runtimeGameId, _runtimeFlowId, _runtimeSessionId);
+            }
         }
 
         public bool RegisterPlugin(IEffectPlugin plugin, bool replaceExisting = true)
@@ -180,6 +193,24 @@ namespace TheraplyCore.Games.Runtime
                 }
             }
 
+            if (_narratorRuntime == null)
+            {
+                _narratorRuntime = GetComponent<NarratorRuntime>();
+                if (_narratorRuntime == null)
+                {
+                    _narratorRuntime = FindFirstObjectByType<NarratorRuntime>();
+                }
+            }
+
+            if (_localizationRuntime == null)
+            {
+                _localizationRuntime = GetComponent<LocalizationRuntime>();
+                if (_localizationRuntime == null)
+                {
+                    _localizationRuntime = FindFirstObjectByType<LocalizationRuntime>();
+                }
+            }
+
             if (_interactionEventBridge == null)
             {
                 _interactionEventBridge = InteractionEventBridge.Instance;
@@ -195,6 +226,8 @@ namespace TheraplyCore.Games.Runtime
             _services.bindings = _flowBindingRegistry;
             _services.sceneRuntime = _sceneRuntimeController;
             _services.feedback = _gameFeedbackService;
+            _services.narrator = _narratorRuntime;
+            _services.localization = _localizationRuntime;
         }
 
         private void EmitEffectTelemetry(

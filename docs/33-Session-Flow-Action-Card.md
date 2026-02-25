@@ -244,6 +244,7 @@ Registration model:
 | `safetyPolicy` | invalid input, blocked channels, emergency stop |
 | `controlPolicy` | remote-only, local-only, hybrid fallback |
 | `telemetryPolicy` | mandatory events and quality gates |
+| `localizationPolicy` | locale default and fallback chain behavior |
 
 ## Atom Catalog (Lowest Reusable Units)
 
@@ -603,6 +604,11 @@ These actions cover target therapeutic gameplay mechanics for this framework.
 | `fade_screen` | Fade in/out transition |
 | `teleport_actor` | Move helper/avatar/guide actor |
 | `emit_hint` | Show hint or narrator message |
+| `set_locale` | Switch active locale at runtime |
+| `narrator_speak` | Queue one narrator line by key |
+| `narrator_play_sequence` | Queue narrator line sequence |
+| `narrator_play_animation` | Trigger narrator actor animation |
+| `narrator_set_attachment` | Show/hide narrator attachment object |
 
 ## Gate Decision Contract
 

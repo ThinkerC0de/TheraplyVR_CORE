@@ -18,6 +18,7 @@ namespace TheraplyCore.Games.Runtime
         [SerializeField] private SessionRuntimeBridge _sessionRuntimeBridge;
         [SerializeField] private ActionAdapterRegistry _actionAdapterRegistry;
         [SerializeField] private EffectRunner _effectRunner;
+        [SerializeField] private LocalizationRuntime _localizationRuntime;
         [SerializeField] private InteractionEventBridge _interactionEventBridge;
         [SerializeField] private MotionTraceRecorder _motionTraceRecorder;
 
@@ -164,6 +165,7 @@ namespace TheraplyCore.Games.Runtime
                 ? "session_flow"
                 : definition.gameId.Trim();
             _scoringRuntime.Configure(definition);
+            ApplyLocalizationPolicy(definition);
             _pendingActionDecisionByAttemptId.Clear();
             _isFlowPaused = false;
 
@@ -703,6 +705,15 @@ namespace TheraplyCore.Games.Runtime
                 }
             }
 
+            if (_localizationRuntime == null)
+            {
+                _localizationRuntime = GetComponent<LocalizationRuntime>();
+                if (_localizationRuntime == null)
+                {
+                    _localizationRuntime = FindFirstObjectByType<LocalizationRuntime>();
+                }
+            }
+
             if (_interactionEventBridge == null)
             {
                 _interactionEventBridge = InteractionEventBridge.Instance;
@@ -960,6 +971,40 @@ namespace TheraplyCore.Games.Runtime
                 _channelEnabledById,
                 _conditionStateFlagsByKey,
                 ResolveBranchPrecedence(_activeDefinition));
+        }
+
+        private void ApplyLocalizationPolicy(GameContracts.GameDefinition definition)
+        {
+            if (_localizationRuntime == null)
+            {
+                return;
+            }
+
+            var localizationPolicy = definition == null || definition.policies == null
+                ? null
+                : definition.policies.localizationPolicy;
+            _localizationRuntime.ApplyPolicy(localizationPolicy);
+            _localizationRuntime.SetRuntimeContext(ResolveGameId(), _activeFlowId, ResolveSessionId());
+
+            if (definition == null || definition.config == null || definition.config.extras == null)
+            {
+                return;
+            }
+
+            for (var i = 0; i < definition.config.extras.Count; i++)
+            {
+                var extra = definition.config.extras[i];
+                if (extra == null || !string.Equals(extra.key, "locale", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(extra.value))
+                {
+                    _localizationRuntime.TrySetLocale(extra.value, out _);
+                }
+                break;
+            }
         }
 
         private string ResolveSessionStateToken()

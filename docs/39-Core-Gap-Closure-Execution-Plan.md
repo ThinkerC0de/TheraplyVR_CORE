@@ -151,6 +151,41 @@ Provide one actor runtime API for speech/animation/attachments, fully locale-awa
 - What we changed: "Added universal narrator + localization runtime and effect hooks."
 - What it gives: "Any scene can reuse one actor flow with multilingual speech and clean fallback."
 
+### Implementation Update (2026-02-25)
+
+Status: `DONE`
+
+Delivered:
+
+1. Added contracts:
+   - `INarratorService`,
+   - `ILocalizationService`,
+   - `NarratorLineRequest`,
+   - `LocalizationPolicy` in session flow policies.
+2. Added runtimes:
+   - `NarratorRuntime` with queue, priority, and interrupt behavior,
+   - `LocalizationRuntime` with deterministic fallback chain.
+3. Added new flow effects:
+   - `narrator_speak`,
+   - `narrator_play_sequence`,
+   - `narrator_play_animation`,
+   - `narrator_set_attachment`,
+   - `set_locale`.
+4. Added locale-aware resolution path:
+   - `textKey` resolution in `set_ui_text`,
+   - localized value resolution for `emit_hint`,
+   - narrator line and audio-binding key resolution via localization keys.
+5. Added telemetry events:
+   - `narrator_line_started`,
+   - `narrator_line_completed`,
+   - `narrator_interrupted`,
+   - `localization_fallback_used`,
+   - `localization_key_missing`.
+6. Added validation coverage:
+   - narrator queue/interrupt deterministic behavior,
+   - locale fallback behavior,
+   - missing-key reason codes.
+
 ## Point 3 - Calendar Runtime and Date Events
 
 ### Target
