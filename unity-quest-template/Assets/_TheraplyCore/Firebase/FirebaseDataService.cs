@@ -111,6 +111,7 @@ namespace TheraplyCore.Firebase
                 "game_completed",
                 "game_failed",
                 "session_error",
+                "interaction_event",
             };
 
         private struct OutboxUploadResult
@@ -2424,6 +2425,17 @@ namespace TheraplyCore.Firebase
                 return true;
             }
 
+            if (string.Equals(dataPoint.dataType, "interaction_event", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (TryGetPayloadString(dataPoint.payload, "schema", out var schema) &&
+                string.Equals(schema, "THERAPLY_INTERACTION_SCHEMA", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
             return CriticalDurableEventTypes.Contains(dataPoint.dataType);
         }
 
@@ -2447,14 +2459,14 @@ namespace TheraplyCore.Firebase
             {
                 var record = new DurableSessionEventRecord
                 {
-                    eventId = Guid.NewGuid().ToString(),
+                    eventId = ResolveDurableEventId(dataPoint),
                     sessionId = ResolveSessionId(dataPoint),
                     patientId = ResolvePatientId(dataPoint),
                     therapistId = ResolveTherapistId(dataPoint),
                     deviceId = ResolveDeviceIdentifierSafe(),
-                    sequence = 0,
+                    sequence = ResolveDurableSequence(dataPoint),
                     eventType = dataPoint.dataType ?? "unknown_event",
-                    eventVersion = 1,
+                    eventVersion = ResolveDurableEventVersion(dataPoint),
                     createdAtUtc = ResolveTimestamp(dataPoint).ToString("O", CultureInfo.InvariantCulture),
                     payloadJson = SerializePayloadDictionary(dataPoint.payload),
                 };
@@ -2477,6 +2489,36 @@ namespace TheraplyCore.Firebase
                 error = e.Message;
                 return false;
             }
+        }
+
+        private static string ResolveDurableEventId(GameDataPoint dataPoint)
+        {
+            if (TryGetPayloadString(dataPoint?.payload, "eventId", out var eventId))
+            {
+                return eventId;
+            }
+
+            return Guid.NewGuid().ToString();
+        }
+
+        private static long ResolveDurableSequence(GameDataPoint dataPoint)
+        {
+            if (TryGetPayloadLong(dataPoint?.payload, "sequenceNumber", out var sequence) && sequence > 0)
+            {
+                return sequence;
+            }
+
+            return 0;
+        }
+
+        private static int ResolveDurableEventVersion(GameDataPoint dataPoint)
+        {
+            if (TryGetPayloadInt(dataPoint?.payload, "payloadVersion", out var version) && version > 0)
+            {
+                return version;
+            }
+
+            return 1;
         }
 
         private void HandleSessionChanged()
@@ -2577,6 +2619,74 @@ namespace TheraplyCore.Firebase
 
             value = converted;
             return true;
+        }
+
+        private static bool TryGetPayloadLong(IReadOnlyDictionary<string, object> payload, string key, out long value)
+        {
+            value = 0L;
+            if (payload == null || string.IsNullOrWhiteSpace(key) || !payload.TryGetValue(key, out var raw) || raw == null)
+            {
+                return false;
+            }
+
+            switch (raw)
+            {
+                case long longValue:
+                    value = longValue;
+                    return true;
+                case int intValue:
+                    value = intValue;
+                    return true;
+                case float floatValue:
+                    value = (long)floatValue;
+                    return true;
+                case double doubleValue:
+                    value = (long)doubleValue;
+                    return true;
+            }
+
+            var converted = Convert.ToString(raw, CultureInfo.InvariantCulture);
+            if (string.IsNullOrWhiteSpace(converted))
+            {
+                return false;
+            }
+
+            return long.TryParse(converted, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+        }
+
+        private static bool TryGetPayloadInt(IReadOnlyDictionary<string, object> payload, string key, out int value)
+        {
+            value = 0;
+            if (payload == null || string.IsNullOrWhiteSpace(key) || !payload.TryGetValue(key, out var raw) || raw == null)
+            {
+                return false;
+            }
+
+            switch (raw)
+            {
+                case int intValue:
+                    value = intValue;
+                    return true;
+                case long longValue:
+                    value = longValue > int.MaxValue
+                        ? int.MaxValue
+                        : (longValue < int.MinValue ? int.MinValue : (int)longValue);
+                    return true;
+                case float floatValue:
+                    value = Mathf.RoundToInt(floatValue);
+                    return true;
+                case double doubleValue:
+                    value = Mathf.RoundToInt((float)doubleValue);
+                    return true;
+            }
+
+            var converted = Convert.ToString(raw, CultureInfo.InvariantCulture);
+            if (string.IsNullOrWhiteSpace(converted))
+            {
+                return false;
+            }
+
+            return int.TryParse(converted, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
         }
 
         private static DateTime ResolveTimestamp(GameDataPoint dataPoint)

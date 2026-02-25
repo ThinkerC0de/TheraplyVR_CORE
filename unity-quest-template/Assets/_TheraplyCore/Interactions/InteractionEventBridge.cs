@@ -627,6 +627,20 @@ namespace TheraplyCore.Interactions
             }
 
             attemptContext.eventCount = Mathf.Max(0, attemptContext.eventCount) + 1;
+            var normalizedFlowId = NormalizeOrFallback(
+                TryReadString(details, "flowId"),
+                TryReadString(details, "flow_id"),
+                string.Empty);
+            var normalizedStepId = NormalizeOrFallback(TryReadString(details, "stepId"), string.Empty);
+            var normalizedNodeId = NormalizeOrFallback(TryReadString(details, "nodeId"), string.Empty);
+            var normalizedControlMode = NormalizeOrFallback(TryReadString(details, "controlMode"), string.Empty);
+            var normalizedActionAttemptId = NormalizeOrFallback(TryReadString(details, "actionAttemptId"), string.Empty);
+            var monotonicSec = TryReadFloat(details, "monotonicSec");
+            var payloadVersion = TryReadInt(details, "payloadVersion");
+            var traceRef = NormalizeOrFallback(
+                TryReadString(details, "trace_ref"),
+                TryReadString(details, "traceRef"),
+                string.Empty);
 
             var payload = new Dictionary<string, object>
             {
@@ -642,14 +656,21 @@ namespace TheraplyCore.Interactions
                 { "interactionType", NormalizeEventToken(interactionType, "UNSPECIFIED_INTERACTION") },
                 { "actionOutcome", NormalizeEventToken(actionOutcome, "OBSERVED") },
                 { "occurredAtUtc", DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture) },
+                { "monotonicSec", monotonicSec ?? Time.realtimeSinceStartup },
                 { "sourceComponent", NormalizeOrFallback(sourceComponent, "UnknownComponent") },
                 { "sourceOfTruth", SourceOfTruth },
+                { "payloadVersion", payloadVersion > 0 ? payloadVersion.Value : 1 },
                 { "sessionId", session.sessionId },
                 { "patientId", session.patientId },
                 { "studentId", session.patientId },
                 { "therapistId", session.therapistId },
                 { "ownerKey", session.ownerKey },
                 { "sessionKey", session.sessionKey },
+                { "flowId", normalizedFlowId },
+                { "stepId", normalizedStepId },
+                { "nodeId", normalizedNodeId },
+                { "controlMode", normalizedControlMode },
+                { "actionAttemptId", normalizedActionAttemptId },
                 { "inputHand", NormalizeOrFallback(inputHand, string.Empty) },
                 { "inputSource", NormalizeOrFallback(inputSource, string.Empty) },
                 { "inputControl", NormalizeOrFallback(inputControl, string.Empty) },
@@ -672,6 +693,11 @@ namespace TheraplyCore.Interactions
             if (targetValid.HasValue)
             {
                 payload["targetValid"] = targetValid.Value;
+            }
+
+            if (!string.IsNullOrWhiteSpace(traceRef))
+            {
+                payload["trace_ref"] = traceRef;
             }
 
             _gameTelemetryService.Track(CanonicalEventName, payload);
@@ -791,6 +817,10 @@ namespace TheraplyCore.Interactions
                        StringComparison.Ordinal) ||
                    string.Equals(
                        NormalizeEventToken(eventType, string.Empty),
+                       "FLOW_STARTED",
+                       StringComparison.Ordinal) ||
+                   string.Equals(
+                       NormalizeEventToken(eventType, string.Empty),
                        "SESSION_START",
                        StringComparison.Ordinal);
         }
@@ -800,7 +830,23 @@ namespace TheraplyCore.Interactions
             return string.Equals(
                 NormalizeEventToken(eventType, string.Empty),
                 "GAME_STOPPED",
-                StringComparison.Ordinal);
+                StringComparison.Ordinal) ||
+                   string.Equals(
+                       NormalizeEventToken(eventType, string.Empty),
+                       "SESSION_TERMINAL",
+                       StringComparison.Ordinal) ||
+                   string.Equals(
+                       NormalizeEventToken(eventType, string.Empty),
+                       "FLOW_COMPLETED",
+                       StringComparison.Ordinal) ||
+                   string.Equals(
+                       NormalizeEventToken(eventType, string.Empty),
+                       "FLOW_FAILED",
+                       StringComparison.Ordinal) ||
+                   string.Equals(
+                       NormalizeEventToken(eventType, string.Empty),
+                       "FLOW_STOPPED",
+                       StringComparison.Ordinal);
         }
 
         private static string ResolveGameplayOutcome(
@@ -1888,6 +1934,46 @@ namespace TheraplyCore.Interactions
             return float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
                 ? parsed
                 : (float?)null;
+        }
+
+        private static int? TryReadInt(IReadOnlyDictionary<string, object> payload, string key)
+        {
+            if (!TryGetPayloadValue(payload, key, out var value) || value == null)
+            {
+                return null;
+            }
+
+            switch (value)
+            {
+                case int intValue:
+                    return intValue;
+                case long longValue:
+                    if (longValue > int.MaxValue)
+                    {
+                        return int.MaxValue;
+                    }
+
+                    if (longValue < int.MinValue)
+                    {
+                        return int.MinValue;
+                    }
+
+                    return (int)longValue;
+                case float floatValue:
+                    return Mathf.RoundToInt(floatValue);
+                case double doubleValue:
+                    return Mathf.RoundToInt((float)doubleValue);
+            }
+
+            var text = Convert.ToString(value, CultureInfo.InvariantCulture);
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return null;
+            }
+
+            return int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+                ? parsed
+                : (int?)null;
         }
 
         private static bool TryReadBool(IReadOnlyDictionary<string, object> payload, string key)

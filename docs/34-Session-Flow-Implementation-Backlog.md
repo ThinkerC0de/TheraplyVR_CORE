@@ -75,13 +75,13 @@ Goal: implement the new framework direction end-to-end so no per-game core rewri
 
 | ID | Task | Status | Acceptance Criteria | Depends On |
 | --- | --- | --- | --- | --- |
-| SF-E-001 | Implement canonical event mapper | TODO | Required envelope fields emitted for all runtime events | SF-B-005 |
-| SF-E-002 | Emit mandatory action event pair | TODO | Every `action_received` has exactly one `action_evaluated` | SF-E-001 |
-| SF-E-003 | Add `session_terminal` emission | TODO | Closed sessions always emit terminal event with state/reason | SF-B-003 |
-| SF-E-004 | Enforce append-first durability | TODO | Events persisted locally before network send path | SF-E-001 |
-| SF-E-005 | Wire outbox ack/retry/dedupe for flow events | TODO | Reliable sync with idempotent `eventId` handling | SF-E-004 |
-| SF-E-006 | Add compact trace recorder | TODO | Optional motion trace persisted and linked through `trace_ref` | SF-E-001 |
-| SF-E-007 | Add export quality gates | TODO | Export blocked on missing decision pairs, sequence gaps, or missing mandatory keys | SF-E-002 |
+| SF-E-001 | Implement canonical event mapper | DONE | Required envelope fields emitted for all runtime events | SF-B-005 |
+| SF-E-002 | Emit mandatory action event pair | DONE | Every `action_received` has exactly one `action_evaluated` | SF-E-001 |
+| SF-E-003 | Add `session_terminal` emission | DONE | Closed sessions always emit terminal event with state/reason | SF-B-003 |
+| SF-E-004 | Enforce append-first durability | DONE | Events persisted locally before network send path | SF-E-001 |
+| SF-E-005 | Wire outbox ack/retry/dedupe for flow events | DONE | Reliable sync with idempotent `eventId` handling | SF-E-004 |
+| SF-E-006 | Add compact trace recorder | DONE | Optional motion trace persisted and linked through `trace_ref` | SF-E-001 |
+| SF-E-007 | Add export quality gates | DONE | Export blocked on missing decision pairs, sequence gaps, or missing mandatory keys | SF-E-002 |
 
 ## Phase F - Control Modes
 

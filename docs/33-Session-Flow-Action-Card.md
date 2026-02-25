@@ -27,8 +27,8 @@ This document defines the core workflow for building new scenes without adding p
 
 Open implementation items (expected):
 
-- runtime scaffolding classes are specified but not all implemented yet.
-- action adapter/plugin coverage includes pointer/tool/hand/grab/gaze/breath/audio-source/dual-hand/pose-path/timeline/sequence channels.
+- `ControlRuntimeGateway` and explicit remote/local fallback orchestration are pending (Phase F).
+- adapter integration tests and full hardening suite are pending (Phase G).
 
 ## Design Rules
 
@@ -56,14 +56,14 @@ Open implementation items (expected):
 
 | Runtime Domain | Scope | Core Components | Status |
 | --- | --- | --- | --- |
-| `SessionRuntime` | Session FSM and lifecycle (`start/pause/resume/stop`) with remote or local control | `SessionFlowRunner`, session FSM bridge, control mode policy | Defined in this card; implementation pending |
-| `SceneRuntime` | Scene load/unload/additive, spawn, teleport anchor, full reset | `SceneRuntimeController`, `FlowBindingRegistry`, `EffectRunner` | Defined in this card; implementation pending |
-| `TaskGraphRuntime` | Graph execution (`Action/Condition/Branch/Timer/Complete/Fail`) | `TaskGraphRunner`, `TransitionEngine`, `ActionGate`, `ActionValidator` | Defined in this card; implementation pending |
-| `InteractionRuntime` | Input channels and normalization | adapters + `ActionAdapterRegistry` | Partial in code, full contract defined |
-| `EffectRuntime` | Narrator/audio/haptics/vfx/ui hint | `EffectRunner` + effect plugins | Partial in code, full contract defined |
-| `ScoringRuntime` | points/errors/lives/success thresholds/adaptive difficulty | `ScoringRuntime`, policy evaluators | Concept defined; implementation pending |
-| `TelemetryRuntime` | canonical append-only log + outbox + retries + dedupe | `TelemetryLedger`, existing event store/outbox path | Partial in code, hard-data rules now defined |
-| `ControlRuntime` | mobile controller mode and local mode | `ControlRuntimeGateway` + control mode policy | Concept defined; implementation pending |
+| `SessionRuntime` | Session FSM and lifecycle (`start/pause/resume/stop`) with remote or local control | `SessionFlowRunner`, session FSM bridge, control mode policy | Implemented |
+| `SceneRuntime` | Scene load/unload/additive, spawn, teleport anchor, full reset | `SceneRuntimeController`, `FlowBindingRegistry`, `EffectRunner` | Implemented (core operations available) |
+| `TaskGraphRuntime` | Graph execution (`Action/Condition/Branch/Timer/Complete/Fail`) | `TaskGraphRunner`, `TransitionEngine`, `ActionGate`, `ActionValidator` | Implemented |
+| `InteractionRuntime` | Input channels and normalization | adapters + `ActionAdapterRegistry` | Implemented |
+| `EffectRuntime` | Narrator/audio/haptics/vfx/ui hint | `EffectRunner` + effect plugins | Implemented |
+| `ScoringRuntime` | points/errors/lives/success thresholds/adaptive difficulty | `ScoringRuntime`, policy evaluators | Implemented |
+| `TelemetryRuntime` | canonical append-only log + outbox + retries + dedupe | `TelemetryLedger`, existing event store/outbox path | Implemented (with export quality gates) |
+| `ControlRuntime` | mobile controller mode and local mode | `ControlRuntimeGateway` + control mode policy | Pending (Phase F) |
 
 `SessionRuntime` canonical state path:
 
@@ -351,16 +351,16 @@ This is the explicit component set for scene workflow. Keep it per activity, not
 
 | Component | Responsibility | Input | Output | Status |
 | --- | --- | --- | --- | --- |
-| `SessionFlowRunner` | Runs flow steps in deterministic order | flow definition + bindings | active step, lifecycle hooks | To add |
-| `ActionGate` | Decides if action is allowed in current step | normalized action event | `accepted/rejected + reasonCode` | To add |
-| `ActionValidator` | Validates target/tool/sequence/time constraints | allowed action config + action event | validation result | To add |
-| `TransitionEngine` | Chooses next step on success/fail/timeout/branch | step result + rules | next step id | To add |
-| `EffectRunner` | Executes effects on step hooks | effect list + trigger context | scene/audio/vfx changes | To add |
-| `FlowBindingRegistry` | Maps binding keys to scene objects/sources | scene references | lookup for actions/effects | To add |
-| `TelemetryLedger` | Emits canonical flow/action events | runner/gate/effect signals | `flow_*`, `action_*`, `effect_*` events | To add |
-| `MotionTraceRecorder` | Optional compact motion trace artifact | transform stream | encoded trace + `trace_ref` event | To add |
-| `FlowConfigProvider` | Loads flow data (`ScriptableObject` or JSON) | game/session selection | resolved `FlowDefinition` | To add |
-| `ActionAdapterRegistry` | Registers adapters for all input channels | adapter components | normalized action stream | To add |
+| `SessionFlowRunner` | Runs flow steps in deterministic order | flow definition + bindings | active step, lifecycle hooks | Implemented |
+| `ActionGate` | Decides if action is allowed in current step | normalized action event | `accepted/rejected + reasonCode` | Implemented |
+| `ActionValidator` | Validates target/tool/sequence/time constraints | allowed action config + action event | validation result | Implemented |
+| `TransitionEngine` | Chooses next step on success/fail/timeout/branch | step result + rules | next step id | Implemented |
+| `EffectRunner` | Executes effects on step hooks | effect list + trigger context | scene/audio/vfx changes | Implemented |
+| `FlowBindingRegistry` | Maps binding keys to scene objects/sources | scene references | lookup for actions/effects | Implemented |
+| `TelemetryLedger` | Emits canonical flow/action events | runner/gate/effect signals | `flow_*`, `action_*`, `effect_*` events | Implemented (via canonical interaction bridge path) |
+| `MotionTraceRecorder` | Optional compact motion trace artifact | transform stream | encoded trace + `trace_ref` event | Implemented |
+| `FlowConfigProvider` | Loads flow data (`ScriptableObject` or JSON) | game/session selection | resolved `FlowDefinition` | Implemented |
+| `ActionAdapterRegistry` | Registers adapters for all input channels | adapter components | normalized action stream | Implemented |
 
 ### Adapter Components
 

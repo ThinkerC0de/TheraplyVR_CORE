@@ -19,6 +19,7 @@ namespace TheraplyCore.Games.Runtime
         [SerializeField] private ActionAdapterRegistry _actionAdapterRegistry;
         [SerializeField] private EffectRunner _effectRunner;
         [SerializeField] private InteractionEventBridge _interactionEventBridge;
+        [SerializeField] private MotionTraceRecorder _motionTraceRecorder;
 
         [Header("Startup")]
         [SerializeField] private bool _autoStartOnEnable = true;
@@ -28,10 +29,13 @@ namespace TheraplyCore.Games.Runtime
 
         [Header("Telemetry")]
         [SerializeField] private bool _emitFlowTelemetry = true;
+        [SerializeField] private bool _enforceDecisionPairCoverage = true;
         [SerializeField] private bool _logLifecycle;
 
         private readonly TaskGraphRunner _taskGraphRunner = new TaskGraphRunner();
         private readonly ScoringRuntime _scoringRuntime = new ScoringRuntime();
+        private readonly Dictionary<string, bool> _pendingActionDecisionByAttemptId =
+            new Dictionary<string, bool>(StringComparer.Ordinal);
         private GameContracts.GameDefinition _activeDefinition;
         private string _activeFlowId = string.Empty;
         private GameContracts.TaskGraphNodeDefinition _lastEnteredNode;
@@ -148,6 +152,7 @@ namespace TheraplyCore.Games.Runtime
                 ? "session_flow"
                 : definition.gameId.Trim();
             _scoringRuntime.Configure(definition);
+            _pendingActionDecisionByAttemptId.Clear();
 
             _taskGraphRunner.Reset();
             _taskGraphRunner.SetPluginRegistry(
@@ -177,6 +182,10 @@ namespace TheraplyCore.Games.Runtime
             }
 
             EmitFlowEvent("flow_started", "FLOW_STARTED");
+            if (_motionTraceRecorder != null)
+            {
+                _motionTraceRecorder.BeginTrace(ResolveGameId(), _activeFlowId, ResolveSessionId());
+            }
             MaybeLog("FLOW_STARTED", reasonCode);
             return true;
         }
@@ -208,7 +217,13 @@ namespace TheraplyCore.Games.Runtime
 
             _taskGraphRunner.Reset();
             _lastEnteredNode = null;
+            _pendingActionDecisionByAttemptId.Clear();
             EmitFlowEvent("flow_stopped", "FLOW_INTERRUPTED");
+            EmitSessionTerminal("FLOW_INTERRUPTED");
+            if (_motionTraceRecorder != null)
+            {
+                _motionTraceRecorder.StopAndPublish("FLOW_INTERRUPTED");
+            }
             MaybeLog("FLOW_INTERRUPTED", reasonCode);
             return true;
         }
@@ -222,51 +237,74 @@ namespace TheraplyCore.Games.Runtime
 
             var now = Time.realtimeSinceStartup;
             var nodeBeforeSubmit = _taskGraphRunner.ActiveNode;
-            EmitActionTelemetry("action_received", intent, null, "ACTION_RECEIVED");
-
-            _taskGraphRunner.SetRuntimeContext(
-                ResolveGameId(),
-                _activeFlowId,
-                ResolveSessionId(),
-                ResolveControlMode(_activeDefinition));
-
-            var submitted = _taskGraphRunner.SubmitAction(
-                intent,
-                now,
-                out var validationResult,
-                out var submitReasonCode);
-
-            var accepted = submitted && validationResult != null && validationResult.accepted;
-            var reasonCode = ResolveDecisionReasonCode(validationResult, submitReasonCode, accepted);
-            _scoringRuntime.RecordActionDecision(accepted, reasonCode, reactionSec: 0f);
-            var scoringSnapshot = _scoringRuntime.GetSnapshot();
-            ApplyAdaptiveDifficultyState(scoringSnapshot);
-            ExecuteNodeEffects(
-                nodeBeforeSubmit,
-                nodeBeforeSubmit == null
-                    ? null
-                    : (accepted ? nodeBeforeSubmit.onAcceptedEffects : nodeBeforeSubmit.onRejectedEffects),
-                accepted ? "on_accepted" : "on_rejected",
-                accepted ? "NODE_ACTION_ACCEPTED" : "NODE_ACTION_REJECTED",
-                intent.actionId,
-                accepted ? "accepted" : "rejected",
-                reasonCode);
-            if (scoringSnapshot.adaptiveChanged)
+            var actionAttemptId = Guid.NewGuid().ToString("N");
+            MarkActionReceived(actionAttemptId);
+            EmitActionTelemetry("action_received", intent, null, "ACTION_RECEIVED", actionAttemptId);
+            try
             {
-                EmitFlowEvent(
-                    "adaptive_difficulty_updated",
-                    NormalizeOrFallback(scoringSnapshot.adaptiveReasonCode, "KEEP_DIFFICULTY"),
-                    BuildScoringDetails(scoringSnapshot));
+                _taskGraphRunner.SetRuntimeContext(
+                    ResolveGameId(),
+                    _activeFlowId,
+                    ResolveSessionId(),
+                    ResolveControlMode(_activeDefinition));
+
+                var submitted = _taskGraphRunner.SubmitAction(
+                    intent,
+                    now,
+                    out var validationResult,
+                    out var submitReasonCode);
+
+                var accepted = submitted && validationResult != null && validationResult.accepted;
+                var reasonCode = ResolveDecisionReasonCode(validationResult, submitReasonCode, accepted);
+                _scoringRuntime.RecordActionDecision(accepted, reasonCode, reactionSec: 0f);
+                var scoringSnapshot = _scoringRuntime.GetSnapshot();
+                ApplyAdaptiveDifficultyState(scoringSnapshot);
+                ExecuteNodeEffects(
+                    nodeBeforeSubmit,
+                    nodeBeforeSubmit == null
+                        ? null
+                        : (accepted ? nodeBeforeSubmit.onAcceptedEffects : nodeBeforeSubmit.onRejectedEffects),
+                    accepted ? "on_accepted" : "on_rejected",
+                    accepted ? "NODE_ACTION_ACCEPTED" : "NODE_ACTION_REJECTED",
+                    intent.actionId,
+                    accepted ? "accepted" : "rejected",
+                    reasonCode);
+                if (scoringSnapshot.adaptiveChanged)
+                {
+                    EmitFlowEvent(
+                        "adaptive_difficulty_updated",
+                        NormalizeOrFallback(scoringSnapshot.adaptiveReasonCode, "KEEP_DIFFICULTY"),
+                        BuildScoringDetails(scoringSnapshot));
+                }
+                EmitActionTelemetry(
+                    "action_evaluated",
+                    intent,
+                    accepted ? "accepted" : "rejected",
+                    reasonCode,
+                    actionAttemptId);
+                MarkActionEvaluated(actionAttemptId);
+
+                if (!submitted && IsRunning)
+                {
+                    HandleRuntimeFailure(submitReasonCode);
+                }
             }
-            EmitActionTelemetry(
-                "action_evaluated",
-                intent,
-                accepted ? "accepted" : "rejected",
-                reasonCode);
-
-            if (!submitted && IsRunning)
+            catch (Exception e)
             {
-                HandleRuntimeFailure(submitReasonCode);
+                const string exceptionReasonCode = "ACTION_EVALUATION_EXCEPTION";
+                EmitActionTelemetry(
+                    "action_evaluated",
+                    intent,
+                    "rejected",
+                    exceptionReasonCode,
+                    actionAttemptId);
+                MarkActionEvaluated(actionAttemptId);
+                MaybeLog("ACTION_EVALUATION_EXCEPTION", e.Message);
+
+                if (IsRunning)
+                {
+                    HandleRuntimeFailure(exceptionReasonCode);
+                }
             }
         }
 
@@ -331,6 +369,29 @@ namespace TheraplyCore.Games.Runtime
         private void HandleGraphCompleted(TaskGraphRunState terminalState, string reasonCode)
         {
             var scoringSnapshot = _scoringRuntime.GetSnapshot();
+            if (HasUnresolvedActionDecisions())
+            {
+                const string unresolvedReasonCode = "UNRESOLVED_ACTION_DECISIONS";
+                if (_sessionRuntimeBridge != null)
+                {
+                    _sessionRuntimeBridge.TryFailTechnicalSession(out _);
+                }
+
+                EmitFlowEvent(
+                    "flow_failed",
+                    unresolvedReasonCode,
+                    BuildFlowFailureDetails(scoringSnapshot, unresolvedReasonCode));
+                EmitSessionTerminal(unresolvedReasonCode);
+                if (_motionTraceRecorder != null)
+                {
+                    _motionTraceRecorder.StopAndPublish(unresolvedReasonCode);
+                }
+                _pendingActionDecisionByAttemptId.Clear();
+                _lastEnteredNode = _taskGraphRunner.ActiveNode;
+                MaybeLog("FLOW_TERMINAL", unresolvedReasonCode);
+                return;
+            }
+
             var activeNode = _taskGraphRunner.ActiveNode;
             if (IsTimeoutTransition(reasonCode))
             {
@@ -354,7 +415,7 @@ namespace TheraplyCore.Games.Runtime
                 EmitFlowEvent(
                     "flow_completed",
                     NormalizeOrFallback(reasonCode, "FLOW_COMPLETED"),
-                    BuildScoringDetails(scoringSnapshot));
+                    BuildFlowSuccessDetails(scoringSnapshot));
             }
             else
             {
@@ -366,10 +427,17 @@ namespace TheraplyCore.Games.Runtime
                 EmitFlowEvent(
                     "flow_failed",
                     NormalizeOrFallback(reasonCode, "FLOW_FAILED"),
-                    BuildScoringDetails(scoringSnapshot));
+                    BuildFlowFailureDetails(
+                        scoringSnapshot,
+                        NormalizeOrFallback(reasonCode, "FLOW_FAILED")));
             }
 
-            EmitSessionTerminal();
+            EmitSessionTerminal(reasonCode);
+            if (_motionTraceRecorder != null)
+            {
+                _motionTraceRecorder.StopAndPublish(reasonCode);
+            }
+            _pendingActionDecisionByAttemptId.Clear();
             _lastEnteredNode = activeNode;
             MaybeLog("FLOW_TERMINAL", reasonCode);
         }
@@ -396,9 +464,17 @@ namespace TheraplyCore.Games.Runtime
                     normalizedReason);
             }
 
-            EmitFlowEvent("flow_failed", normalizedReason, BuildScoringDetails(scoringSnapshot));
-            EmitSessionTerminal();
+            EmitFlowEvent(
+                "flow_failed",
+                normalizedReason,
+                BuildFlowFailureDetails(scoringSnapshot, normalizedReason));
+            EmitSessionTerminal(normalizedReason);
+            if (_motionTraceRecorder != null)
+            {
+                _motionTraceRecorder.StopAndPublish(normalizedReason);
+            }
             _taskGraphRunner.Reset();
+            _pendingActionDecisionByAttemptId.Clear();
             _lastEnteredNode = null;
             MaybeLog("FLOW_RUNTIME_FAILED", normalizedReason);
         }
@@ -466,6 +542,15 @@ namespace TheraplyCore.Games.Runtime
                     _interactionEventBridge = FindFirstObjectByType<InteractionEventBridge>();
                 }
             }
+
+            if (_motionTraceRecorder == null)
+            {
+                _motionTraceRecorder = GetComponent<MotionTraceRecorder>();
+                if (_motionTraceRecorder == null)
+                {
+                    _motionTraceRecorder = FindFirstObjectByType<MotionTraceRecorder>();
+                }
+            }
         }
 
         private void EmitFlowEvent(
@@ -483,8 +568,11 @@ namespace TheraplyCore.Games.Runtime
                 { "flowId", NormalizeOrFallback(_activeFlowId, "session_flow") },
                 { "stepId", NormalizeOrFallback(_taskGraphRunner.ActiveNodeId, string.Empty) },
                 { "nodeId", NormalizeOrFallback(_taskGraphRunner.ActiveNodeId, string.Empty) },
+                { "eventType", NormalizeOrFallback(eventName, "flow_event") },
                 { "reasonCode", NormalizeOrFallback(reasonCode, "FLOW_EVENT") },
                 { "controlMode", ResolveControlMode(_activeDefinition) },
+                { "payloadVersion", 1 },
+                { "monotonicSec", Time.realtimeSinceStartup },
                 { "actionOutcome", "OBSERVED" },
             };
 
@@ -513,7 +601,8 @@ namespace TheraplyCore.Games.Runtime
             string eventName,
             GameContracts.ActionIntent intent,
             string decision,
-            string reasonCode)
+            string reasonCode,
+            string actionAttemptId)
         {
             if (!_emitFlowTelemetry || _interactionEventBridge == null || intent == null)
             {
@@ -532,7 +621,11 @@ namespace TheraplyCore.Games.Runtime
                 { "inputHand", NormalizeOrFallback(intent.inputHand, string.Empty) },
                 { "inputValue", intent.inputValue },
                 { "reactionSec", Mathf.Max(0f, intent.occurredAtElapsedSec) },
+                { "actionAttemptId", NormalizeOrFallback(actionAttemptId, string.Empty) },
+                { "eventType", NormalizeOrFallback(eventName, "action_event") },
                 { "reasonCode", NormalizeOrFallback(reasonCode, "ACTION_OBSERVED") },
+                { "payloadVersion", 1 },
+                { "monotonicSec", Time.realtimeSinceStartup },
             };
 
             if (!string.IsNullOrWhiteSpace(decision))
@@ -555,7 +648,7 @@ namespace TheraplyCore.Games.Runtime
                 nameof(SessionFlowRunner));
         }
 
-        private void EmitSessionTerminal()
+        private void EmitSessionTerminal(string reasonCode)
         {
             if (!_emitFlowTelemetry || _interactionEventBridge == null || _sessionRuntimeBridge == null)
             {
@@ -574,7 +667,11 @@ namespace TheraplyCore.Games.Runtime
             {
                 { "flowId", NormalizeOrFallback(_activeFlowId, "session_flow") },
                 { "terminalState", state.ToString() },
-                { "reasonCode", "SESSION_TERMINAL" },
+                { "reasonCode", NormalizeOrFallback(reasonCode, "SESSION_TERMINAL") },
+                { "unresolvedActionDecisions", CountUnresolvedActionDecisions() },
+                { "eventType", "session_terminal" },
+                { "payloadVersion", 1 },
+                { "monotonicSec", Time.realtimeSinceStartup },
                 { "actionOutcome", "OBSERVED" },
             };
 
@@ -689,9 +786,28 @@ namespace TheraplyCore.Games.Runtime
             }
         }
 
-        private static IReadOnlyDictionary<string, object> BuildScoringDetails(ScoringRuntime.ScoringSnapshot scoringSnapshot)
+        private IReadOnlyDictionary<string, object> BuildFlowSuccessDetails(ScoringRuntime.ScoringSnapshot scoringSnapshot)
         {
-            return new Dictionary<string, object>
+            var details = BuildScoringDetails(scoringSnapshot);
+            details["telemetryDecisionCoverageOk"] = !HasUnresolvedActionDecisions();
+            details["unresolvedActionDecisions"] = CountUnresolvedActionDecisions();
+            return details;
+        }
+
+        private IReadOnlyDictionary<string, object> BuildFlowFailureDetails(
+            ScoringRuntime.ScoringSnapshot scoringSnapshot,
+            string failureReasonCode)
+        {
+            var details = BuildScoringDetails(scoringSnapshot);
+            details["telemetryDecisionCoverageOk"] = !HasUnresolvedActionDecisions();
+            details["unresolvedActionDecisions"] = CountUnresolvedActionDecisions();
+            details["failureReasonCode"] = NormalizeOrFallback(failureReasonCode, "FLOW_FAILED");
+            return details;
+        }
+
+        private static Dictionary<string, object> BuildScoringDetails(ScoringRuntime.ScoringSnapshot scoringSnapshot)
+        {
+            var details = new Dictionary<string, object>
             {
                 { "scoreTotal", scoringSnapshot.scoreTotal },
                 { "correctCount", scoringSnapshot.correctCount },
@@ -706,6 +822,81 @@ namespace TheraplyCore.Games.Runtime
                 { "cueTimeoutSec", scoringSnapshot.cueTimeoutSec },
                 { "difficulty", scoringSnapshot.difficulty },
             };
+            return details;
+        }
+
+        private void MarkActionReceived(string actionAttemptId)
+        {
+            var normalizedAttemptId = NormalizeOrFallback(actionAttemptId, string.Empty);
+            if (string.IsNullOrWhiteSpace(normalizedAttemptId))
+            {
+                return;
+            }
+
+            if (!_pendingActionDecisionByAttemptId.ContainsKey(normalizedAttemptId))
+            {
+                _pendingActionDecisionByAttemptId[normalizedAttemptId] = false;
+            }
+        }
+
+        private void MarkActionEvaluated(string actionAttemptId)
+        {
+            var normalizedAttemptId = NormalizeOrFallback(actionAttemptId, string.Empty);
+            if (string.IsNullOrWhiteSpace(normalizedAttemptId))
+            {
+                return;
+            }
+
+            _pendingActionDecisionByAttemptId[normalizedAttemptId] = true;
+        }
+
+        private bool HasUnresolvedActionDecisions()
+        {
+            if (!_enforceDecisionPairCoverage || !_emitFlowTelemetry)
+            {
+                return false;
+            }
+
+            if (_activeDefinition == null ||
+                _activeDefinition.policies == null ||
+                _activeDefinition.policies.telemetryPolicy == null)
+            {
+                return false;
+            }
+
+            if (!_activeDefinition.policies.telemetryPolicy.requireDecisionForEveryAction)
+            {
+                return false;
+            }
+
+            foreach (var decisionState in _pendingActionDecisionByAttemptId.Values)
+            {
+                if (!decisionState)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private int CountUnresolvedActionDecisions()
+        {
+            if (_pendingActionDecisionByAttemptId.Count <= 0)
+            {
+                return 0;
+            }
+
+            var unresolved = 0;
+            foreach (var decisionState in _pendingActionDecisionByAttemptId.Values)
+            {
+                if (!decisionState)
+                {
+                    unresolved++;
+                }
+            }
+
+            return unresolved;
         }
 
         private static string ResolveDecisionReasonCode(

@@ -19,6 +19,17 @@ namespace TheraplyCore.Games.Runtime
                 "TASK_OUTCOME_SUMMARY",
                 "TASK_LABEL_GENERATED",
                 "ADAPTIVE_DIFFICULTY_ADJUSTED",
+                "ACTION_RECEIVED",
+                "ACTION_EVALUATED",
+                "FLOW_STARTED",
+                "STEP_ENTERED",
+                "FLOW_COMPLETED",
+                "FLOW_FAILED",
+                "FLOW_STOPPED",
+                "ADAPTIVE_DIFFICULTY_UPDATED",
+                "SESSION_TERMINAL",
+                "EFFECT_EXECUTED",
+                "TRACE_REF",
             };
 
         [Serializable]
@@ -71,14 +82,24 @@ namespace TheraplyCore.Games.Runtime
             public long sequenceNumber;
             public string eventType;
             public string taskRunId;
+            public string attemptId;
+            public string actionAttemptId;
             public string gameId;
+            public string flowId;
+            public string stepId;
+            public string nodeId;
+            public string controlMode;
             public string sourceOfTruth;
+            public string sourceComponent;
+            public int payloadVersion;
             public string ownerKey;
             public string sessionKey;
             public string sessionId;
             public string occurredAtUtc;
+            public float monotonicSec;
             public string actionOutcome;
             public string reasonCode;
+            public string trace_ref;
             public CanonicalEventDetails details;
         }
 
@@ -98,6 +119,14 @@ namespace TheraplyCore.Games.Runtime
             public int omittedCount;
             public int redundantCount;
             public int recommendedDifficultyLevel;
+            public string actionId;
+            public string channelId;
+            public string decision;
+            public string targetId;
+            public string inputSource;
+            public string inputHand;
+            public string trace_ref;
+            public string actionAttemptId;
         }
 
         public LoadResult LoadFromDurableTrace(LoadOptions options)
@@ -206,14 +235,24 @@ namespace TheraplyCore.Games.Runtime
                     { "sequenceNumber", canonicalPayload.sequenceNumber > 0 ? canonicalPayload.sequenceNumber : durableRecord.sequence },
                     { "eventType", normalizedEventType },
                     { "taskRunId", taskRunId },
+                    { "attemptId", Normalize(canonicalPayload.attemptId) },
+                    { "actionAttemptId", Normalize(canonicalPayload.actionAttemptId, details.actionAttemptId) },
                     { "gameId", Normalize(canonicalPayload.gameId) },
+                    { "flowId", Normalize(canonicalPayload.flowId) },
+                    { "stepId", Normalize(canonicalPayload.stepId) },
+                    { "nodeId", Normalize(canonicalPayload.nodeId) },
+                    { "controlMode", Normalize(canonicalPayload.controlMode) },
                     { "sourceOfTruth", Normalize(canonicalPayload.sourceOfTruth) },
+                    { "sourceComponent", Normalize(canonicalPayload.sourceComponent) },
+                    { "payloadVersion", canonicalPayload.payloadVersion > 0 ? canonicalPayload.payloadVersion : 1 },
                     { "ownerKey", Normalize(canonicalPayload.ownerKey) },
                     { "sessionKey", Normalize(canonicalPayload.sessionKey) },
                     { "sessionId", Normalize(canonicalPayload.sessionId, durableRecord.sessionId) },
                     { "occurredAtUtc", Normalize(canonicalPayload.occurredAtUtc, durableRecord.createdAtUtc) },
+                    { "monotonicSec", canonicalPayload.monotonicSec },
                     { "actionOutcome", Normalize(canonicalPayload.actionOutcome) },
                     { "reasonCode", Normalize(canonicalPayload.reasonCode) },
+                    { "trace_ref", Normalize(canonicalPayload.trace_ref, details.trace_ref) },
                     {
                         "details",
                         new Dictionary<string, object>(StringComparer.Ordinal)
@@ -231,6 +270,14 @@ namespace TheraplyCore.Games.Runtime
                             { "omittedCount", details.omittedCount },
                             { "redundantCount", details.redundantCount },
                             { "recommendedDifficultyLevel", details.recommendedDifficultyLevel },
+                            { "actionId", Normalize(details.actionId) },
+                            { "channelId", Normalize(details.channelId) },
+                            { "decision", Normalize(details.decision) },
+                            { "targetId", Normalize(details.targetId) },
+                            { "inputSource", Normalize(details.inputSource) },
+                            { "inputHand", Normalize(details.inputHand) },
+                            { "trace_ref", Normalize(details.trace_ref) },
+                            { "actionAttemptId", Normalize(details.actionAttemptId) },
                         }
                     },
                 };

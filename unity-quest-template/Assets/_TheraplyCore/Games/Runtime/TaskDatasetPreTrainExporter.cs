@@ -36,6 +36,11 @@ namespace TheraplyCore.Games.Runtime
             public int sourceOfTruthViolations;
             public int ownershipViolations;
             public int taskRunConsistencyViolations;
+            public int missingMandatoryKeyViolations;
+            public int sequenceGapViolations;
+            public int unresolvedActionDecisionViolations;
+            public int duplicateActionDecisionViolations;
+            public int missingSessionTerminalViolations;
             public int uniqueTaskRuns;
             public int taskOutcomeSummaries;
             public int taskLabels;
@@ -413,6 +418,11 @@ namespace TheraplyCore.Games.Runtime
                 "- sourceOfTruthViolations: " + sanityReport.sourceOfTruthViolations.ToString(CultureInfo.InvariantCulture),
                 "- ownershipViolations: " + sanityReport.ownershipViolations.ToString(CultureInfo.InvariantCulture),
                 "- taskRunConsistencyViolations: " + sanityReport.taskRunConsistencyViolations.ToString(CultureInfo.InvariantCulture),
+                "- missingMandatoryKeyViolations: " + sanityReport.missingMandatoryKeyViolations.ToString(CultureInfo.InvariantCulture),
+                "- sequenceGapViolations: " + sanityReport.sequenceGapViolations.ToString(CultureInfo.InvariantCulture),
+                "- unresolvedActionDecisionViolations: " + sanityReport.unresolvedActionDecisionViolations.ToString(CultureInfo.InvariantCulture),
+                "- duplicateActionDecisionViolations: " + sanityReport.duplicateActionDecisionViolations.ToString(CultureInfo.InvariantCulture),
+                "- missingSessionTerminalViolations: " + sanityReport.missingSessionTerminalViolations.ToString(CultureInfo.InvariantCulture),
                 "- invalidRecords: " + sanityReport.invalidRecords.ToString(CultureInfo.InvariantCulture),
                 string.Empty,
                 "## Quality Gate",
@@ -601,16 +611,26 @@ namespace TheraplyCore.Games.Runtime
                 })
                 .ToArray();
 
+            var flowTelemetryRequirements = CanonicalFlowTelemetryQualityGate.CreateDefaultRequirements();
+            var flowTelemetryGate = new CanonicalFlowTelemetryQualityGate();
+            var flowTelemetryReport = flowTelemetryGate.Evaluate(records, flowTelemetryRequirements);
+
             return new SanityCheckReport
             {
                 passed = invalidRecords == 0 &&
                          sourceOfTruthViolations == 0 &&
                          ownershipViolations == 0 &&
-                         taskRunConsistencyViolations == 0,
+                         taskRunConsistencyViolations == 0 &&
+                         flowTelemetryReport.readyForExport,
                 invalidRecords = invalidRecords,
                 sourceOfTruthViolations = sourceOfTruthViolations,
                 ownershipViolations = ownershipViolations,
                 taskRunConsistencyViolations = taskRunConsistencyViolations,
+                missingMandatoryKeyViolations = flowTelemetryReport.missingMandatoryKeyCount,
+                sequenceGapViolations = flowTelemetryReport.sequenceGapCount,
+                unresolvedActionDecisionViolations = flowTelemetryReport.unresolvedActionDecisionCount,
+                duplicateActionDecisionViolations = flowTelemetryReport.duplicateActionDecisionCount,
+                missingSessionTerminalViolations = flowTelemetryReport.sessionsMissingTerminal,
                 uniqueTaskRuns = taskRuns.Count,
                 taskOutcomeSummaries = summaries,
                 taskLabels = labels,
@@ -640,6 +660,27 @@ namespace TheraplyCore.Games.Runtime
             if (sanityReport.taskRunConsistencyViolations > 0)
             {
                 return "EXPORT_TASK_RUN_INCONSISTENT";
+            }
+
+            if (sanityReport.missingMandatoryKeyViolations > 0)
+            {
+                return "EXPORT_MISSING_MANDATORY_KEYS";
+            }
+
+            if (sanityReport.sequenceGapViolations > 0)
+            {
+                return "EXPORT_SEQUENCE_GAPS_DETECTED";
+            }
+
+            if (sanityReport.unresolvedActionDecisionViolations > 0 ||
+                sanityReport.duplicateActionDecisionViolations > 0)
+            {
+                return "EXPORT_ACTION_DECISION_COVERAGE_FAILED";
+            }
+
+            if (sanityReport.missingSessionTerminalViolations > 0)
+            {
+                return "EXPORT_SESSION_TERMINAL_MISSING";
             }
 
             if (!qualityReport.readyForTraining)
