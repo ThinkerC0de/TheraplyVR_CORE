@@ -21,7 +21,7 @@ This document defines the core workflow for building new scenes without adding p
 | Full interaction telemetry for ML (`what/when/how/why`) | Covered by canonical schema + decision events + reason codes |
 | Hard data robustness (anti data drift/loss) | Covered by hard-data guarantees and export quality gates |
 | Mobile controller mode and local mode | Covered by `ControlRuntime` and `controlPolicy` |
-| Locale switch from mobile settings (gears) must update Unity language | Tracked by `SF-I-005` (`ControlRuntimeGateway` -> `ILocalizationService`) |
+| Locale switch from mobile settings (gears) must update Unity language | Covered by `ControlRuntimeGateway` locale command path (`SET_LOCALE_REQUEST` -> `ILocalizationService`) |
 | Runtime domains (Session/Scene/TaskGraph/Interaction/Effect/Scoring/Telemetry/Control) | Covered in runtime domains checklist |
 | Definition layer (`config + graph + bindings + policies`) | Covered by `GameDefinition` contract |
 | `channels`, `conditions`, `effects`, `policies` | Covered by dedicated catalogs |
@@ -65,7 +65,13 @@ Implementation status:
 | `EffectRuntime` | Narrator/audio/haptics/vfx/ui hint | `EffectRunner` + effect plugins | Implemented |
 | `ScoringRuntime` | points/errors/lives/success thresholds/adaptive difficulty | `ScoringRuntime`, policy evaluators | Implemented |
 | `TelemetryRuntime` | canonical append-only log + outbox + retries + dedupe | `SessionFlowRunner`, `InteractionEventBridge`, `GameTelemetryService`, existing event store/outbox path | Implemented (with export quality gates) |
-| `ControlRuntime` | mobile controller mode, local mode, and remote locale command path | `ControlRuntimeGateway` + control mode policy + localization service bridge | Implemented (locale sync path tracked by `SF-I-005`) |
+| `ControlRuntime` | mobile controller mode, local mode, and remote locale command path | `ControlRuntimeGateway` + control mode policy + localization service bridge | Implemented |
+
+`ControlRuntime` locale command contract:
+
+- `commandId`: `SET_LOCALE_REQUEST`
+- `payload`: `locale`, `requestId`, `source`, `correlationId` (required for traceability)
+- behavior: accepted in `remote_only` and `hybrid`; rejected in `local_only` with explicit reason code
 
 `SessionRuntime` canonical state path:
 

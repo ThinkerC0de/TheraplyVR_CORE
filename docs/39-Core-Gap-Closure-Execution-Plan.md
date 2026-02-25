@@ -362,6 +362,36 @@ Allow mobile settings ("gears") language choice to change active Unity locale at
 - What we changed: "Connected mobile settings language command to runtime locale switch."
 - What it gives: "Operator can change session language live from controller settings."
 
+### Implementation Update (2026-02-25)
+
+Status: `DONE`
+
+Delivered:
+
+1. Added locale command contract:
+   - `GameCommandIds.SetLocaleRequest = "SET_LOCALE_REQUEST"`,
+   - `SetLocaleRequestCommand` (`locale`, `requestId`, `source`, `correlationId`).
+2. Extended `ControlRuntimeGateway` remote command mapping:
+   - subscribes to `SetLocaleRequestCommand`,
+   - routes through localization bridge with control-mode gate enforcement.
+3. Implemented locale change runtime path:
+   - applies locale through `LocalizationRuntime.TrySetLocale(...)`,
+   - rejects disallowed source in `local_only` mode (`CONTROL_SOURCE_REMOTE_NOT_ALLOWED`),
+   - preserves deterministic fallback behavior from `localizationPolicy`.
+4. Added canonical telemetry events emitted by control runtime:
+   - `locale_change_requested`,
+   - `locale_change_applied`,
+   - `locale_change_rejected`.
+5. Added command bus built-in mapping:
+   - `SetLocaleRequestCommand -> SET_LOCALE_REQUEST`.
+6. Added dedicated validation:
+   - `MobileLocaleSyncValidation` covering:
+     - remote locale switch success path,
+     - unsupported locale rejection,
+     - `local_only` mode remote rejection.
+7. Added validation pack step integration:
+   - `scripts/unity_session_flow_validation_pack.ps1` now runs `MobileLocaleSyncValidation`.
+
 ## Validation Gate Per Checkpoint
 
 Run the smallest set required to verify each point before commit.

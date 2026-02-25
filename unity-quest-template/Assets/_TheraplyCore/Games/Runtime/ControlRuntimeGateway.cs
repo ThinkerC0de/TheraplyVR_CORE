@@ -27,6 +27,7 @@ namespace TheraplyCore.Games.Runtime
         [SerializeField] private FlowConfigProvider _flowConfigProvider;
         [SerializeField] private GameSessionContext _sessionContext;
         [SerializeField] private GameCommandBus _commandBus;
+        [SerializeField] private LocalizationRuntime _localizationRuntime;
         [SerializeField] private TCPServerService _tcpServerService;
         [SerializeField] private InteractionEventBridge _interactionEventBridge;
 
@@ -332,6 +333,14 @@ namespace TheraplyCore.Games.Runtime
                 out _);
         }
 
+        private void HandleRemoteSetLocaleCommand(GameContracts.SetLocaleRequestCommand command)
+        {
+            TryExecuteSetLocaleCommand(
+                ControlSource.Remote,
+                command,
+                out _);
+        }
+
         private void HandleRemoteClientConnected(string clientIp)
         {
             TryAutoStartLocalFallback();
@@ -353,6 +362,7 @@ namespace TheraplyCore.Games.Runtime
             _commandBus.Subscribe<GameContracts.PauseGameCommand>(HandleRemotePauseCommand);
             _commandBus.Subscribe<GameContracts.ResumeGameCommand>(HandleRemoteResumeCommand);
             _commandBus.Subscribe<GameContracts.StopGameCommand>(HandleRemoteStopCommand);
+            _commandBus.Subscribe<GameContracts.SetLocaleRequestCommand>(HandleRemoteSetLocaleCommand);
         }
 
         private void UnsubscribeRemoteCommands()
@@ -366,6 +376,7 @@ namespace TheraplyCore.Games.Runtime
             _commandBus.Unsubscribe<GameContracts.PauseGameCommand>(HandleRemotePauseCommand);
             _commandBus.Unsubscribe<GameContracts.ResumeGameCommand>(HandleRemoteResumeCommand);
             _commandBus.Unsubscribe<GameContracts.StopGameCommand>(HandleRemoteStopCommand);
+            _commandBus.Unsubscribe<GameContracts.SetLocaleRequestCommand>(HandleRemoteSetLocaleCommand);
         }
 
         private void SubscribeTransportSignals()
@@ -502,6 +513,15 @@ namespace TheraplyCore.Games.Runtime
                 }
             }
 
+            if (_localizationRuntime == null)
+            {
+                _localizationRuntime = GetComponent<LocalizationRuntime>();
+                if (_localizationRuntime == null)
+                {
+                    _localizationRuntime = FindFirstObjectByType<LocalizationRuntime>();
+                }
+            }
+
             if (_tcpServerService == null)
             {
                 _tcpServerService = GetComponent<TCPServerService>();
@@ -556,6 +576,121 @@ namespace TheraplyCore.Games.Runtime
                 nameof(ControlRuntimeGateway));
         }
 
+        private bool TryExecuteSetLocaleCommand(
+            ControlSource source,
+            GameContracts.SetLocaleRequestCommand command,
+            out string reasonCode)
+        {
+            reasonCode = string.Empty;
+            ResolveDependencies();
+            RefreshControlMode();
+
+            var requestedLocale = Normalize(command == null ? string.Empty : command.locale);
+            var requestId = ResolveLocaleRequestId(command);
+            var previousLocale = _localizationRuntime == null ? string.Empty : _localizationRuntime.CurrentLocale;
+            EmitLocaleTelemetry(
+                "locale_change_requested",
+                source,
+                requestedLocale,
+                previousLocale,
+                "LOCALE_CHANGE_REQUESTED",
+                requestId,
+                applied: false);
+
+            if (!IsControlSourceAllowed(source, out reasonCode))
+            {
+                EmitLocaleTelemetry(
+                    "locale_change_rejected",
+                    source,
+                    requestedLocale,
+                    previousLocale,
+                    reasonCode,
+                    requestId,
+                    applied: false);
+                MaybeLog("LOCALE_CHANGE_REJECTED", GameContracts.GameCommandIds.SetLocaleRequest, source, reasonCode);
+                return false;
+            }
+
+            if (_localizationRuntime == null)
+            {
+                reasonCode = "LOCALIZATION_SERVICE_MISSING";
+                EmitLocaleTelemetry(
+                    "locale_change_rejected",
+                    source,
+                    requestedLocale,
+                    previousLocale,
+                    reasonCode,
+                    requestId,
+                    applied: false);
+                return false;
+            }
+
+            if (!_localizationRuntime.TrySetLocale(requestedLocale, out reasonCode))
+            {
+                EmitLocaleTelemetry(
+                    "locale_change_rejected",
+                    source,
+                    requestedLocale,
+                    previousLocale,
+                    reasonCode,
+                    requestId,
+                    applied: false);
+                MaybeLog("LOCALE_CHANGE_REJECTED", GameContracts.GameCommandIds.SetLocaleRequest, source, reasonCode);
+                return false;
+            }
+
+            EmitLocaleTelemetry(
+                "locale_change_applied",
+                source,
+                _localizationRuntime.CurrentLocale,
+                previousLocale,
+                "LOCALE_CHANGE_APPLIED",
+                requestId,
+                applied: true);
+            MaybeLog("LOCALE_CHANGE_APPLIED", GameContracts.GameCommandIds.SetLocaleRequest, source, string.Empty);
+            return true;
+        }
+
+        private void EmitLocaleTelemetry(
+            string eventName,
+            ControlSource source,
+            string locale,
+            string previousLocale,
+            string reasonCode,
+            string requestId,
+            bool applied)
+        {
+            if (!_emitControlTelemetry || _interactionEventBridge == null)
+            {
+                return;
+            }
+
+            var payload = new Dictionary<string, object>
+            {
+                { "flowId", NormalizeOrFallback(_sessionFlowRunner == null ? string.Empty : _sessionFlowRunner.ActiveFlowId, "session_flow") },
+                { "stepId", NormalizeOrFallback(_sessionFlowRunner == null ? string.Empty : _sessionFlowRunner.ActiveNodeId, string.Empty) },
+                { "nodeId", NormalizeOrFallback(_sessionFlowRunner == null ? string.Empty : _sessionFlowRunner.ActiveNodeId, string.Empty) },
+                { "controlMode", _activeControlMode },
+                { "source", source == ControlSource.Remote ? "remote" : "local" },
+                { "locale", NormalizeOrFallback(locale, string.Empty) },
+                { "previousLocale", NormalizeOrFallback(previousLocale, string.Empty) },
+                { "requestId", NormalizeOrFallback(requestId, string.Empty) },
+                { "commandId", GameContracts.GameCommandIds.SetLocaleRequest },
+                { "reasonCode", NormalizeOrFallback(reasonCode, string.Empty) },
+                { "eventType", NormalizeOrFallback(eventName, "locale_change_event") },
+                { "payloadVersion", 1 },
+                { "monotonicSec", Time.realtimeSinceStartup },
+                { "actionOutcome", applied ? "CORRECT" : "OBSERVED" },
+            };
+
+            _interactionEventBridge.RecordGameplayEvent(
+                ResolveDefinitionGameId(),
+                eventName,
+                _sessionRuntimeBridge == null ? string.Empty : _sessionRuntimeBridge.SessionState.ToString(),
+                payload,
+                nameof(ControlRuntimeGateway));
+        }
+
         private string ResolveDefinitionGameId()
         {
             if (_flowConfigProvider != null &&
@@ -592,6 +727,28 @@ namespace TheraplyCore.Games.Runtime
         private static string Normalize(string value)
         {
             return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+        }
+
+        private static string ResolveLocaleRequestId(GameContracts.SetLocaleRequestCommand command)
+        {
+            if (command == null)
+            {
+                return Guid.NewGuid().ToString("N");
+            }
+
+            var requestId = Normalize(command.requestId);
+            if (!string.IsNullOrWhiteSpace(requestId))
+            {
+                return requestId;
+            }
+
+            var correlationId = Normalize(command.correlationId);
+            if (!string.IsNullOrWhiteSpace(correlationId))
+            {
+                return correlationId;
+            }
+
+            return Guid.NewGuid().ToString("N");
         }
 
         private static string NormalizeOrFallback(string value, string fallback)

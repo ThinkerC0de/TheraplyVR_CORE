@@ -121,7 +121,7 @@ Execution details: `docs/39-Core-Gap-Closure-Execution-Plan.md`
 | SF-I-002 | Implement universal narrator and localization runtime | DONE | Narration and locale switching are data-driven through effects, with fallback and telemetry | SF-D-003 |
 | SF-I-003 | Implement calendar runtime and date-driven event rules | DONE | Date windows/profile-date rules can activate variants and sequences without scene scripts, with deterministic conflict policy and calendar telemetry | SF-A-003 |
 | SF-I-004 | Expose scene lifecycle operations as flow effects | DONE | `load_scene`, `unload_scene`, `reset_scene` are available through effect plugins with reason-coded failures | SF-B-004, SF-D-003 |
-| SF-I-005 | Add locale sync from mobile settings to Unity runtime | TODO | Language selected in mobile settings is applied in Unity at runtime through `ControlRuntimeGateway` + `LocalizationRuntime`, with explicit telemetry and reason-coded rejection | SF-I-002, SF-F-002 |
+| SF-I-005 | Add locale sync from mobile settings to Unity runtime | DONE | Language selected in mobile settings is applied in Unity at runtime through `ControlRuntimeGateway` + `LocalizationRuntime`, with explicit telemetry and reason-coded rejection | SF-I-002, SF-F-002 |
 
 ## Global Definition Of Done
 

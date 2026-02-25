@@ -139,6 +139,11 @@ $validationSteps = @(
         log = "unity_scene_lifecycle_effects_validation.log"
     },
     @{
+        name = "MobileLocaleSyncValidation"
+        method = "TheraplyCore.Editor.Automation.MobileLocaleSyncValidation.RunMobileLocaleSyncValidation"
+        log = "unity_mobile_locale_sync_validation.log"
+    },
+    @{
         name = "TaskGraphRuntimeIntegrationValidation"
         method = "TheraplyCore.Editor.Automation.TaskGraphRuntimeIntegrationValidation.RunTaskGraphRuntimeIntegrationValidation"
         log = "unity_task_graph_runtime_integration_validation.log"
@@ -188,11 +193,12 @@ $summaryLines = @(
     "2. NarratorLocalizationRuntimeValidation",
     "3. CalendarRuntimeValidation",
     "4. SceneLifecycleEffectsValidation",
-    "5. TaskGraphRuntimeIntegrationValidation",
-    "6. AdapterIntegrationValidation",
-    "7. CanonicalFlowTelemetryQualityGateValidation",
-    "8. SessionFlowOutboxResilienceValidation",
-    "9. SessionFlowSmokeTemplateValidation",
+    "5. MobileLocaleSyncValidation",
+    "6. TaskGraphRuntimeIntegrationValidation",
+    "7. AdapterIntegrationValidation",
+    "8. CanonicalFlowTelemetryQualityGateValidation",
+    "9. SessionFlowOutboxResilienceValidation",
+    "10. SessionFlowSmokeTemplateValidation",
     "",
     "Logs:",
     ("- {0}" -f $LogDirectory),

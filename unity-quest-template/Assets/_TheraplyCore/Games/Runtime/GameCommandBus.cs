@@ -1006,6 +1006,7 @@ namespace TheraplyCore.Games.Runtime
             SetCommandIdMapping(typeof(PauseGameCommand), GameCommandIds.PauseGame);
             SetCommandIdMapping(typeof(ResumeGameCommand), GameCommandIds.ResumeGame);
             SetCommandIdMapping(typeof(StopGameCommand), GameCommandIds.StopGame);
+            SetCommandIdMapping(typeof(SetLocaleRequestCommand), GameCommandIds.SetLocaleRequest);
             SetCommandIdMapping(typeof(EndSessionCommand), GameCommandIds.EndSession);
             SetCommandIdMapping(typeof(CriticalCommandAckPayload), GameCommandIds.CommandAck);
             SetCommandIdMapping(typeof(SessionStateUpdateCommand), GameCommandIds.SessionStateUpdate);

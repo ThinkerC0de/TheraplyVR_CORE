@@ -13,6 +13,7 @@ namespace TheraplyCore.Games.Contracts
         public const string PauseGame = "PAUSE_GAME";
         public const string ResumeGame = "RESUME_GAME";
         public const string StopGame = "STOP_GAME";
+        public const string SetLocaleRequest = "SET_LOCALE_REQUEST";
         public const string EndSession = "END_SESSION";
         public const string CommandAck = "COMMAND_ACK";
         public const string UpdateConfig = "UPDATE_CONFIG";
@@ -105,6 +106,18 @@ namespace TheraplyCore.Games.Contracts
         public string correlationId;
         public string gameId;
         public string reason;
+
+        public string CorrelationId => correlationId;
+    }
+
+    [Serializable]
+    public sealed class SetLocaleRequestCommand : IGameCommand
+    {
+        public string correlationId;
+        public string gameId;
+        public string locale;
+        public string requestId;
+        public string source;
 
         public string CorrelationId => correlationId;
     }
