@@ -607,6 +607,7 @@ These actions cover target therapeutic gameplay mechanics for this framework.
 | `show_object` | Make bound object visible/enabled |
 | `hide_object` | Hide/disable bound object |
 | `spawn_object` | Spawn prefab/entity at binding point |
+| `spawn_prefab_wave` | Spawn prefab batch in area over time |
 | `despawn_object` | Remove spawned entity |
 | `spawn_object_group` | Spawn group of entities |
 | `despawn_object_group` | Remove group of entities |

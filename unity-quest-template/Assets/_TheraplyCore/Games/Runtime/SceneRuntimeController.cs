@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -381,6 +382,97 @@ namespace TheraplyCore.Games.Runtime
             return true;
         }
 
+        public bool TrySpawnWave(
+            string bindingKeyPrefix,
+            string prefabKey,
+            string spawnPointKey,
+            Vector3 areaSize,
+            int count,
+            float durationSec,
+            bool randomYaw,
+            out string reasonCode)
+        {
+            reasonCode = string.Empty;
+            RebuildRegistryIndex();
+
+            if (string.IsNullOrWhiteSpace(prefabKey))
+            {
+                reasonCode = "PREFAB_KEY_REQUIRED";
+                return false;
+            }
+
+            if (!_prefabByKey.TryGetValue(prefabKey.Trim(), out var prefab) || prefab == null)
+            {
+                reasonCode = "PREFAB_KEY_NOT_FOUND";
+                return false;
+            }
+
+            if (count <= 0)
+            {
+                reasonCode = "SPAWN_COUNT_INVALID";
+                return false;
+            }
+
+            if (durationSec < 0f)
+            {
+                reasonCode = "SPAWN_DURATION_INVALID";
+                return false;
+            }
+
+            Transform spawnPoint = null;
+            if (!string.IsNullOrWhiteSpace(spawnPointKey))
+            {
+                _spawnPointsByKey.TryGetValue(spawnPointKey.Trim(), out spawnPoint);
+            }
+
+            var safeAreaSize = new Vector3(
+                Mathf.Max(0f, areaSize.x),
+                Mathf.Max(0f, areaSize.y),
+                Mathf.Max(0f, areaSize.z));
+            var normalizedBindingPrefix = NormalizeOrFallback(bindingKeyPrefix, string.Empty);
+
+            if (count == 1 || durationSec <= 0f)
+            {
+                for (var i = 0; i < count; i++)
+                {
+                    if (!TrySpawnResolvedPrefab(
+                            prefab,
+                            normalizedBindingPrefix,
+                            i,
+                            count,
+                            spawnPoint,
+                            safeAreaSize,
+                            randomYaw,
+                            out reasonCode))
+                    {
+                        return false;
+                    }
+                }
+
+                reasonCode = "SPAWN_WAVE_APPLIED";
+                return true;
+            }
+
+            if (!isActiveAndEnabled)
+            {
+                reasonCode = "SCENE_RUNTIME_INACTIVE";
+                return false;
+            }
+
+            StartCoroutine(
+                SpawnWaveRoutine(
+                    prefab,
+                    normalizedBindingPrefix,
+                    count,
+                    durationSec,
+                    spawnPoint,
+                    safeAreaSize,
+                    randomYaw));
+
+            reasonCode = "SPAWN_WAVE_SCHEDULED";
+            return true;
+        }
+
         public bool TryDespawnByInstanceId(string instanceId, out string reasonCode)
         {
             reasonCode = string.Empty;
@@ -479,6 +571,125 @@ namespace TheraplyCore.Games.Runtime
             {
                 TryDespawnByInstanceId(ids[i], out _);
             }
+        }
+
+        private IEnumerator SpawnWaveRoutine(
+            GameObject prefab,
+            string bindingKeyPrefix,
+            int count,
+            float durationSec,
+            Transform spawnPoint,
+            Vector3 areaSize,
+            bool randomYaw)
+        {
+            var intervalSec = count <= 1 ? 0f : durationSec / (count - 1);
+            for (var i = 0; i < count; i++)
+            {
+                if (!TrySpawnResolvedPrefab(
+                        prefab,
+                        bindingKeyPrefix,
+                        i,
+                        count,
+                        spawnPoint,
+                        areaSize,
+                        randomYaw,
+                        out _))
+                {
+                    yield break;
+                }
+
+                if (i < count - 1 && intervalSec > 0f)
+                {
+                    yield return new WaitForSeconds(intervalSec);
+                }
+            }
+        }
+
+        private bool TrySpawnResolvedPrefab(
+            GameObject prefab,
+            string bindingKeyPrefix,
+            int index,
+            int totalCount,
+            Transform spawnPoint,
+            Vector3 areaSize,
+            bool randomYaw,
+            out string reasonCode)
+        {
+            reasonCode = string.Empty;
+            if (prefab == null)
+            {
+                reasonCode = "PREFAB_KEY_NOT_FOUND";
+                return false;
+            }
+
+            var position = BuildSpawnPosition(spawnPoint, areaSize);
+            var rotation = BuildSpawnRotation(spawnPoint, randomYaw);
+            var instance = Instantiate(prefab, position, rotation);
+            if (instance == null)
+            {
+                reasonCode = "SPAWN_FAILED";
+                return false;
+            }
+
+            var instanceId = Guid.NewGuid().ToString();
+            _spawnById[instanceId] = new SpawnRecord
+            {
+                instanceId = instanceId,
+                bindingKey = BuildSpawnBindingKey(bindingKeyPrefix, index, totalCount),
+                instance = instance,
+            };
+
+            MaybeLog("SPAWN:" + instanceId);
+            return true;
+        }
+
+        private static string BuildSpawnBindingKey(string bindingKeyPrefix, int index, int totalCount)
+        {
+            var normalizedPrefix = NormalizeOrFallback(bindingKeyPrefix, string.Empty);
+            if (string.IsNullOrWhiteSpace(normalizedPrefix))
+            {
+                return string.Empty;
+            }
+
+            if (totalCount <= 1)
+            {
+                return normalizedPrefix;
+            }
+
+            return normalizedPrefix + "_" + (index + 1);
+        }
+
+        private static Vector3 BuildSpawnPosition(Transform spawnPoint, Vector3 areaSize)
+        {
+            var basePosition = spawnPoint == null ? Vector3.zero : spawnPoint.position;
+            var half = areaSize * 0.5f;
+            if (half.sqrMagnitude <= 0f)
+            {
+                return basePosition;
+            }
+
+            var localOffset = new Vector3(
+                UnityEngine.Random.Range(-half.x, half.x),
+                UnityEngine.Random.Range(-half.y, half.y),
+                UnityEngine.Random.Range(-half.z, half.z));
+            if (spawnPoint == null)
+            {
+                return basePosition + localOffset;
+            }
+
+            return basePosition + spawnPoint.TransformVector(localOffset);
+        }
+
+        private static Quaternion BuildSpawnRotation(Transform spawnPoint, bool randomYaw)
+        {
+            var baseRotation = spawnPoint == null ? Quaternion.identity : spawnPoint.rotation;
+            if (!randomYaw)
+            {
+                return baseRotation;
+            }
+
+            var yawRotation = Quaternion.AngleAxis(UnityEngine.Random.Range(0f, 360f), Vector3.up);
+            return yawRotation * baseRotation;
         }
 
         private static void IndexPrefabs(

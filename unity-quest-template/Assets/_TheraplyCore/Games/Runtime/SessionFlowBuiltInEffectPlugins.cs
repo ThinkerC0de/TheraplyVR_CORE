@@ -58,6 +58,7 @@ namespace TheraplyCore.Games.Runtime
             registry.Register(new DelegateEffectPlugin("show_object", ExecuteShowObject), replaceExisting);
             registry.Register(new DelegateEffectPlugin("hide_object", ExecuteHideObject), replaceExisting);
             registry.Register(new DelegateEffectPlugin("spawn_object", ExecuteSpawnObject), replaceExisting);
+            registry.Register(new DelegateEffectPlugin("spawn_prefab_wave", ExecuteSpawnPrefabWave), replaceExisting);
             registry.Register(new DelegateEffectPlugin("despawn_object", ExecuteDespawnObject), replaceExisting);
             registry.Register(new DelegateEffectPlugin("play_audio", ExecutePlayAudio), replaceExisting);
             registry.Register(new DelegateEffectPlugin("stop_audio", ExecuteStopAudio), replaceExisting);
@@ -139,6 +140,63 @@ namespace TheraplyCore.Games.Runtime
             var bindingKey = ReadParameter(effect, "bindingKey", effect == null ? string.Empty : effect.binding);
             var spawnPointKey = ReadParameter(effect, "spawnPointKey", string.Empty);
             return services.sceneRuntime.TrySpawn(bindingKey, prefabKey, spawnPointKey, out _, out reasonCode);
+        }
+
+        private static bool ExecuteSpawnPrefabWave(
+            GameContracts.EffectDefinition effect,
+            EffectExecutionContext context,
+            EffectRuntimeServices services,
+            out string reasonCode)
+        {
+            if (services == null || services.sceneRuntime == null)
+            {
+                reasonCode = "SCENE_RUNTIME_MISSING";
+                return false;
+            }
+
+            var prefabKey = ReadParameter(effect, "prefabKey", effect == null ? string.Empty : effect.binding);
+            if (string.IsNullOrWhiteSpace(prefabKey))
+            {
+                reasonCode = "PREFAB_KEY_REQUIRED";
+                return false;
+            }
+
+            var bindingKeyPrefix = ReadParameter(effect, "bindingKeyPrefix", string.Empty);
+            if (string.IsNullOrWhiteSpace(bindingKeyPrefix))
+            {
+                bindingKeyPrefix = ReadParameter(effect, "bindingKey", effect == null ? string.Empty : effect.binding);
+            }
+
+            var spawnPointKey = ReadParameter(effect, "spawnPointKey", string.Empty);
+            var count = ReadIntParameter(effect, "count", 1);
+            if (count <= 0)
+            {
+                reasonCode = "SPAWN_COUNT_INVALID";
+                return false;
+            }
+
+            var durationSec = ReadFloatParameter(effect, "durationSec", 0f);
+            if (durationSec < 0f)
+            {
+                reasonCode = "SPAWN_DURATION_INVALID";
+                return false;
+            }
+
+            var areaSize = new Vector3(
+                Mathf.Max(0f, ReadFloatParameter(effect, "areaSizeX", 0f)),
+                Mathf.Max(0f, ReadFloatParameter(effect, "areaSizeY", 0f)),
+                Mathf.Max(0f, ReadFloatParameter(effect, "areaSizeZ", 0f)));
+            var randomYaw = ReadBoolParameter(effect, "randomYaw", true);
+
+            return services.sceneRuntime.TrySpawnWave(
+                bindingKeyPrefix,
+                prefabKey,
+                spawnPointKey,
+                areaSize,
+                count,
+                durationSec,
+                randomYaw,
+                out reasonCode);
         }
 
         private static bool ExecuteDespawnObject(

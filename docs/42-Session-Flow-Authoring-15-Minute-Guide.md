@@ -53,11 +53,25 @@ Goal: create and run a new scene setup without adding per-game logic in core run
   - `Mouse wheel` = zoom in/out.
   - `RMB` on empty canvas = context menu with categorized node creation.
 - Node:
-  - `RMB` on node = `Select`, `Rename`, `Delete`, `Disconnect Outgoing`, `Disconnect Incoming`, `Disconnect All`.
+  - `RMB` on node = `Select`, `Rename`, `Set As Entry (Start)`, `Delete`, `Disconnect Outgoing`, `Disconnect Incoming`, `Disconnect All`.
+  - `RMB` on node = `Effects -> Add On Enter -> Spawn Prefab Wave` adds ready-to-edit spawn preset.
   - `Rename` opens rename section in right inspector; apply a stable id like `start_action`.
 - Start node:
   - Set explicit start in left panel: `Task Graph -> Entry Node`.
-  - Recommended convention: rename first node to `start` or `start_action`, then set it as `Entry Node`.
+  - Renaming node id to `start` auto-assigns it as `Entry Node`.
+  - Recommended convention: rename first node to `start`.
+
+## Spawn Prefab Wave Parameters
+
+Use effect id: `spawn_prefab_wave`
+
+- `prefabKey`: prefab registry key from `SceneRuntimeController`.
+- `spawnPointKey`: optional transform key used as spawn center.
+- `bindingKeyPrefix`: prefix assigned to spawned instances (`prefix_1`, `prefix_2`, ...).
+- `count`: number of spawned prefabs.
+- `durationSec`: total spawn duration (`0` = instant batch).
+- `areaSizeX`, `areaSizeY`, `areaSizeZ`: spawn box size around `spawnPointKey`.
+- `randomYaw`: random Y rotation per spawned instance.
 
 ## Validation Commands
 

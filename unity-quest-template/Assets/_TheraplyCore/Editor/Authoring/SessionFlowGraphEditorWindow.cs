@@ -244,7 +244,16 @@ namespace TheraplyCore.Editor.Authoring
                     NodeWidth * _graphZoom,
                     NodeHeight * _graphZoom);
                 var selected = string.Equals(node.nodeId, _selectedNodeId, StringComparison.OrdinalIgnoreCase);
-                var title = selected ? "* " + node.nodeId + " (" + node.nodeType + ")" : node.nodeId + " (" + node.nodeType + ")";
+                var isEntryNode = string.Equals(
+                    node.nodeId,
+                    _definition.taskGraph.entryNodeId,
+                    StringComparison.OrdinalIgnoreCase);
+                var titlePrefix = selected ? "* " : string.Empty;
+                if (isEntryNode)
+                {
+                    titlePrefix += "[ENTRY] ";
+                }
+                var title = titlePrefix + node.nodeId + " (" + node.nodeType + ")";
 
                 var updated = GUI.Window(
                     1000 + i,
@@ -526,6 +535,10 @@ namespace TheraplyCore.Editor.Authoring
                 new GUIContent("Node/Rename"),
                 false,
                 () => BeginRenameNode(nodeId));
+            menu.AddItem(
+                new GUIContent("Node/Set As Entry (Start)"),
+                false,
+                () => SetEntryNode(nodeId));
             menu.AddSeparator("Node/");
             menu.AddItem(
                 new GUIContent("Node/Delete"),
@@ -572,6 +585,12 @@ namespace TheraplyCore.Editor.Authoring
             {
                 menu.AddDisabledItem(new GUIContent("Connections/Disconnect All"));
             }
+
+            menu.AddSeparator("Effects/");
+            menu.AddItem(
+                new GUIContent("Effects/Add On Enter/Spawn Prefab Wave"),
+                false,
+                () => AddSpawnWavePresetToNode(nodeId));
 
             menu.ShowAsContext();
         }
@@ -785,6 +804,11 @@ namespace TheraplyCore.Editor.Authoring
             if (GUILayout.Button("Add Effect"))
             {
                 effects.Add(new EffectDefinition());
+            }
+
+            if (GUILayout.Button("Add Spawn Prefab Wave"))
+            {
+                effects.Add(CreateSpawnWavePresetEffect());
             }
         }
         private void DrawChannels()
@@ -1029,6 +1053,11 @@ namespace TheraplyCore.Editor.Authoring
                 _definition.taskGraph.entryNodeId = targetNodeId;
             }
 
+            if (string.Equals(targetNodeId, "start", StringComparison.OrdinalIgnoreCase))
+            {
+                _definition.taskGraph.entryNodeId = targetNodeId;
+            }
+
             for (var i = 0; i < _definition.taskGraph.nodes.Count; i++)
             {
                 var other = _definition.taskGraph.nodes[i];
@@ -1092,6 +1121,23 @@ namespace TheraplyCore.Editor.Authoring
 
             Repaint();
             return true;
+        }
+
+        private void SetEntryNode(string nodeId)
+        {
+            if (string.IsNullOrWhiteSpace(nodeId))
+            {
+                return;
+            }
+
+            if (IndexOfNode(nodeId) < 0)
+            {
+                return;
+            }
+
+            _definition.taskGraph.entryNodeId = nodeId.Trim();
+            _selectedNodeId = nodeId.Trim();
+            Repaint();
         }
 
         private void BeginRenameNode(string nodeId)
@@ -1277,6 +1323,41 @@ namespace TheraplyCore.Editor.Authoring
             }
 
             Repaint();
+        }
+
+        private void AddSpawnWavePresetToNode(string nodeId)
+        {
+            var node = GetNode(nodeId);
+            if (node == null)
+            {
+                return;
+            }
+
+            node.onEnterEffects ??= new List<EffectDefinition>();
+            node.onEnterEffects.Add(CreateSpawnWavePresetEffect());
+            _selectedNodeId = node.nodeId;
+            Repaint();
+        }
+
+        private static EffectDefinition CreateSpawnWavePresetEffect()
+        {
+            return new EffectDefinition
+            {
+                effectId = "spawn_prefab_wave",
+                binding = string.Empty,
+                parameters = new List<KeyValuePairString>
+                {
+                    new KeyValuePairString { key = "prefabKey", value = "target_prefab" },
+                    new KeyValuePairString { key = "bindingKeyPrefix", value = "targets" },
+                    new KeyValuePairString { key = "spawnPointKey", value = "spawn_center" },
+                    new KeyValuePairString { key = "count", value = "5" },
+                    new KeyValuePairString { key = "durationSec", value = "2.0" },
+                    new KeyValuePairString { key = "areaSizeX", value = "2.0" },
+                    new KeyValuePairString { key = "areaSizeY", value = "0.0" },
+                    new KeyValuePairString { key = "areaSizeZ", value = "2.0" },
+                    new KeyValuePairString { key = "randomYaw", value = "true" },
+                },
+            };
         }
         private void DrawLinks()
         {
