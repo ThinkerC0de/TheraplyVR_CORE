@@ -158,6 +158,7 @@ namespace TheraplyCore.Games.Runtime
                 _commandBus.Subscribe<ResumeGameCommand>(HandleResumeCommand);
                 _commandBus.Subscribe<StopGameCommand>(HandleStopCommand);
                 _commandBus.Subscribe<EndSessionCommand>(HandleEndSessionCommand);
+                _commandBus.Subscribe<DynamicUpdateConfigCommand>(HandleUpdateConfigCommand);
                 _commandBus.Subscribe<ManualResyncCommand>(HandleManualResyncCommand);
                 _commandBus.Subscribe<SyncCatalogCommand>(HandleSyncCatalogCommand);
                 _commandBus.Subscribe<InstallGameCommand>(HandleInstallGameCommand);
@@ -197,6 +198,7 @@ namespace TheraplyCore.Games.Runtime
                 _commandBus.Unsubscribe<ResumeGameCommand>(HandleResumeCommand);
                 _commandBus.Unsubscribe<StopGameCommand>(HandleStopCommand);
                 _commandBus.Unsubscribe<EndSessionCommand>(HandleEndSessionCommand);
+                _commandBus.Unsubscribe<DynamicUpdateConfigCommand>(HandleUpdateConfigCommand);
                 _commandBus.Unsubscribe<ManualResyncCommand>(HandleManualResyncCommand);
                 _commandBus.Unsubscribe<SyncCatalogCommand>(HandleSyncCatalogCommand);
                 _commandBus.Unsubscribe<InstallGameCommand>(HandleInstallGameCommand);
@@ -684,6 +686,42 @@ namespace TheraplyCore.Games.Runtime
             });
         }
 
+        private void HandleUpdateConfigCommand(DynamicUpdateConfigCommand command)
+        {
+            if (!TryResolveCommandGame(command?.gameId))
+            {
+                throw new InvalidOperationException("UPDATE_CONFIG_NO_ACTIVE_GAME");
+            }
+
+            var syntheticStart = new StartGameCommand
+            {
+                correlationId = command == null ? string.Empty : command.correlationId,
+                gameId = command == null ? string.Empty : command.gameId,
+                resumeFromSaved = false,
+                gameConfigType = command == null ? string.Empty : command.gameConfigType,
+                gameConfigVersion = command == null ? 0 : command.gameConfigVersion,
+                gameConfigJson = command == null ? string.Empty : command.gameConfigJson,
+            };
+
+            if (!TryApplyConfigCommand(
+                    syntheticStart,
+                    "UPDATE_CONFIG_UNSUPPORTED",
+                    "UPDATE_CONFIG_REJECTED",
+                    out var reasonCode))
+            {
+                throw new InvalidOperationException(
+                    string.IsNullOrWhiteSpace(reasonCode)
+                        ? "UPDATE_CONFIG_REJECTED"
+                        : reasonCode);
+            }
+
+            TrackCriticalRuntimeEvent("update_config", new Dictionary<string, object>
+            {
+                { "gameId", _activeGameId ?? string.Empty },
+                { "reasonCode", "UPDATE_CONFIG_APPLIED" },
+            });
+        }
+
         private void HandleManualResyncCommand(ManualResyncCommand command)
         {
             _ = HandleManualResyncCommandAsync(command);
@@ -1150,14 +1188,40 @@ namespace TheraplyCore.Games.Runtime
 
         private void TryApplyStartCommandConfig(StartGameCommand command)
         {
+            if (!TryApplyConfigCommand(
+                    command,
+                    "START_CONFIG_PROVIDER_UNSUPPORTED",
+                    "START_CONFIG_REJECTED",
+                    out var reasonCode))
+            {
+                if (!string.IsNullOrWhiteSpace(reasonCode))
+                {
+                    Logger.Warning(
+                        $"[GameRuntime] Ignored START_GAME config for {_activeGameId}: {reasonCode}");
+                }
+            }
+        }
+
+        private bool TryApplyConfigCommand(
+            StartGameCommand command,
+            string unsupportedReasonCode,
+            string rejectedReasonCode,
+            out string reasonCode)
+        {
+            reasonCode = string.Empty;
+
             if (command == null || _activeGame == null || string.IsNullOrWhiteSpace(_activeGameId))
             {
-                return;
+                reasonCode = "UPDATE_CONFIG_INVALID";
+                return false;
             }
 
             if (!(_activeGame is GameContracts.IStartCommandConfigProvider configProvider))
             {
-                return;
+                reasonCode = string.IsNullOrWhiteSpace(unsupportedReasonCode)
+                    ? "UPDATE_CONFIG_UNSUPPORTED"
+                    : unsupportedReasonCode;
+                return false;
             }
 
             _knownConfigs.TryGetValue(_activeGameId, out var previousConfig);
@@ -1166,26 +1230,28 @@ namespace TheraplyCore.Games.Runtime
                     command,
                     previousConfig,
                     out var resolvedConfig,
-                    out var reasonCode))
+                    out reasonCode))
             {
-                if (!string.IsNullOrWhiteSpace(reasonCode))
-                {
-                    Logger.Warning(
-                        $"[GameRuntime] Ignored START_GAME config for {_activeGameId}: {reasonCode}");
-                }
-                return;
+                reasonCode = string.IsNullOrWhiteSpace(reasonCode)
+                    ? (string.IsNullOrWhiteSpace(rejectedReasonCode) ? "UPDATE_CONFIG_REJECTED" : rejectedReasonCode)
+                    : reasonCode;
+                return false;
             }
 
             if (resolvedConfig == null)
             {
-                Logger.Warning($"[GameRuntime] START_GAME config provider returned null for {_activeGameId}.");
-                return;
+                reasonCode = "UPDATE_CONFIG_NULL_CONFIG";
+                return false;
             }
 
             if (!UpdateGameConfig(_activeGameId, resolvedConfig))
             {
-                Logger.Warning($"[GameRuntime] Failed to apply START_GAME config for {_activeGameId}.");
+                reasonCode = "UPDATE_CONFIG_FAILED";
+                return false;
             }
+
+            reasonCode = string.Empty;
+            return true;
         }
 
         private bool TryResolveStartupConfig(out GameContracts.IGameConfig config)

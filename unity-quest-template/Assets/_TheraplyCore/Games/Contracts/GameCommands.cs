@@ -132,6 +132,19 @@ namespace TheraplyCore.Games.Contracts
     }
 
     [Serializable]
+    public sealed class DynamicUpdateConfigCommand : IGameCommand
+    {
+        public string correlationId;
+        public string sessionId;
+        public string gameId;
+        public string gameConfigType;
+        public int gameConfigVersion;
+        public string gameConfigJson;
+
+        public string CorrelationId => correlationId;
+    }
+
+    [Serializable]
     public sealed class UpdateConfigCommand<TConfig> : IGameCommand where TConfig : IGameConfig
     {
         public string correlationId;

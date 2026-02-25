@@ -7,6 +7,7 @@ import 'package:flutter_controller/models/critical_command_envelope.dart';
 import 'package:flutter_controller/models/device_info.dart';
 import 'package:flutter_controller/models/entitlement_access.dart';
 import 'package:flutter_controller/models/game_catalog_entry.dart';
+import 'package:flutter_controller/models/mobile_control_schema.dart';
 import 'package:flutter_controller/models/ops_error_catalog.dart';
 import 'package:flutter_controller/models/parent_progress_snapshot.dart';
 import 'package:flutter_controller/models/runtime_status_signal.dart';
@@ -31,6 +32,7 @@ import 'package:flutter_controller/services/student_reward_service.dart';
 import 'package:flutter_controller/services/therapist_session_settings_service.dart';
 import 'package:flutter_controller/models/therapy_session_record.dart';
 import 'package:flutter_controller/widgets/media_stream_widget.dart';
+import 'package:flutter_controller/widgets/mobile_control_renderer.dart';
 
 enum _SessionGateAction { keepCurrent, resume, startNew }
 
@@ -198,6 +200,7 @@ class _ControlScreenState extends State<ControlScreen>
 
   static const String _demoCubeGameId = 'demo_cube_clicker';
   static const String _pulseTargetGameId = 'pulse_target_tap';
+  static const String _updateConfigCommandId = 'UPDATE_CONFIG';
   static const String _interruptedAutoCloseReasonCode =
       'INTERRUPTED_AUTO_CLOSED_TIMEOUT';
   static const Duration _recentlyEndedSessionTtl = Duration(seconds: 20);
@@ -286,6 +289,9 @@ class _ControlScreenState extends State<ControlScreen>
   int _pulseTargetCount = 8;
   double _pulseTargetSpeed = 0.7;
   double _pulseTargetScale = 0.3;
+  final Map<String, dynamic> _dynamicControlValuesByControlId =
+      <String, dynamic>{};
+  String _dynamicControlValuesGameId = '';
 
   @override
   void initState() {
@@ -1812,6 +1818,11 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   Map<String, dynamic> _buildSelectedGameConfigSnapshot() {
+    final schemaSnapshot = _buildSchemaDrivenConfigSnapshot();
+    if (schemaSnapshot != null) {
+      return schemaSnapshot;
+    }
+
     if (_isDemoCubeGameSelected) {
       return <String, dynamic>{
         'gameConfigType': 'demo_cube_config_v1',
@@ -1842,6 +1853,142 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     return <String, dynamic>{};
+  }
+
+  Map<String, dynamic>? _buildSchemaDrivenConfigSnapshot() {
+    final schema = _selectedGameEntry.mobileControlSchema;
+    if (schema == null) {
+      return null;
+    }
+
+    final gameConfig = _buildSchemaDrivenGameConfigPayload(
+      schema,
+      emitForUpdateConfig: false,
+    );
+
+    return <String, dynamic>{
+      'gameConfigType': _resolveSchemaGameConfigType(schema),
+      'gameConfigVersion': _resolveSchemaGameConfigVersion(schema),
+      ...gameConfig,
+    };
+  }
+
+  Map<String, dynamic> _buildSchemaDrivenGameConfigPayload(
+    MobileControlSchema schema, {
+    required bool emitForUpdateConfig,
+  }) {
+    _ensureDynamicControlValuesForSelectedSchema();
+
+    final payload = <String, dynamic>{};
+    for (final control in schema.controls) {
+      if (control.isButton) {
+        continue;
+      }
+
+      final shouldEmit = emitForUpdateConfig
+          ? control.binding.emitOnUpdateConfig
+          : control.binding.emitOnStartGame;
+      if (!shouldEmit) {
+        continue;
+      }
+
+      final bindingPath = control.binding.path.trim();
+      if (bindingPath.isEmpty) {
+        continue;
+      }
+
+      var value = _dynamicControlValuesByControlId[control.controlId];
+      value ??= _resolveSchemaControlDefaultValue(control);
+      payload[bindingPath] =
+          _coerceSchemaValue(control.binding.valueType, value);
+    }
+
+    if (schema.payload.includeVersionInGameConfig &&
+        schema.payload.gameConfigVersion > 0) {
+      payload['version'] = schema.payload.gameConfigVersion;
+    }
+
+    return payload;
+  }
+
+  String _resolveSchemaGameConfigType(MobileControlSchema schema) {
+    final configured = schema.payload.gameConfigType.trim();
+    if (configured.isNotEmpty) {
+      return configured;
+    }
+
+    return '${_selectedGameId}_config';
+  }
+
+  int _resolveSchemaGameConfigVersion(MobileControlSchema schema) {
+    final version = schema.payload.gameConfigVersion;
+    return version > 0 ? version : 1;
+  }
+
+  void _ensureDynamicControlValuesForSelectedSchema() {
+    final schema = _selectedGameEntry.mobileControlSchema;
+    if (schema == null) {
+      _dynamicControlValuesByControlId.clear();
+      _dynamicControlValuesGameId = '';
+      return;
+    }
+
+    final normalizedGameId = _selectedGameId.trim();
+    if (_dynamicControlValuesGameId != normalizedGameId) {
+      _dynamicControlValuesByControlId.clear();
+      _dynamicControlValuesGameId = normalizedGameId;
+    }
+
+    final knownControlIds = <String>{};
+    for (final control in schema.controls) {
+      knownControlIds.add(control.controlId);
+      _dynamicControlValuesByControlId.putIfAbsent(
+        control.controlId,
+        () => _resolveSchemaControlDefaultValue(control),
+      );
+    }
+
+    final staleKeys = _dynamicControlValuesByControlId.keys
+        .where((key) => !knownControlIds.contains(key))
+        .toList(growable: false);
+    for (final key in staleKeys) {
+      _dynamicControlValuesByControlId.remove(key);
+    }
+  }
+
+  dynamic _resolveSchemaControlDefaultValue(MobileControlDefinition control) {
+    final raw = control.defaultValue;
+    return _coerceSchemaValue(control.binding.valueType, raw);
+  }
+
+  dynamic _coerceSchemaValue(String valueType, dynamic raw) {
+    switch (valueType) {
+      case MobileControlValueTypes.integer:
+        if (raw is int) {
+          return raw;
+        }
+        if (raw is num) {
+          return raw.round();
+        }
+        return int.tryParse(raw.toString().trim()) ?? 0;
+      case MobileControlValueTypes.decimal:
+        if (raw is double) {
+          return raw;
+        }
+        if (raw is num) {
+          return raw.toDouble();
+        }
+        return double.tryParse(raw.toString().trim()) ?? 0.0;
+      case MobileControlValueTypes.boolean:
+        if (raw is bool) {
+          return raw;
+        }
+        final normalized = raw.toString().trim().toLowerCase();
+        return normalized == 'true' || normalized == '1' || normalized == 'yes';
+      case MobileControlValueTypes.text:
+      default:
+        return raw.toString();
+    }
   }
 
   Future<void> _refreshPersistedSessionSnapshot({
@@ -3915,35 +4062,45 @@ class _ControlScreenState extends State<ControlScreen>
       payload['resumeFromSaved'] = false;
     }
 
-    if (command == CriticalCommandIds.startGame && _isDemoCubeGameSelected) {
-      payload['gameConfigType'] = 'demo_cube_config_v1';
-      payload['gameConfigVersion'] = 1;
-      payload['gameConfigJson'] = jsonEncode(<String, dynamic>{
-        'cubeCount': _demoCubeCount,
-        'cubeSpeed': double.parse(_demoCubeSpeed.toStringAsFixed(2)),
-        'levelMode': _demoLevelMode,
-        'version': 1,
-      });
-    }
-
-    if (command == CriticalCommandIds.startGame && _isPulseTargetGameSelected) {
-      final adaptiveDifficultySensitivity = double.parse(
-        _therapistSessionSettings.adaptiveDifficultySensitivity
-            .toStringAsFixed(2),
-      );
-      payload['gameConfigType'] = 'pulse_targets_config_v1';
-      payload['gameConfigVersion'] = 1;
-      payload['gameConfigJson'] = jsonEncode(<String, dynamic>{
-        'targetCount': _pulseTargetCount,
-        'targetSpeed': double.parse(_pulseTargetSpeed.toStringAsFixed(2)),
-        'targetScale': double.parse(_pulseTargetScale.toStringAsFixed(2)),
-        'adaptiveDifficultyEnabled':
-            _therapistSessionSettings.adaptiveDifficultyEnabled,
-        'adaptiveDifficultySensitivity': adaptiveDifficultySensitivity,
-        'adaptiveDifficultyLevel': _resolveAdaptiveDifficultyLevel(),
-        'labelPipelineEnabled': _therapistSessionSettings.labelPipelineEnabled,
-        'version': 1,
-      });
+    if (command == CriticalCommandIds.startGame) {
+      final schema = _selectedGameEntry.mobileControlSchema;
+      if (schema != null) {
+        final schemaGameConfig = _buildSchemaDrivenGameConfigPayload(
+          schema,
+          emitForUpdateConfig: false,
+        );
+        payload['gameConfigType'] = _resolveSchemaGameConfigType(schema);
+        payload['gameConfigVersion'] = _resolveSchemaGameConfigVersion(schema);
+        payload['gameConfigJson'] = jsonEncode(schemaGameConfig);
+      } else if (_isDemoCubeGameSelected) {
+        payload['gameConfigType'] = 'demo_cube_config_v1';
+        payload['gameConfigVersion'] = 1;
+        payload['gameConfigJson'] = jsonEncode(<String, dynamic>{
+          'cubeCount': _demoCubeCount,
+          'cubeSpeed': double.parse(_demoCubeSpeed.toStringAsFixed(2)),
+          'levelMode': _demoLevelMode,
+          'version': 1,
+        });
+      } else if (_isPulseTargetGameSelected) {
+        final adaptiveDifficultySensitivity = double.parse(
+          _therapistSessionSettings.adaptiveDifficultySensitivity
+              .toStringAsFixed(2),
+        );
+        payload['gameConfigType'] = 'pulse_targets_config_v1';
+        payload['gameConfigVersion'] = 1;
+        payload['gameConfigJson'] = jsonEncode(<String, dynamic>{
+          'targetCount': _pulseTargetCount,
+          'targetSpeed': double.parse(_pulseTargetSpeed.toStringAsFixed(2)),
+          'targetScale': double.parse(_pulseTargetScale.toStringAsFixed(2)),
+          'adaptiveDifficultyEnabled':
+              _therapistSessionSettings.adaptiveDifficultyEnabled,
+          'adaptiveDifficultySensitivity': adaptiveDifficultySensitivity,
+          'adaptiveDifficultyLevel': _resolveAdaptiveDifficultyLevel(),
+          'labelPipelineEnabled':
+              _therapistSessionSettings.labelPipelineEnabled,
+          'version': 1,
+        });
+      }
     }
 
     if (command == CriticalCommandIds.stopGame) {
@@ -3957,6 +4114,97 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     return payload;
+  }
+
+  Future<void> _handleSchemaButtonControl(
+    MobileControlDefinition control,
+  ) async {
+    final normalizedCommand = control.buttonCommandId.trim().toUpperCase();
+    if (normalizedCommand == _updateConfigCommandId) {
+      await _sendUpdateConfigFromSchema();
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Unsupported schema command: ${control.buttonCommandId.trim()}',
+        ),
+        backgroundColor: Colors.orange.shade700,
+      ),
+    );
+  }
+
+  Future<bool> _sendUpdateConfigFromSchema() async {
+    final schema = _selectedGameEntry.mobileControlSchema;
+    if (schema == null) {
+      return false;
+    }
+
+    if (!_isConnected) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Headset is offline. Cannot send UPDATE_CONFIG.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return false;
+    }
+
+    final sessionId = _activeSessionId;
+    final therapistId = _resolveActorTherapistId();
+    final ownerKey = _resolveOwnerKey(therapistIdOverride: therapistId);
+    final sessionKey = _resolveSessionKey(
+      sessionId,
+      therapistIdOverride: therapistId,
+    );
+    final gameConfig = _buildSchemaDrivenGameConfigPayload(
+      schema,
+      emitForUpdateConfig: true,
+    );
+
+    final payload = <String, dynamic>{
+      'sessionId': sessionId,
+      'studentId': widget.student.id,
+      'patientId': widget.student.id,
+      'therapistId': therapistId,
+      'ownerKey': ownerKey,
+      'sessionKey': sessionKey,
+      'gameId': _selectedGameId,
+      'gameConfigType': _resolveSchemaGameConfigType(schema),
+      'gameConfigVersion': _resolveSchemaGameConfigVersion(schema),
+      'gameConfigJson': jsonEncode(gameConfig),
+    };
+
+    try {
+      await _connection.sendCommand(_updateConfigCommandId, payload);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Configuration update sent.'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
+      return true;
+    } catch (e) {
+      if (mounted) {
+        _enqueueIncidentAlert(
+          title: 'UPDATE_CONFIG failed',
+          message: 'Failed to send UPDATE_CONFIG: $e',
+          reasonCode: OpsErrorCatalog.tryExtractReasonCode(e) ??
+              'UPDATE_CONFIG_SEND_FAILED',
+          severity: OperatorIncidentSeverity.error,
+        );
+      }
+      return false;
+    }
   }
 
   int _resolveAdaptiveDifficultyLevel() {
@@ -6288,16 +6536,33 @@ class _ControlScreenState extends State<ControlScreen>
                 ),
                 const SizedBox(height: 8),
               ],
-              if (_isDemoCubeGameSelected)
-                _buildDemoCubeSettings(lockedByRuntime: setupLockedByRuntime),
-              if (_isPulseTargetGameSelected)
-                _buildPulseTargetsSettings(
-                    lockedByRuntime: setupLockedByRuntime),
-              if (!_isDemoCubeGameSelected && !_isPulseTargetGameSelected)
-                _buildGenericGameSettings(
-                  entry,
-                  lockedByRuntime: setupLockedByRuntime,
+              if (entry.mobileControlSchema == null &&
+                  entry.mobileControlSchemaReasonCode.trim().isNotEmpty) ...[
+                _buildStateBanner(
+                  icon: Icons.rule_folder_outlined,
+                  color: Colors.orange.shade800,
+                  text:
+                      'Invalid mobile schema (${entry.mobileControlSchemaReasonCode}). Falling back to static setup.',
                 ),
+                const SizedBox(height: 8),
+              ],
+              if (entry.mobileControlSchema != null)
+                _buildSchemaDrivenSettings(
+                  entry.mobileControlSchema!,
+                  lockedByRuntime: setupLockedByRuntime,
+                )
+              else ...[
+                if (_isDemoCubeGameSelected)
+                  _buildDemoCubeSettings(lockedByRuntime: setupLockedByRuntime),
+                if (_isPulseTargetGameSelected)
+                  _buildPulseTargetsSettings(
+                      lockedByRuntime: setupLockedByRuntime),
+                if (!_isDemoCubeGameSelected && !_isPulseTargetGameSelected)
+                  _buildGenericGameSettings(
+                    entry,
+                    lockedByRuntime: setupLockedByRuntime,
+                  ),
+              ],
               const SizedBox(height: 8),
               _buildSessionControlPanel(
                 entry: entry,
@@ -6415,6 +6680,52 @@ class _ControlScreenState extends State<ControlScreen>
                   ),
                 ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildSchemaDrivenSettings(
+    MobileControlSchema schema, {
+    required bool lockedByRuntime,
+  }) {
+    _ensureDynamicControlValuesForSelectedSchema();
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (lockedByRuntime)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'Runtime active: value controls are locked. Schema buttons remain available.',
+                style: TextStyle(
+                  color: Colors.orange[800],
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          MobileControlRenderer(
+            schema: schema,
+            valuesByControlId: _dynamicControlValuesByControlId,
+            locked: lockedByRuntime,
+            onValueChanged: (change) {
+              setState(() {
+                _dynamicControlValuesByControlId[change.control.controlId] =
+                    change.value;
+              });
+            },
+            onButtonPressed: (control) {
+              unawaited(_handleSchemaButtonControl(control));
+            },
+          ),
+        ],
       ),
     );
   }
@@ -6647,6 +6958,8 @@ class _GameCatalogEntry {
   final bool runtimeLaunchEnabled;
   final int sortOrder;
   final List<String> previewLines;
+  final MobileControlSchema? mobileControlSchema;
+  final String mobileControlSchemaReasonCode;
 
   const _GameCatalogEntry({
     required this.gameId,
@@ -6661,6 +6974,8 @@ class _GameCatalogEntry {
     required this.runtimeLaunchEnabled,
     required this.sortOrder,
     required this.previewLines,
+    this.mobileControlSchema,
+    this.mobileControlSchemaReasonCode = '',
   });
 
   factory _GameCatalogEntry.fromRemoteEntry(GameCatalogEntry entry) {
@@ -6677,6 +6992,8 @@ class _GameCatalogEntry {
       runtimeLaunchEnabled: entry.runtimeLaunchEnabled,
       sortOrder: entry.sortOrder,
       previewLines: List<String>.from(entry.previewLines),
+      mobileControlSchema: entry.mobileControlSchema,
+      mobileControlSchemaReasonCode: entry.mobileControlSchemaReasonCode,
     );
   }
 }
