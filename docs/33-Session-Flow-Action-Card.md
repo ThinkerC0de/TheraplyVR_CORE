@@ -31,6 +31,8 @@ Implementation status:
 
 - validation and hardening suite are implemented (`Phase G = DONE`).
 - authoring and operations playbooks are implemented (`Phase H = DONE`).
+- core gap closure for runtime behavior is implemented (`Phase I = DONE`).
+- authoring automation stack (schema + editor + dynamic mobile renderer + demo) is implemented (`Phase J = DONE`).
 
 ## Design Rules
 

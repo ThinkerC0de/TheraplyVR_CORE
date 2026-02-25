@@ -123,6 +123,16 @@ Execution details: `docs/39-Core-Gap-Closure-Execution-Plan.md`
 | SF-I-004 | Expose scene lifecycle operations as flow effects | DONE | `load_scene`, `unload_scene`, `reset_scene` are available through effect plugins with reason-coded failures | SF-B-004, SF-D-003 |
 | SF-I-005 | Add locale sync from mobile settings to Unity runtime | DONE | Language selected in mobile settings is applied in Unity at runtime through `ControlRuntimeGateway` + `LocalizationRuntime`, with explicit telemetry and reason-coded rejection | SF-I-002, SF-F-002 |
 
+## Phase J - Authoring Tooling and Dynamic Mobile Controls
+
+| ID | Task | Status | Acceptance Criteria | Depends On |
+| --- | --- | --- | --- | --- |
+| SF-J-001 | Add mobile control schema contract and validators | DONE | Unity and Flutter parse and validate one `THERAPLY_MOBILE_CONTROL_SCHEMA` contract with reason-coded validation failures | SF-A-001, SF-G-001 |
+| SF-J-002 | Add Unity flow graph editor window | DONE | Editor supports node editing (`Action/Condition/Branch/Timer/Complete/Fail`), transitions, policies, channels, save/load, import/export, and validator panel | SF-B-009, SF-I-001 |
+| SF-J-003 | Add Flutter schema-driven dynamic control renderer | DONE | Mobile setup renders controls from schema and builds `START_GAME` plus `UPDATE_CONFIG` payloads without per-game runtime branching | SF-J-001, SF-F-002 |
+| SF-J-004 | Add end-to-end authoring sample | DONE | One sample `GameDefinitionAsset` and one sample mobile schema prove Unity authoring -> mobile dynamic rendering -> unchanged core runtime execution path | SF-J-002, SF-J-003 |
+| SF-J-005 | Publish authoring runbook and status updates | DONE | "15-minute" guide and backlog/status docs reflect delivered authoring stack | SF-J-004 |
+
 ## Global Definition Of Done
 
 1. New scene is authored using `GameDefinition` only.
@@ -131,6 +141,7 @@ Execution details: `docs/39-Core-Gap-Closure-Execution-Plan.md`
 4. Export quality gates pass with 100% required coverage.
 5. Session runs in both remote and local modes as configured.
 6. Phase `SF-I-001` to `SF-I-005` are delivered and marked `DONE`.
+7. Phase `SF-J-001` to `SF-J-005` are delivered and marked `DONE`.
 
 ## Historical Note
 
