@@ -34,9 +34,10 @@ namespace TheraplyCore.Editor.Automation
             ValidateBranchTrueFalseRouting();
             ValidateBranchPrecedence();
             ValidateNoMatchFailurePath();
+            ValidateCalendarConditionRouting();
             ValidateConditionTelemetryEvents();
             ValidateRejectedActionPath();
-            return "successPath=OK; timeoutPath=OK; branchTrueFalse=OK; precedence=OK; noMatch=OK; conditionTelemetry=OK; rejectPath=OK";
+            return "successPath=OK; timeoutPath=OK; branchTrueFalse=OK; precedence=OK; noMatch=OK; calendarConditions=OK; conditionTelemetry=OK; rejectPath=OK";
         }
 
         private static void ValidateSuccessPath()
@@ -310,6 +311,70 @@ namespace TheraplyCore.Editor.Automation
                 "Unexpected terminal reason code for no-match failure path.");
         }
 
+        private static void ValidateCalendarConditionRouting()
+        {
+            var graph = new TaskGraphDefinition
+            {
+                entryNodeId = "n_branch",
+                nodes = new List<TaskGraphNodeDefinition>
+                {
+                    new TaskGraphNodeDefinition
+                    {
+                        nodeId = "n_branch",
+                        nodeType = TaskGraphNodeTypes.Branch,
+                        conditions = new List<ConditionDefinition>
+                        {
+                            new ConditionDefinition
+                            {
+                                conditionId = SessionFlowConditionIds.IsEventActive,
+                                subject = "holiday_event",
+                                op = "eq",
+                                value = "true",
+                                nextNodeId = "n_complete",
+                            },
+                            new ConditionDefinition
+                            {
+                                conditionId = SessionFlowConditionIds.IsWithinDateWindow,
+                                subject = "2020-12-20T00:00:00Z",
+                                value = "2021-01-10T23:59:59Z",
+                                op = "between_yearly",
+                                nextNodeId = "n_fail",
+                            },
+                        },
+                    },
+                    new TaskGraphNodeDefinition
+                    {
+                        nodeId = "n_complete",
+                        nodeType = TaskGraphNodeTypes.Complete,
+                    },
+                    new TaskGraphNodeDefinition
+                    {
+                        nodeId = "n_fail",
+                        nodeType = TaskGraphNodeTypes.Fail,
+                    },
+                },
+            };
+
+            var calendarService = new MockCalendarService();
+            calendarService.SetEventActive("holiday_event", true);
+
+            var runner = CreateConditionRunner(
+                default(ScoringRuntime.ScoringSnapshot),
+                branchPrecedence: BranchPrecedenceModes.FirstMatch,
+                calendarService: calendarService);
+
+            AssertTrue(
+                runner.Initialize(graph, out var initReason),
+                "Calendar condition graph should initialize. reason=" + initReason);
+            AssertTrue(
+                runner.Start(0f, out var startReason),
+                "Calendar condition graph should start. reason=" + startReason);
+            AssertEqual(
+                TaskGraphRunState.Completed,
+                runner.State,
+                "Calendar condition graph should route to complete.");
+        }
+
         private static void ValidateConditionTelemetryEvents()
         {
             var graph = new TaskGraphDefinition
@@ -472,7 +537,8 @@ namespace TheraplyCore.Editor.Automation
             string branchPrecedence,
             IReadOnlyDictionary<string, bool> channelEnabledById = null,
             IReadOnlyDictionary<string, string> stateFlagsByKey = null,
-            string controlMode = SessionFlowControlModes.Hybrid)
+            string controlMode = SessionFlowControlModes.Hybrid,
+            ICalendarService calendarService = null)
         {
             var runner = new TaskGraphRunner();
             var conditionRegistry = new ConditionEvaluatorRegistry();
@@ -487,8 +553,94 @@ namespace TheraplyCore.Editor.Automation
                 scoringSnapshot,
                 channelEnabledById,
                 stateFlagsByKey,
-                branchPrecedence);
+                branchPrecedence,
+                calendarService);
             return runner;
+        }
+
+        private sealed class MockCalendarService : ICalendarService
+        {
+            private readonly Dictionary<string, bool> _activeEvents =
+                new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+
+            public string ActiveTimezoneId => "UTC";
+            public DateTime CurrentUtc => DateTime.UtcNow;
+
+            public void SetRuntimeContext(string gameId, string flowId, string sessionId)
+            {
+            }
+
+            public void SetTimeSource(ICalendarTimeSource timeSource)
+            {
+            }
+
+            public bool TryApplyPolicy(
+                CalendarPolicy policy,
+                IReadOnlyDictionary<string, string> profileDatesByKey,
+                out string reasonCode)
+            {
+                reasonCode = string.Empty;
+                return true;
+            }
+
+            public bool TrySetOverrideUtc(string utcIso, out string reasonCode)
+            {
+                reasonCode = string.Empty;
+                return true;
+            }
+
+            public void ClearOverrideUtc()
+            {
+            }
+
+            public void TickRuntime()
+            {
+            }
+
+            public bool TryEvaluateEventActive(string eventId, out bool isActive, out string reasonCode)
+            {
+                isActive = !string.IsNullOrWhiteSpace(eventId) &&
+                           _activeEvents.TryGetValue(eventId.Trim(), out var active) &&
+                           active;
+                reasonCode = isActive ? "CALENDAR_EVENT_ACTIVE" : "CALENDAR_EVENT_INACTIVE";
+                return true;
+            }
+
+            public bool TryEvaluateDateWindow(
+                string start,
+                string end,
+                bool yearlyRecurring,
+                string timezoneId,
+                out bool matched,
+                out string reasonCode)
+            {
+                matched = true;
+                reasonCode = "CALENDAR_WINDOW_MATCHED";
+                return true;
+            }
+
+            public bool TryEvaluateProfileDate(
+                string profileDateKey,
+                int daysBefore,
+                int daysAfter,
+                string timezoneId,
+                out bool matched,
+                out string reasonCode)
+            {
+                matched = true;
+                reasonCode = "CALENDAR_PROFILE_DATE_MATCHED";
+                return true;
+            }
+
+            public void SetEventActive(string eventId, bool active)
+            {
+                if (string.IsNullOrWhiteSpace(eventId))
+                {
+                    return;
+                }
+
+                _activeEvents[eventId.Trim()] = active;
+            }
         }
 
         private static void PersistValidationResult(string status, string details)

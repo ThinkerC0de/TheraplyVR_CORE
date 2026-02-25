@@ -136,6 +136,43 @@ namespace TheraplyCore.Games.Contracts
         IReadOnlyList<string> BuildFallbackChain(string locale);
     }
 
+    public interface ICalendarTimeSource
+    {
+        DateTime UtcNow { get; }
+    }
+
+    public interface ICalendarService
+    {
+        string ActiveTimezoneId { get; }
+        DateTime CurrentUtc { get; }
+
+        void SetRuntimeContext(string gameId, string flowId, string sessionId);
+        void SetTimeSource(ICalendarTimeSource timeSource);
+        bool TryApplyPolicy(
+            CalendarPolicy policy,
+            IReadOnlyDictionary<string, string> profileDatesByKey,
+            out string reasonCode);
+        bool TrySetOverrideUtc(string utcIso, out string reasonCode);
+        void ClearOverrideUtc();
+        void TickRuntime();
+
+        bool TryEvaluateEventActive(string eventId, out bool isActive, out string reasonCode);
+        bool TryEvaluateDateWindow(
+            string start,
+            string end,
+            bool yearlyRecurring,
+            string timezoneId,
+            out bool matched,
+            out string reasonCode);
+        bool TryEvaluateProfileDate(
+            string profileDateKey,
+            int daysBefore,
+            int daysAfter,
+            string timezoneId,
+            out bool matched,
+            out string reasonCode);
+    }
+
     /// <summary>
     /// Canonical session lifecycle states shared by runtime and signaling layers.
     /// Use these exact wire-safe values.

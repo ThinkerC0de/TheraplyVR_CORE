@@ -60,6 +60,15 @@ namespace TheraplyCore.Editor.Automation
             AssertTrue(
                 SessionFlowConditionIds.IsSupported(SessionFlowConditionIds.ElapsedTimeWindow),
                 "Built-in elapsed time window condition id should be supported.");
+            AssertTrue(
+                SessionFlowConditionIds.IsSupported(SessionFlowConditionIds.IsEventActive),
+                "Built-in calendar event condition id should be supported.");
+            AssertTrue(
+                SessionFlowConditionIds.IsSupported(SessionFlowConditionIds.IsWithinDateWindow),
+                "Built-in date window condition id should be supported.");
+            AssertTrue(
+                SessionFlowConditionIds.IsSupported(SessionFlowConditionIds.IsProfileBirthday),
+                "Built-in profile birthday condition id should be supported.");
             AssertEqual(
                 BranchPrecedenceModes.FirstMatch,
                 BranchPrecedenceModes.NormalizeOrDefault("unsupported"),
@@ -74,6 +83,16 @@ namespace TheraplyCore.Editor.Automation
             AssertTrue(
                 !string.IsNullOrWhiteSpace(localizationPolicy.defaultLocale),
                 "Localization policy default locale should not be empty.");
+
+            var calendarPolicy = sampleDefinition.policies.calendarPolicy;
+            AssertTrue(calendarPolicy != null, "Calendar policy should exist in default policies.");
+            AssertTrue(
+                !string.IsNullOrWhiteSpace(calendarPolicy.timezoneId),
+                "Calendar policy timezone should not be empty.");
+            AssertEqual(
+                CalendarConflictPolicies.HighestPriority,
+                CalendarConflictPolicies.NormalizeOrDefault("unsupported"),
+                "Calendar conflict policy should normalize to highest_priority fallback.");
 
             var actionValidator = new ActionValidator();
             var allowedAction = new AllowedActionDefinition
@@ -114,7 +133,7 @@ namespace TheraplyCore.Editor.Automation
             AssertTrue(validResult.accepted, "Expected action acceptance for valid control mode and input range.");
             AssertEqual("ACTION_ACCEPTED", validResult.reasonCode, "Unexpected reason code for valid action.");
 
-            return "definitionValidation=OK; conditionContracts=OK; localizationPolicy=OK; actionValidator=OK";
+            return "definitionValidation=OK; conditionContracts=OK; localizationPolicy=OK; calendarPolicy=OK; actionValidator=OK";
         }
 
         private static void PersistValidationResult(string status, string details)

@@ -129,6 +129,11 @@ $validationSteps = @(
         log = "unity_narrator_localization_runtime_validation.log"
     },
     @{
+        name = "CalendarRuntimeValidation"
+        method = "TheraplyCore.Editor.Automation.CalendarRuntimeValidation.RunCalendarRuntimeValidation"
+        log = "unity_calendar_runtime_validation.log"
+    },
+    @{
         name = "TaskGraphRuntimeIntegrationValidation"
         method = "TheraplyCore.Editor.Automation.TaskGraphRuntimeIntegrationValidation.RunTaskGraphRuntimeIntegrationValidation"
         log = "unity_task_graph_runtime_integration_validation.log"
@@ -176,11 +181,12 @@ $summaryLines = @(
     "Validation order:",
     "1. SessionFlowContractsValidation",
     "2. NarratorLocalizationRuntimeValidation",
-    "3. TaskGraphRuntimeIntegrationValidation",
-    "4. AdapterIntegrationValidation",
-    "5. CanonicalFlowTelemetryQualityGateValidation",
-    "6. SessionFlowOutboxResilienceValidation",
-    "7. SessionFlowSmokeTemplateValidation",
+    "3. CalendarRuntimeValidation",
+    "4. TaskGraphRuntimeIntegrationValidation",
+    "5. AdapterIntegrationValidation",
+    "6. CanonicalFlowTelemetryQualityGateValidation",
+    "7. SessionFlowOutboxResilienceValidation",
+    "8. SessionFlowSmokeTemplateValidation",
     "",
     "Logs:",
     ("- {0}" -f $LogDirectory),

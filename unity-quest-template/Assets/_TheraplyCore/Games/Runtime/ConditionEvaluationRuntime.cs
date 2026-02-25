@@ -51,6 +51,7 @@ namespace TheraplyCore.Games.Runtime
         public ScoringRuntime.ScoringSnapshot scoringSnapshot;
         public IReadOnlyDictionary<string, bool> channelEnabledById;
         public IReadOnlyDictionary<string, string> stateFlagsByKey;
+        public GameContracts.ICalendarService calendar;
 
         public float NodeElapsedSec => Mathf.Max(0f, nowElapsedSec - Mathf.Max(0f, nodeEnteredAtSec));
         public float FlowElapsedSec => Mathf.Max(0f, nowElapsedSec);
@@ -196,6 +197,9 @@ namespace TheraplyCore.Games.Runtime
             registry.Register(new ControlModeEqualsConditionEvaluator(), replaceExisting);
             registry.Register(new ChannelEnabledConditionEvaluator(), replaceExisting);
             registry.Register(new ElapsedTimeWindowConditionEvaluator(), replaceExisting);
+            registry.Register(new EventActiveConditionEvaluator(), replaceExisting);
+            registry.Register(new DateWindowConditionEvaluator(), replaceExisting);
+            registry.Register(new ProfileBirthdayConditionEvaluator(), replaceExisting);
         }
 
         private sealed class ScoreThresholdConditionEvaluator : IConditionEvaluator
@@ -469,6 +473,253 @@ namespace TheraplyCore.Games.Runtime
                     default:
                         reasonCode = "ELAPSED_SUBJECT_UNSUPPORTED";
                         return 0f;
+                }
+            }
+        }
+
+        private sealed class EventActiveConditionEvaluator : IConditionEvaluator
+        {
+            public string ConditionId => GameContracts.SessionFlowConditionIds.IsEventActive;
+
+            public ConditionEvaluationResult Evaluate(
+                GameContracts.ConditionDefinition condition,
+                ConditionEvaluationContext context)
+            {
+                if (context == null || context.calendar == null)
+                {
+                    return ConditionEvaluationResult.NotMatched("CALENDAR_SERVICE_MISSING");
+                }
+
+                var eventId = ConditionComparison.Normalize(condition == null ? string.Empty : condition.subject);
+                if (string.IsNullOrWhiteSpace(eventId))
+                {
+                    eventId = ConditionComparison.Normalize(condition == null ? string.Empty : condition.value);
+                }
+
+                if (string.IsNullOrWhiteSpace(eventId))
+                {
+                    return ConditionEvaluationResult.NotMatched("CALENDAR_EVENT_ID_REQUIRED");
+                }
+
+                if (!context.calendar.TryEvaluateEventActive(eventId, out var isActive, out var reasonCode))
+                {
+                    return ConditionEvaluationResult.NotMatched(
+                        string.IsNullOrWhiteSpace(reasonCode) ? "CALENDAR_EVENT_EVALUATION_FAILED" : reasonCode);
+                }
+
+                var op = ConditionComparison.NormalizeOrDefault(condition == null ? string.Empty : condition.op, "eq");
+                var expectedActive = true;
+                var rawValue = ConditionComparison.Normalize(condition == null ? string.Empty : condition.value);
+                if (!string.IsNullOrWhiteSpace(rawValue) && ConditionComparison.TryParseBool(rawValue, out var parsedExpected))
+                {
+                    expectedActive = parsedExpected;
+                }
+
+                if (!ConditionComparison.TryCompareBoolean(isActive, expectedActive, op, out var matched, out var comparisonReason))
+                {
+                    return ConditionEvaluationResult.NotMatched(comparisonReason);
+                }
+
+                return matched
+                    ? ConditionEvaluationResult.Matched("CONDITION_MATCHED")
+                    : ConditionEvaluationResult.NotMatched("CONDITION_NOT_MATCHED");
+            }
+        }
+
+        private sealed class DateWindowConditionEvaluator : IConditionEvaluator
+        {
+            public string ConditionId => GameContracts.SessionFlowConditionIds.IsWithinDateWindow;
+
+            public ConditionEvaluationResult Evaluate(
+                GameContracts.ConditionDefinition condition,
+                ConditionEvaluationContext context)
+            {
+                if (context == null || context.calendar == null)
+                {
+                    return ConditionEvaluationResult.NotMatched("CALENDAR_SERVICE_MISSING");
+                }
+
+                var start = ConditionComparison.Normalize(condition == null ? string.Empty : condition.subject);
+                var end = ConditionComparison.Normalize(condition == null ? string.Empty : condition.value);
+                if (string.IsNullOrWhiteSpace(start) &&
+                    TryParseRangePair(condition == null ? string.Empty : condition.value, out var parsedStart, out var parsedEnd))
+                {
+                    start = parsedStart;
+                    end = parsedEnd;
+                }
+
+                if (string.IsNullOrWhiteSpace(start) || string.IsNullOrWhiteSpace(end))
+                {
+                    return ConditionEvaluationResult.NotMatched("CALENDAR_DATE_WINDOW_REQUIRED");
+                }
+
+                var normalizedOp = ConditionComparison.NormalizeOrDefault(condition == null ? string.Empty : condition.op, "between");
+                var yearlyRecurring = string.Equals(normalizedOp, "between_yearly", StringComparison.OrdinalIgnoreCase) ||
+                                      string.Equals(normalizedOp, "yearly", StringComparison.OrdinalIgnoreCase);
+                var expectInWindow = !string.Equals(normalizedOp, "outside", StringComparison.OrdinalIgnoreCase) &&
+                                     !string.Equals(normalizedOp, "not_between", StringComparison.OrdinalIgnoreCase);
+
+                if (!context.calendar.TryEvaluateDateWindow(
+                        start,
+                        end,
+                        yearlyRecurring,
+                        timezoneId: string.Empty,
+                        out var matchedWindow,
+                        out var reasonCode))
+                {
+                    return ConditionEvaluationResult.NotMatched(
+                        string.IsNullOrWhiteSpace(reasonCode) ? "CALENDAR_DATE_WINDOW_EVALUATION_FAILED" : reasonCode);
+                }
+
+                var matched = expectInWindow ? matchedWindow : !matchedWindow;
+                return matched
+                    ? ConditionEvaluationResult.Matched("CONDITION_MATCHED")
+                    : ConditionEvaluationResult.NotMatched("CONDITION_NOT_MATCHED");
+            }
+
+            private static bool TryParseRangePair(string raw, out string start, out string end)
+            {
+                start = string.Empty;
+                end = string.Empty;
+
+                if (string.IsNullOrWhiteSpace(raw))
+                {
+                    return false;
+                }
+
+                string[] parts;
+                if (raw.Contains(".."))
+                {
+                    parts = raw.Split(new[] { ".." }, StringSplitOptions.None);
+                }
+                else if (raw.Contains("|"))
+                {
+                    parts = raw.Split('|');
+                }
+                else if (raw.Contains(","))
+                {
+                    parts = raw.Split(',');
+                }
+                else
+                {
+                    return false;
+                }
+
+                if (parts == null || parts.Length != 2)
+                {
+                    return false;
+                }
+
+                start = ConditionComparison.Normalize(parts[0]);
+                end = ConditionComparison.Normalize(parts[1]);
+                return !string.IsNullOrWhiteSpace(start) && !string.IsNullOrWhiteSpace(end);
+            }
+        }
+
+        private sealed class ProfileBirthdayConditionEvaluator : IConditionEvaluator
+        {
+            public string ConditionId => GameContracts.SessionFlowConditionIds.IsProfileBirthday;
+
+            public ConditionEvaluationResult Evaluate(
+                GameContracts.ConditionDefinition condition,
+                ConditionEvaluationContext context)
+            {
+                if (context == null || context.calendar == null)
+                {
+                    return ConditionEvaluationResult.NotMatched("CALENDAR_SERVICE_MISSING");
+                }
+
+                var profileDateKey = ConditionComparison.Normalize(condition == null ? string.Empty : condition.subject);
+                var daysBefore = 0;
+                var daysAfter = 0;
+                ParseTolerance(condition == null ? string.Empty : condition.value, out daysBefore, out daysAfter);
+
+                if (!context.calendar.TryEvaluateProfileDate(
+                        profileDateKey,
+                        daysBefore,
+                        daysAfter,
+                        timezoneId: string.Empty,
+                        out var matchedBirthday,
+                        out var reasonCode))
+                {
+                    return ConditionEvaluationResult.NotMatched(
+                        string.IsNullOrWhiteSpace(reasonCode) ? "CALENDAR_PROFILE_DATE_EVALUATION_FAILED" : reasonCode);
+                }
+
+                var op = ConditionComparison.NormalizeOrDefault(condition == null ? string.Empty : condition.op, "eq");
+                var expectedMatched = true;
+                if (ConditionComparison.TryParseBool(condition == null ? string.Empty : condition.value, out var boolExpected))
+                {
+                    expectedMatched = boolExpected;
+                }
+
+                if (!ConditionComparison.TryCompareBoolean(
+                        matchedBirthday,
+                        expectedMatched,
+                        op,
+                        out var matched,
+                        out var comparisonReason))
+                {
+                    return ConditionEvaluationResult.NotMatched(comparisonReason);
+                }
+
+                return matched
+                    ? ConditionEvaluationResult.Matched("CONDITION_MATCHED")
+                    : ConditionEvaluationResult.NotMatched("CONDITION_NOT_MATCHED");
+            }
+
+            private static void ParseTolerance(string raw, out int daysBefore, out int daysAfter)
+            {
+                daysBefore = 0;
+                daysAfter = 0;
+
+                if (string.IsNullOrWhiteSpace(raw))
+                {
+                    return;
+                }
+
+                var normalized = ConditionComparison.Normalize(raw);
+                if (ConditionComparison.TryParseBool(normalized, out _))
+                {
+                    return;
+                }
+
+                string[] parts;
+                if (normalized.Contains(".."))
+                {
+                    parts = normalized.Split(new[] { ".." }, StringSplitOptions.None);
+                }
+                else if (normalized.Contains("|"))
+                {
+                    parts = normalized.Split('|');
+                }
+                else if (normalized.Contains(","))
+                {
+                    parts = normalized.Split(',');
+                }
+                else
+                {
+                    parts = new[] { normalized };
+                }
+
+                if (parts.Length == 1)
+                {
+                    if (int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var symmetric))
+                    {
+                        daysBefore = Mathf.Max(0, symmetric);
+                        daysAfter = Mathf.Max(0, symmetric);
+                    }
+                    return;
+                }
+
+                if (int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var before))
+                {
+                    daysBefore = Mathf.Max(0, before);
+                }
+
+                if (int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var after))
+                {
+                    daysAfter = Mathf.Max(0, after);
                 }
             }
         }

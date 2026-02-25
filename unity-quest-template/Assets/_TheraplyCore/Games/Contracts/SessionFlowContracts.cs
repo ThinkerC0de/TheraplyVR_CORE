@@ -86,6 +86,9 @@ namespace TheraplyCore.Games.Contracts
         public const string ControlModeEquals = "control_mode_equals";
         public const string ChannelEnabled = "channel_enabled";
         public const string ElapsedTimeWindow = "elapsed_time_window";
+        public const string IsEventActive = "is_event_active";
+        public const string IsWithinDateWindow = "is_within_date_window";
+        public const string IsProfileBirthday = "is_profile_birthday";
 
         private static readonly HashSet<string> SupportedConditionIds =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -95,6 +98,9 @@ namespace TheraplyCore.Games.Contracts
                 ControlModeEquals,
                 ChannelEnabled,
                 ElapsedTimeWindow,
+                IsEventActive,
+                IsWithinDateWindow,
+                IsProfileBirthday,
             };
 
         public static bool IsSupported(string conditionId)
@@ -235,6 +241,7 @@ namespace TheraplyCore.Games.Contracts
         public ControlPolicy controlPolicy = new ControlPolicy();
         public TelemetryPolicy telemetryPolicy = new TelemetryPolicy();
         public LocalizationPolicy localizationPolicy = new LocalizationPolicy();
+        public CalendarPolicy calendarPolicy = new CalendarPolicy();
 
         public static SessionFlowPolicies CreateDefault()
         {
@@ -323,6 +330,88 @@ namespace TheraplyCore.Games.Contracts
         public string defaultLocale = "en-US";
         public bool fallbackToLanguageCode = true;
         public List<string> fallbackLocales = new List<string>();
+    }
+
+    public static class CalendarRuleTypes
+    {
+        public const string DateWindow = "date_window";
+        public const string ProfileBirthday = "profile_birthday";
+
+        private static readonly HashSet<string> SupportedRuleTypes =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                DateWindow,
+                ProfileBirthday,
+            };
+
+        public static bool IsSupported(string ruleType)
+        {
+            return !string.IsNullOrWhiteSpace(ruleType) && SupportedRuleTypes.Contains(ruleType.Trim());
+        }
+
+        public static string NormalizeOrDefault(string ruleType)
+        {
+            return IsSupported(ruleType) ? ruleType.Trim().ToLowerInvariant() : DateWindow;
+        }
+    }
+
+    public static class CalendarConflictPolicies
+    {
+        public const string HighestPriority = "highest_priority";
+        public const string FirstMatch = "first_match";
+
+        private static readonly HashSet<string> SupportedPolicies =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                HighestPriority,
+                FirstMatch,
+            };
+
+        public static bool IsSupported(string policy)
+        {
+            return !string.IsNullOrWhiteSpace(policy) && SupportedPolicies.Contains(policy.Trim());
+        }
+
+        public static string NormalizeOrDefault(string policy)
+        {
+            return IsSupported(policy) ? policy.Trim().ToLowerInvariant() : HighestPriority;
+        }
+    }
+
+    [Serializable]
+    public sealed class CalendarRuleDefinition
+    {
+        public string ruleId = string.Empty;
+        public string ruleType = CalendarRuleTypes.DateWindow;
+        public string start = string.Empty;
+        public string end = string.Empty;
+        public bool yearlyRecurring;
+        public string profileDateKey = string.Empty;
+        public int daysBefore;
+        public int daysAfter;
+        public string timezoneId = string.Empty;
+    }
+
+    [Serializable]
+    public sealed class CalendarEventDefinition
+    {
+        public string eventId = string.Empty;
+        public string variantGroup = string.Empty;
+        public int priority;
+        public bool requireAllRules = true;
+        public List<string> ruleIds = new List<string>();
+    }
+
+    [Serializable]
+    public sealed class CalendarPolicy
+    {
+        public string timezoneId = "UTC";
+        public bool fallbackToUtcWhenTimezoneInvalid = true;
+        public bool allowQaTimeOverride = true;
+        public string defaultProfileDateKey = "profile_birthday";
+        public string conflictPolicy = CalendarConflictPolicies.HighestPriority;
+        public List<CalendarRuleDefinition> rules = new List<CalendarRuleDefinition>();
+        public List<CalendarEventDefinition> events = new List<CalendarEventDefinition>();
     }
 
     [Serializable]

@@ -17,6 +17,7 @@ This document defines the core workflow for building new scenes without adding p
 | No version suffixes in names | Covered in Design Rules (`V2/V3` forbidden in names) |
 | Session controls what is allowed now | Covered by `TaskGraphRunner` + `ActionGate` + node policies |
 | Scene can drive show/spawn/hide/play/etc. | Covered by effect catalog and lifecycle hooks |
+| Date-driven variants/events without scene scripts | Covered by `CalendarRuntime` + calendar conditions/effects/policy |
 | Full interaction telemetry for ML (`what/when/how/why`) | Covered by canonical schema + decision events + reason codes |
 | Hard data robustness (anti data drift/loss) | Covered by hard-data guarantees and export quality gates |
 | Mobile controller mode and local mode | Covered by `ControlRuntime` and `controlPolicy` |
@@ -246,6 +247,7 @@ Registration model:
 | `controlPolicy` | remote-only, local-only, hybrid fallback |
 | `telemetryPolicy` | mandatory events and quality gates |
 | `localizationPolicy` | locale default and fallback chain behavior |
+| `calendarPolicy` | date rules, event conflicts, timezone, QA override policy |
 
 ## Atom Catalog (Lowest Reusable Units)
 
@@ -284,6 +286,9 @@ Actions are compositions of atoms; games are compositions of actions.
 | `condition_prerequisite_done` | Previous required milestones completed |
 | `condition_channel_enabled` | Channel is enabled by definition/policy |
 | `condition_control_mode_allows_action` | Current control mode permits action |
+| `condition_calendar_event_active` | Calendar event is currently active |
+| `condition_date_window_active` | Current date/time is inside configured date window |
+| `condition_profile_date_match` | Profile date rule (for example birthday) is matched |
 
 ### State Atoms
 
@@ -610,6 +615,8 @@ These actions cover target therapeutic gameplay mechanics for this framework.
 | `narrator_play_sequence` | Queue narrator line sequence |
 | `narrator_play_animation` | Trigger narrator actor animation |
 | `narrator_set_attachment` | Show/hide narrator attachment object |
+| `set_binding_active_by_calendar_event` | Toggle binding active state from calendar event activity |
+| `trigger_sequence_by_calendar_event` | Trigger timeline/narrator sequence only when calendar event is active |
 
 ## Gate Decision Contract
 
@@ -657,6 +664,9 @@ To answer "what, when, how, and why", log all of the events below.
 | `locale_change_requested` | `sessionId`, `source`, `locale`, `requestId` |
 | `locale_change_applied` | `sessionId`, `source`, `locale`, `previousLocale` |
 | `locale_change_rejected` | `sessionId`, `source`, `locale`, `reasonCode` |
+| `calendar_rule_evaluated` | `flowId`, `eventId`, `ruleId`, `ruleType`, `matched`, `reasonCode` |
+| `calendar_event_activated` | `flowId`, `eventId`, `variantGroup`, `priority` |
+| `calendar_event_expired` | `flowId`, `eventId`, `variantGroup`, `priority` |
 | `trace_ref` | `flowId`, `traceType`, `traceId`, `encoding` |
 
 Rejected actions are represented as `action_evaluated` with `decision = rejected`.

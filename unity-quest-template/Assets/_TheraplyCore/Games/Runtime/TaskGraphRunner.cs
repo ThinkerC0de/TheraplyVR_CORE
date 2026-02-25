@@ -36,6 +36,7 @@ namespace TheraplyCore.Games.Runtime
         private string _runtimeControlMode = GameContracts.SessionFlowControlModes.Hybrid;
         private string _runtimeBranchPrecedence = GameContracts.BranchPrecedenceModes.FirstMatch;
         private ScoringRuntime.ScoringSnapshot _runtimeScoringSnapshot;
+        private GameContracts.ICalendarService _runtimeCalendarService;
 
         private GameContracts.TaskGraphDefinition _graph;
         private GameContracts.TaskGraphNodeDefinition _activeNode;
@@ -65,10 +66,12 @@ namespace TheraplyCore.Games.Runtime
             ScoringRuntime.ScoringSnapshot scoringSnapshot,
             IReadOnlyDictionary<string, bool> channelEnabledById,
             IReadOnlyDictionary<string, string> stateFlagsByKey,
-            string branchPrecedence)
+            string branchPrecedence,
+            GameContracts.ICalendarService calendarService = null)
         {
             _runtimeScoringSnapshot = scoringSnapshot;
             _runtimeBranchPrecedence = GameContracts.BranchPrecedenceModes.NormalizeOrDefault(branchPrecedence);
+            _runtimeCalendarService = calendarService;
             CopyChannelStates(channelEnabledById, _channelEnabledById);
             CopyStateFlags(stateFlagsByKey, _stateFlagsByKey);
         }
@@ -157,6 +160,7 @@ namespace TheraplyCore.Games.Runtime
             _runtimeControlMode = GameContracts.SessionFlowControlModes.Hybrid;
             _runtimeBranchPrecedence = GameContracts.BranchPrecedenceModes.FirstMatch;
             _runtimeScoringSnapshot = default(ScoringRuntime.ScoringSnapshot);
+            _runtimeCalendarService = null;
             _state = TaskGraphRunState.NotInitialized;
         }
 
@@ -459,6 +463,7 @@ namespace TheraplyCore.Games.Runtime
                 scoringSnapshot = _runtimeScoringSnapshot,
                 channelEnabledById = _channelEnabledById,
                 stateFlagsByKey = _stateFlagsByKey,
+                calendar = _runtimeCalendarService,
             };
 
             var result = evaluator.Evaluate(condition, context);

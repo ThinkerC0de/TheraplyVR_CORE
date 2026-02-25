@@ -38,5 +38,6 @@ namespace TheraplyCore.Games.Runtime
         public GameFeedbackService feedback;
         public GameContracts.INarratorService narrator;
         public GameContracts.ILocalizationService localization;
+        public GameContracts.ICalendarService calendar;
     }
 }

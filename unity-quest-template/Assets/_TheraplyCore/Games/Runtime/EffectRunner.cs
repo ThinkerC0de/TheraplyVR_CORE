@@ -19,6 +19,7 @@ namespace TheraplyCore.Games.Runtime
         [SerializeField] private GameFeedbackService _gameFeedbackService;
         [SerializeField] private NarratorRuntime _narratorRuntime;
         [SerializeField] private LocalizationRuntime _localizationRuntime;
+        [SerializeField] private CalendarRuntime _calendarRuntime;
         [SerializeField] private InteractionEventBridge _interactionEventBridge;
 
         [Header("Registration")]
@@ -62,6 +63,11 @@ namespace TheraplyCore.Games.Runtime
             if (_localizationRuntime != null)
             {
                 _localizationRuntime.SetRuntimeContext(_runtimeGameId, _runtimeFlowId, _runtimeSessionId);
+            }
+
+            if (_calendarRuntime != null)
+            {
+                _calendarRuntime.SetRuntimeContext(_runtimeGameId, _runtimeFlowId, _runtimeSessionId);
             }
         }
 
@@ -211,6 +217,15 @@ namespace TheraplyCore.Games.Runtime
                 }
             }
 
+            if (_calendarRuntime == null)
+            {
+                _calendarRuntime = GetComponent<CalendarRuntime>();
+                if (_calendarRuntime == null)
+                {
+                    _calendarRuntime = FindFirstObjectByType<CalendarRuntime>();
+                }
+            }
+
             if (_interactionEventBridge == null)
             {
                 _interactionEventBridge = InteractionEventBridge.Instance;
@@ -228,6 +243,7 @@ namespace TheraplyCore.Games.Runtime
             _services.feedback = _gameFeedbackService;
             _services.narrator = _narratorRuntime;
             _services.localization = _localizationRuntime;
+            _services.calendar = _calendarRuntime;
         }
 
         private void EmitEffectTelemetry(

@@ -78,6 +78,8 @@ namespace TheraplyCore.Games.Runtime
             registry.Register(new DelegateEffectPlugin("narrator_play_sequence", ExecuteNarratorPlaySequence), replaceExisting);
             registry.Register(new DelegateEffectPlugin("narrator_play_animation", ExecuteNarratorPlayAnimation), replaceExisting);
             registry.Register(new DelegateEffectPlugin("narrator_set_attachment", ExecuteNarratorSetAttachment), replaceExisting);
+            registry.Register(new DelegateEffectPlugin("set_binding_active_by_calendar_event", ExecuteSetBindingActiveByCalendarEvent), replaceExisting);
+            registry.Register(new DelegateEffectPlugin("trigger_sequence_by_calendar_event", ExecuteTriggerSequenceByCalendarEvent), replaceExisting);
         }
 
         private static bool ExecuteShowObject(
@@ -684,6 +686,177 @@ namespace TheraplyCore.Games.Runtime
 
             var visible = ReadBoolParameter(effect, "visible", true);
             return services.narrator.TrySetAttachment(attachmentBindingKey, visible, out reasonCode);
+        }
+
+        private static bool ExecuteSetBindingActiveByCalendarEvent(
+            GameContracts.EffectDefinition effect,
+            EffectExecutionContext context,
+            EffectRuntimeServices services,
+            out string reasonCode)
+        {
+            reasonCode = string.Empty;
+            if (services == null || services.calendar == null)
+            {
+                reasonCode = "CALENDAR_SERVICE_MISSING";
+                return false;
+            }
+
+            if (services.bindings == null)
+            {
+                reasonCode = "FLOW_BINDINGS_MISSING";
+                return false;
+            }
+
+            var eventId = ReadParameter(effect, "eventId", string.Empty);
+            if (string.IsNullOrWhiteSpace(eventId))
+            {
+                reasonCode = "CALENDAR_EVENT_ID_REQUIRED";
+                return false;
+            }
+
+            if (!services.calendar.TryEvaluateEventActive(eventId, out var isEventActive, out reasonCode))
+            {
+                return false;
+            }
+
+            var bindingKey = ReadParameter(effect, "bindingKey", effect == null ? string.Empty : effect.binding);
+            if (string.IsNullOrWhiteSpace(bindingKey))
+            {
+                reasonCode = "EFFECT_BINDING_REQUIRED";
+                return false;
+            }
+
+            if (!services.bindings.TryGetObject(bindingKey, out var target) || target == null)
+            {
+                reasonCode = "EFFECT_BINDING_NOT_FOUND";
+                return false;
+            }
+
+            var activeWhenEvent = ReadBoolParameter(effect, "activeWhenEvent", true);
+            target.SetActive(activeWhenEvent ? isEventActive : !isEventActive);
+            reasonCode = string.Empty;
+            return true;
+        }
+
+        private static bool ExecuteTriggerSequenceByCalendarEvent(
+            GameContracts.EffectDefinition effect,
+            EffectExecutionContext context,
+            EffectRuntimeServices services,
+            out string reasonCode)
+        {
+            reasonCode = string.Empty;
+            if (services == null || services.calendar == null)
+            {
+                reasonCode = "CALENDAR_SERVICE_MISSING";
+                return false;
+            }
+
+            var eventId = ReadParameter(effect, "eventId", string.Empty);
+            if (string.IsNullOrWhiteSpace(eventId))
+            {
+                reasonCode = "CALENDAR_EVENT_ID_REQUIRED";
+                return false;
+            }
+
+            if (!services.calendar.TryEvaluateEventActive(eventId, out var isEventActive, out reasonCode))
+            {
+                return false;
+            }
+
+            if (!isEventActive)
+            {
+                var skipWhenInactive = ReadBoolParameter(effect, "skipWhenInactive", true);
+                if (skipWhenInactive)
+                {
+                    reasonCode = string.Empty;
+                    return true;
+                }
+
+                reasonCode = "CALENDAR_EVENT_INACTIVE";
+                return false;
+            }
+
+            var executed = false;
+
+            var timelineKey = ReadParameter(effect, "timelineKey", string.Empty);
+            if (!string.IsNullOrWhiteSpace(timelineKey))
+            {
+                if (services.bindings == null ||
+                    !services.bindings.TryGetTimeline(timelineKey, out var timeline) ||
+                    timeline == null)
+                {
+                    reasonCode = "TIMELINE_BINDING_NOT_FOUND";
+                    return false;
+                }
+
+                timeline.Play();
+                executed = true;
+            }
+
+            var lineKeysRaw = ReadParameter(effect, "lineKeys", string.Empty);
+            if (!string.IsNullOrWhiteSpace(lineKeysRaw))
+            {
+                if (services.narrator == null)
+                {
+                    reasonCode = "NARRATOR_SERVICE_MISSING";
+                    return false;
+                }
+
+                var lineKeys = SplitLineKeys(lineKeysRaw);
+                if (lineKeys.Count <= 0)
+                {
+                    reasonCode = "NARRATOR_SEQUENCE_KEYS_REQUIRED";
+                    return false;
+                }
+
+                var priority = ReadIntParameter(effect, "priority", 0);
+                var simulatedDurationSec = ReadFloatParameter(effect, "simulatedDurationSec", 0f);
+                var fallbackTextPrefix = ReadParameter(effect, "fallbackTextPrefix", string.Empty);
+
+                var requests = new List<GameContracts.NarratorLineRequest>(lineKeys.Count);
+                for (var i = 0; i < lineKeys.Count; i++)
+                {
+                    var lineKey = lineKeys[i];
+                    if (string.IsNullOrWhiteSpace(lineKey))
+                    {
+                        continue;
+                    }
+
+                    requests.Add(
+                        new GameContracts.NarratorLineRequest
+                        {
+                            lineKey = lineKey,
+                            priority = priority,
+                            interruptIfBusy = i == 0 && ReadBoolParameter(effect, "interruptIfBusy", false),
+                            simulatedDurationSec = simulatedDurationSec,
+                            fallbackText = string.IsNullOrWhiteSpace(fallbackTextPrefix)
+                                ? string.Empty
+                                : fallbackTextPrefix.Trim() + " " + lineKey,
+                        });
+                }
+
+                if (requests.Count <= 0)
+                {
+                    reasonCode = "NARRATOR_SEQUENCE_KEYS_REQUIRED";
+                    return false;
+                }
+
+                if (!services.narrator.TrySpeakSequence(requests, out reasonCode))
+                {
+                    return false;
+                }
+
+                executed = true;
+            }
+
+            if (!executed)
+            {
+                reasonCode = "CALENDAR_SEQUENCE_ACTION_REQUIRED";
+                return false;
+            }
+
+            reasonCode = string.Empty;
+            return true;
         }
 
         private static bool TryBuildNarratorLineRequest(

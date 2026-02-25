@@ -231,6 +231,39 @@ Support date-driven variants and event windows as pure framework behavior.
 - What we changed: "Added calendar runtime and date-event rules to flow."
 - What it gives: "Seasonal and profile-date behaviors are reusable and deterministic."
 
+### Implementation Update (2026-02-25)
+
+Status: `DONE`
+
+Delivered:
+
+1. Added calendar contracts and policy model:
+   - `CalendarRuleDefinition`,
+   - `CalendarEventDefinition`,
+   - `CalendarPolicy`,
+   - conflict and rule-type normalization contracts.
+2. Added `CalendarRuntime` with:
+   - pluggable `ICalendarTimeSource`,
+   - timezone-aware rule evaluation,
+   - QA override mode via runtime UTC override,
+   - deterministic variant conflict resolution by policy.
+3. Added built-in date conditions in deterministic condition path:
+   - `is_event_active`,
+   - `is_within_date_window`,
+   - `is_profile_birthday`.
+4. Added calendar-driven effects:
+   - `set_binding_active_by_calendar_event`,
+   - `trigger_sequence_by_calendar_event`.
+5. Added telemetry events:
+   - `calendar_rule_evaluated`,
+   - `calendar_event_activated`,
+   - `calendar_event_expired`.
+6. Added validation coverage:
+   - recurring yearly and cross-year windows,
+   - timezone window edge behavior,
+   - event priority/conflict policy behavior,
+   - calendar condition routing integration in task graph runtime.
+
 ## Point 4 - Scene Lifecycle Effects in Flow
 
 ### Target

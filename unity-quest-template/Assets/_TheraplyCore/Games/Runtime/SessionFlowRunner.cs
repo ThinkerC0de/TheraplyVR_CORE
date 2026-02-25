@@ -19,6 +19,7 @@ namespace TheraplyCore.Games.Runtime
         [SerializeField] private ActionAdapterRegistry _actionAdapterRegistry;
         [SerializeField] private EffectRunner _effectRunner;
         [SerializeField] private LocalizationRuntime _localizationRuntime;
+        [SerializeField] private CalendarRuntime _calendarRuntime;
         [SerializeField] private InteractionEventBridge _interactionEventBridge;
         [SerializeField] private MotionTraceRecorder _motionTraceRecorder;
 
@@ -101,6 +102,11 @@ namespace TheraplyCore.Games.Runtime
                 _activeFlowId,
                 ResolveSessionId(),
                 ResolveControlMode(_activeDefinition));
+            if (_calendarRuntime != null)
+            {
+                _calendarRuntime.SetRuntimeContext(ResolveGameId(), _activeFlowId, ResolveSessionId());
+                _calendarRuntime.TickRuntime();
+            }
             ApplyConditionRuntimeState(_scoringRuntime.GetSnapshot());
 
             if (!_taskGraphRunner.Tick(now, out var reasonCode) && !string.IsNullOrWhiteSpace(reasonCode))
@@ -166,6 +172,7 @@ namespace TheraplyCore.Games.Runtime
                 : definition.gameId.Trim();
             _scoringRuntime.Configure(definition);
             ApplyLocalizationPolicy(definition);
+            ApplyCalendarPolicy(definition);
             _pendingActionDecisionByAttemptId.Clear();
             _isFlowPaused = false;
 
@@ -714,6 +721,15 @@ namespace TheraplyCore.Games.Runtime
                 }
             }
 
+            if (_calendarRuntime == null)
+            {
+                _calendarRuntime = GetComponent<CalendarRuntime>();
+                if (_calendarRuntime == null)
+                {
+                    _calendarRuntime = FindFirstObjectByType<CalendarRuntime>();
+                }
+            }
+
             if (_interactionEventBridge == null)
             {
                 _interactionEventBridge = InteractionEventBridge.Instance;
@@ -970,7 +986,8 @@ namespace TheraplyCore.Games.Runtime
                 scoringSnapshot,
                 _channelEnabledById,
                 _conditionStateFlagsByKey,
-                ResolveBranchPrecedence(_activeDefinition));
+                ResolveBranchPrecedence(_activeDefinition),
+                _calendarRuntime);
         }
 
         private void ApplyLocalizationPolicy(GameContracts.GameDefinition definition)
@@ -1005,6 +1022,84 @@ namespace TheraplyCore.Games.Runtime
                 }
                 break;
             }
+        }
+
+        private void ApplyCalendarPolicy(GameContracts.GameDefinition definition)
+        {
+            if (_calendarRuntime == null)
+            {
+                return;
+            }
+
+            _calendarRuntime.SetRuntimeContext(ResolveGameId(), _activeFlowId, ResolveSessionId());
+            var policy = definition == null || definition.policies == null
+                ? null
+                : definition.policies.calendarPolicy;
+            _calendarRuntime.TryApplyPolicy(
+                policy,
+                BuildProfileDateMap(definition),
+                out _);
+
+            if (definition == null || definition.config == null || definition.config.extras == null)
+            {
+                return;
+            }
+
+            for (var i = 0; i < definition.config.extras.Count; i++)
+            {
+                var extra = definition.config.extras[i];
+                if (extra == null || string.IsNullOrWhiteSpace(extra.key))
+                {
+                    continue;
+                }
+
+                if (!string.Equals(extra.key.Trim(), "calendar_override_utc", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(extra.value))
+                {
+                    _calendarRuntime.TrySetOverrideUtc(extra.value, out _);
+                }
+                break;
+            }
+        }
+
+        private static IReadOnlyDictionary<string, string> BuildProfileDateMap(GameContracts.GameDefinition definition)
+        {
+            var profileDates = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (definition == null || definition.config == null || definition.config.extras == null)
+            {
+                return profileDates;
+            }
+
+            for (var i = 0; i < definition.config.extras.Count; i++)
+            {
+                var extra = definition.config.extras[i];
+                if (extra == null || string.IsNullOrWhiteSpace(extra.key) || string.IsNullOrWhiteSpace(extra.value))
+                {
+                    continue;
+                }
+
+                var key = extra.key.Trim();
+                if (key.StartsWith("profile_date.", StringComparison.OrdinalIgnoreCase))
+                {
+                    var mapKey = key.Substring("profile_date.".Length);
+                    if (!string.IsNullOrWhiteSpace(mapKey))
+                    {
+                        profileDates[mapKey] = extra.value.Trim();
+                    }
+                    continue;
+                }
+
+                if (string.Equals(key, "profile_birthday", StringComparison.OrdinalIgnoreCase))
+                {
+                    profileDates["profile_birthday"] = extra.value.Trim();
+                }
+            }
+
+            return profileDates;
         }
 
         private string ResolveSessionStateToken()
