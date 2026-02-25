@@ -11,6 +11,7 @@
 - [38-Session-Flow-Mechanic-Mapping-Template.md](38-Session-Flow-Mechanic-Mapping-Template.md)
 - [39-Core-Gap-Closure-Execution-Plan.md](39-Core-Gap-Closure-Execution-Plan.md)
 - [40-Mobile-Control-Schema-Contract.md](40-Mobile-Control-Schema-Contract.md)
+- [41-Session-Flow-End-to-End-Demo.md](41-Session-Flow-End-to-End-Demo.md)
 
 ## Session Resilience Program
 - [03-Session-Resilience-Roadmap.md](03-Session-Resilience-Roadmap.md)
