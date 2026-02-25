@@ -1,7 +1,7 @@
 # Core Gap Closure Execution Plan
 
 Date: 2026-02-25  
-Scope: close the four critical core gaps before scaling scene authoring.
+Scope: close the five critical core gaps before scaling scene authoring.
 
 ## Goal
 
@@ -10,7 +10,8 @@ Make the framework truly "author new scene from definition only" with no per-gam
 1. deterministic `Condition` and `Branch` execution in `TaskGraphRuntime`,
 2. universal narrator + localization runtime,
 3. calendar/date-driven runtime events,
-4. scene load/unload/reset actions exposed through flow effects.
+4. scene load/unload/reset actions exposed through flow effects,
+5. locale switch in Unity driven by language selection in mobile settings.
 
 ## Checkpoint Protocol (Per Point)
 
@@ -28,6 +29,7 @@ Suggested commit naming:
 - `SF-I2: narrator and localization runtime`
 - `SF-I3: calendar runtime and date events`
 - `SF-I4: scene lifecycle effects for flow`
+- `SF-I5: mobile settings locale sync`
 
 ## Point 1 - Deterministic Condition and Branch Evaluation
 
@@ -266,6 +268,42 @@ Expose scene lifecycle operations as first-class effects.
 - What we changed: "Added scene lifecycle effect plugins backed by SceneRuntime."
 - What it gives: "Flow can orchestrate scene swaps/resets without framework rewrites."
 
+## Point 5 - Mobile Settings Locale Sync
+
+### Target
+
+Allow mobile settings ("gears") language choice to change active Unity locale at runtime.
+
+### Deliverables
+
+1. Add control command contract for locale change:
+   - `set_locale_request` with locale code payload.
+2. Extend `ControlRuntimeGateway` command mapping:
+   - accept locale command in `remote_only` and `hybrid` modes,
+   - reject disallowed source with explicit reason code.
+3. Wire command to `ILocalizationService`:
+   - call locale switch in runtime immediately,
+   - keep deterministic fallback behavior from `localizationPolicy`.
+4. Add telemetry events:
+   - `locale_change_requested`,
+   - `locale_change_applied`,
+   - `locale_change_rejected`.
+5. Add tests:
+   - runtime locale switch from remote command,
+   - invalid/unsupported locale rejection,
+   - mode restriction behavior (`local_only` rejects remote command).
+
+### Acceptance Criteria
+
+1. Changing language in mobile settings updates Unity locale without scene-specific scripts.
+2. Locale switch path is reason-coded and fully observable in canonical telemetry.
+3. Flow can continue safely after locale change during active session.
+
+### Short status after commit
+
+- What we changed: "Connected mobile settings language command to runtime locale switch."
+- What it gives: "Operator can change session language live from controller settings."
+
 ## Validation Gate Per Checkpoint
 
 Run the smallest set required to verify each point before commit.
@@ -277,7 +315,7 @@ Run the smallest set required to verify each point before commit.
 
 ## Global Done Criteria for This Plan
 
-1. All 4 points are merged with separate commits and pushes.
+1. All 5 points are merged with separate commits and pushes.
 2. Scene author can express branching, narration/localization, date events, and scene lifecycle changes in definition/policies/effects only.
 3. Canonical telemetry captures causal chain for all added runtime behaviors.
 4. No per-game runtime branch is introduced.

@@ -20,6 +20,7 @@ This document defines the core workflow for building new scenes without adding p
 | Full interaction telemetry for ML (`what/when/how/why`) | Covered by canonical schema + decision events + reason codes |
 | Hard data robustness (anti data drift/loss) | Covered by hard-data guarantees and export quality gates |
 | Mobile controller mode and local mode | Covered by `ControlRuntime` and `controlPolicy` |
+| Locale switch from mobile settings (gears) must update Unity language | Tracked by `SF-I-005` (`ControlRuntimeGateway` -> `ILocalizationService`) |
 | Runtime domains (Session/Scene/TaskGraph/Interaction/Effect/Scoring/Telemetry/Control) | Covered in runtime domains checklist |
 | Definition layer (`config + graph + bindings + policies`) | Covered by `GameDefinition` contract |
 | `channels`, `conditions`, `effects`, `policies` | Covered by dedicated catalogs |
@@ -63,7 +64,7 @@ Implementation status:
 | `EffectRuntime` | Narrator/audio/haptics/vfx/ui hint | `EffectRunner` + effect plugins | Implemented |
 | `ScoringRuntime` | points/errors/lives/success thresholds/adaptive difficulty | `ScoringRuntime`, policy evaluators | Implemented |
 | `TelemetryRuntime` | canonical append-only log + outbox + retries + dedupe | `SessionFlowRunner`, `InteractionEventBridge`, `GameTelemetryService`, existing event store/outbox path | Implemented (with export quality gates) |
-| `ControlRuntime` | mobile controller mode and local mode | `ControlRuntimeGateway` + control mode policy | Implemented |
+| `ControlRuntime` | mobile controller mode, local mode, and remote locale command path | `ControlRuntimeGateway` + control mode policy + localization service bridge | Implemented (locale sync path tracked by `SF-I-005`) |
 
 `SessionRuntime` canonical state path:
 
@@ -653,6 +654,9 @@ To answer "what, when, how, and why", log all of the events below.
 | `flow_failed` | `flowId`, `failedStepId`, `reasonCode` |
 | `session_terminal` | `sessionId`, `terminalState`, `reasonCode` |
 | `effect_executed` | `flowId`, `stepId`, `effectId`, `trigger` |
+| `locale_change_requested` | `sessionId`, `source`, `locale`, `requestId` |
+| `locale_change_applied` | `sessionId`, `source`, `locale`, `previousLocale` |
+| `locale_change_rejected` | `sessionId`, `source`, `locale`, `reasonCode` |
 | `trace_ref` | `flowId`, `traceType`, `traceId`, `encoding` |
 
 Rejected actions are represented as `action_evaluated` with `decision = rejected`.
