@@ -71,6 +71,40 @@ Suggested commit naming:
 - What we changed: "Implemented real condition/branch evaluator path in graph runtime."
 - What it gives: "Scene author controls routing by data, not hardcoded fallback behavior."
 
+### Implementation Update (2026-02-25)
+
+Status: `DONE`
+
+Delivered:
+
+1. Added condition runtime contracts and registry:
+   - `IConditionEvaluator`,
+   - `ConditionEvaluatorRegistry`,
+   - `ConditionEvaluationResult`,
+   - `ConditionEvaluationContext`,
+   - branch/condition trace models.
+2. Added built-in condition evaluators:
+   - `score_threshold`,
+   - `state_flag_equals`,
+   - `control_mode_equals`,
+   - `channel_enabled`,
+   - `elapsed_time_window`.
+3. Updated `TaskGraphRunner`:
+   - deterministic `Condition`/`Branch` routing from declared `conditions`,
+   - precedence support via `branchPolicy.precedence` (`first_match`/`last_match`),
+   - explicit no-match handling (`nextOnFail` route or deterministic fail),
+   - no implicit branch fallback routing.
+4. Updated `SessionFlowRunner`:
+   - condition runtime state wiring (scoring/channels/state flags/precedence),
+   - telemetry emission for `condition_evaluated` and `branch_routed`.
+5. Updated `TransitionEngine`:
+   - `Branch` trigger now requires explicit condition evaluation path.
+6. Updated validation coverage:
+   - true/false branch routing,
+   - precedence determinism,
+   - no-match failure path,
+   - condition/branch telemetry event coverage.
+
 ## Point 2 - Universal Narrator and Localization Runtime
 
 ### Target

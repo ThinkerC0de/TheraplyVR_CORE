@@ -22,13 +22,20 @@ namespace TheraplyCore.Games.Runtime
     {
         private readonly Dictionary<string, GameContracts.TaskGraphNodeDefinition> _nodesById =
             new Dictionary<string, GameContracts.TaskGraphNodeDefinition>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, bool> _channelEnabledById =
+            new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, string> _stateFlagsByKey =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private readonly ActionGate _actionGate = new ActionGate();
         private readonly TransitionEngine _transitionEngine = new TransitionEngine();
+        private ConditionEvaluatorRegistry _conditionEvaluatorRegistry = new ConditionEvaluatorRegistry();
         private ActionPluginRegistry _pluginRegistry;
         private string _runtimeGameId = string.Empty;
         private string _runtimeFlowId = string.Empty;
         private string _runtimeSessionId = string.Empty;
         private string _runtimeControlMode = GameContracts.SessionFlowControlModes.Hybrid;
+        private string _runtimeBranchPrecedence = GameContracts.BranchPrecedenceModes.FirstMatch;
+        private ScoringRuntime.ScoringSnapshot _runtimeScoringSnapshot;
 
         private GameContracts.TaskGraphDefinition _graph;
         private GameContracts.TaskGraphNodeDefinition _activeNode;
@@ -37,6 +44,8 @@ namespace TheraplyCore.Games.Runtime
 
         public event Action<GameContracts.TaskGraphNodeDefinition, string> NodeEntered;
         public event Action<TaskGraphRunState, string> GraphCompleted;
+        public event Action<ConditionEvaluationTrace> ConditionEvaluated;
+        public event Action<BranchRoutingTrace> BranchRouted;
 
         public TaskGraphRunState State => _state;
         public string ActiveNodeId => _activeNode == null ? string.Empty : _activeNode.nodeId;
@@ -45,6 +54,23 @@ namespace TheraplyCore.Games.Runtime
         public void SetPluginRegistry(ActionPluginRegistry pluginRegistry)
         {
             _pluginRegistry = pluginRegistry;
+        }
+
+        public void SetConditionEvaluatorRegistry(ConditionEvaluatorRegistry conditionEvaluatorRegistry)
+        {
+            _conditionEvaluatorRegistry = conditionEvaluatorRegistry ?? new ConditionEvaluatorRegistry();
+        }
+
+        public void SetConditionRuntimeState(
+            ScoringRuntime.ScoringSnapshot scoringSnapshot,
+            IReadOnlyDictionary<string, bool> channelEnabledById,
+            IReadOnlyDictionary<string, string> stateFlagsByKey,
+            string branchPrecedence)
+        {
+            _runtimeScoringSnapshot = scoringSnapshot;
+            _runtimeBranchPrecedence = GameContracts.BranchPrecedenceModes.NormalizeOrDefault(branchPrecedence);
+            CopyChannelStates(channelEnabledById, _channelEnabledById);
+            CopyStateFlags(stateFlagsByKey, _stateFlagsByKey);
         }
 
         public void SetRuntimeContext(
@@ -120,6 +146,8 @@ namespace TheraplyCore.Games.Runtime
         public void Reset()
         {
             _nodesById.Clear();
+            _channelEnabledById.Clear();
+            _stateFlagsByKey.Clear();
             _graph = null;
             _activeNode = null;
             _activeNodeEnteredAtSec = 0f;
@@ -127,6 +155,8 @@ namespace TheraplyCore.Games.Runtime
             _runtimeFlowId = string.Empty;
             _runtimeSessionId = string.Empty;
             _runtimeControlMode = GameContracts.SessionFlowControlModes.Hybrid;
+            _runtimeBranchPrecedence = GameContracts.BranchPrecedenceModes.FirstMatch;
+            _runtimeScoringSnapshot = default(ScoringRuntime.ScoringSnapshot);
             _state = TaskGraphRunState.NotInitialized;
         }
 
@@ -145,7 +175,7 @@ namespace TheraplyCore.Games.Runtime
             }
 
             _state = TaskGraphRunState.Running;
-            EvaluateImmediateNodeRouting(nowElapsedSec, out var immediateReasonCode);
+            EvaluateImmediateNodeRouting(nowElapsedSec, evaluateConditionBranchNodes: true, out var immediateReasonCode);
             if (!string.IsNullOrWhiteSpace(immediateReasonCode))
             {
                 reasonCode = immediateReasonCode;
@@ -172,7 +202,7 @@ namespace TheraplyCore.Games.Runtime
                 }
             }
 
-            EvaluateImmediateNodeRouting(nowElapsedSec, out var immediateReasonCode);
+            EvaluateImmediateNodeRouting(nowElapsedSec, evaluateConditionBranchNodes: true, out var immediateReasonCode);
             if (!string.IsNullOrWhiteSpace(immediateReasonCode))
             {
                 reasonCode = immediateReasonCode;
@@ -262,7 +292,7 @@ namespace TheraplyCore.Games.Runtime
                 return false;
             }
 
-            EvaluateImmediateNodeRouting(nowElapsedSec, out var immediateReasonCode);
+            EvaluateImmediateNodeRouting(nowElapsedSec, evaluateConditionBranchNodes: false, out var immediateReasonCode);
             if (!string.IsNullOrWhiteSpace(immediateReasonCode))
             {
                 reasonCode = immediateReasonCode;
@@ -272,7 +302,10 @@ namespace TheraplyCore.Games.Runtime
             return true;
         }
 
-        private void EvaluateImmediateNodeRouting(float nowElapsedSec, out string reasonCode)
+        private void EvaluateImmediateNodeRouting(
+            float nowElapsedSec,
+            bool evaluateConditionBranchNodes,
+            out string reasonCode)
         {
             reasonCode = string.Empty;
 
@@ -304,10 +337,14 @@ namespace TheraplyCore.Games.Runtime
                     return;
                 }
 
-                if (string.Equals(nodeType, Normalize(GameContracts.TaskGraphNodeTypes.Condition), StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(nodeType, Normalize(GameContracts.TaskGraphNodeTypes.Branch), StringComparison.OrdinalIgnoreCase))
+                if (IsConditionOrBranchNodeType(nodeType))
                 {
-                    if (!RouteByTrigger(TransitionTrigger.Branch, nowElapsedSec, "NODE_BRANCH", out reasonCode))
+                    if (!evaluateConditionBranchNodes)
+                    {
+                        return;
+                    }
+
+                    if (!EvaluateConditionOrBranchRouting(nowElapsedSec, out reasonCode))
                     {
                         return;
                     }
@@ -321,6 +358,181 @@ namespace TheraplyCore.Games.Runtime
             reasonCode = "IMMEDIATE_ROUTE_LOOP_DETECTED";
             _state = TaskGraphRunState.Failed;
             GraphCompleted?.Invoke(_state, "NODE_BRANCH_LOOP_DETECTED");
+        }
+
+        private bool EvaluateConditionOrBranchRouting(float nowElapsedSec, out string reasonCode)
+        {
+            reasonCode = string.Empty;
+
+            if (_activeNode == null)
+            {
+                reasonCode = "ACTIVE_NODE_MISSING";
+                return false;
+            }
+
+            if (_activeNode.conditions == null || _activeNode.conditions.Count <= 0)
+            {
+                return HandleNoConditionMatch(nowElapsedSec, "CONDITION_SET_EMPTY", out reasonCode);
+            }
+
+            var firstMatchPrecedence = string.Equals(
+                _runtimeBranchPrecedence,
+                GameContracts.BranchPrecedenceModes.FirstMatch,
+                StringComparison.OrdinalIgnoreCase);
+
+            var selectedCondition = default(GameContracts.ConditionDefinition);
+            for (var i = 0; i < _activeNode.conditions.Count; i++)
+            {
+                var condition = _activeNode.conditions[i];
+                var evaluationResult = EvaluateCondition(condition, nowElapsedSec);
+                EmitConditionEvaluated(condition, evaluationResult, nowElapsedSec);
+                if (!evaluationResult.matched)
+                {
+                    continue;
+                }
+
+                selectedCondition = condition;
+                if (firstMatchPrecedence)
+                {
+                    break;
+                }
+            }
+
+            if (selectedCondition == null)
+            {
+                return HandleNoConditionMatch(nowElapsedSec, "CONDITION_NO_MATCH", out reasonCode);
+            }
+
+            var nextNodeId = Normalize(selectedCondition.nextNodeId);
+            if (string.IsNullOrWhiteSpace(nextNodeId))
+            {
+                reasonCode = "CONDITION_MATCH_ROUTE_MISSING";
+                EmitBranchRouted(
+                    selectedCondition,
+                    matched: true,
+                    selectedNextNodeId: string.Empty,
+                    reasonCode: reasonCode,
+                    nowElapsedSec: nowElapsedSec);
+                return false;
+            }
+
+            EmitBranchRouted(
+                selectedCondition,
+                matched: true,
+                selectedNextNodeId: nextNodeId,
+                reasonCode: "BRANCH_MATCH_ROUTE_SELECTED",
+                nowElapsedSec: nowElapsedSec);
+            return TryEnterNode(nextNodeId, nowElapsedSec, "NODE_BRANCH_MATCH", out reasonCode);
+        }
+
+        private ConditionEvaluationResult EvaluateCondition(
+            GameContracts.ConditionDefinition condition,
+            float nowElapsedSec)
+        {
+            if (condition == null)
+            {
+                return ConditionEvaluationResult.NotMatched("CONDITION_ENTRY_NULL");
+            }
+
+            var conditionId = Normalize(condition.conditionId);
+            if (string.IsNullOrWhiteSpace(conditionId))
+            {
+                return ConditionEvaluationResult.NotMatched("CONDITION_ID_REQUIRED");
+            }
+
+            if (_conditionEvaluatorRegistry == null ||
+                !_conditionEvaluatorRegistry.TryResolve(conditionId, out var evaluator) ||
+                evaluator == null)
+            {
+                return ConditionEvaluationResult.NotMatched("CONDITION_EVALUATOR_NOT_FOUND");
+            }
+
+            var context = new ConditionEvaluationContext
+            {
+                gameId = _runtimeGameId,
+                flowId = _runtimeFlowId,
+                sessionId = _runtimeSessionId,
+                nodeId = ActiveNodeId,
+                controlMode = _runtimeControlMode,
+                nowElapsedSec = Mathf.Max(0f, nowElapsedSec),
+                nodeEnteredAtSec = Mathf.Max(0f, _activeNodeEnteredAtSec),
+                scoringSnapshot = _runtimeScoringSnapshot,
+                channelEnabledById = _channelEnabledById,
+                stateFlagsByKey = _stateFlagsByKey,
+            };
+
+            var result = evaluator.Evaluate(condition, context);
+            if (string.IsNullOrWhiteSpace(result.reasonCode))
+            {
+                result.reasonCode = result.matched ? "CONDITION_MATCHED" : "CONDITION_NOT_MATCHED";
+            }
+
+            return result;
+        }
+
+        private bool HandleNoConditionMatch(float nowElapsedSec, string noMatchReasonCode, out string reasonCode)
+        {
+            reasonCode = string.Empty;
+            var fallbackNextNodeId = Normalize(_activeNode == null ? string.Empty : _activeNode.nextOnFail);
+
+            EmitBranchRouted(
+                selectedCondition: null,
+                matched: false,
+                selectedNextNodeId: fallbackNextNodeId,
+                reasonCode: noMatchReasonCode,
+                nowElapsedSec: nowElapsedSec);
+
+            if (!string.IsNullOrWhiteSpace(fallbackNextNodeId))
+            {
+                return TryEnterNode(fallbackNextNodeId, nowElapsedSec, "NODE_BRANCH_NO_MATCH", out reasonCode);
+            }
+
+            _state = TaskGraphRunState.Failed;
+            GraphCompleted?.Invoke(_state, noMatchReasonCode);
+            return true;
+        }
+
+        private void EmitConditionEvaluated(
+            GameContracts.ConditionDefinition condition,
+            ConditionEvaluationResult evaluationResult,
+            float nowElapsedSec)
+        {
+            ConditionEvaluated?.Invoke(
+                new ConditionEvaluationTrace
+                {
+                    nodeId = Normalize(ActiveNodeId),
+                    conditionId = condition == null ? string.Empty : Normalize(condition.conditionId),
+                    subject = condition == null ? string.Empty : Normalize(condition.subject),
+                    op = condition == null ? string.Empty : Normalize(condition.op),
+                    value = condition == null ? string.Empty : Normalize(condition.value),
+                    matched = evaluationResult.matched,
+                    reasonCode = Normalize(evaluationResult.reasonCode),
+                    nowElapsedSec = Mathf.Max(0f, nowElapsedSec),
+                    nodeElapsedSec = Mathf.Max(0f, nowElapsedSec - Mathf.Max(0f, _activeNodeEnteredAtSec)),
+                });
+        }
+
+        private void EmitBranchRouted(
+            GameContracts.ConditionDefinition selectedCondition,
+            bool matched,
+            string selectedNextNodeId,
+            string reasonCode,
+            float nowElapsedSec)
+        {
+            BranchRouted?.Invoke(
+                new BranchRoutingTrace
+                {
+                    nodeId = Normalize(ActiveNodeId),
+                    nodeType = Normalize(_activeNode == null ? string.Empty : _activeNode.nodeType),
+                    precedence = Normalize(_runtimeBranchPrecedence),
+                    matched = matched,
+                    selectedConditionId = selectedCondition == null
+                        ? string.Empty
+                        : Normalize(selectedCondition.conditionId),
+                    selectedNextNodeId = Normalize(selectedNextNodeId),
+                    reasonCode = Normalize(reasonCode),
+                    nowElapsedSec = Mathf.Max(0f, nowElapsedSec),
+                });
         }
 
         private bool RouteByTrigger(
@@ -387,6 +599,62 @@ namespace TheraplyCore.Games.Runtime
         private static string Normalize(string value)
         {
             return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+        }
+
+        private static bool IsConditionOrBranchNodeType(string nodeType)
+        {
+            return string.Equals(
+                       nodeType,
+                       Normalize(GameContracts.TaskGraphNodeTypes.Condition),
+                       StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(
+                       nodeType,
+                       Normalize(GameContracts.TaskGraphNodeTypes.Branch),
+                       StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void CopyChannelStates(
+            IReadOnlyDictionary<string, bool> source,
+            IDictionary<string, bool> target)
+        {
+            target.Clear();
+            if (source == null || source.Count <= 0)
+            {
+                return;
+            }
+
+            foreach (var kv in source)
+            {
+                var normalizedKey = Normalize(kv.Key);
+                if (string.IsNullOrWhiteSpace(normalizedKey))
+                {
+                    continue;
+                }
+
+                target[normalizedKey] = kv.Value;
+            }
+        }
+
+        private static void CopyStateFlags(
+            IReadOnlyDictionary<string, string> source,
+            IDictionary<string, string> target)
+        {
+            target.Clear();
+            if (source == null || source.Count <= 0)
+            {
+                return;
+            }
+
+            foreach (var kv in source)
+            {
+                var normalizedKey = Normalize(kv.Key);
+                if (string.IsNullOrWhiteSpace(normalizedKey))
+                {
+                    continue;
+                }
+
+                target[normalizedKey] = kv.Value == null ? string.Empty : kv.Value.Trim();
+            }
         }
 
         private static GameContracts.AllowedActionDefinition ResolveAllowedAction(

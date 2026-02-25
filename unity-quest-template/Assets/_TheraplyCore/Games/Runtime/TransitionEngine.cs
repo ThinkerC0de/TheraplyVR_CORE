@@ -79,8 +79,14 @@ namespace TheraplyCore.Games.Runtime
                     nextNodeId = Normalize(node.nextOnTimeout);
                     break;
                 case TransitionTrigger.Branch:
-                    nextNodeId = Normalize(node.nextOnSuccess);
-                    break;
+                    return new TransitionDecision
+                    {
+                        resolved = false,
+                        terminalComplete = false,
+                        terminalFail = false,
+                        nextNodeId = string.Empty,
+                        reasonCode = "BRANCH_TRIGGER_REQUIRES_CONDITION_EVALUATION",
+                    };
             }
 
             if (string.IsNullOrWhiteSpace(nextNodeId))

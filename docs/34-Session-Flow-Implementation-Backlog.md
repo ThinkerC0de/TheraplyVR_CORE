@@ -117,7 +117,7 @@ Execution details: `docs/39-Core-Gap-Closure-Execution-Plan.md`
 
 | ID | Task | Status | Acceptance Criteria | Depends On |
 | --- | --- | --- | --- | --- |
-| SF-I-001 | Implement deterministic `Condition` and `Branch` evaluation path | TODO | `TaskGraphRunner` + `TransitionEngine` evaluate declared conditions and branch policy, no implicit fallback routing | SF-B-008 |
+| SF-I-001 | Implement deterministic `Condition` and `Branch` evaluation path | DONE | `TaskGraphRunner` + `TransitionEngine` evaluate declared conditions and branch policy, no implicit fallback routing | SF-B-008 |
 | SF-I-002 | Implement universal narrator and localization runtime | TODO | Narration and locale switching are data-driven through effects, with fallback and telemetry | SF-D-003 |
 | SF-I-003 | Implement calendar runtime and date-driven event rules | TODO | Date windows/profile-date rules can activate variants and sequences without scene scripts | SF-A-003 |
 | SF-I-004 | Expose scene lifecycle operations as flow effects | TODO | `load_scene`, `unload_scene`, `reset_scene` are available through effect plugins with reason-coded failures | SF-B-004, SF-D-003 |

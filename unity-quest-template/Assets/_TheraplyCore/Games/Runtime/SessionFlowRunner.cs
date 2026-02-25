@@ -34,8 +34,13 @@ namespace TheraplyCore.Games.Runtime
 
         private readonly TaskGraphRunner _taskGraphRunner = new TaskGraphRunner();
         private readonly ScoringRuntime _scoringRuntime = new ScoringRuntime();
+        private readonly ConditionEvaluatorRegistry _conditionEvaluatorRegistry = new ConditionEvaluatorRegistry();
         private readonly Dictionary<string, bool> _pendingActionDecisionByAttemptId =
             new Dictionary<string, bool>(StringComparer.Ordinal);
+        private readonly Dictionary<string, bool> _channelEnabledById =
+            new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, string> _conditionStateFlagsByKey =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private GameContracts.GameDefinition _activeDefinition;
         private string _activeFlowId = string.Empty;
         private GameContracts.TaskGraphNodeDefinition _lastEnteredNode;
@@ -50,8 +55,12 @@ namespace TheraplyCore.Games.Runtime
         private void Awake()
         {
             ResolveDependencies();
+            SessionFlowBuiltInConditionEvaluators.RegisterBuiltIns(_conditionEvaluatorRegistry, replaceExisting: true);
+            _taskGraphRunner.SetConditionEvaluatorRegistry(_conditionEvaluatorRegistry);
             _taskGraphRunner.NodeEntered += HandleNodeEntered;
             _taskGraphRunner.GraphCompleted += HandleGraphCompleted;
+            _taskGraphRunner.ConditionEvaluated += HandleConditionEvaluated;
+            _taskGraphRunner.BranchRouted += HandleBranchRouted;
         }
 
         private void OnEnable()
@@ -91,6 +100,7 @@ namespace TheraplyCore.Games.Runtime
                 _activeFlowId,
                 ResolveSessionId(),
                 ResolveControlMode(_activeDefinition));
+            ApplyConditionRuntimeState(_scoringRuntime.GetSnapshot());
 
             if (!_taskGraphRunner.Tick(now, out var reasonCode) && !string.IsNullOrWhiteSpace(reasonCode))
             {
@@ -165,6 +175,8 @@ namespace TheraplyCore.Games.Runtime
                 _activeFlowId,
                 ResolveSessionId(),
                 ResolveControlMode(_activeDefinition));
+            RebuildConditionRuntimeCaches(_activeDefinition);
+            ApplyConditionRuntimeState(_scoringRuntime.GetSnapshot());
             if (_effectRunner != null)
             {
                 _effectRunner.SetRuntimeContext(
@@ -221,6 +233,8 @@ namespace TheraplyCore.Games.Runtime
             _taskGraphRunner.Reset();
             _lastEnteredNode = null;
             _pendingActionDecisionByAttemptId.Clear();
+            _channelEnabledById.Clear();
+            _conditionStateFlagsByKey.Clear();
             _isFlowPaused = false;
             EmitFlowEvent("flow_stopped", "FLOW_INTERRUPTED");
             if (_motionTraceRecorder != null)
@@ -259,6 +273,8 @@ namespace TheraplyCore.Games.Runtime
             _taskGraphRunner.Reset();
             _lastEnteredNode = null;
             _pendingActionDecisionByAttemptId.Clear();
+            _channelEnabledById.Clear();
+            _conditionStateFlagsByKey.Clear();
             _isFlowPaused = false;
             EmitFlowEvent("flow_stopped", "FLOW_STOPPED_BY_CONTROL");
             EmitSessionTerminal("FLOW_STOPPED_BY_CONTROL");
@@ -355,6 +371,7 @@ namespace TheraplyCore.Games.Runtime
                     _activeFlowId,
                     ResolveSessionId(),
                     ResolveControlMode(_activeDefinition));
+                ApplyConditionRuntimeState(_scoringRuntime.GetSnapshot());
 
                 var submitted = _taskGraphRunner.SubmitAction(
                     intent,
@@ -366,6 +383,7 @@ namespace TheraplyCore.Games.Runtime
                 var reasonCode = ResolveDecisionReasonCode(validationResult, submitReasonCode, accepted);
                 _scoringRuntime.RecordActionDecision(accepted, reasonCode, reactionSec: 0f);
                 var scoringSnapshot = _scoringRuntime.GetSnapshot();
+                ApplyConditionRuntimeState(scoringSnapshot);
                 ApplyAdaptiveDifficultyState(scoringSnapshot);
                 ExecuteNodeEffects(
                     nodeBeforeSubmit,
@@ -474,6 +492,41 @@ namespace TheraplyCore.Games.Runtime
                 });
         }
 
+        private void HandleConditionEvaluated(ConditionEvaluationTrace trace)
+        {
+            EmitFlowEvent(
+                "condition_evaluated",
+                NormalizeOrFallback(trace.reasonCode, "CONDITION_EVALUATED"),
+                new Dictionary<string, object>
+                {
+                    { "nodeId", NormalizeOrFallback(trace.nodeId, string.Empty) },
+                    { "conditionId", NormalizeOrFallback(trace.conditionId, string.Empty) },
+                    { "subject", NormalizeOrFallback(trace.subject, string.Empty) },
+                    { "op", NormalizeOrFallback(trace.op, string.Empty) },
+                    { "value", NormalizeOrFallback(trace.value, string.Empty) },
+                    { "matched", trace.matched },
+                    { "nodeElapsedSec", trace.nodeElapsedSec },
+                    { "evaluatedAtElapsedSec", trace.nowElapsedSec },
+                });
+        }
+
+        private void HandleBranchRouted(BranchRoutingTrace trace)
+        {
+            EmitFlowEvent(
+                "branch_routed",
+                NormalizeOrFallback(trace.reasonCode, "BRANCH_ROUTED"),
+                new Dictionary<string, object>
+                {
+                    { "nodeId", NormalizeOrFallback(trace.nodeId, string.Empty) },
+                    { "nodeType", NormalizeOrFallback(trace.nodeType, string.Empty) },
+                    { "branchPrecedence", NormalizeOrFallback(trace.precedence, string.Empty) },
+                    { "branchMatched", trace.matched },
+                    { "selectedConditionId", NormalizeOrFallback(trace.selectedConditionId, string.Empty) },
+                    { "nextNodeId", NormalizeOrFallback(trace.selectedNextNodeId, string.Empty) },
+                    { "routedAtElapsedSec", trace.nowElapsedSec },
+                });
+        }
+
         private void HandleGraphCompleted(TaskGraphRunState terminalState, string reasonCode)
         {
             var scoringSnapshot = _scoringRuntime.GetSnapshot();
@@ -495,6 +548,8 @@ namespace TheraplyCore.Games.Runtime
                     _motionTraceRecorder.StopAndPublish(unresolvedReasonCode);
                 }
                 _pendingActionDecisionByAttemptId.Clear();
+                _channelEnabledById.Clear();
+                _conditionStateFlagsByKey.Clear();
                 _lastEnteredNode = _taskGraphRunner.ActiveNode;
                 MaybeLog("FLOW_TERMINAL", unresolvedReasonCode);
                 return;
@@ -546,6 +601,8 @@ namespace TheraplyCore.Games.Runtime
                 _motionTraceRecorder.StopAndPublish(reasonCode);
             }
             _pendingActionDecisionByAttemptId.Clear();
+            _channelEnabledById.Clear();
+            _conditionStateFlagsByKey.Clear();
             _isFlowPaused = false;
             _lastEnteredNode = activeNode;
             MaybeLog("FLOW_TERMINAL", reasonCode);
@@ -584,6 +641,8 @@ namespace TheraplyCore.Games.Runtime
             }
             _taskGraphRunner.Reset();
             _pendingActionDecisionByAttemptId.Clear();
+            _channelEnabledById.Clear();
+            _conditionStateFlagsByKey.Clear();
             _isFlowPaused = false;
             _lastEnteredNode = null;
             MaybeLog("FLOW_RUNTIME_FAILED", normalizedReason);
@@ -843,6 +902,64 @@ namespace TheraplyCore.Games.Runtime
             }
 
             return GameContracts.SessionFlowControlModes.NormalizeOrDefault(definition.controlMode);
+        }
+
+        private string ResolveBranchPrecedence(GameContracts.GameDefinition definition)
+        {
+            if (definition == null ||
+                definition.policies == null ||
+                definition.policies.branchPolicy == null)
+            {
+                return GameContracts.BranchPrecedenceModes.FirstMatch;
+            }
+
+            return GameContracts.BranchPrecedenceModes.NormalizeOrDefault(
+                definition.policies.branchPolicy.precedence);
+        }
+
+        private void RebuildConditionRuntimeCaches(GameContracts.GameDefinition definition)
+        {
+            _channelEnabledById.Clear();
+            _conditionStateFlagsByKey.Clear();
+
+            if (definition != null && definition.channels != null)
+            {
+                for (var i = 0; i < definition.channels.Count; i++)
+                {
+                    var channel = definition.channels[i];
+                    if (channel == null || string.IsNullOrWhiteSpace(channel.channelId))
+                    {
+                        continue;
+                    }
+
+                    _channelEnabledById[channel.channelId.Trim()] = channel.enabled;
+                }
+            }
+
+            if (definition != null &&
+                definition.config != null &&
+                definition.config.extras != null)
+            {
+                for (var i = 0; i < definition.config.extras.Count; i++)
+                {
+                    var extra = definition.config.extras[i];
+                    if (extra == null || string.IsNullOrWhiteSpace(extra.key))
+                    {
+                        continue;
+                    }
+
+                    _conditionStateFlagsByKey[extra.key.Trim()] = NormalizeOrFallback(extra.value, string.Empty);
+                }
+            }
+        }
+
+        private void ApplyConditionRuntimeState(ScoringRuntime.ScoringSnapshot scoringSnapshot)
+        {
+            _taskGraphRunner.SetConditionRuntimeState(
+                scoringSnapshot,
+                _channelEnabledById,
+                _conditionStateFlagsByKey,
+                ResolveBranchPrecedence(_activeDefinition));
         }
 
         private string ResolveSessionStateToken()

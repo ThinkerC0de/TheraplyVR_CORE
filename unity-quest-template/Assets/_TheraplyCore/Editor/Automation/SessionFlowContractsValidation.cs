@@ -54,6 +54,21 @@ namespace TheraplyCore.Editor.Automation
                 invalidModeReason,
                 "Unexpected reason code for invalid top-level control mode.");
 
+            AssertTrue(
+                SessionFlowConditionIds.IsSupported(SessionFlowConditionIds.ScoreThreshold),
+                "Built-in score threshold condition id should be supported.");
+            AssertTrue(
+                SessionFlowConditionIds.IsSupported(SessionFlowConditionIds.ElapsedTimeWindow),
+                "Built-in elapsed time window condition id should be supported.");
+            AssertEqual(
+                BranchPrecedenceModes.FirstMatch,
+                BranchPrecedenceModes.NormalizeOrDefault("unsupported"),
+                "Branch precedence should normalize to first_match fallback.");
+            AssertEqual(
+                BranchPrecedenceModes.LastMatch,
+                BranchPrecedenceModes.NormalizeOrDefault(BranchPrecedenceModes.LastMatch),
+                "Branch precedence should keep last_match mode.");
+
             var actionValidator = new ActionValidator();
             var allowedAction = new AllowedActionDefinition
             {
@@ -93,7 +108,7 @@ namespace TheraplyCore.Editor.Automation
             AssertTrue(validResult.accepted, "Expected action acceptance for valid control mode and input range.");
             AssertEqual("ACTION_ACCEPTED", validResult.reasonCode, "Unexpected reason code for valid action.");
 
-            return "definitionValidation=OK; actionValidator=OK";
+            return "definitionValidation=OK; conditionContracts=OK; actionValidator=OK";
         }
 
         private static void PersistValidationResult(string status, string details)

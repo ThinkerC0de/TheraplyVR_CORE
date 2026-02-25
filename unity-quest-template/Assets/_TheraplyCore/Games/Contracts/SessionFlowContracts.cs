@@ -77,6 +77,38 @@ namespace TheraplyCore.Games.Contracts
     }
 
     /// <summary>
+    /// Stable condition ids for deterministic branch routing.
+    /// </summary>
+    public static class SessionFlowConditionIds
+    {
+        public const string ScoreThreshold = "score_threshold";
+        public const string StateFlagEquals = "state_flag_equals";
+        public const string ControlModeEquals = "control_mode_equals";
+        public const string ChannelEnabled = "channel_enabled";
+        public const string ElapsedTimeWindow = "elapsed_time_window";
+
+        private static readonly HashSet<string> SupportedConditionIds =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ScoreThreshold,
+                StateFlagEquals,
+                ControlModeEquals,
+                ChannelEnabled,
+                ElapsedTimeWindow,
+            };
+
+        public static bool IsSupported(string conditionId)
+        {
+            return !string.IsNullOrWhiteSpace(conditionId) && SupportedConditionIds.Contains(conditionId.Trim());
+        }
+
+        public static string NormalizeOrEmpty(string conditionId)
+        {
+            return IsSupported(conditionId) ? conditionId.Trim().ToLowerInvariant() : string.Empty;
+        }
+    }
+
+    /// <summary>
     /// Canonical reason codes for definition validation.
     /// </summary>
     public static class SessionFlowDefinitionReasonCodes
@@ -233,7 +265,30 @@ namespace TheraplyCore.Games.Contracts
     [Serializable]
     public sealed class BranchPolicy
     {
-        public string precedence = "first_match";
+        public string precedence = BranchPrecedenceModes.FirstMatch;
+    }
+
+    public static class BranchPrecedenceModes
+    {
+        public const string FirstMatch = "first_match";
+        public const string LastMatch = "last_match";
+
+        private static readonly HashSet<string> SupportedModes =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                FirstMatch,
+                LastMatch,
+            };
+
+        public static bool IsSupported(string precedence)
+        {
+            return !string.IsNullOrWhiteSpace(precedence) && SupportedModes.Contains(precedence.Trim());
+        }
+
+        public static string NormalizeOrDefault(string precedence)
+        {
+            return IsSupported(precedence) ? precedence.Trim().ToLowerInvariant() : FirstMatch;
+        }
     }
 
     [Serializable]
@@ -397,8 +452,10 @@ namespace TheraplyCore.Games.Contracts
     public sealed class ConditionDefinition
     {
         public string conditionId = string.Empty;
+        public string subject = string.Empty;
         public string op = string.Empty;
         public string value = string.Empty;
+        public string nextNodeId = string.Empty;
     }
 
     [Serializable]
