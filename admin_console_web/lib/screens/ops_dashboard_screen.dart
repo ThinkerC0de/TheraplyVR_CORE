@@ -50,9 +50,12 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
   bool _savingGrant = false;
   bool _seedingGameCatalog = false;
   bool _loadingCatalogSeed = true;
+  bool _loadingExportManifest = true;
   String _catalogSeedError = '';
+  String _exportManifestError = '';
   List<AdminGameCatalogSeedEntry> _catalogSeedEntries =
       const <AdminGameCatalogSeedEntry>[];
+  GameDefinitionExportManifest? _exportManifest;
 
   String get _targetUserId => _targetUserIdController.text.trim();
 
@@ -60,7 +63,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
   void initState() {
     super.initState();
     _targetUserIdController.addListener(_refresh);
-    _loadCatalogSeed();
+    _loadCatalogAuthoringAssets();
   }
 
   @override
@@ -114,6 +117,46 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
         });
       }
     }
+  }
+
+  Future<void> _loadExportManifest() async {
+    setState(() {
+      _loadingExportManifest = true;
+      _exportManifestError = '';
+    });
+
+    try {
+      final manifest = await GameCatalogSeedSource.loadManifestDefault();
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _exportManifest = manifest;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _exportManifest = null;
+        _exportManifestError = error.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingExportManifest = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadCatalogAuthoringAssets() async {
+    await Future.wait<void>(<Future<void>>[
+      _loadCatalogSeed(),
+      _loadExportManifest(),
+    ]);
   }
 
   int _readDays(TextEditingController controller, int fallback) {
@@ -462,6 +505,206 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
     return datePart.endsWith('Z') ? datePart : '${datePart}Z';
   }
 
+  _SeedFreshnessStatus _evaluateSeedFreshness() {
+    if (_loadingCatalogSeed || _loadingExportManifest) {
+      return const _SeedFreshnessStatus(
+        level: _SeedFreshnessLevel.loading,
+        label: 'Loading',
+        summary: 'Loading catalog seed and export manifest.',
+        details: <String>[],
+      );
+    }
+
+    if (_catalogSeedError.trim().isNotEmpty ||
+        _exportManifestError.trim().isNotEmpty) {
+      final details = <String>[
+        if (_catalogSeedError.trim().isNotEmpty)
+          'Catalog seed error: $_catalogSeedError',
+        if (_exportManifestError.trim().isNotEmpty)
+          'Export manifest error: $_exportManifestError',
+      ];
+      return _SeedFreshnessStatus(
+        level: _SeedFreshnessLevel.error,
+        label: 'Error',
+        summary: 'Cannot validate authoring source freshness.',
+        details: details,
+      );
+    }
+
+    final manifest = _exportManifest;
+    if (manifest == null) {
+      return const _SeedFreshnessStatus(
+        level: _SeedFreshnessLevel.error,
+        label: 'Error',
+        summary: 'Export manifest is unavailable.',
+        details: <String>[],
+      );
+    }
+
+    final catalogGameIds =
+        _catalogSeedEntries.map((entry) => entry.gameId.toLowerCase()).toSet();
+    final manifestGameIds =
+        manifest.exportedGameIds.map((id) => id.toLowerCase()).toSet();
+    final missingGameIds = manifestGameIds
+        .where((id) => !catalogGameIds.contains(id))
+        .toList()
+      ..sort();
+    final presentCount = manifestGameIds.length - missingGameIds.length;
+    final age = DateTime.now().toUtc().difference(manifest.exportedAtUtc);
+    final details = <String>[
+      'ExportedAtUtc=${_formatUtc(manifest.exportedAtUtc)} (${_formatAge(age)})',
+      'Manifest entries=${manifest.entries.length} (entryCount=${manifest.entryCount})',
+      'Exported gameIds in seed=$presentCount/${manifestGameIds.length}',
+    ];
+    if (missingGameIds.isNotEmpty) {
+      details.add('Missing in seed: ${missingGameIds.join(', ')}');
+      return _SeedFreshnessStatus(
+        level: _SeedFreshnessLevel.error,
+        label: 'Error',
+        summary: 'Seed is out of sync with export manifest.',
+        details: details,
+      );
+    }
+
+    if (age.isNegative) {
+      return _SeedFreshnessStatus(
+        level: _SeedFreshnessLevel.warning,
+        label: 'Warning',
+        summary: 'Manifest timestamp is in the future; check system clock.',
+        details: details,
+      );
+    }
+
+    if (age.inDays >= 7) {
+      return _SeedFreshnessStatus(
+        level: _SeedFreshnessLevel.stale,
+        label: 'Stale',
+        summary: 'Export manifest is older than 7 days.',
+        details: details,
+      );
+    }
+
+    if (age.inHours >= 72) {
+      return _SeedFreshnessStatus(
+        level: _SeedFreshnessLevel.warning,
+        label: 'Warning',
+        summary: 'Export manifest is older than 72 hours.',
+        details: details,
+      );
+    }
+
+    return _SeedFreshnessStatus(
+      level: _SeedFreshnessLevel.healthy,
+      label: 'Healthy',
+      summary: 'Catalog seed is in sync with export manifest.',
+      details: details,
+    );
+  }
+
+  String _formatAge(Duration age) {
+    if (age.isNegative) {
+      return 'future by ${_formatDuration(-age)}';
+    }
+    return 'age ${_formatDuration(age)}';
+  }
+
+  String _formatDuration(Duration duration) {
+    if (duration.inDays > 0) {
+      return '${duration.inDays}d';
+    }
+    if (duration.inHours > 0) {
+      return '${duration.inHours}h';
+    }
+    if (duration.inMinutes > 0) {
+      return '${duration.inMinutes}m';
+    }
+    return '${duration.inSeconds}s';
+  }
+
+  Widget _buildSeedFreshnessCard() {
+    final status = _evaluateSeedFreshness();
+    final Color badgeBackground;
+    final Color badgeForeground;
+    switch (status.level) {
+      case _SeedFreshnessLevel.healthy:
+        badgeBackground = Colors.green.shade100;
+        badgeForeground = Colors.green.shade900;
+        break;
+      case _SeedFreshnessLevel.warning:
+        badgeBackground = Colors.orange.shade100;
+        badgeForeground = Colors.orange.shade900;
+        break;
+      case _SeedFreshnessLevel.stale:
+        badgeBackground = Colors.amber.shade100;
+        badgeForeground = Colors.amber.shade900;
+        break;
+      case _SeedFreshnessLevel.error:
+        badgeBackground = Colors.red.shade100;
+        badgeForeground = Colors.red.shade900;
+        break;
+      case _SeedFreshnessLevel.loading:
+        badgeBackground = Colors.blueGrey.shade100;
+        badgeForeground = Colors.blueGrey.shade900;
+        break;
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: badgeBackground,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  status.label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: badgeForeground,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Seed Source Freshness',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            status.summary,
+            style: TextStyle(
+              fontSize: 12,
+              color: status.level == _SeedFreshnessLevel.error
+                  ? Colors.red.shade700
+                  : null,
+            ),
+          ),
+          if (status.details.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            for (final detail in status.details)
+              Text(
+                detail,
+                style: const TextStyle(fontSize: 12),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
   void _useTargetUid(String uid) {
     final normalizedUid = uid.trim();
     if (normalizedUid.isEmpty) {
@@ -754,17 +997,12 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  _loadingCatalogSeed
-                      ? 'Loading catalog seed from contracts...'
-                      : 'Catalog seed is loaded from assets/contracts/game_catalog_seed.json. You can seed game_catalog with one click.',
+                  (_loadingCatalogSeed || _loadingExportManifest)
+                      ? 'Loading catalog seed and export manifest from contracts...'
+                      : 'Catalog seed and export manifest are loaded from assets/contracts. You can seed game_catalog with one click.',
                 ),
-                if (_catalogSeedError.trim().isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    'Catalog seed load error: $_catalogSeedError',
-                    style: TextStyle(color: Colors.red.shade700),
-                  ),
-                ],
+                const SizedBox(height: 8),
+                _buildSeedFreshnessCard(),
                 const SizedBox(height: 10),
                 Wrap(
                   spacing: 8,
@@ -788,8 +1026,10 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                       ),
                     ),
                     OutlinedButton.icon(
-                      onPressed: _loadingCatalogSeed ? null : _loadCatalogSeed,
-                      icon: _loadingCatalogSeed
+                      onPressed: (_loadingCatalogSeed || _loadingExportManifest)
+                          ? null
+                          : _loadCatalogAuthoringAssets,
+                      icon: (_loadingCatalogSeed || _loadingExportManifest)
                           ? const SizedBox(
                               width: 14,
                               height: 14,
@@ -811,8 +1051,9 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                   builder: (context, snapshot) {
                     final statsByGameId =
                         snapshot.data ?? const <String, AdminGameGrantStats>{};
-                    final knownIds =
-                        _catalogSeedEntries.map((entry) => entry.gameId).toSet();
+                    final knownIds = _catalogSeedEntries
+                        .map((entry) => entry.gameId)
+                        .toSet();
                     final unknownGrantGames = statsByGameId.keys
                         .where((gameId) => !knownIds.contains(gameId))
                         .toList()
@@ -1469,4 +1710,26 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
       ),
     );
   }
+}
+
+enum _SeedFreshnessLevel {
+  loading,
+  healthy,
+  warning,
+  stale,
+  error,
+}
+
+class _SeedFreshnessStatus {
+  final _SeedFreshnessLevel level;
+  final String label;
+  final String summary;
+  final List<String> details;
+
+  const _SeedFreshnessStatus({
+    required this.level,
+    required this.label,
+    required this.summary,
+    required this.details,
+  });
 }

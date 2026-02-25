@@ -18,6 +18,7 @@ on:
       - "admin_console_web/lib/services/entitlement_admin_service.dart"
       - "admin_console_web/lib/services/game_catalog_seed_source.dart"
       - "admin_console_web/assets/contracts/game_catalog_seed.json"
+      - "admin_console_web/assets/contracts/game_definition_export_manifest.json"
       - "admin_console_web/pubspec.yaml"
   push:
     branches:
@@ -38,6 +39,7 @@ on:
       - "admin_console_web/lib/services/entitlement_admin_service.dart"
       - "admin_console_web/lib/services/game_catalog_seed_source.dart"
       - "admin_console_web/assets/contracts/game_catalog_seed.json"
+      - "admin_console_web/assets/contracts/game_definition_export_manifest.json"
       - "admin_console_web/pubspec.yaml"
 
 jobs:
