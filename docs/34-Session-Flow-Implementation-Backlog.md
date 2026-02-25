@@ -96,10 +96,10 @@ Goal: implement the new framework direction end-to-end so no per-game core rewri
 
 | ID | Task | Status | Acceptance Criteria | Depends On |
 | --- | --- | --- | --- | --- |
-| SF-G-001 | Unit tests for contracts and validators | TODO | Contract parsing, policy validation, and reason-code coverage pass | SF-A-005 |
+| SF-G-001 | Unit tests for contracts and validators | DONE | Contract parsing, policy validation, and reason-code coverage pass | SF-A-005 |
 | SF-G-002 | Runtime integration tests for graph flow | TODO | Success/fail/timeout/branch scenarios deterministic and reproducible | SF-B-008 |
 | SF-G-003 | Adapter integration tests | TODO | Each channel adapter emits normalized intent and final decision telemetry | SF-C-013 |
-| SF-G-004 | Telemetry consistency tests | TODO | No missing mandatory fields, no unresolved action decisions | SF-E-007 |
+| SF-G-004 | Telemetry consistency tests | DONE | No missing mandatory fields, no unresolved action decisions | SF-E-007 |
 | SF-G-005 | Reconnect/offline resilience tests | TODO | Outbox replay and dedupe behavior validated under disconnect/reconnect | SF-E-005 |
 | SF-G-006 | Smoke scene template | TODO | One generic flow scene can run end-to-end using definition only | SF-D-005 |
 
