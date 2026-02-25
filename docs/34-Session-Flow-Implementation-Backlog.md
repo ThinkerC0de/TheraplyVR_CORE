@@ -107,9 +107,9 @@ Goal: implement the new framework direction end-to-end so no per-game core rewri
 
 | ID | Task | Status | Acceptance Criteria | Depends On |
 | --- | --- | --- | --- | --- |
-| SF-H-001 | Create scene authoring checklist | TODO | Designer checklist for bindings/actions/effects/policies finalized | SF-G-006 |
-| SF-H-002 | Create flow debugging runbook | TODO | Operator/dev guide for reason codes, traces, and failure triage finalized | SF-G-004 |
-| SF-H-003 | Create migration template from mechanic pattern | TODO | New scene can be planned via action/effect/policy mapping without core edits | SF-H-001 |
+| SF-H-001 | Create scene authoring checklist | DONE | Designer checklist for bindings/actions/effects/policies finalized | SF-G-006 |
+| SF-H-002 | Create flow debugging runbook | DONE | Operator/dev guide for reason codes, traces, and failure triage finalized | SF-G-004 |
+| SF-H-003 | Create migration template from mechanic pattern | DONE | New scene can be planned via action/effect/policy mapping without core edits | SF-H-001 |
 
 ## Global Definition Of Done
 
