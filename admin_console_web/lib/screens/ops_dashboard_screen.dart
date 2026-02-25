@@ -56,6 +56,8 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
   List<AdminGameCatalogSeedEntry> _catalogSeedEntries =
       const <AdminGameCatalogSeedEntry>[];
   GameDefinitionExportManifest? _exportManifest;
+  _GamesAuthoringFilter _gamesAuthoringFilter = _GamesAuthoringFilter.all;
+  _GamesSortMode _gamesSortMode = _GamesSortMode.authoringSeverity;
 
   String get _targetUserId => _targetUserIdController.text.trim();
 
@@ -981,6 +983,55 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
     );
   }
 
+  bool _matchesGamesAuthoringFilter(_AuthoringStatus status) {
+    switch (_gamesAuthoringFilter) {
+      case _GamesAuthoringFilter.all:
+        return true;
+      case _GamesAuthoringFilter.issues:
+        return status.level == _AuthoringStatusLevel.error ||
+            status.level == _AuthoringStatusLevel.warning;
+      case _GamesAuthoringFilter.ready:
+        return status.level == _AuthoringStatusLevel.healthy;
+      case _GamesAuthoringFilter.info:
+        return status.level == _AuthoringStatusLevel.info;
+    }
+  }
+
+  int _authoringSeverityRank(_AuthoringStatusLevel level) {
+    switch (level) {
+      case _AuthoringStatusLevel.error:
+        return 0;
+      case _AuthoringStatusLevel.warning:
+        return 1;
+      case _AuthoringStatusLevel.info:
+        return 2;
+      case _AuthoringStatusLevel.healthy:
+        return 3;
+    }
+  }
+
+  String _authoringFilterLabel(_GamesAuthoringFilter filter) {
+    switch (filter) {
+      case _GamesAuthoringFilter.all:
+        return 'All';
+      case _GamesAuthoringFilter.issues:
+        return 'Issues';
+      case _GamesAuthoringFilter.ready:
+        return 'Ready';
+      case _GamesAuthoringFilter.info:
+        return 'Info';
+    }
+  }
+
+  String _gamesSortModeLabel(_GamesSortMode mode) {
+    switch (mode) {
+      case _GamesSortMode.authoringSeverity:
+        return 'Sort: issues first';
+      case _GamesSortMode.catalogOrder:
+        return 'Sort: catalog order';
+    }
+  }
+
   Widget _buildGamesTab() {
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -1046,6 +1097,40 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                   ],
                 ),
                 const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final filter in _GamesAuthoringFilter.values)
+                      ChoiceChip(
+                        selected: _gamesAuthoringFilter == filter,
+                        label: Text(_authoringFilterLabel(filter)),
+                        onSelected: (_) {
+                          setState(() {
+                            _gamesAuthoringFilter = filter;
+                          });
+                        },
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final mode in _GamesSortMode.values)
+                      ChoiceChip(
+                        selected: _gamesSortMode == mode,
+                        label: Text(_gamesSortModeLabel(mode)),
+                        onSelected: (_) {
+                          setState(() {
+                            _gamesSortMode = mode;
+                          });
+                        },
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 10),
                 StreamBuilder<Map<String, AdminGameGrantStats>>(
                   stream: EntitlementAdminService.watchGameGrantStats(),
                   builder: (context, snapshot) {
@@ -1053,7 +1138,8 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                         snapshot.data ?? const <String, AdminGameGrantStats>{};
                     final manifestEntriesByGameId =
                         <String, GameDefinitionExportManifestEntry>{
-                      for (final entry in _exportManifest?.entries ?? const [])
+                      for (final entry in _exportManifest?.entries ??
+                          const <GameDefinitionExportManifestEntry>[])
                         entry.gameId.toLowerCase(): entry,
                     };
                     final knownIds = _catalogSeedEntries
@@ -1063,28 +1149,114 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                         .where((gameId) => !knownIds.contains(gameId))
                         .toList()
                       ..sort();
+                    final catalogRows = _catalogSeedEntries.map((game) {
+                      final manifestEntry =
+                          manifestEntriesByGameId[game.gameId.toLowerCase()];
+                      final authoringStatus = _resolveAuthoringStatus(
+                        isCatalogEntry: true,
+                        runtimeLaunchEnabled: game.runtimeLaunchEnabled,
+                        manifestEntry: manifestEntry,
+                        hasEmbeddedMobileSchema:
+                            game.mobileControlSchema != null &&
+                                game.mobileControlSchema!.isNotEmpty,
+                      );
+                      return _CatalogGameCardData(
+                        entry: game,
+                        authoringStatus: authoringStatus,
+                      );
+                    }).toList();
+                    catalogRows.sort((left, right) {
+                      if (_gamesSortMode == _GamesSortMode.authoringSeverity) {
+                        final byAuthoring = _authoringSeverityRank(
+                          left.authoringStatus.level,
+                        ).compareTo(
+                          _authoringSeverityRank(right.authoringStatus.level),
+                        );
+                        if (byAuthoring != 0) {
+                          return byAuthoring;
+                        }
+                      }
+
+                      final bySortOrder =
+                          left.entry.sortOrder.compareTo(right.entry.sortOrder);
+                      if (bySortOrder != 0) {
+                        return bySortOrder;
+                      }
+                      return left.entry.gameId
+                          .toLowerCase()
+                          .compareTo(right.entry.gameId.toLowerCase());
+                    });
+                    final visibleCatalogRows = catalogRows
+                        .where((row) =>
+                            _matchesGamesAuthoringFilter(row.authoringStatus))
+                        .toList();
+
+                    final unknownGrantRows = unknownGrantGames.map((gameId) {
+                      final manifestEntry =
+                          manifestEntriesByGameId[gameId.toLowerCase()];
+                      return _GrantOnlyGameCardData(
+                        gameId: gameId,
+                        authoringStatus: _resolveAuthoringStatus(
+                          isCatalogEntry: false,
+                          runtimeLaunchEnabled: false,
+                          manifestEntry: manifestEntry,
+                          hasEmbeddedMobileSchema: false,
+                        ),
+                      );
+                    }).toList();
+                    unknownGrantRows.sort((left, right) {
+                      if (_gamesSortMode == _GamesSortMode.authoringSeverity) {
+                        final byAuthoring = _authoringSeverityRank(
+                          left.authoringStatus.level,
+                        ).compareTo(
+                          _authoringSeverityRank(right.authoringStatus.level),
+                        );
+                        if (byAuthoring != 0) {
+                          return byAuthoring;
+                        }
+                      }
+                      return left.gameId
+                          .toLowerCase()
+                          .compareTo(right.gameId.toLowerCase());
+                    });
+                    final visibleUnknownGrantRows = unknownGrantRows
+                        .where((row) =>
+                            _matchesGamesAuthoringFilter(row.authoringStatus))
+                        .toList();
 
                     return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        for (final game in _catalogSeedEntries)
-                          _buildGameCard(
-                            title: game.title,
-                            gameId: game.gameId,
-                            description: game.description,
-                            targetVersion: game.targetContentVersion,
-                            packageUri: game.packageUri,
-                            availableForPurchase: game.availableForPurchase,
-                            runtimeLaunchEnabled: game.runtimeLaunchEnabled,
-                            sortOrder: game.sortOrder,
-                            stats: statsByGameId[game.gameId],
-                            isCatalogEntry: true,
-                            manifestEntry: manifestEntriesByGameId[
-                                game.gameId.toLowerCase()],
-                            hasEmbeddedMobileSchema:
-                                game.mobileControlSchema != null &&
-                                    game.mobileControlSchema!.isNotEmpty,
+                        Text(
+                          'Visible: ${visibleCatalogRows.length + visibleUnknownGrantRows.length}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        Text(
+                          'Catalog entries: ${visibleCatalogRows.length}/${catalogRows.length}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        if (unknownGrantRows.isNotEmpty)
+                          Text(
+                            'Grant-only entries: ${visibleUnknownGrantRows.length}/${unknownGrantRows.length}',
+                            style: const TextStyle(fontSize: 12),
                           ),
-                        if (unknownGrantGames.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        for (final row in visibleCatalogRows)
+                          _buildGameCard(
+                            title: row.entry.title,
+                            gameId: row.entry.gameId,
+                            description: row.entry.description,
+                            targetVersion: row.entry.targetContentVersion,
+                            packageUri: row.entry.packageUri,
+                            availableForPurchase:
+                                row.entry.availableForPurchase,
+                            runtimeLaunchEnabled:
+                                row.entry.runtimeLaunchEnabled,
+                            sortOrder: row.entry.sortOrder,
+                            stats: statsByGameId[row.entry.gameId],
+                            authoringStatus: row.authoringStatus,
+                          ),
+                        if (visibleUnknownGrantRows.isNotEmpty) ...[
                           const SizedBox(height: 8),
                           const Align(
                             alignment: Alignment.centerLeft,
@@ -1094,21 +1266,18 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                             ),
                           ),
                           const SizedBox(height: 8),
-                          for (final gameId in unknownGrantGames)
+                          for (final row in visibleUnknownGrantRows)
                             _buildGameCard(
-                              title: gameId,
-                              gameId: gameId,
+                              title: row.gameId,
+                              gameId: row.gameId,
                               description: 'GAME scope detected in grants.',
                               targetVersion: '-',
                               packageUri: '',
                               availableForPurchase: false,
                               runtimeLaunchEnabled: false,
                               sortOrder: 0,
-                              stats: statsByGameId[gameId],
-                              isCatalogEntry: false,
-                              manifestEntry:
-                                  manifestEntriesByGameId[gameId.toLowerCase()],
-                              hasEmbeddedMobileSchema: false,
+                              stats: statsByGameId[row.gameId],
+                              authoringStatus: row.authoringStatus,
                             ),
                         ],
                       ],
@@ -1133,18 +1302,10 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
     required bool runtimeLaunchEnabled,
     required int sortOrder,
     required AdminGameGrantStats? stats,
-    required bool isCatalogEntry,
-    required GameDefinitionExportManifestEntry? manifestEntry,
-    required bool hasEmbeddedMobileSchema,
+    required _AuthoringStatus authoringStatus,
   }) {
     final activeCount = stats?.activeAssignments ?? 0;
     final revokedCount = stats?.revokedAssignments ?? 0;
-    final authoringStatus = _resolveAuthoringStatus(
-      isCatalogEntry: isCatalogEntry,
-      runtimeLaunchEnabled: runtimeLaunchEnabled,
-      manifestEntry: manifestEntry,
-      hasEmbeddedMobileSchema: hasEmbeddedMobileSchema,
-    );
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(8),
@@ -1941,5 +2102,37 @@ class _AuthoringStatus {
     required this.label,
     required this.summary,
     required this.details,
+  });
+}
+
+enum _GamesAuthoringFilter {
+  all,
+  issues,
+  ready,
+  info,
+}
+
+enum _GamesSortMode {
+  authoringSeverity,
+  catalogOrder,
+}
+
+class _CatalogGameCardData {
+  final AdminGameCatalogSeedEntry entry;
+  final _AuthoringStatus authoringStatus;
+
+  const _CatalogGameCardData({
+    required this.entry,
+    required this.authoringStatus,
+  });
+}
+
+class _GrantOnlyGameCardData {
+  final String gameId;
+  final _AuthoringStatus authoringStatus;
+
+  const _GrantOnlyGameCardData({
+    required this.gameId,
+    required this.authoringStatus,
   });
 }
