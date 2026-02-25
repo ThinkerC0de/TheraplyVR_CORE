@@ -197,6 +197,20 @@ namespace TheraplyCore.Games.Runtime
             var colorMinValue = ReadFloatParameter(effect, "minValue", 0.6f);
             var colorMaxValue = ReadFloatParameter(effect, "maxValue", 1f);
             var colorAlpha = Clamp01(ReadFloatParameter(effect, "alpha", 1f));
+            var rotationOnSpawn = ReadBoolParameter(effect, "rotationOnSpawn", false);
+            var rotationRandom = ReadBoolParameter(effect, "rotationRandom", true);
+            var rotationSpeed = ReadFloatParameter(effect, "rotationSpeed", 1f);
+            var rotationAngleX = ReadFloatParameter(effect, "rotationAngleX", 0f);
+            var rotationAngleY = ReadFloatParameter(effect, "rotationAngleY", 90f);
+            var rotationAngleZ = ReadFloatParameter(effect, "rotationAngleZ", 0f);
+            var rotationMinSpeed = ReadFloatParameter(effect, "rotationMinSpeed", 0.6f);
+            var rotationMaxSpeed = ReadFloatParameter(effect, "rotationMaxSpeed", 1.4f);
+            var rotationMinAngleX = ReadFloatParameter(effect, "rotationMinAngleX", -120f);
+            var rotationMaxAngleX = ReadFloatParameter(effect, "rotationMaxAngleX", 120f);
+            var rotationMinAngleY = ReadFloatParameter(effect, "rotationMinAngleY", -120f);
+            var rotationMaxAngleY = ReadFloatParameter(effect, "rotationMaxAngleY", 120f);
+            var rotationMinAngleZ = ReadFloatParameter(effect, "rotationMinAngleZ", -120f);
+            var rotationMaxAngleZ = ReadFloatParameter(effect, "rotationMaxAngleZ", 120f);
 
             Normalize01Range(ref colorMinHue, ref colorMaxHue);
             Normalize01Range(ref colorMinSaturation, ref colorMaxSaturation);
@@ -219,6 +233,20 @@ namespace TheraplyCore.Games.Runtime
                 colorMinValue,
                 colorMaxValue,
                 colorAlpha,
+                rotationOnSpawn,
+                rotationRandom,
+                rotationSpeed,
+                rotationAngleX,
+                rotationAngleY,
+                rotationAngleZ,
+                rotationMinSpeed,
+                rotationMaxSpeed,
+                rotationMinAngleX,
+                rotationMaxAngleX,
+                rotationMinAngleY,
+                rotationMaxAngleY,
+                rotationMinAngleZ,
+                rotationMaxAngleZ,
                 out reasonCode);
         }
 

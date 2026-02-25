@@ -152,6 +152,34 @@ MonoBehaviour:
             value: 1.00
           - key: alpha
             value: 1.00
+          - key: rotationOnSpawn
+            value: true
+          - key: rotationRandom
+            value: true
+          - key: rotationSpeed
+            value: 1.0
+          - key: rotationAngleX
+            value: 0.0
+          - key: rotationAngleY
+            value: 90.0
+          - key: rotationAngleZ
+            value: 0.0
+          - key: rotationMinSpeed
+            value: 0.6
+          - key: rotationMaxSpeed
+            value: 1.4
+          - key: rotationMinAngleX
+            value: -120.0
+          - key: rotationMaxAngleX
+            value: 120.0
+          - key: rotationMinAngleY
+            value: -120.0
+          - key: rotationMaxAngleY
+            value: 120.0
+          - key: rotationMinAngleZ
+            value: -120.0
+          - key: rotationMaxAngleZ
+            value: 120.0
         onExitEffects: []
         onAcceptedEffects: []
         onRejectedEffects: []

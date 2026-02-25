@@ -399,6 +399,20 @@ namespace TheraplyCore.Games.Runtime
             float colorMinValue,
             float colorMaxValue,
             float colorAlpha,
+            bool rotationOnSpawn,
+            bool rotationRandom,
+            float rotationSpeed,
+            float rotationAngleX,
+            float rotationAngleY,
+            float rotationAngleZ,
+            float rotationMinSpeed,
+            float rotationMaxSpeed,
+            float rotationMinAngleX,
+            float rotationMaxAngleX,
+            float rotationMinAngleY,
+            float rotationMaxAngleY,
+            float rotationMinAngleZ,
+            float rotationMaxAngleZ,
             out string reasonCode)
         {
             reasonCode = string.Empty;
@@ -443,6 +457,13 @@ namespace TheraplyCore.Games.Runtime
             Normalize01Range(ref colorMinSaturation, ref colorMaxSaturation);
             Normalize01Range(ref colorMinValue, ref colorMaxValue);
             var normalizedColorAlpha = Mathf.Clamp01(colorAlpha);
+            rotationSpeed = Mathf.Max(0f, rotationSpeed);
+            rotationMinSpeed = Mathf.Max(0f, rotationMinSpeed);
+            rotationMaxSpeed = Mathf.Max(0f, rotationMaxSpeed);
+            NormalizeRange(ref rotationMinSpeed, ref rotationMaxSpeed);
+            NormalizeRange(ref rotationMinAngleX, ref rotationMaxAngleX);
+            NormalizeRange(ref rotationMinAngleY, ref rotationMaxAngleY);
+            NormalizeRange(ref rotationMinAngleZ, ref rotationMaxAngleZ);
 
             if (count == 1 || durationSec <= 0f)
             {
@@ -465,6 +486,20 @@ namespace TheraplyCore.Games.Runtime
                             colorMinValue,
                             colorMaxValue,
                             normalizedColorAlpha,
+                            rotationOnSpawn,
+                            rotationRandom,
+                            rotationSpeed,
+                            rotationAngleX,
+                            rotationAngleY,
+                            rotationAngleZ,
+                            rotationMinSpeed,
+                            rotationMaxSpeed,
+                            rotationMinAngleX,
+                            rotationMaxAngleX,
+                            rotationMinAngleY,
+                            rotationMaxAngleY,
+                            rotationMinAngleZ,
+                            rotationMaxAngleZ,
                             out reasonCode))
                     {
                         return false;
@@ -498,7 +533,21 @@ namespace TheraplyCore.Games.Runtime
                     colorMaxSaturation,
                     colorMinValue,
                     colorMaxValue,
-                    normalizedColorAlpha));
+                    normalizedColorAlpha,
+                    rotationOnSpawn,
+                    rotationRandom,
+                    rotationSpeed,
+                    rotationAngleX,
+                    rotationAngleY,
+                    rotationAngleZ,
+                    rotationMinSpeed,
+                    rotationMaxSpeed,
+                    rotationMinAngleX,
+                    rotationMaxAngleX,
+                    rotationMinAngleY,
+                    rotationMaxAngleY,
+                    rotationMinAngleZ,
+                    rotationMaxAngleZ));
 
             reasonCode = "SPAWN_WAVE_SCHEDULED";
             return true;
@@ -697,7 +746,21 @@ namespace TheraplyCore.Games.Runtime
             float colorMaxSaturation,
             float colorMinValue,
             float colorMaxValue,
-            float colorAlpha)
+            float colorAlpha,
+            bool rotationOnSpawn,
+            bool rotationRandom,
+            float rotationSpeed,
+            float rotationAngleX,
+            float rotationAngleY,
+            float rotationAngleZ,
+            float rotationMinSpeed,
+            float rotationMaxSpeed,
+            float rotationMinAngleX,
+            float rotationMaxAngleX,
+            float rotationMinAngleY,
+            float rotationMaxAngleY,
+            float rotationMinAngleZ,
+            float rotationMaxAngleZ)
         {
             var intervalSec = count <= 1 ? 0f : durationSec / (count - 1);
             for (var i = 0; i < count; i++)
@@ -719,6 +782,20 @@ namespace TheraplyCore.Games.Runtime
                         colorMinValue,
                         colorMaxValue,
                         colorAlpha,
+                        rotationOnSpawn,
+                        rotationRandom,
+                        rotationSpeed,
+                        rotationAngleX,
+                        rotationAngleY,
+                        rotationAngleZ,
+                        rotationMinSpeed,
+                        rotationMaxSpeed,
+                        rotationMinAngleX,
+                        rotationMaxAngleX,
+                        rotationMinAngleY,
+                        rotationMaxAngleY,
+                        rotationMinAngleZ,
+                        rotationMaxAngleZ,
                         out _))
                 {
                     yield break;
@@ -748,6 +825,20 @@ namespace TheraplyCore.Games.Runtime
             float colorMinValue,
             float colorMaxValue,
             float colorAlpha,
+            bool rotationOnSpawn,
+            bool rotationRandom,
+            float rotationSpeed,
+            float rotationAngleX,
+            float rotationAngleY,
+            float rotationAngleZ,
+            float rotationMinSpeed,
+            float rotationMaxSpeed,
+            float rotationMinAngleX,
+            float rotationMaxAngleX,
+            float rotationMinAngleY,
+            float rotationMaxAngleY,
+            float rotationMinAngleZ,
+            float rotationMaxAngleZ,
             out string reasonCode)
         {
             reasonCode = string.Empty;
@@ -787,6 +878,25 @@ namespace TheraplyCore.Games.Runtime
                     colorMaxValue,
                     colorAlpha,
                     out _);
+            }
+
+            if (rotationOnSpawn)
+            {
+                TryConfigureSpawnRotation(
+                    instance,
+                    rotationRandom,
+                    rotationSpeed,
+                    rotationAngleX,
+                    rotationAngleY,
+                    rotationAngleZ,
+                    rotationMinSpeed,
+                    rotationMaxSpeed,
+                    rotationMinAngleX,
+                    rotationMaxAngleX,
+                    rotationMinAngleY,
+                    rotationMaxAngleY,
+                    rotationMinAngleZ,
+                    rotationMaxAngleZ);
             }
 
             MaybeLog("SPAWN:" + instanceId);
@@ -842,6 +952,89 @@ namespace TheraplyCore.Games.Runtime
             return yawRotation * baseRotation;
         }
 
+        private static void TryConfigureSpawnRotation(
+            GameObject target,
+            bool random,
+            float speed,
+            float angleX,
+            float angleY,
+            float angleZ,
+            float minSpeed,
+            float maxSpeed,
+            float minAngleX,
+            float maxAngleX,
+            float minAngleY,
+            float maxAngleY,
+            float minAngleZ,
+            float maxAngleZ)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            var angularVelocity = CreateRotationAngularVelocity(
+                random,
+                speed,
+                angleX,
+                angleY,
+                angleZ,
+                minSpeed,
+                maxSpeed,
+                minAngleX,
+                maxAngleX,
+                minAngleY,
+                maxAngleY,
+                minAngleZ,
+                maxAngleZ);
+            if (angularVelocity.sqrMagnitude <= 0.0001f)
+            {
+                return;
+            }
+
+            var rotator = target.GetComponent<SpawnedObjectRotator>();
+            if (rotator == null)
+            {
+                rotator = target.AddComponent<SpawnedObjectRotator>();
+            }
+
+            if (rotator != null)
+            {
+                rotator.SetAngularVelocity(angularVelocity);
+            }
+        }
+
+        private static Vector3 CreateRotationAngularVelocity(
+            bool random,
+            float speed,
+            float angleX,
+            float angleY,
+            float angleZ,
+            float minSpeed,
+            float maxSpeed,
+            float minAngleX,
+            float maxAngleX,
+            float minAngleY,
+            float maxAngleY,
+            float minAngleZ,
+            float maxAngleZ)
+        {
+            var safeSpeed = Mathf.Max(0f, speed);
+            var safeMinSpeed = Mathf.Max(0f, minSpeed);
+            var safeMaxSpeed = Mathf.Max(0f, maxSpeed);
+            NormalizeRange(ref safeMinSpeed, ref safeMaxSpeed);
+
+            if (random)
+            {
+                safeSpeed = UnityEngine.Random.Range(safeMinSpeed, safeMaxSpeed);
+                angleX = UnityEngine.Random.Range(minAngleX, maxAngleX);
+                angleY = UnityEngine.Random.Range(minAngleY, maxAngleY);
+                angleZ = UnityEngine.Random.Range(minAngleZ, maxAngleZ);
+            }
+
+            return new Vector3(angleX, angleY, angleZ) * safeSpeed;
+        }
+
         private static bool TryApplyRandomMaterialColor(
             GameObject target,
             bool includeInactive,
@@ -885,6 +1078,18 @@ namespace TheraplyCore.Games.Runtime
         {
             minValue = Mathf.Clamp01(minValue);
             maxValue = Mathf.Clamp01(maxValue);
+            if (maxValue >= minValue)
+            {
+                return;
+            }
+
+            var swap = minValue;
+            minValue = maxValue;
+            maxValue = swap;
+        }
+
+        private static void NormalizeRange(ref float minValue, ref float maxValue)
+        {
             if (maxValue >= minValue)
             {
                 return;
@@ -1059,6 +1264,33 @@ namespace TheraplyCore.Games.Runtime
             return string.IsNullOrWhiteSpace(value)
                 ? (fallback ?? string.Empty)
                 : value.Trim();
+        }
+    }
+
+    [DisallowMultipleComponent]
+    internal sealed class SpawnedObjectRotator : MonoBehaviour
+    {
+        [SerializeField] private Vector3 _angularVelocityDegPerSec = Vector3.zero;
+
+        public void SetAngularVelocity(Vector3 angularVelocityDegPerSec)
+        {
+            _angularVelocityDegPerSec = angularVelocityDegPerSec;
+            enabled = _angularVelocityDegPerSec.sqrMagnitude > 0.0001f;
+        }
+
+        private void Awake()
+        {
+            enabled = _angularVelocityDegPerSec.sqrMagnitude > 0.0001f;
+        }
+
+        private void Update()
+        {
+            if (_angularVelocityDegPerSec.sqrMagnitude <= 0.0001f)
+            {
+                return;
+            }
+
+            transform.Rotate(_angularVelocityDegPerSec * Time.deltaTime, Space.Self);
         }
     }
 }

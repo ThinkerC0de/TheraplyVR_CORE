@@ -79,6 +79,14 @@ Use effect id: `spawn_prefab_wave`
 - `minSaturation`, `maxSaturation`: saturation range in `[0..1]` used by on-spawn randomization.
 - `minValue`, `maxValue`: value/brightness range in `[0..1]` used by on-spawn randomization.
 - `alpha`: output alpha in `[0..1]` used by on-spawn randomization.
+- `rotationOnSpawn`: if `true`, each spawned instance gets rotator component at spawn time.
+- `rotationRandom`: rotation mode for each spawned instance (`true` = random per object, default).
+- `rotationSpeed`: speed multiplier used in manual mode.
+- `rotationAngleX`, `rotationAngleY`, `rotationAngleZ`: base rotation angles (deg/s before multiplier) in manual mode.
+- `rotationMinSpeed`, `rotationMaxSpeed`: random speed multiplier range used when `rotationRandom=true`.
+- `rotationMinAngleX`, `rotationMaxAngleX`: random X-angle range (deg/s before multiplier).
+- `rotationMinAngleY`, `rotationMaxAngleY`: random Y-angle range (deg/s before multiplier).
+- `rotationMinAngleZ`, `rotationMaxAngleZ`: random Z-angle range (deg/s before multiplier).
 
 ## Random Material Color Parameters
 
@@ -132,6 +140,6 @@ flutter test test/widget_test.dart test/game_catalog_service_test.dart test/mobi
 - Flow asset: `Assets/_YourGames/Samples/SessionFlow/SpawnExampleFlowDefinition.asset`.
 - Nodes in sample graph:
   - `start` (`Action`, timeout to next node)
-  - `spawn_wave` (`Timer`, on-enter `spawn_prefab_wave` with `randomColorOnSpawn=true`)
+  - `spawn_wave` (`Timer`, on-enter `spawn_prefab_wave` with `randomColorOnSpawn=true` and `rotationOnSpawn=true`)
   - `complete` (`Complete`)
   - `fail` (`Fail`)
