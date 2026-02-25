@@ -25,6 +25,7 @@ Goal: create and run a new scene setup without adding per-game logic in core run
 3. Minute 6-7: Validate the definition in editor.
    - Run `Validate`.
    - Resolve reason-coded errors from `SessionFlowDefinitionValidator`.
+   - Click `Export Contracts` to save asset and export contracts from Unity to `contracts/`.
 
 4. Minute 7-10: Author mobile controls schema.
    - Start from `contracts/mobile_control_schema_demo_cube_clicker.json`.
@@ -48,6 +49,16 @@ Goal: create and run a new scene setup without adding per-game logic in core run
 ## Validation Commands
 
 Run after authoring updates:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/unity_export_authoring_contracts.ps1
+```
+
+`unity_export_authoring_contracts.ps1` also synchronizes `mobile_control_schema_*.json` into `contracts/game_catalog_seed.json`.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/authoring_contract_gate.ps1
+```
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/unity_session_flow_validation_pack.ps1 -SkipCompile

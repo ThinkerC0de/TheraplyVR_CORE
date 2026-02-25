@@ -1,0 +1,64 @@
+name: Authoring Contract Gate
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/authoring-contract-gate.yml"
+      - "contracts/**"
+      - "scripts/authoring_contract_gate.ps1"
+      - "scripts/unity_export_authoring_contracts.ps1"
+      - "scripts/sync_mobile_control_schemas_to_catalog.ps1"
+      - "unity-quest-template/Assets/_TheraplyCore/Editor/Authoring/**"
+      - "flutter_controller/lib/models/**"
+      - "flutter_controller/lib/widgets/mobile_control_renderer.dart"
+      - "flutter_controller/lib/screens/control_screen.dart"
+      - "flutter_controller/test/**"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/authoring-contract-gate.yml"
+      - "contracts/**"
+      - "scripts/authoring_contract_gate.ps1"
+      - "scripts/unity_export_authoring_contracts.ps1"
+      - "scripts/sync_mobile_control_schemas_to_catalog.ps1"
+      - "unity-quest-template/Assets/_TheraplyCore/Editor/Authoring/**"
+      - "flutter_controller/lib/models/**"
+      - "flutter_controller/lib/widgets/mobile_control_renderer.dart"
+      - "flutter_controller/lib/screens/control_screen.dart"
+      - "flutter_controller/test/**"
+
+jobs:
+  authoring-contracts:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate authoring contracts
+        shell: pwsh
+        run: ./scripts/authoring_contract_gate.ps1
+
+  flutter-authoring:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flutter_controller
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Flutter analyze
+        run: flutter analyze
+
+      - name: Flutter tests (authoring scope)
+        run: flutter test test/widget_test.dart test/game_catalog_service_test.dart test/mobile_control_schema_test.dart

@@ -342,6 +342,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\unity_cli_validate.ps1 -Mode 
 
 # optional explicit scene override for build check
 powershell -ExecutionPolicy Bypass -File .\scripts\unity_cli_validate.ps1 -Mode build -BuildScenes 'Assets/_Examples/Scenes/SessionResilienceTest.unity'
+
+# authoring export + contract gate
+powershell -ExecutionPolicy Bypass -File .\scripts\unity_export_authoring_contracts.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\authoring_contract_gate.ps1
 ```
 
 ```bash
