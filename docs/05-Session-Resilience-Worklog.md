@@ -118,7 +118,7 @@
 | R-P6-008 | Define adaptive continuation policy for interrupted/incomplete child sessions | TODO | System should safely continue or reschedule unfinished plan segments without data loss |
 | R-P6-009 | Enforce per-child session closure lock in UX + protocol | TODO | Block start of new session for same child until previous is explicitly ended/aborted |
 | R-P6-010 | Add validation matrix for therapist vs parent flows and entitlement edge cases | TODO | Include offline, stale entitlement cache, partial download, uninstall, and role switch scenarios |
-| R-P6-011 | Add game-driven Flutter control-layout schema (editor-configurable) | TODO | Per-game control UI should be defined by declarative schema (`controls`, bindings, layout, style tokens, validation), versioned, bundled with game content, and rendered by Flutter runtime without hardcoded screen logic |
+| R-P6-011 | Add game-driven Flutter control-layout schema (editor-configurable) | DONE | Delivered declarative `THERAPLY_MOBILE_CONTROL_SCHEMA` path end-to-end: Unity authoring/validator/export, contract sync into catalog assets, Flutter dynamic renderer for `START_GAME` + `UPDATE_CONFIG`, runtime fallback only when schema missing, and admin-console freshness/status checks for export manifest |
 
 ## Notes
 - Validation run (2026-02-17, Unity follow-up/modularity): Firebase network automation passed after removing hardcoded validation `gameId` and adding dynamic module/game resolution.
@@ -223,3 +223,4 @@
 - Rollout/SOP update (2026-02-17, P4-003): added `docs/06-Session-Resilience-Rollout-SOP.md` covering release roles, pre-rollout checklist, staged rollout progression (canary/beta/broad), go/no-go metrics (`no-loss sessions`, ACK timeout rate, outbox age, crash trend), incident severity levels, first-15-minute response, and fault-specific runbooks.
 - Validation run (2026-02-17, P4-003): `flutter analyze`, `flutter test`, and `flutter build apk --debug` pass; Unity compile/build not executed in CLI.
 - Documentation update (2026-02-17): added `docs/01-System-Components-Guide.md` with component-by-component system reference (Unity + Flutter), including purpose, usage, dependencies, and configuration checklists; linked from `README.md` and `docs/README.md`.
+- P6 update (2026-02-25, authoring lane): `R-P6-011` is now `DONE` with shared mobile-control schema contract + validators (`docs/40-Mobile-Control-Schema-Contract.md`), Unity flow authoring/export tooling, Flutter dynamic control rendering, contract gate CI, and admin-console manifest freshness/status visibility.

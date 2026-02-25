@@ -209,7 +209,7 @@ Deliverables:
 6. Therapist program builder for reusable session templates and per-game parameter presets.
 7. Parent one-button guided mode that runs therapist-defined plans with adaptive fallback when a child stops early.
 8. Session closure invariant enforcement: no new child session can start until previous session is explicitly ended/aborted.
-9. Declarative mobile control-layout schema per game (authorable with game content) so Flutter renders game-specific setup/control UI from metadata, not hardcoded screen branches.
+9. Declarative mobile control-layout schema per game (authorable with game content) so Flutter renders game-specific setup/control UI from metadata, not hardcoded screen branches (`R-P6-011` baseline delivered on 2026-02-25; remaining P6 items still required).
 
 Exit Criteria:
 - Mobile catalog and Quest installed-game state are consistent after reconnect/restart.
@@ -225,12 +225,12 @@ Strict execution order for current block:
 Current checkpoint status:
 - Step 1: DONE.
 - Step 2: DONE.
-- Step 3: TODO (remains in Phase P6 backlog).
+- Step 3: IN_PROGRESS (P6 started with `R-P6-011` baseline delivered; remaining P6 backlog items stay open).
 
 ## Execution Update (2026-02-17, Unity Follow-Up)
 - Firebase network automation now resolves validation `gameId` dynamically (CLI arg/runtime default/registered module) instead of hardcoded `smoke_test_game` in core automation logic.
 - Demo gameplay prototype remains in examples (`demo_cube_clicker`, `DemoCubeScene`) and is launchable by explicit `gameId` through existing runtime command flow.
-- P6 remains deferred until catalog/licensing scope is started explicitly.
+- P6 is now partially started (`R-P6-011` delivered); catalog/licensing/lifecycle scope remains open.
 
 ## Tracking and Execution Rules
 1. Every completed task must update `docs/05-Session-Resilience-Worklog.md`.
