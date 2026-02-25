@@ -11,6 +11,15 @@ void main() {
       expect(entry.reasonCode, 'SESSION_LOCK_CONFLICT');
     });
 
+    test('maps session closure lock reason code to stable error id', () {
+      final entry =
+          OpsErrorCatalog.lookupByReasonCode('SESSION_CLOSURE_REQUIRED');
+
+      expect(entry, isNotNull);
+      expect(entry!.errorId, 'E-1204');
+      expect(entry.reasonCode, 'SESSION_CLOSURE_REQUIRED');
+    });
+
     test('extracts reason code from critical command exception text', () {
       final error = Exception(
         'Critical command SESSION_ATTACH failed after 3 attempts (reason=SESSION_LOCK_CONFLICT)',

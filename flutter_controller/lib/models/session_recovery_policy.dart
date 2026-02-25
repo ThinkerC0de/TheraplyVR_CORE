@@ -48,6 +48,36 @@ class SessionRecoveryPolicy {
         state == SessionLifecycleState.failedTechnical;
   }
 
+  static bool shouldRequireExplicitClosureForNewSession({
+    required String targetSessionId,
+    required String persistedSessionId,
+    required SessionLifecycleState? persistedState,
+    required bool persistedRequiresHandoffDecision,
+    required bool persistedSessionRecentlyEnded,
+  }) {
+    final normalizedTargetSessionId = targetSessionId.trim();
+    final normalizedPersistedSessionId = persistedSessionId.trim();
+
+    if (normalizedTargetSessionId.isEmpty ||
+        normalizedPersistedSessionId.isEmpty) {
+      return false;
+    }
+
+    if (normalizedTargetSessionId == normalizedPersistedSessionId) {
+      return false;
+    }
+
+    if (!persistedRequiresHandoffDecision || persistedSessionRecentlyEnded) {
+      return false;
+    }
+
+    if (persistedState != null && isTerminalState(persistedState)) {
+      return false;
+    }
+
+    return true;
+  }
+
   static bool shouldAdoptCreatedRolloverSession({
     required bool sessionAttachReady,
     required bool requiresSessionDecision,

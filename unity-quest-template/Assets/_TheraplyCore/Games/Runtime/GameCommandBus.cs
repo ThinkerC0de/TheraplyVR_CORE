@@ -654,7 +654,11 @@ namespace TheraplyCore.Games.Runtime
 
             Logger.Warning(
                 $"[GameCommandBus] Rejecting critical command due active session lock. activeSession={activeSessionId}, state={activeState}, incomingSession={envelopeSessionId}, command={commandId}");
-            rejectReasonCode = AckReasonCodes.SessionLockConflict;
+            rejectReasonCode =
+                string.Equals(commandId, GameCommandIds.StartGame, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(commandId, GameCommandIds.ResumeGame, StringComparison.OrdinalIgnoreCase)
+                    ? AckReasonCodes.SessionClosureRequired
+                    : AckReasonCodes.SessionLockConflict;
             return false;
         }
 
@@ -788,7 +792,11 @@ namespace TheraplyCore.Games.Runtime
 
             Logger.Warning(
                 $"[GameCommandBus] Rejecting critical command due session key mismatch. command={commandId}, activeSessionKey={activeSessionKey}, incomingSessionKey={incomingSessionKey}");
-            rejectReasonCode = AckReasonCodes.SessionLockConflict;
+            rejectReasonCode =
+                string.Equals(commandId, GameCommandIds.StartGame, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(commandId, GameCommandIds.ResumeGame, StringComparison.OrdinalIgnoreCase)
+                    ? AckReasonCodes.SessionClosureRequired
+                    : AckReasonCodes.SessionLockConflict;
             return false;
         }
 
@@ -1048,6 +1056,7 @@ namespace TheraplyCore.Games.Runtime
             public const string EnvelopeInvalidExpiresAt = "ENVELOPE_INVALID_EXPIRES_AT";
             public const string EnvelopeExpired = "ENVELOPE_EXPIRED";
             public const string SessionLockConflict = "SESSION_LOCK_CONFLICT";
+            public const string SessionClosureRequired = "SESSION_CLOSURE_REQUIRED";
             public const string SessionOwnershipConflict = "SESSION_OWNERSHIP_CONFLICT";
             public const string SessionOwnershipMissing = "SESSION_OWNERSHIP_MISSING";
             public const string Unspecified = "UNSPECIFIED";

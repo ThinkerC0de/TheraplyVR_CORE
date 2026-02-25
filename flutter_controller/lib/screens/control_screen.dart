@@ -3907,6 +3907,78 @@ class _ControlScreenState extends State<ControlScreen>
     }
   }
 
+  bool _enforceSessionClosureLockForGameCommand({
+    required String command,
+    required String commandSessionId,
+  }) {
+    if (command != CriticalCommandIds.startGame &&
+        command != CriticalCommandIds.resumeGame) {
+      return true;
+    }
+
+    final persisted = _latestPersistedSession;
+    if (persisted == null) {
+      return true;
+    }
+
+    final persistedSessionId = persisted.sessionId.trim();
+    final requiresClosure =
+        SessionRecoveryPolicy.shouldRequireExplicitClosureForNewSession(
+      targetSessionId: commandSessionId,
+      persistedSessionId: persistedSessionId,
+      persistedState: persisted.state,
+      persistedRequiresHandoffDecision: persisted.requiresHandoffDecision,
+      persistedSessionRecentlyEnded: _wasSessionRecentlyEnded(persistedSessionId),
+    );
+    if (!requiresClosure) {
+      return true;
+    }
+
+    _logSessionDecision(
+      source: 'closure_lock',
+      decision: 'BLOCK_COMMAND',
+      commandId: command,
+      sessionId: persistedSessionId,
+      reason: 'SESSION_CLOSURE_REQUIRED',
+    );
+
+    final canOpenDecisionDialog = _isSessionDecisionAllowedByContext();
+    if (canOpenDecisionDialog) {
+      if (mounted) {
+        setState(() {
+          _remoteSessionIdPendingDecision = persistedSessionId;
+          _requiresSessionDecision = true;
+        });
+      } else {
+        _remoteSessionIdPendingDecision = persistedSessionId;
+        _requiresSessionDecision = true;
+      }
+      _promptSessionDecisionIfNeeded();
+    } else {
+      _markDeferredHandoff(
+        sessionId: persistedSessionId,
+        reasonCode: 'SESSION_CLOSURE_REQUIRED',
+        source: 'closure_lock',
+      );
+    }
+
+    if (mounted) {
+      final shortSessionId = persistedSessionId.length > 16
+          ? '${persistedSessionId.substring(0, 8)}...${persistedSessionId.substring(persistedSessionId.length - 4)}'
+          : persistedSessionId;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Finish unfinished session [$shortSessionId] before starting a new one.',
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+
+    return false;
+  }
+
   Future<bool> _sendCommand(
     String command, {
     Map<String, dynamic>? extraPayload,
@@ -4005,6 +4077,13 @@ class _ControlScreenState extends State<ControlScreen>
         reasonCode: 'SESSION_ID_REQUIRED',
         severity: OperatorIncidentSeverity.error,
       );
+      return false;
+    }
+
+    if (!_enforceSessionClosureLockForGameCommand(
+      command: command,
+      commandSessionId: commandSessionId,
+    )) {
       return false;
     }
 

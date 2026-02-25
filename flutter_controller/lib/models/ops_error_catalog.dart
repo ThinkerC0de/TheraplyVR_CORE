@@ -75,6 +75,11 @@ class OpsErrorCatalog {
       reasonCode: 'SESSION_LOCK_CONFLICT',
       description: 'Active session lock conflict.',
     ),
+    'SESSION_CLOSURE_REQUIRED': const OpsErrorCatalogEntry(
+      errorId: 'E-1204',
+      reasonCode: 'SESSION_CLOSURE_REQUIRED',
+      description: 'Previous session must be explicitly ended before new start.',
+    ),
     'SESSION_OWNERSHIP_CONFLICT': const OpsErrorCatalogEntry(
       errorId: 'E-1202',
       reasonCode: 'SESSION_OWNERSHIP_CONFLICT',

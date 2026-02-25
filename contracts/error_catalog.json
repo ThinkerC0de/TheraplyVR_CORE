@@ -81,6 +81,13 @@
       "operatorAction": "Finish or re-attach to the active session."
     },
     {
+      "errorId": "E-1204",
+      "reasonCode": "SESSION_CLOSURE_REQUIRED",
+      "severity": "warning",
+      "title": "Explicit session closure required",
+      "operatorAction": "End or continue the unfinished session before starting a new one."
+    },
+    {
       "errorId": "E-1202",
       "reasonCode": "SESSION_OWNERSHIP_CONFLICT",
       "severity": "error",

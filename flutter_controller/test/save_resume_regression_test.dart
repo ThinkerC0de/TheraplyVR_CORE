@@ -116,6 +116,44 @@ void main() {
       expect(emptyRemote, isFalse);
       expect(sameRemote, isFalse);
     });
+
+    test(
+        'explicit closure is required when persisted unfinished session differs from target session',
+        () {
+      final requiresClosure =
+          SessionRecoveryPolicy.shouldRequireExplicitClosureForNewSession(
+        targetSessionId: 'new-session-id',
+        persistedSessionId: 'unfinished-session-id',
+        persistedState: SessionLifecycleState.interrupted,
+        persistedRequiresHandoffDecision: true,
+        persistedSessionRecentlyEnded: false,
+      );
+
+      expect(requiresClosure, isTrue);
+    });
+
+    test('explicit closure is not required for same or recently-ended session',
+        () {
+      final sameSession =
+          SessionRecoveryPolicy.shouldRequireExplicitClosureForNewSession(
+        targetSessionId: 'session-a',
+        persistedSessionId: 'session-a',
+        persistedState: SessionLifecycleState.interrupted,
+        persistedRequiresHandoffDecision: true,
+        persistedSessionRecentlyEnded: false,
+      );
+      final recentlyEnded =
+          SessionRecoveryPolicy.shouldRequireExplicitClosureForNewSession(
+        targetSessionId: 'session-b',
+        persistedSessionId: 'session-a',
+        persistedState: SessionLifecycleState.interrupted,
+        persistedRequiresHandoffDecision: true,
+        persistedSessionRecentlyEnded: true,
+      );
+
+      expect(sameSession, isFalse);
+      expect(recentlyEnded, isFalse);
+    });
   });
 
   group('save/resume regression protocol flow', () {

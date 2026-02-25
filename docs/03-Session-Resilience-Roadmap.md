@@ -230,7 +230,7 @@ Current checkpoint status:
 ## Execution Update (2026-02-17, Unity Follow-Up)
 - Firebase network automation now resolves validation `gameId` dynamically (CLI arg/runtime default/registered module) instead of hardcoded `smoke_test_game` in core automation logic.
 - Demo gameplay prototype remains in examples (`demo_cube_clicker`, `DemoCubeScene`) and is launchable by explicit `gameId` through existing runtime command flow.
-- P6 is now partially started (`R-P6-001`, `R-P6-002`, `R-P6-003`, `R-P6-005`, `R-P6-010`, `R-P6-011` delivered; `R-P6-004` in progress with deterministic simulator state restore); catalog/licensing/full production lifecycle scope remains open.
+- P6 is now partially started (`R-P6-001`, `R-P6-002`, `R-P6-003`, `R-P6-005`, `R-P6-009`, `R-P6-010`, `R-P6-011` delivered; `R-P6-004` in progress with deterministic simulator state restore); catalog/licensing/full production lifecycle scope remains open.
 
 ## Tracking and Execution Rules
 1. Every completed task must update `docs/05-Session-Resilience-Worklog.md`.
