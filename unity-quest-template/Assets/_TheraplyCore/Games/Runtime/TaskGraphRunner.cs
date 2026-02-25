@@ -145,7 +145,13 @@ namespace TheraplyCore.Games.Runtime
             }
 
             _state = TaskGraphRunState.Running;
-            EvaluateImmediateNodeRouting(nowElapsedSec, out _);
+            EvaluateImmediateNodeRouting(nowElapsedSec, out var immediateReasonCode);
+            if (!string.IsNullOrWhiteSpace(immediateReasonCode))
+            {
+                reasonCode = immediateReasonCode;
+                return false;
+            }
+
             return true;
         }
 
@@ -166,7 +172,13 @@ namespace TheraplyCore.Games.Runtime
                 }
             }
 
-            EvaluateImmediateNodeRouting(nowElapsedSec, out _);
+            EvaluateImmediateNodeRouting(nowElapsedSec, out var immediateReasonCode);
+            if (!string.IsNullOrWhiteSpace(immediateReasonCode))
+            {
+                reasonCode = immediateReasonCode;
+                return false;
+            }
+
             return true;
         }
 
@@ -250,7 +262,13 @@ namespace TheraplyCore.Games.Runtime
                 return false;
             }
 
-            EvaluateImmediateNodeRouting(nowElapsedSec, out _);
+            EvaluateImmediateNodeRouting(nowElapsedSec, out var immediateReasonCode);
+            if (!string.IsNullOrWhiteSpace(immediateReasonCode))
+            {
+                reasonCode = immediateReasonCode;
+                return false;
+            }
+
             return true;
         }
 
@@ -263,26 +281,46 @@ namespace TheraplyCore.Games.Runtime
                 return;
             }
 
-            var nodeType = Normalize(_activeNode.nodeType);
-            if (string.Equals(nodeType, Normalize(GameContracts.TaskGraphNodeTypes.Complete), StringComparison.OrdinalIgnoreCase))
+            var safeguardLimit = Mathf.Max(4, _nodesById.Count * 2);
+            for (var guard = 0; guard < safeguardLimit; guard++)
             {
-                _state = TaskGraphRunState.Completed;
-                GraphCompleted?.Invoke(_state, "GRAPH_COMPLETED");
+                if (_state != TaskGraphRunState.Running || _activeNode == null)
+                {
+                    return;
+                }
+
+                var nodeType = Normalize(_activeNode.nodeType);
+                if (string.Equals(nodeType, Normalize(GameContracts.TaskGraphNodeTypes.Complete), StringComparison.OrdinalIgnoreCase))
+                {
+                    _state = TaskGraphRunState.Completed;
+                    GraphCompleted?.Invoke(_state, "GRAPH_COMPLETED");
+                    return;
+                }
+
+                if (string.Equals(nodeType, Normalize(GameContracts.TaskGraphNodeTypes.Fail), StringComparison.OrdinalIgnoreCase))
+                {
+                    _state = TaskGraphRunState.Failed;
+                    GraphCompleted?.Invoke(_state, "GRAPH_FAILED");
+                    return;
+                }
+
+                if (string.Equals(nodeType, Normalize(GameContracts.TaskGraphNodeTypes.Condition), StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(nodeType, Normalize(GameContracts.TaskGraphNodeTypes.Branch), StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!RouteByTrigger(TransitionTrigger.Branch, nowElapsedSec, "NODE_BRANCH", out reasonCode))
+                    {
+                        return;
+                    }
+
+                    continue;
+                }
+
                 return;
             }
 
-            if (string.Equals(nodeType, Normalize(GameContracts.TaskGraphNodeTypes.Fail), StringComparison.OrdinalIgnoreCase))
-            {
-                _state = TaskGraphRunState.Failed;
-                GraphCompleted?.Invoke(_state, "GRAPH_FAILED");
-                return;
-            }
-
-            if (string.Equals(nodeType, Normalize(GameContracts.TaskGraphNodeTypes.Condition), StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(nodeType, Normalize(GameContracts.TaskGraphNodeTypes.Branch), StringComparison.OrdinalIgnoreCase))
-            {
-                RouteByTrigger(TransitionTrigger.Branch, nowElapsedSec, "NODE_BRANCH", out _);
-            }
+            reasonCode = "IMMEDIATE_ROUTE_LOOP_DETECTED";
+            _state = TaskGraphRunState.Failed;
+            GraphCompleted?.Invoke(_state, "NODE_BRANCH_LOOP_DETECTED");
         }
 
         private bool RouteByTrigger(

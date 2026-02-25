@@ -104,6 +104,23 @@ Run these validations in order:
 5. `SessionFlowOutboxResilienceValidation`
 6. `SessionFlowSmokeTemplateValidation`
 
+One-shot command (recommended):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\unity_session_flow_validation_pack.ps1
+```
+
+Optional flags:
+
+- `-SkipCompile` skips Unity compile precheck.
+- `-EvidenceRoot <path>` writes summary and logs to a specific evidence directory.
+- `-LogDirectory <path>` writes command logs to a specific directory.
+
+Default output:
+
+- summary: `docs/evidence/<timestamp>/SUMMARY.md`
+- logs: `docs/evidence/<timestamp>/commands/*.log`
+
 ## 6. Operator Escalation Thresholds
 
 Escalate immediately when:

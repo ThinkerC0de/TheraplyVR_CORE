@@ -38,6 +38,7 @@ namespace TheraplyCore.Editor.Automation
 
             var unresolvedDecisionRecords = new List<IReadOnlyDictionary<string, object>>(validRecords);
             unresolvedDecisionRecords.RemoveAt(2); // remove ACTION_EVALUATED
+            RenumberSequenceNumbers(unresolvedDecisionRecords);
             var unresolvedDecisionReport = gate.Evaluate(unresolvedDecisionRecords, requirements);
             AssertFalse(unresolvedDecisionReport.readyForExport, "Expected unresolved decision report to fail.");
             AssertEqual(
@@ -64,6 +65,22 @@ namespace TheraplyCore.Editor.Automation
                 "Unexpected reason for missing terminal report.");
 
             return "valid=PASS; unresolvedDecision=PASS; sequenceGap=PASS; missingTerminal=PASS";
+        }
+
+        private static void RenumberSequenceNumbers(IList<IReadOnlyDictionary<string, object>> records)
+        {
+            if (records == null)
+            {
+                return;
+            }
+
+            for (var i = 0; i < records.Count; i++)
+            {
+                if (records[i] is Dictionary<string, object> mutableRecord)
+                {
+                    mutableRecord["sequenceNumber"] = (long)(i + 1);
+                }
+            }
         }
 
         private static List<Dictionary<string, object>> CreateValidFlowRecords()
