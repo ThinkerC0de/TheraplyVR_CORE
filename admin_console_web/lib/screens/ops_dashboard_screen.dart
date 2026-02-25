@@ -1051,6 +1051,11 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                   builder: (context, snapshot) {
                     final statsByGameId =
                         snapshot.data ?? const <String, AdminGameGrantStats>{};
+                    final manifestEntriesByGameId =
+                        <String, GameDefinitionExportManifestEntry>{
+                      for (final entry in _exportManifest?.entries ?? const [])
+                        entry.gameId.toLowerCase(): entry,
+                    };
                     final knownIds = _catalogSeedEntries
                         .map((entry) => entry.gameId)
                         .toSet();
@@ -1072,6 +1077,12 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                             runtimeLaunchEnabled: game.runtimeLaunchEnabled,
                             sortOrder: game.sortOrder,
                             stats: statsByGameId[game.gameId],
+                            isCatalogEntry: true,
+                            manifestEntry: manifestEntriesByGameId[
+                                game.gameId.toLowerCase()],
+                            hasEmbeddedMobileSchema:
+                                game.mobileControlSchema != null &&
+                                    game.mobileControlSchema!.isNotEmpty,
                           ),
                         if (unknownGrantGames.isNotEmpty) ...[
                           const SizedBox(height: 8),
@@ -1094,6 +1105,10 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                               runtimeLaunchEnabled: false,
                               sortOrder: 0,
                               stats: statsByGameId[gameId],
+                              isCatalogEntry: false,
+                              manifestEntry:
+                                  manifestEntriesByGameId[gameId.toLowerCase()],
+                              hasEmbeddedMobileSchema: false,
                             ),
                         ],
                       ],
@@ -1118,9 +1133,18 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
     required bool runtimeLaunchEnabled,
     required int sortOrder,
     required AdminGameGrantStats? stats,
+    required bool isCatalogEntry,
+    required GameDefinitionExportManifestEntry? manifestEntry,
+    required bool hasEmbeddedMobileSchema,
   }) {
     final activeCount = stats?.activeAssignments ?? 0;
     final revokedCount = stats?.revokedAssignments ?? 0;
+    final authoringStatus = _resolveAuthoringStatus(
+      isCatalogEntry: isCatalogEntry,
+      runtimeLaunchEnabled: runtimeLaunchEnabled,
+      manifestEntry: manifestEntry,
+      hasEmbeddedMobileSchema: hasEmbeddedMobileSchema,
+    );
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(8),
@@ -1161,6 +1185,8 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                   'Grant stats: active=$activeCount, revoked=$revokedCount',
                   style: const TextStyle(fontSize: 12),
                 ),
+                const SizedBox(height: 4),
+                _buildAuthoringStatusRow(authoringStatus),
               ],
             ),
           ),
@@ -1168,6 +1194,169 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
             onPressed: () => _useGameIdForGrant(gameId),
             child: const Text('Use gameId'),
           ),
+        ],
+      ),
+    );
+  }
+
+  _AuthoringStatus _resolveAuthoringStatus({
+    required bool isCatalogEntry,
+    required bool runtimeLaunchEnabled,
+    required GameDefinitionExportManifestEntry? manifestEntry,
+    required bool hasEmbeddedMobileSchema,
+  }) {
+    if (!isCatalogEntry) {
+      return const _AuthoringStatus(
+        level: _AuthoringStatusLevel.info,
+        label: 'grant-only',
+        summary: 'Grant exists for gameId outside catalog seed.',
+        details: <String>[],
+      );
+    }
+
+    if (_loadingExportManifest) {
+      return const _AuthoringStatus(
+        level: _AuthoringStatusLevel.info,
+        label: 'checking',
+        summary: 'Waiting for export manifest.',
+        details: <String>[],
+      );
+    }
+
+    if (_exportManifestError.trim().isNotEmpty) {
+      return _AuthoringStatus(
+        level: _AuthoringStatusLevel.error,
+        label: 'error',
+        summary: 'Export manifest load failed.',
+        details: <String>['error=$_exportManifestError'],
+      );
+    }
+
+    if (manifestEntry == null) {
+      if (runtimeLaunchEnabled) {
+        return const _AuthoringStatus(
+          level: _AuthoringStatusLevel.warning,
+          label: 'missing export',
+          summary:
+              'Runtime launch is enabled but game is absent from export manifest.',
+          details: <String>[],
+        );
+      }
+
+      return const _AuthoringStatus(
+        level: _AuthoringStatusLevel.info,
+        label: 'store-only',
+        summary: 'Catalog entry is not part of runtime authoring export.',
+        details: <String>[],
+      );
+    }
+
+    final schemaPath = manifestEntry.mobileControlSchemaJsonPath.trim();
+    final manifestHasSchemaPath = schemaPath.isNotEmpty;
+
+    if (manifestHasSchemaPath && hasEmbeddedMobileSchema) {
+      return _AuthoringStatus(
+        level: _AuthoringStatusLevel.healthy,
+        label: 'export+schema',
+        summary: 'Definition export and embedded mobile schema are present.',
+        details: <String>[
+          'definition=${manifestEntry.definitionJsonPath}',
+          'schema=$schemaPath',
+        ],
+      );
+    }
+
+    if (!manifestHasSchemaPath && !hasEmbeddedMobileSchema) {
+      return _AuthoringStatus(
+        level: _AuthoringStatusLevel.warning,
+        label: 'export-only',
+        summary: 'Definition export exists without mobile control schema.',
+        details: <String>['definition=${manifestEntry.definitionJsonPath}'],
+      );
+    }
+
+    if (manifestHasSchemaPath && !hasEmbeddedMobileSchema) {
+      return _AuthoringStatus(
+        level: _AuthoringStatusLevel.error,
+        label: 'schema mismatch',
+        summary:
+            'Manifest has schema path but catalog entry has no embedded mobile schema.',
+        details: <String>['schema=$schemaPath'],
+      );
+    }
+
+    return _AuthoringStatus(
+      level: _AuthoringStatusLevel.error,
+      label: 'schema mismatch',
+      summary:
+          'Catalog entry embeds mobile schema but manifest lacks schema path.',
+      details: <String>['definition=${manifestEntry.definitionJsonPath}'],
+    );
+  }
+
+  Widget _buildAuthoringStatusRow(_AuthoringStatus status) {
+    final Color badgeBackground;
+    final Color badgeForeground;
+    switch (status.level) {
+      case _AuthoringStatusLevel.healthy:
+        badgeBackground = Colors.green.shade100;
+        badgeForeground = Colors.green.shade900;
+        break;
+      case _AuthoringStatusLevel.warning:
+        badgeBackground = Colors.orange.shade100;
+        badgeForeground = Colors.orange.shade900;
+        break;
+      case _AuthoringStatusLevel.error:
+        badgeBackground = Colors.red.shade100;
+        badgeForeground = Colors.red.shade900;
+        break;
+      case _AuthoringStatusLevel.info:
+        badgeBackground = Colors.blueGrey.shade100;
+        badgeForeground = Colors.blueGrey.shade900;
+        break;
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: badgeBackground,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  status.label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: badgeForeground,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'authoring',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(status.summary, style: const TextStyle(fontSize: 12)),
+          if (status.details.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            for (final detail in status.details)
+              Text(detail, style: const TextStyle(fontSize: 11)),
+          ],
         ],
       ),
     );
@@ -1727,6 +1916,27 @@ class _SeedFreshnessStatus {
   final List<String> details;
 
   const _SeedFreshnessStatus({
+    required this.level,
+    required this.label,
+    required this.summary,
+    required this.details,
+  });
+}
+
+enum _AuthoringStatusLevel {
+  info,
+  healthy,
+  warning,
+  error,
+}
+
+class _AuthoringStatus {
+  final _AuthoringStatusLevel level;
+  final String label;
+  final String summary;
+  final List<String> details;
+
+  const _AuthoringStatus({
     required this.level,
     required this.label,
     required this.summary,
