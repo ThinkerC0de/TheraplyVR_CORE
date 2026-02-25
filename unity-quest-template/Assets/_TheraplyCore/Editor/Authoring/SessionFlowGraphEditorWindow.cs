@@ -1,0 +1,1002 @@
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using TheraplyCore.Games.Contracts;
+using UnityEditor;
+using UnityEngine;
+
+namespace TheraplyCore.Editor.Authoring
+{
+    public sealed class SessionFlowGraphEditorWindow : EditorWindow
+    {
+        private static readonly string[] NodeTypes =
+        {
+            TaskGraphNodeTypes.Action,
+            TaskGraphNodeTypes.Condition,
+            TaskGraphNodeTypes.Branch,
+            TaskGraphNodeTypes.Timer,
+            TaskGraphNodeTypes.Complete,
+            TaskGraphNodeTypes.Fail,
+        };
+
+        private static readonly string[] ControlModes =
+        {
+            SessionFlowControlModes.Hybrid,
+            SessionFlowControlModes.RemoteOnly,
+            SessionFlowControlModes.LocalOnly,
+        };
+
+        private static readonly string[] ChannelIds =
+        {
+            SessionFlowChannelIds.Pointer,
+            SessionFlowChannelIds.ToolImpact,
+            SessionFlowChannelIds.HandContact,
+            SessionFlowChannelIds.HandGrab,
+            SessionFlowChannelIds.Gaze,
+            SessionFlowChannelIds.Breath,
+            SessionFlowChannelIds.AudioSource,
+            SessionFlowChannelIds.DualHand,
+            SessionFlowChannelIds.PosePath,
+            SessionFlowChannelIds.Sequence,
+            SessionFlowChannelIds.Timeline,
+        };
+
+        private const float LeftWidth = 390f;
+        private const float RightWidth = 430f;
+        private const float CanvasWidth = 3600f;
+        private const float CanvasHeight = 2400f;
+        private const float NodeWidth = 230f;
+        private const float NodeHeight = 150f;
+
+        private GameDefinitionAsset _asset;
+        private GameDefinition _definition;
+        private readonly Dictionary<string, Vector2> _nodePositions =
+            new Dictionary<string, Vector2>(StringComparer.OrdinalIgnoreCase);
+
+        private Vector2 _leftScroll;
+        private Vector2 _graphScroll;
+        private Vector2 _rightScroll;
+
+        private string _selectedNodeId = string.Empty;
+        private bool _layoutDirty = true;
+        private bool _hasValidation;
+        private bool _validationPass;
+        private string _validationReason = string.Empty;
+
+        [MenuItem("Theraply/Session Flow/Flow Graph Editor")]
+        public static void OpenWindow()
+        {
+            var window = GetWindow<SessionFlowGraphEditorWindow>();
+            window.titleContent = new GUIContent("Flow Graph Editor");
+            window.minSize = new Vector2(1450f, 780f);
+            window.Show();
+        }
+
+        private void OnEnable()
+        {
+            EnsureDefinition();
+            AutoLayout();
+        }
+
+        private void OnGUI()
+        {
+            EnsureDefinition();
+
+            DrawToolbar();
+
+            EditorGUILayout.BeginHorizontal();
+            DrawLeftPanel();
+            DrawGraphPanel();
+            DrawRightPanel();
+            EditorGUILayout.EndHorizontal();
+        }
+
+        private void DrawToolbar()
+        {
+            EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
+
+            var nextAsset = EditorGUILayout.ObjectField(
+                _asset,
+                typeof(GameDefinitionAsset),
+                false,
+                GUILayout.Width(260f)) as GameDefinitionAsset;
+            if (nextAsset != _asset)
+            {
+                _asset = nextAsset;
+                if (_asset != null)
+                {
+                    LoadFromAsset(_asset);
+                }
+            }
+
+            if (GUILayout.Button("New", EditorStyles.toolbarButton, GUILayout.Width(52f)))
+            {
+                _definition = GameDefinition.CreateSample();
+                EnsureDefinition();
+                _layoutDirty = true;
+            }
+
+            if (GUILayout.Button("Load Asset", EditorStyles.toolbarButton, GUILayout.Width(90f)))
+            {
+                LoadFromAsset(_asset);
+            }
+
+            if (GUILayout.Button("Save Asset", EditorStyles.toolbarButton, GUILayout.Width(90f)))
+            {
+                SaveToAsset();
+            }
+
+            if (GUILayout.Button("Import JSON", EditorStyles.toolbarButton, GUILayout.Width(92f)))
+            {
+                ImportJson();
+            }
+
+            if (GUILayout.Button("Export JSON", EditorStyles.toolbarButton, GUILayout.Width(92f)))
+            {
+                ExportJson();
+            }
+
+            if (GUILayout.Button("Auto Layout", EditorStyles.toolbarButton, GUILayout.Width(90f)))
+            {
+                AutoLayout();
+            }
+
+            if (GUILayout.Button("Validate", EditorStyles.toolbarButton, GUILayout.Width(70f)))
+            {
+                _validationPass = SessionFlowDefinitionValidator.TryValidate(_definition, out _validationReason);
+                _hasValidation = true;
+            }
+
+            GUILayout.FlexibleSpace();
+            EditorGUILayout.EndHorizontal();
+        }
+
+        private void DrawLeftPanel()
+        {
+            EditorGUILayout.BeginVertical(GUILayout.Width(LeftWidth));
+            _leftScroll = EditorGUILayout.BeginScrollView(_leftScroll);
+
+            EditorGUILayout.LabelField("Game", EditorStyles.boldLabel);
+            _definition.gameId = EditorGUILayout.TextField("Game Id", _definition.gameId);
+            _definition.displayName = EditorGUILayout.TextField("Display Name", _definition.displayName);
+            _definition.commentVersion = EditorGUILayout.TextField("Comment Version", _definition.commentVersion);
+            _definition.controlMode = DrawPopup("Control Mode", _definition.controlMode, ControlModes);
+
+            EnsureConfig();
+            EditorGUILayout.Space(8f);
+            EditorGUILayout.LabelField("Config", EditorStyles.boldLabel);
+            _definition.config.difficulty = EditorGUILayout.TextField("Difficulty", _definition.config.difficulty);
+            _definition.config.timeLimitSec = EditorGUILayout.IntField("Time Limit", _definition.config.timeLimitSec);
+            _definition.config.targetCount = EditorGUILayout.IntField("Target Count", _definition.config.targetCount);
+            DrawKeyValues("Config Extras", _definition.config.extras);
+
+            EditorGUILayout.Space(8f);
+            DrawChannels();
+
+            EditorGUILayout.Space(8f);
+            DrawPolicies();
+
+            EditorGUILayout.Space(8f);
+            DrawGraphSettings();
+
+            EditorGUILayout.EndScrollView();
+            EditorGUILayout.EndVertical();
+        }
+
+        private void DrawGraphPanel()
+        {
+            EditorGUILayout.BeginVertical();
+            var host = GUILayoutUtility.GetRect(
+                GUIContent.none,
+                GUIStyle.none,
+                GUILayout.ExpandHeight(true),
+                GUILayout.ExpandWidth(true));
+            GUI.Box(host, GUIContent.none);
+
+            var canvas = new Rect(0f, 0f, CanvasWidth, CanvasHeight);
+            _graphScroll = GUI.BeginScrollView(host, _graphScroll, canvas);
+
+            if (_layoutDirty)
+            {
+                AutoLayout();
+                _layoutDirty = false;
+            }
+
+            DrawLinks();
+
+            BeginWindows();
+            for (var i = 0; i < _definition.taskGraph.nodes.Count; i++)
+            {
+                var node = _definition.taskGraph.nodes[i];
+                if (node == null)
+                {
+                    continue;
+                }
+
+                var id = SafeNodeId(node.nodeId, i);
+                var pos = ResolveNodePosition(id, i);
+                var rect = new Rect(pos.x, pos.y, NodeWidth, NodeHeight);
+                var selected = string.Equals(node.nodeId, _selectedNodeId, StringComparison.OrdinalIgnoreCase);
+                var title = selected ? "* " + node.nodeId + " (" + node.nodeType + ")" : node.nodeId + " (" + node.nodeType + ")";
+
+                var updated = GUI.Window(
+                    1000 + i,
+                    rect,
+                    windowId => DrawNodeCard(windowId, node),
+                    title);
+
+                if (updated.position != rect.position)
+                {
+                    _nodePositions[id] = updated.position;
+                }
+            }
+            EndWindows();
+
+            GUI.EndScrollView();
+            EditorGUILayout.EndVertical();
+        }
+        private void DrawRightPanel()
+        {
+            EditorGUILayout.BeginVertical(GUILayout.Width(RightWidth));
+            _rightScroll = EditorGUILayout.BeginScrollView(_rightScroll);
+
+            EditorGUILayout.LabelField("Validation", EditorStyles.boldLabel);
+            if (!_hasValidation)
+            {
+                EditorGUILayout.HelpBox("Validation not executed yet.", MessageType.Info);
+            }
+            else if (_validationPass)
+            {
+                EditorGUILayout.HelpBox("SessionFlowDefinitionValidator: PASS", MessageType.Info);
+            }
+            else
+            {
+                EditorGUILayout.HelpBox(
+                    "SessionFlowDefinitionValidator: FAIL\nreasonCode=" +
+                    (string.IsNullOrWhiteSpace(_validationReason)
+                        ? SessionFlowDefinitionReasonCodes.DefinitionParseFailed
+                        : _validationReason),
+                    MessageType.Error);
+            }
+
+            EditorGUILayout.Space(8f);
+            DrawNodeInspector();
+
+            EditorGUILayout.EndScrollView();
+            EditorGUILayout.EndVertical();
+        }
+
+        private void DrawNodeCard(int windowId, TaskGraphNodeDefinition node)
+        {
+            EditorGUILayout.LabelField("Success", string.IsNullOrWhiteSpace(node.nextOnSuccess) ? "-" : node.nextOnSuccess);
+            EditorGUILayout.LabelField("Fail", string.IsNullOrWhiteSpace(node.nextOnFail) ? "-" : node.nextOnFail);
+            EditorGUILayout.LabelField("Timeout", string.IsNullOrWhiteSpace(node.nextOnTimeout) ? "-" : node.nextOnTimeout);
+            EditorGUILayout.LabelField("Allowed", (node.allowedActions == null ? 0 : node.allowedActions.Count).ToString());
+            EditorGUILayout.LabelField("Conditions", (node.conditions == null ? 0 : node.conditions.Count).ToString());
+            if (GUILayout.Button("Select"))
+            {
+                _selectedNodeId = node.nodeId;
+            }
+
+            GUI.DragWindow(new Rect(0f, 0f, NodeWidth, 22f));
+        }
+
+        private void DrawNodeInspector()
+        {
+            EditorGUILayout.LabelField("Node Inspector", EditorStyles.boldLabel);
+
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("Add Action"))
+            {
+                AddNode(TaskGraphNodeTypes.Action);
+            }
+            if (GUILayout.Button("Add Condition"))
+            {
+                AddNode(TaskGraphNodeTypes.Condition);
+            }
+            if (GUILayout.Button("Add Branch"))
+            {
+                AddNode(TaskGraphNodeTypes.Branch);
+            }
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("Add Timer"))
+            {
+                AddNode(TaskGraphNodeTypes.Timer);
+            }
+            if (GUILayout.Button("Add Complete"))
+            {
+                AddNode(TaskGraphNodeTypes.Complete);
+            }
+            if (GUILayout.Button("Add Fail"))
+            {
+                AddNode(TaskGraphNodeTypes.Fail);
+            }
+            EditorGUILayout.EndHorizontal();
+
+            var nodeIds = BuildNodeIds();
+            if (nodeIds.Count == 0)
+            {
+                EditorGUILayout.HelpBox("No nodes in graph.", MessageType.Warning);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(_selectedNodeId) || !nodeIds.Contains(_selectedNodeId))
+            {
+                _selectedNodeId = nodeIds[0];
+            }
+
+            var selectedIndex = Mathf.Max(0, nodeIds.IndexOf(_selectedNodeId));
+            selectedIndex = EditorGUILayout.Popup("Selected Node", selectedIndex, nodeIds.ToArray());
+            _selectedNodeId = nodeIds[selectedIndex];
+
+            var node = GetNode(_selectedNodeId);
+            if (node == null)
+            {
+                return;
+            }
+
+            node.nodeId = EditorGUILayout.TextField("Node Id", node.nodeId);
+            node.nodeType = DrawPopup("Node Type", node.nodeType, NodeTypes);
+            node.timeoutSec = EditorGUILayout.FloatField("Timeout Sec", node.timeoutSec);
+
+            node.nextOnSuccess = DrawNodeTarget("Next On Success", node.nextOnSuccess);
+            node.nextOnFail = DrawNodeTarget("Next On Fail", node.nextOnFail);
+            node.nextOnTimeout = DrawNodeTarget("Next On Timeout", node.nextOnTimeout);
+
+            EditorGUILayout.Space(6f);
+            DrawAllowedActions(node);
+            EditorGUILayout.Space(6f);
+            DrawConditions(node);
+            EditorGUILayout.Space(6f);
+            DrawEffects("On Enter", node.onEnterEffects);
+            DrawEffects("On Exit", node.onExitEffects);
+            DrawEffects("On Accepted", node.onAcceptedEffects);
+            DrawEffects("On Rejected", node.onRejectedEffects);
+            DrawEffects("On Timeout", node.onTimeoutEffects);
+
+            EditorGUILayout.Space(8f);
+            if (GUILayout.Button("Remove Selected Node"))
+            {
+                RemoveNode(node.nodeId);
+            }
+        }
+
+        private void DrawAllowedActions(TaskGraphNodeDefinition node)
+        {
+            node.allowedActions ??= new List<AllowedActionDefinition>();
+            EditorGUILayout.LabelField("Allowed Actions", EditorStyles.boldLabel);
+            for (var i = 0; i < node.allowedActions.Count; i++)
+            {
+                var item = node.allowedActions[i] ?? new AllowedActionDefinition();
+                node.allowedActions[i] = item;
+                item.constraints ??= new List<KeyValuePairString>();
+
+                EditorGUILayout.BeginVertical("box");
+                item.actionId = EditorGUILayout.TextField("Action Id", item.actionId);
+                item.targetGroup = EditorGUILayout.TextField("Target Group", item.targetGroup);
+                DrawKeyValues("Constraints", item.constraints);
+                if (GUILayout.Button("Remove Allowed Action"))
+                {
+                    node.allowedActions.RemoveAt(i);
+                    EditorGUILayout.EndVertical();
+                    break;
+                }
+                EditorGUILayout.EndVertical();
+            }
+
+            if (GUILayout.Button("Add Allowed Action"))
+            {
+                node.allowedActions.Add(new AllowedActionDefinition());
+            }
+        }
+
+        private void DrawConditions(TaskGraphNodeDefinition node)
+        {
+            node.conditions ??= new List<ConditionDefinition>();
+            EditorGUILayout.LabelField("Conditions", EditorStyles.boldLabel);
+            for (var i = 0; i < node.conditions.Count; i++)
+            {
+                var item = node.conditions[i] ?? new ConditionDefinition();
+                node.conditions[i] = item;
+
+                EditorGUILayout.BeginVertical("box");
+                item.conditionId = EditorGUILayout.TextField("Condition Id", item.conditionId);
+                item.subject = EditorGUILayout.TextField("Subject", item.subject);
+                item.op = EditorGUILayout.TextField("Operator", item.op);
+                item.value = EditorGUILayout.TextField("Value", item.value);
+                item.nextNodeId = DrawNodeTarget("Next Node", item.nextNodeId);
+                if (GUILayout.Button("Remove Condition"))
+                {
+                    node.conditions.RemoveAt(i);
+                    EditorGUILayout.EndVertical();
+                    break;
+                }
+                EditorGUILayout.EndVertical();
+            }
+
+            if (GUILayout.Button("Add Condition"))
+            {
+                node.conditions.Add(new ConditionDefinition());
+            }
+        }
+
+        private void DrawEffects(string title, List<EffectDefinition> effects)
+        {
+            effects ??= new List<EffectDefinition>();
+            EditorGUILayout.LabelField(title + " Effects", EditorStyles.boldLabel);
+            for (var i = 0; i < effects.Count; i++)
+            {
+                var item = effects[i] ?? new EffectDefinition();
+                effects[i] = item;
+                item.parameters ??= new List<KeyValuePairString>();
+
+                EditorGUILayout.BeginVertical("box");
+                item.effectId = EditorGUILayout.TextField("Effect Id", item.effectId);
+                item.binding = EditorGUILayout.TextField("Binding", item.binding);
+                DrawKeyValues("Parameters", item.parameters);
+                if (GUILayout.Button("Remove Effect"))
+                {
+                    effects.RemoveAt(i);
+                    EditorGUILayout.EndVertical();
+                    break;
+                }
+                EditorGUILayout.EndVertical();
+            }
+
+            if (GUILayout.Button("Add Effect"))
+            {
+                effects.Add(new EffectDefinition());
+            }
+        }
+        private void DrawChannels()
+        {
+            _definition.channels ??= SessionFlowDefaults.CreateDefaultChannels();
+            EditorGUILayout.LabelField("Channels", EditorStyles.boldLabel);
+
+            for (var i = 0; i < ChannelIds.Length; i++)
+            {
+                var channelId = ChannelIds[i];
+                var channel = _definition.channels.FirstOrDefault(
+                    item => item != null && string.Equals(item.channelId, channelId, StringComparison.OrdinalIgnoreCase));
+                if (channel == null)
+                {
+                    channel = new SessionFlowChannelConfig { channelId = channelId, enabled = false };
+                    _definition.channels.Add(channel);
+                }
+
+                channel.enabled = EditorGUILayout.ToggleLeft(channel.channelId, channel.enabled);
+            }
+        }
+
+        private void DrawPolicies()
+        {
+            _definition.policies ??= SessionFlowPolicies.CreateDefault();
+            _definition.policies.retryPolicy ??= new RetryPolicy();
+            _definition.policies.timeoutPolicy ??= new TimeoutPolicy();
+            _definition.policies.branchPolicy ??= new BranchPolicy();
+            _definition.policies.scoringPolicy ??= new ScoringPolicy();
+            _definition.policies.difficultyPolicy ??= new DifficultyPolicy();
+            _definition.policies.safetyPolicy ??= new SafetyPolicy();
+            _definition.policies.controlPolicy ??= new ControlPolicy();
+            _definition.policies.telemetryPolicy ??= new TelemetryPolicy();
+            _definition.policies.localizationPolicy ??= new LocalizationPolicy();
+            _definition.policies.calendarPolicy ??= new CalendarPolicy();
+            _definition.policies.localizationPolicy.fallbackLocales ??= new List<string>();
+
+            EditorGUILayout.LabelField("Policies", EditorStyles.boldLabel);
+
+            _definition.policies.wrongActionPolicy = EditorGUILayout.TextField("Wrong Action", _definition.policies.wrongActionPolicy);
+            _definition.policies.retryPolicy.maxRetries = EditorGUILayout.IntField("Retry Max", _definition.policies.retryPolicy.maxRetries);
+            _definition.policies.retryPolicy.cooldownSec = EditorGUILayout.FloatField("Retry Cooldown", _definition.policies.retryPolicy.cooldownSec);
+            _definition.policies.timeoutPolicy.defaultTimeoutSec = EditorGUILayout.FloatField("Default Timeout", _definition.policies.timeoutPolicy.defaultTimeoutSec);
+            _definition.policies.branchPolicy.precedence = EditorGUILayout.TextField("Branch Precedence", _definition.policies.branchPolicy.precedence);
+            _definition.policies.controlPolicy.mode = DrawPopup("Policy Control Mode", _definition.policies.controlPolicy.mode, ControlModes);
+
+            _definition.policies.scoringPolicy.lives = EditorGUILayout.IntField("Lives", _definition.policies.scoringPolicy.lives);
+            _definition.policies.scoringPolicy.pointsPerCorrect = EditorGUILayout.IntField("Points Correct", _definition.policies.scoringPolicy.pointsPerCorrect);
+            _definition.policies.scoringPolicy.pointsPerWrong = EditorGUILayout.IntField("Points Wrong", _definition.policies.scoringPolicy.pointsPerWrong);
+
+            _definition.policies.difficultyPolicy.adaptiveEnabled = EditorGUILayout.Toggle("Adaptive Difficulty", _definition.policies.difficultyPolicy.adaptiveEnabled);
+            _definition.policies.safetyPolicy.emergencyStopEnabled = EditorGUILayout.Toggle("Emergency Stop", _definition.policies.safetyPolicy.emergencyStopEnabled);
+            _definition.policies.safetyPolicy.rejectDisabledChannels = EditorGUILayout.Toggle("Reject Disabled", _definition.policies.safetyPolicy.rejectDisabledChannels);
+            _definition.policies.telemetryPolicy.requireDecisionForEveryAction = EditorGUILayout.Toggle("Require Decision", _definition.policies.telemetryPolicy.requireDecisionForEveryAction);
+
+            _definition.policies.localizationPolicy.defaultLocale = EditorGUILayout.TextField("Default Locale", _definition.policies.localizationPolicy.defaultLocale);
+            _definition.policies.localizationPolicy.fallbackToLanguageCode = EditorGUILayout.Toggle("Fallback Language", _definition.policies.localizationPolicy.fallbackToLanguageCode);
+            DrawStringList("Fallback Locales", _definition.policies.localizationPolicy.fallbackLocales);
+
+            _definition.policies.calendarPolicy.timezoneId = EditorGUILayout.TextField("Calendar Timezone", _definition.policies.calendarPolicy.timezoneId);
+            _definition.policies.calendarPolicy.fallbackToUtcWhenTimezoneInvalid = EditorGUILayout.Toggle("Calendar Fallback UTC", _definition.policies.calendarPolicy.fallbackToUtcWhenTimezoneInvalid);
+            _definition.policies.calendarPolicy.allowQaTimeOverride = EditorGUILayout.Toggle("Calendar QA Override", _definition.policies.calendarPolicy.allowQaTimeOverride);
+        }
+
+        private void DrawGraphSettings()
+        {
+            EnsureGraph();
+            EditorGUILayout.LabelField("Task Graph", EditorStyles.boldLabel);
+
+            var ids = BuildNodeIds();
+            if (ids.Count > 0)
+            {
+                var idx = Mathf.Max(0, ids.IndexOf(_definition.taskGraph.entryNodeId));
+                idx = EditorGUILayout.Popup("Entry Node", idx, ids.ToArray());
+                _definition.taskGraph.entryNodeId = ids[idx];
+            }
+            else
+            {
+                _definition.taskGraph.entryNodeId = EditorGUILayout.TextField("Entry Node", _definition.taskGraph.entryNodeId);
+            }
+
+            EditorGUILayout.LabelField("Node Count", _definition.taskGraph.nodes.Count.ToString());
+        }
+
+        private void DrawKeyValues(string title, List<KeyValuePairString> values)
+        {
+            values ??= new List<KeyValuePairString>();
+            EditorGUILayout.LabelField(title, EditorStyles.miniBoldLabel);
+            for (var i = 0; i < values.Count; i++)
+            {
+                var item = values[i] ?? new KeyValuePairString();
+                values[i] = item;
+                EditorGUILayout.BeginHorizontal();
+                item.key = EditorGUILayout.TextField(item.key);
+                item.value = EditorGUILayout.TextField(item.value);
+                if (GUILayout.Button("-", GUILayout.Width(22f)))
+                {
+                    values.RemoveAt(i);
+                    EditorGUILayout.EndHorizontal();
+                    break;
+                }
+                EditorGUILayout.EndHorizontal();
+            }
+
+            if (GUILayout.Button("+ Add", GUILayout.Width(64f)))
+            {
+                values.Add(new KeyValuePairString());
+            }
+        }
+
+        private void DrawStringList(string title, List<string> values)
+        {
+            values ??= new List<string>();
+            EditorGUILayout.LabelField(title, EditorStyles.miniBoldLabel);
+            for (var i = 0; i < values.Count; i++)
+            {
+                EditorGUILayout.BeginHorizontal();
+                values[i] = EditorGUILayout.TextField(values[i]);
+                if (GUILayout.Button("-", GUILayout.Width(22f)))
+                {
+                    values.RemoveAt(i);
+                    EditorGUILayout.EndHorizontal();
+                    break;
+                }
+                EditorGUILayout.EndHorizontal();
+            }
+
+            if (GUILayout.Button("+ Add", GUILayout.Width(64f)))
+            {
+                values.Add(string.Empty);
+            }
+        }
+
+        private void AddNode(string nodeType)
+        {
+            EnsureGraph();
+            var node = new TaskGraphNodeDefinition
+            {
+                nodeId = BuildNodeId(nodeType),
+                nodeType = nodeType,
+                allowedActions = new List<AllowedActionDefinition>(),
+                conditions = new List<ConditionDefinition>(),
+                onEnterEffects = new List<EffectDefinition>(),
+                onExitEffects = new List<EffectDefinition>(),
+                onAcceptedEffects = new List<EffectDefinition>(),
+                onRejectedEffects = new List<EffectDefinition>(),
+                onTimeoutEffects = new List<EffectDefinition>(),
+            };
+
+            _definition.taskGraph.nodes.Add(node);
+            _selectedNodeId = node.nodeId;
+            _layoutDirty = true;
+        }
+
+        private void RemoveNode(string nodeId)
+        {
+            if (string.IsNullOrWhiteSpace(nodeId))
+            {
+                return;
+            }
+
+            var idx = IndexOfNode(nodeId);
+            if (idx < 0)
+            {
+                return;
+            }
+
+            _definition.taskGraph.nodes.RemoveAt(idx);
+            if (_definition.taskGraph.nodes.Count > 0)
+            {
+                _selectedNodeId = _definition.taskGraph.nodes[0].nodeId;
+            }
+            else
+            {
+                _selectedNodeId = string.Empty;
+            }
+            _layoutDirty = true;
+        }
+        private void DrawLinks()
+        {
+            Handles.BeginGUI();
+            try
+            {
+                for (var i = 0; i < _definition.taskGraph.nodes.Count; i++)
+                {
+                    var source = _definition.taskGraph.nodes[i];
+                    if (source == null)
+                    {
+                        continue;
+                    }
+
+                    var sourceRect = NodeRect(source.nodeId, i);
+                    var links = BuildLinks(source);
+                    for (var l = 0; l < links.Count; l++)
+                    {
+                        var link = links[l];
+                        var targetIndex = IndexOfNode(link.Target);
+                        if (targetIndex < 0)
+                        {
+                            continue;
+                        }
+
+                        var target = _definition.taskGraph.nodes[targetIndex];
+                        var targetRect = NodeRect(target.nodeId, targetIndex);
+
+                        var start = new Vector3(sourceRect.xMax, sourceRect.center.y, 0f);
+                        var end = new Vector3(targetRect.xMin, targetRect.center.y, 0f);
+                        var tan = Mathf.Clamp(Mathf.Abs(end.x - start.x) * 0.4f, 40f, 180f);
+
+                        Handles.color = link.Color;
+                        Handles.DrawBezier(
+                            start,
+                            end,
+                            start + Vector3.right * tan,
+                            end + Vector3.left * tan,
+                            link.Color,
+                            null,
+                            2f);
+
+                        var labelPos = (start + end) * 0.5f;
+                        GUI.Label(new Rect(labelPos.x - 55f, labelPos.y - 10f, 110f, 18f), link.Label, EditorStyles.miniBoldLabel);
+                    }
+                }
+            }
+            finally
+            {
+                Handles.EndGUI();
+            }
+        }
+
+        private List<Link> BuildLinks(TaskGraphNodeDefinition node)
+        {
+            var links = new List<Link>();
+            if (!string.IsNullOrWhiteSpace(node.nextOnSuccess))
+            {
+                links.Add(new Link(node.nextOnSuccess, "success", new Color(0.2f, 0.8f, 0.2f, 0.95f)));
+            }
+            if (!string.IsNullOrWhiteSpace(node.nextOnFail))
+            {
+                links.Add(new Link(node.nextOnFail, "fail", new Color(0.95f, 0.35f, 0.35f, 0.95f)));
+            }
+            if (!string.IsNullOrWhiteSpace(node.nextOnTimeout))
+            {
+                links.Add(new Link(node.nextOnTimeout, "timeout", new Color(0.98f, 0.72f, 0.25f, 0.95f)));
+            }
+
+            if (node.conditions != null)
+            {
+                for (var i = 0; i < node.conditions.Count; i++)
+                {
+                    var c = node.conditions[i];
+                    if (c == null || string.IsNullOrWhiteSpace(c.nextNodeId))
+                    {
+                        continue;
+                    }
+
+                    var label = string.IsNullOrWhiteSpace(c.conditionId) ? "condition" : c.conditionId;
+                    links.Add(new Link(c.nextNodeId, label, new Color(0.4f, 0.6f, 1f, 0.95f)));
+                }
+            }
+
+            return links;
+        }
+
+        private Rect NodeRect(string nodeId, int fallback)
+        {
+            var id = SafeNodeId(nodeId, fallback);
+            var pos = ResolveNodePosition(id, fallback);
+            return new Rect(pos.x, pos.y, NodeWidth, NodeHeight);
+        }
+
+        private Vector2 ResolveNodePosition(string nodeId, int fallback)
+        {
+            if (!_nodePositions.TryGetValue(nodeId, out var pos))
+            {
+                pos = new Vector2(80f + (fallback % 5) * 300f, 80f + (fallback / 5) * 220f);
+                _nodePositions[nodeId] = pos;
+            }
+
+            return pos;
+        }
+
+        private string SafeNodeId(string nodeId, int fallback)
+        {
+            return string.IsNullOrWhiteSpace(nodeId) ? "node_" + Mathf.Max(0, fallback) : nodeId.Trim();
+        }
+
+        private void AutoLayout()
+        {
+            EnsureGraph();
+            _nodePositions.Clear();
+            for (var i = 0; i < _definition.taskGraph.nodes.Count; i++)
+            {
+                var node = _definition.taskGraph.nodes[i];
+                if (node == null)
+                {
+                    continue;
+                }
+
+                var col = i % 4;
+                var row = i / 4;
+                _nodePositions[SafeNodeId(node.nodeId, i)] = new Vector2(80f + col * 320f, 90f + row * 230f);
+            }
+        }
+
+        private void EnsureDefinition()
+        {
+            if (_definition == null)
+            {
+                _definition = GameDefinition.CreateSample();
+            }
+
+            EnsureConfig();
+            EnsureGraph();
+        }
+
+        private void EnsureConfig()
+        {
+            _definition.config ??= new GameDefinitionConfig();
+            _definition.config.extras ??= new List<KeyValuePairString>();
+        }
+
+        private void EnsureGraph()
+        {
+            _definition.taskGraph ??= TaskGraphDefinition.CreateEmpty();
+            _definition.taskGraph.nodes ??= new List<TaskGraphNodeDefinition>();
+
+            for (var i = 0; i < _definition.taskGraph.nodes.Count; i++)
+            {
+                var node = _definition.taskGraph.nodes[i];
+                if (node == null)
+                {
+                    node = new TaskGraphNodeDefinition
+                    {
+                        nodeId = "node_" + (i + 1),
+                        nodeType = TaskGraphNodeTypes.Action,
+                    };
+                    _definition.taskGraph.nodes[i] = node;
+                }
+
+                node.allowedActions ??= new List<AllowedActionDefinition>();
+                node.conditions ??= new List<ConditionDefinition>();
+                node.onEnterEffects ??= new List<EffectDefinition>();
+                node.onExitEffects ??= new List<EffectDefinition>();
+                node.onAcceptedEffects ??= new List<EffectDefinition>();
+                node.onRejectedEffects ??= new List<EffectDefinition>();
+                node.onTimeoutEffects ??= new List<EffectDefinition>();
+            }
+
+            if (string.IsNullOrWhiteSpace(_definition.taskGraph.entryNodeId) && _definition.taskGraph.nodes.Count > 0)
+            {
+                _definition.taskGraph.entryNodeId = _definition.taskGraph.nodes[0].nodeId;
+            }
+        }
+
+        private void LoadFromAsset(GameDefinitionAsset asset)
+        {
+            if (asset == null)
+            {
+                return;
+            }
+
+            _definition = Clone(asset.definition) ?? GameDefinition.CreateSample();
+            EnsureDefinition();
+            _layoutDirty = true;
+        }
+
+        private void SaveToAsset()
+        {
+            if (_asset == null)
+            {
+                var path = EditorUtility.SaveFilePanelInProject(
+                    "Save GameDefinitionAsset",
+                    "GameDefinition",
+                    "asset",
+                    "Choose location for the GameDefinitionAsset.");
+                if (string.IsNullOrWhiteSpace(path))
+                {
+                    return;
+                }
+
+                var created = CreateInstance<GameDefinitionAsset>();
+                created.definition = Clone(_definition) ?? GameDefinition.CreateSample();
+                AssetDatabase.CreateAsset(created, path);
+                AssetDatabase.SaveAssets();
+                _asset = created;
+                Selection.activeObject = created;
+                return;
+            }
+
+            Undo.RecordObject(_asset, "Save Flow Asset");
+            _asset.definition = Clone(_definition) ?? GameDefinition.CreateSample();
+            EditorUtility.SetDirty(_asset);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+        }
+
+        private void ImportJson()
+        {
+            var path = EditorUtility.OpenFilePanel("Import GameDefinition JSON", Application.dataPath, "json");
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            {
+                return;
+            }
+
+            try
+            {
+                var json = File.ReadAllText(path);
+                var parsed = JsonUtility.FromJson<GameDefinition>(json);
+                if (parsed == null)
+                {
+                    EditorUtility.DisplayDialog("Flow Graph Editor", "Could not parse JSON.", "OK");
+                    return;
+                }
+
+                _definition = parsed;
+                EnsureDefinition();
+                _layoutDirty = true;
+            }
+            catch (Exception ex)
+            {
+                EditorUtility.DisplayDialog("Flow Graph Editor", "Import failed:\n" + ex.Message, "OK");
+            }
+        }
+
+        private void ExportJson()
+        {
+            var path = EditorUtility.SaveFilePanel(
+                "Export GameDefinition JSON",
+                Application.dataPath,
+                (_definition.gameId ?? "game_definition") + ".json",
+                "json");
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return;
+            }
+
+            try
+            {
+                File.WriteAllText(path, JsonUtility.ToJson(_definition, true));
+                AssetDatabase.Refresh();
+            }
+            catch (Exception ex)
+            {
+                EditorUtility.DisplayDialog("Flow Graph Editor", "Export failed:\n" + ex.Message, "OK");
+            }
+        }
+
+        private TaskGraphNodeDefinition GetNode(string nodeId)
+        {
+            return _definition.taskGraph.nodes.FirstOrDefault(
+                node => node != null && string.Equals(node.nodeId, nodeId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private int IndexOfNode(string nodeId)
+        {
+            for (var i = 0; i < _definition.taskGraph.nodes.Count; i++)
+            {
+                var node = _definition.taskGraph.nodes[i];
+                if (node != null && string.Equals(node.nodeId, nodeId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        private List<string> BuildNodeIds()
+        {
+            return _definition.taskGraph.nodes
+                .Where(node => node != null && !string.IsNullOrWhiteSpace(node.nodeId))
+                .Select(node => node.nodeId.Trim())
+                .ToList();
+        }
+
+        private string BuildNodeId(string prefix)
+        {
+            var safePrefix = string.IsNullOrWhiteSpace(prefix) ? "node" : prefix.Trim().ToLowerInvariant();
+            safePrefix = safePrefix.Replace(' ', '_');
+
+            var idx = 1;
+            while (true)
+            {
+                var candidate = safePrefix + "_" + idx;
+                if (IndexOfNode(candidate) < 0)
+                {
+                    return candidate;
+                }
+                idx++;
+            }
+        }
+
+        private string DrawNodeTarget(string label, string current)
+        {
+            var ids = BuildNodeIds();
+            if (ids.Count == 0)
+            {
+                return EditorGUILayout.TextField(label, current);
+            }
+
+            var options = new List<string> { string.Empty };
+            options.AddRange(ids);
+            var idx = Mathf.Max(0, options.IndexOf(current ?? string.Empty));
+            idx = EditorGUILayout.Popup(label, idx, options.ToArray());
+            return options[idx];
+        }
+
+        private string DrawPopup(string label, string current, IReadOnlyList<string> options)
+        {
+            var value = string.IsNullOrWhiteSpace(current) ? options[0] : current.Trim();
+            var idx = 0;
+            for (var i = 0; i < options.Count; i++)
+            {
+                if (string.Equals(options[i], value, StringComparison.OrdinalIgnoreCase))
+                {
+                    idx = i;
+                    break;
+                }
+            }
+
+            idx = EditorGUILayout.Popup(label, idx, options.ToArray());
+            return options[Mathf.Clamp(idx, 0, options.Count - 1)];
+        }
+
+        private static GameDefinition Clone(GameDefinition source)
+        {
+            if (source == null)
+            {
+                return null;
+            }
+
+            var json = JsonUtility.ToJson(source);
+            return string.IsNullOrWhiteSpace(json) ? null : JsonUtility.FromJson<GameDefinition>(json);
+        }
+
+        private readonly struct Link
+        {
+            public readonly string Target;
+            public readonly string Label;
+            public readonly Color Color;
+
+            public Link(string target, string label, Color color)
+            {
+                Target = target;
+                Label = label;
+                Color = color;
+            }
+        }
+    }
+}
