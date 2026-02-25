@@ -4,6 +4,15 @@ using UnityEngine;
 
 namespace TheraplyCore.Games.Contracts
 {
+    [CreateAssetMenu(
+        fileName = "GameDefinition",
+        menuName = "Theraply/Session Flow/Game Definition",
+        order = 420)]
+    public sealed class GameDefinitionAsset : ScriptableObject
+    {
+        public GameDefinition definition = GameDefinition.CreateSample();
+    }
+
     /// <summary>
     /// Stable control mode ids for session execution.
     /// </summary>
@@ -751,12 +760,4 @@ namespace TheraplyCore.Games.Contracts
         }
     }
 
-    [CreateAssetMenu(
-        fileName = "GameDefinition",
-        menuName = "Theraply/Session Flow/Game Definition",
-        order = 420)]
-    public sealed class GameDefinitionAsset : ScriptableObject
-    {
-        public GameDefinition definition = GameDefinition.CreateSample();
-    }
 }

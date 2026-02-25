@@ -1,0 +1,410 @@
+{
+    "gameId": "demo_cube_clicker",
+    "displayName": "Demo Cube Flow Definition",
+    "commentVersion": "2026-02-25 demo authoring sample",
+    "controlMode": "hybrid",
+    "config": {
+        "difficulty": "normal",
+        "timeLimitSec": 180,
+        "targetCount": 20,
+        "extras": [
+            {
+                "key": "levelMode",
+                "value": "basic"
+            }
+        ]
+    },
+    "bindings": {
+        "objects": [],
+        "zones": [],
+        "audio": [],
+        "timeline": []
+    },
+    "channels": [
+        {
+            "channelId": "pointer",
+            "enabled": true
+        },
+        {
+            "channelId": "tool_impact",
+            "enabled": true
+        },
+        {
+            "channelId": "hand_contact",
+            "enabled": false
+        },
+        {
+            "channelId": "hand_grab",
+            "enabled": false
+        },
+        {
+            "channelId": "gaze",
+            "enabled": false
+        },
+        {
+            "channelId": "breath",
+            "enabled": false
+        },
+        {
+            "channelId": "audio_source",
+            "enabled": false
+        },
+        {
+            "channelId": "dual_hand",
+            "enabled": false
+        },
+        {
+            "channelId": "pose_path",
+            "enabled": false
+        },
+        {
+            "channelId": "sequence",
+            "enabled": false
+        },
+        {
+            "channelId": "timeline",
+            "enabled": false
+        }
+    ],
+    "policies": {
+        "wrongActionPolicy": "warn",
+        "retryPolicy": {
+            "maxRetries": 3,
+            "cooldownSec": 0.5
+        },
+        "timeoutPolicy": {
+            "defaultTimeoutSec": 15.0
+        },
+        "branchPolicy": {
+            "precedence": "first_match"
+        },
+        "scoringPolicy": {
+            "lives": 3,
+            "pointsPerCorrect": 1,
+            "pointsPerWrong": -1
+        },
+        "difficultyPolicy": {
+            "adaptiveEnabled": true
+        },
+        "safetyPolicy": {
+            "emergencyStopEnabled": true,
+            "rejectDisabledChannels": true
+        },
+        "controlPolicy": {
+            "mode": "hybrid"
+        },
+        "telemetryPolicy": {
+            "requireDecisionForEveryAction": true
+        },
+        "localizationPolicy": {
+            "defaultLocale": "en-US",
+            "fallbackToLanguageCode": true,
+            "fallbackLocales": [
+                "pl"
+            ]
+        },
+        "calendarPolicy": {
+            "timezoneId": "UTC",
+            "fallbackToUtcWhenTimezoneInvalid": true,
+            "allowQaTimeOverride": true,
+            "defaultProfileDateKey": "profile_birthday",
+            "conflictPolicy": "highest_priority",
+            "rules": [],
+            "events": []
+        }
+    },
+    "taskGraph": {
+        "entryNodeId": "n_action",
+        "nodes": [
+            {
+                "nodeId": "n_action",
+                "nodeType": "Action",
+                "allowedActions": [
+                    {
+                        "actionId": "touch_target_with_tool",
+                        "targetGroup": "demo_cube",
+                        "constraints": [
+                            {
+                                "key": "requiredChannelId",
+                                "value": "pointer"
+                            }
+                        ]
+                    }
+                ],
+                "conditions": [],
+                "timeoutSec": 12.0,
+                "onEnterEffects": [
+                    {
+                        "effectId": "emit_hint",
+                        "binding": "demo_hint",
+                        "parameters": [
+                            {
+                                "key": "message",
+                                "value": "Touch highlighted cube"
+                            }
+                        ]
+                    }
+                ],
+                "onExitEffects": [],
+                "onAcceptedEffects": [],
+                "onRejectedEffects": [],
+                "onTimeoutEffects": [],
+                "nextOnSuccess": "n_branch",
+                "nextOnFail": "n_fail",
+                "nextOnTimeout": "n_fail"
+            },
+            {
+                "nodeId": "n_branch",
+                "nodeType": "Branch",
+                "allowedActions": [],
+                "conditions": [
+                    {
+                        "conditionId": "score_threshold",
+                        "subject": "scoreTotal",
+                        "op": ">=",
+                        "value": "5",
+                        "nextNodeId": "n_complete"
+                    }
+                ],
+                "timeoutSec": 0.0,
+                "onEnterEffects": [],
+                "onExitEffects": [],
+                "onAcceptedEffects": [],
+                "onRejectedEffects": [],
+                "onTimeoutEffects": [],
+                "nextOnSuccess": "n_timer",
+                "nextOnFail": "n_timer",
+                "nextOnTimeout": "n_fail"
+            },
+            {
+                "nodeId": "n_timer",
+                "nodeType": "Timer",
+                "allowedActions": [],
+                "conditions": [],
+                "timeoutSec": 30.0,
+                "onEnterEffects": [],
+                "onExitEffects": [],
+                "onAcceptedEffects": [],
+                "onRejectedEffects": [],
+                "onTimeoutEffects": [],
+                "nextOnSuccess": "n_complete",
+                "nextOnFail": "n_fail",
+                "nextOnTimeout": "n_complete"
+            },
+            {
+                "nodeId": "n_complete",
+                "nodeType": "Complete",
+                "allowedActions": [],
+                "conditions": [],
+                "timeoutSec": 0.0,
+                "onEnterEffects": [],
+                "onExitEffects": [],
+                "onAcceptedEffects": [],
+                "onRejectedEffects": [],
+                "onTimeoutEffects": [],
+                "nextOnSuccess": "",
+                "nextOnFail": "",
+                "nextOnTimeout": ""
+            },
+            {
+                "nodeId": "n_fail",
+                "nodeType": "Fail",
+                "allowedActions": [],
+                "conditions": [],
+                "timeoutSec": 0.0,
+                "onEnterEffects": [],
+                "onExitEffects": [],
+                "onAcceptedEffects": [],
+                "onRejectedEffects": [],
+                "onTimeoutEffects": [],
+                "nextOnSuccess": "",
+                "nextOnFail": "",
+                "nextOnTimeout": ""
+            }
+        ]
+    },
+    "mobileControlSchema": {
+        "schema": "THERAPLY_MOBILE_CONTROL_SCHEMA",
+        "schemaVersion": "2026-02-25",
+        "gameId": "demo_cube_clicker",
+        "title": "Demo Cube Dynamic Controls",
+        "description": "Dynamic setup rendered from schema with update button.",
+        "layout": {
+            "mode": "stack",
+            "columns": 1
+        },
+        "payload": {
+            "target": "game_config",
+            "gameConfigType": "demo_cube_config_v1",
+            "gameConfigVersion": 1,
+            "includeVersionInGameConfig": true
+        },
+        "sections": [
+            {
+                "sectionId": "setup",
+                "label": "Setup",
+                "order": 10
+            },
+            {
+                "sectionId": "runtime",
+                "label": "Runtime",
+                "order": 20
+            }
+        ],
+        "controls": [
+            {
+                "controlId": "cube_count",
+                "type": "slider",
+                "label": "Cube Count",
+                "hint": "Number of active cubes.",
+                "placeholder": "",
+                "sectionId": "setup",
+                "order": 10,
+                "defaultValue": "12",
+                "buttonCommandId": "UPDATE_CONFIG",
+                "binding": {
+                    "target": "game_config",
+                    "path": "cubeCount",
+                    "valueType": "int",
+                    "emitOnStartGame": true,
+                    "emitOnUpdateConfig": true
+                },
+                "validation": {
+                    "required": true,
+                    "minValue": "4",
+                    "maxValue": "40",
+                    "step": "1",
+                    "minLength": 0,
+                    "maxLength": 0,
+                    "regex": ""
+                },
+                "options": []
+            },
+            {
+                "controlId": "cube_speed",
+                "type": "slider",
+                "label": "Cube Speed",
+                "hint": "Movement speed multiplier.",
+                "placeholder": "",
+                "sectionId": "setup",
+                "order": 20,
+                "defaultValue": "0.7",
+                "buttonCommandId": "UPDATE_CONFIG",
+                "binding": {
+                    "target": "game_config",
+                    "path": "cubeSpeed",
+                    "valueType": "double",
+                    "emitOnStartGame": true,
+                    "emitOnUpdateConfig": true
+                },
+                "validation": {
+                    "required": true,
+                    "minValue": "0.2",
+                    "maxValue": "2.2",
+                    "step": "0.1",
+                    "minLength": 0,
+                    "maxLength": 0,
+                    "regex": ""
+                },
+                "options": []
+            },
+            {
+                "controlId": "level_mode",
+                "type": "select",
+                "label": "Level Mode",
+                "hint": "Select progression mode.",
+                "placeholder": "",
+                "sectionId": "setup",
+                "order": 30,
+                "defaultValue": "basic",
+                "buttonCommandId": "UPDATE_CONFIG",
+                "binding": {
+                    "target": "game_config",
+                    "path": "levelMode",
+                    "valueType": "string",
+                    "emitOnStartGame": true,
+                    "emitOnUpdateConfig": true
+                },
+                "validation": {
+                    "required": true,
+                    "minValue": "",
+                    "maxValue": "",
+                    "step": "",
+                    "minLength": 0,
+                    "maxLength": 0,
+                    "regex": ""
+                },
+                "options": [
+                    {
+                        "value": "basic",
+                        "label": "Basic"
+                    },
+                    {
+                        "value": "alternate_colors",
+                        "label": "Alternate Colors"
+                    },
+                    {
+                        "value": "random_target_color",
+                        "label": "Random Target"
+                    }
+                ]
+            },
+            {
+                "controlId": "therapist_note",
+                "type": "text",
+                "label": "Session Note",
+                "hint": "Optional note sent with update config.",
+                "placeholder": "Note for runtime log",
+                "sectionId": "runtime",
+                "order": 40,
+                "defaultValue": "",
+                "buttonCommandId": "UPDATE_CONFIG",
+                "binding": {
+                    "target": "game_config",
+                    "path": "therapistNote",
+                    "valueType": "string",
+                    "emitOnStartGame": false,
+                    "emitOnUpdateConfig": true
+                },
+                "validation": {
+                    "required": false,
+                    "minValue": "",
+                    "maxValue": "",
+                    "step": "",
+                    "minLength": 0,
+                    "maxLength": 120,
+                    "regex": ""
+                },
+                "options": []
+            },
+            {
+                "controlId": "apply_runtime_update",
+                "type": "button",
+                "label": "Apply Runtime Config",
+                "hint": "Send UPDATE_CONFIG with current control values.",
+                "placeholder": "",
+                "sectionId": "runtime",
+                "order": 50,
+                "defaultValue": "",
+                "buttonCommandId": "UPDATE_CONFIG",
+                "binding": {
+                    "target": "game_config",
+                    "path": "",
+                    "valueType": "string",
+                    "emitOnStartGame": false,
+                    "emitOnUpdateConfig": false
+                },
+                "validation": {
+                    "required": false,
+                    "minValue": "",
+                    "maxValue": "",
+                    "step": "",
+                    "minLength": 0,
+                    "maxLength": 0,
+                    "regex": ""
+                },
+                "options": []
+            }
+        ]
+    }
+}

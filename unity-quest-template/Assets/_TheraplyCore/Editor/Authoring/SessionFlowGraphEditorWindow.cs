@@ -137,6 +137,15 @@ namespace TheraplyCore.Editor.Authoring
                 ExportJson();
             }
 
+            if (GUILayout.Button("Export Contracts", EditorStyles.toolbarButton, GUILayout.Width(116f)))
+            {
+                SaveToAsset();
+                if (_asset != null)
+                {
+                    SessionFlowAuthoringExport.ExportAllToContractsMenu();
+                }
+            }
+
             if (GUILayout.Button("Auto Layout", EditorStyles.toolbarButton, GUILayout.Width(90f)))
             {
                 AutoLayout();
