@@ -156,6 +156,7 @@ namespace TheraplyCore.Games.Contracts
         public List<SessionFlowChannelConfig> channels = SessionFlowDefaults.CreateDefaultChannels();
         public SessionFlowPolicies policies = new SessionFlowPolicies();
         public TaskGraphDefinition taskGraph = TaskGraphDefinition.CreateEmpty();
+        public MobileControlSchema mobileControlSchema;
 
         public bool TryValidate(out string reasonCode)
         {
@@ -180,6 +181,7 @@ namespace TheraplyCore.Games.Contracts
                 channels = SessionFlowDefaults.CreateDefaultChannels(),
                 policies = SessionFlowPolicies.CreateDefault(),
                 taskGraph = TaskGraphDefinition.CreateEmpty(),
+                mobileControlSchema = null,
             };
         }
     }
@@ -700,7 +702,52 @@ namespace TheraplyCore.Games.Contracts
                 }
             }
 
+            if (HasMobileControlSchemaPayload(definition.mobileControlSchema))
+            {
+                if (!string.IsNullOrWhiteSpace(definition.mobileControlSchema.gameId) &&
+                    !string.Equals(
+                        definition.mobileControlSchema.gameId.Trim(),
+                        definition.gameId.Trim(),
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    reasonCode = MobileControlSchemaReasonCodes.GameIdMismatch;
+                    return false;
+                }
+
+                if (!MobileControlSchemaValidator.TryValidate(definition.mobileControlSchema, out reasonCode))
+                {
+                    return false;
+                }
+            }
+
             return true;
+        }
+
+        private static bool HasMobileControlSchemaPayload(MobileControlSchema schema)
+        {
+            if (schema == null)
+            {
+                return false;
+            }
+
+            if (!string.IsNullOrWhiteSpace(schema.gameId) ||
+                !string.IsNullOrWhiteSpace(schema.title) ||
+                !string.IsNullOrWhiteSpace(schema.description))
+            {
+                return true;
+            }
+
+            if (schema.controls != null && schema.controls.Count > 0)
+            {
+                return true;
+            }
+
+            if (schema.sections != null && schema.sections.Count > 0)
+            {
+                return true;
+            }
+
+            return false;
         }
     }
 

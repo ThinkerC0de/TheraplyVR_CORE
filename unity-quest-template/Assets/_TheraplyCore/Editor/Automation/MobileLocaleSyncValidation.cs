@@ -107,7 +107,12 @@ namespace TheraplyCore.Editor.Automation
 
                 ValidateRemoteLocaleSwitch(commandBus, localizationRuntime, publishedEvents);
                 ValidateUnsupportedLocaleRejection(commandBus, localizationRuntime, publishedEvents);
-                ValidateLocalOnlyRemoteRejection(commandBus, flowConfigProvider, localizationRuntime, publishedEvents);
+                ValidateLocalOnlyRemoteRejection(
+                    commandBus,
+                    flowConfigProvider,
+                    sessionBridge,
+                    localizationRuntime,
+                    publishedEvents);
 
                 return "remoteLocaleSwitch=OK; unsupportedLocaleRejected=OK; localOnlyRemoteRejected=OK";
             }
@@ -202,15 +207,18 @@ namespace TheraplyCore.Editor.Automation
         private static void ValidateLocalOnlyRemoteRejection(
             GameCommandBus commandBus,
             FlowConfigProvider flowConfigProvider,
+            SessionRuntimeBridge sessionRuntimeBridge,
             LocalizationRuntime localizationRuntime,
             IReadOnlyList<IReadOnlyDictionary<string, object>> publishedEvents)
         {
             AssertTrue(commandBus != null, "GameCommandBus is required.");
             AssertTrue(flowConfigProvider != null, "FlowConfigProvider is required.");
+            AssertTrue(sessionRuntimeBridge != null, "SessionRuntimeBridge is required.");
             AssertTrue(localizationRuntime != null, "Localization runtime is required.");
             AssertTrue(publishedEvents != null, "Published events list is required.");
 
             ConfigureFlowDefinition(flowConfigProvider, SessionFlowControlModes.LocalOnly);
+            SetNonPublicField(sessionRuntimeBridge, "_activeControlMode", SessionFlowControlModes.LocalOnly);
 
             var beforeEventCount = publishedEvents.Count;
             var localeBeforeRequest = localizationRuntime.CurrentLocale;
@@ -247,9 +255,11 @@ namespace TheraplyCore.Editor.Automation
 
             definition.policies.controlPolicy.mode = definition.controlMode;
 
-            var json = JsonUtility.ToJson(definition);
-            SetNonPublicField(flowConfigProvider, "_definitionJson", new TextAsset(json));
-            SetNonPublicField(flowConfigProvider, "_preferJsonSource", true);
+            var definitionAsset = ScriptableObject.CreateInstance<GameDefinitionAsset>();
+            definitionAsset.definition = definition;
+            SetNonPublicField(flowConfigProvider, "_definitionAsset", definitionAsset);
+            SetNonPublicField(flowConfigProvider, "_definitionJson", null);
+            SetNonPublicField(flowConfigProvider, "_preferJsonSource", false);
             SetNonPublicField(flowConfigProvider, "_fallbackToSampleWhenMissing", false);
             flowConfigProvider.InvalidateCache();
         }

@@ -84,6 +84,53 @@ namespace TheraplyCore.Editor.Automation
                 !string.IsNullOrWhiteSpace(localizationPolicy.defaultLocale),
                 "Localization policy default locale should not be empty.");
 
+            var sampleMobileSchema = MobileControlSchema.CreateDefault(sampleDefinition.gameId);
+            sampleMobileSchema.title = "Sample Mobile Schema";
+            sampleMobileSchema.payload.gameConfigType = "sample_control_config";
+            sampleMobileSchema.controls.Add(new MobileControlDefinition
+            {
+                controlId = "target_count",
+                type = MobileControlTypes.Slider,
+                label = "Target Count",
+                defaultValue = "8",
+                binding = new MobileControlBindingDefinition
+                {
+                    target = MobileControlPayloadTargets.GameConfig,
+                    path = "targetCount",
+                    valueType = MobileControlValueTypes.Integer,
+                    emitOnStartGame = true,
+                    emitOnUpdateConfig = true,
+                },
+                validation = new MobileControlValidationDefinition
+                {
+                    required = true,
+                    minValue = "3",
+                    maxValue = "32",
+                    step = "1",
+                },
+            });
+            AssertTrue(
+                sampleMobileSchema.TryValidate(out var mobileSchemaReason),
+                "Sample mobile control schema should validate. reason=" + mobileSchemaReason);
+
+            var invalidMobileSchema = MobileControlSchema.CreateDefault(sampleDefinition.gameId);
+            invalidMobileSchema.controls.Add(new MobileControlDefinition
+            {
+                controlId = "invalid_control",
+                type = "unsupported_type",
+                binding = new MobileControlBindingDefinition
+                {
+                    path = "value",
+                },
+            });
+            AssertFalse(
+                invalidMobileSchema.TryValidate(out var invalidMobileReason),
+                "Unsupported control type should fail schema validation.");
+            AssertEqual(
+                MobileControlSchemaReasonCodes.ControlTypeUnsupported,
+                invalidMobileReason,
+                "Unexpected reason code for unsupported mobile control type.");
+
             var calendarPolicy = sampleDefinition.policies.calendarPolicy;
             AssertTrue(calendarPolicy != null, "Calendar policy should exist in default policies.");
             AssertTrue(
@@ -133,7 +180,7 @@ namespace TheraplyCore.Editor.Automation
             AssertTrue(validResult.accepted, "Expected action acceptance for valid control mode and input range.");
             AssertEqual("ACTION_ACCEPTED", validResult.reasonCode, "Unexpected reason code for valid action.");
 
-            return "definitionValidation=OK; conditionContracts=OK; localizationPolicy=OK; calendarPolicy=OK; actionValidator=OK";
+            return "definitionValidation=OK; conditionContracts=OK; localizationPolicy=OK; mobileControlSchema=OK; calendarPolicy=OK; actionValidator=OK";
         }
 
         private static void PersistValidationResult(string status, string details)

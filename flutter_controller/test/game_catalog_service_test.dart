@@ -1,4 +1,5 @@
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
+import 'package:flutter_controller/models/mobile_control_schema.dart';
 import 'package:flutter_controller/services/game_catalog_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -63,6 +64,37 @@ void main() {
 
       expect(entries.single.gameId, 'fallback-id');
       expect(entries.single.title, 'Fallback');
+    });
+
+    test('parses optional mobile control schema from catalog entry', () async {
+      await firestore.collection('game_catalog').doc('demo').set(
+        <String, dynamic>{
+          'gameId': 'demo_cube_clicker',
+          'title': 'Demo',
+          'active': true,
+          'mobileControlSchema': <String, dynamic>{
+            'schema': MobileControlSchemaIds.mobileControlSchema,
+            'schemaVersion': '2026-02-25',
+            'gameId': 'demo_cube_clicker',
+            'controls': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'controlId': 'cube_count',
+                'type': 'slider',
+                'binding': <String, dynamic>{
+                  'path': 'cubeCount',
+                  'valueType': 'int',
+                },
+              },
+            ],
+          },
+        },
+      );
+
+      final stream = GameCatalogService.watchActiveCatalog();
+      final entries = await stream.firstWhere((value) => value.isNotEmpty);
+
+      expect(entries.single.mobileControlSchema, isNotNull);
+      expect(entries.single.mobileControlSchemaReasonCode, isEmpty);
     });
   });
 }
