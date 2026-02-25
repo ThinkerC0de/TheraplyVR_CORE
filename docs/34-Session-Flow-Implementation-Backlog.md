@@ -111,6 +111,17 @@ Goal: implement the new framework direction end-to-end so no per-game core rewri
 | SF-H-002 | Create flow debugging runbook | DONE | Operator/dev guide for reason codes, traces, and failure triage finalized | SF-G-004 |
 | SF-H-003 | Create migration template from mechanic pattern | DONE | New scene can be planned via action/effect/policy mapping without core edits | SF-H-001 |
 
+## Phase I - Core Gap Closure (Current Direction)
+
+Execution details: `docs/39-Core-Gap-Closure-Execution-Plan.md`
+
+| ID | Task | Status | Acceptance Criteria | Depends On |
+| --- | --- | --- | --- | --- |
+| SF-I-001 | Implement deterministic `Condition` and `Branch` evaluation path | TODO | `TaskGraphRunner` + `TransitionEngine` evaluate declared conditions and branch policy, no implicit fallback routing | SF-B-008 |
+| SF-I-002 | Implement universal narrator and localization runtime | TODO | Narration and locale switching are data-driven through effects, with fallback and telemetry | SF-D-003 |
+| SF-I-003 | Implement calendar runtime and date-driven event rules | TODO | Date windows/profile-date rules can activate variants and sequences without scene scripts | SF-A-003 |
+| SF-I-004 | Expose scene lifecycle operations as flow effects | TODO | `load_scene`, `unload_scene`, `reset_scene` are available through effect plugins with reason-coded failures | SF-B-004, SF-D-003 |
+
 ## Global Definition Of Done
 
 1. New scene is authored using `GameDefinition` only.
@@ -118,6 +129,7 @@ Goal: implement the new framework direction end-to-end so no per-game core rewri
 3. Every action attempt has complete decision telemetry.
 4. Export quality gates pass with 100% required coverage.
 5. Session runs in both remote and local modes as configured.
+6. Phase `SF-I-001` to `SF-I-004` are delivered and marked `DONE`.
 
 ## Historical Note
 
