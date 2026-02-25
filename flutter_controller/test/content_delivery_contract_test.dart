@@ -38,6 +38,26 @@ void main() {
 
   test('runtime status codec falls back to NOT_INSTALLED', () {
     expect(
+      ContentRuntimeStatusCodec.fromWire('SYNCING_MANIFEST'),
+      ContentRuntimeStatus.syncingManifest,
+    );
+    expect(
+      ContentRuntimeStatusCodec.fromWire('DOWNLOADING'),
+      ContentRuntimeStatus.downloading,
+    );
+    expect(
+      ContentRuntimeStatusCodec.fromWire('VERIFYING'),
+      ContentRuntimeStatus.verifying,
+    );
+    expect(
+      ContentRuntimeStatusCodec.fromWire('ACTIVATING'),
+      ContentRuntimeStatus.activating,
+    );
+    expect(
+      ContentRuntimeStatusCodec.fromWire('ROLLING_BACK'),
+      ContentRuntimeStatus.rollingBack,
+    );
+    expect(
       ContentRuntimeStatusCodec.fromWire('unknown_status'),
       ContentRuntimeStatus.notInstalled,
     );
@@ -57,6 +77,16 @@ void main() {
     expect(payload['gameId'], 'pulse_target_tap');
     expect(payload['targetVersion'], '2.0.0');
     expect(payload['issuedAtUtc'], timestamp.toIso8601String());
+  });
+
+  test('request install transition starts with syncing manifest phase', () {
+    expect(
+      ContentDeliveryTransitionRule.nextStatus(
+        current: ContentRuntimeStatus.notInstalled,
+        action: ContentDeliveryAction.requestInstallOrUpdate,
+      ),
+      ContentRuntimeStatus.syncingManifest,
+    );
   });
 
   test('launch gate requires quest status signal when delivery is enabled', () {

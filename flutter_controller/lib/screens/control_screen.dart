@@ -3078,6 +3078,26 @@ class _ControlScreenState extends State<ControlScreen>
           : 'Selected game `${entry.title}` is not licensed for this account.';
     }
 
+    if (state.runtimeStatus == ContentRuntimeStatus.syncingManifest) {
+      return 'Selected game `${entry.title}` is syncing manifest. Wait for READY status.';
+    }
+
+    if (state.runtimeStatus == ContentRuntimeStatus.downloading) {
+      return 'Selected game `${entry.title}` is downloading content. Wait for READY status.';
+    }
+
+    if (state.runtimeStatus == ContentRuntimeStatus.verifying) {
+      return 'Selected game `${entry.title}` is verifying package integrity. Wait for READY status.';
+    }
+
+    if (state.runtimeStatus == ContentRuntimeStatus.activating) {
+      return 'Selected game `${entry.title}` is activating content. Wait for READY status.';
+    }
+
+    if (state.runtimeStatus == ContentRuntimeStatus.rollingBack) {
+      return 'Selected game `${entry.title}` is rolling back after verify failure. Wait for final status.';
+    }
+
     if (state.runtimeStatus == ContentRuntimeStatus.installing) {
       return 'Selected game `${entry.title}` is currently installing. Wait for READY status.';
     }
@@ -5696,6 +5716,11 @@ class _ControlScreenState extends State<ControlScreen>
   Widget _buildContentStatusChip(PurchasedContentState state) {
     final label = switch (state.runtimeStatus) {
       ContentRuntimeStatus.notInstalled => 'Available',
+      ContentRuntimeStatus.syncingManifest => 'Syncing manifest',
+      ContentRuntimeStatus.downloading => 'Downloading',
+      ContentRuntimeStatus.verifying => 'Verifying',
+      ContentRuntimeStatus.activating => 'Activating',
+      ContentRuntimeStatus.rollingBack => 'Rolling back',
       ContentRuntimeStatus.installing => 'Installing',
       ContentRuntimeStatus.ready => 'Installed',
       ContentRuntimeStatus.updateRequired => 'Update required',
@@ -5747,6 +5772,16 @@ class _ControlScreenState extends State<ControlScreen>
     switch (status) {
       case ContentRuntimeStatus.notInstalled:
         return Colors.grey.shade700;
+      case ContentRuntimeStatus.syncingManifest:
+        return Colors.blueGrey.shade700;
+      case ContentRuntimeStatus.downloading:
+        return Colors.blue.shade700;
+      case ContentRuntimeStatus.verifying:
+        return Colors.deepPurple.shade700;
+      case ContentRuntimeStatus.activating:
+        return Colors.teal.shade700;
+      case ContentRuntimeStatus.rollingBack:
+        return Colors.brown.shade700;
       case ContentRuntimeStatus.installing:
         return Colors.blue.shade700;
       case ContentRuntimeStatus.ready:

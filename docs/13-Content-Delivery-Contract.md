@@ -13,6 +13,11 @@ Status: draft contract + Flutter orchestration + Quest dev simulator (`CAT-001`,
 
 `runtimeStatus` must use one of:
 - `NOT_INSTALLED`
+- `SYNCING_MANIFEST`
+- `DOWNLOADING`
+- `VERIFYING`
+- `ACTIVATING`
+- `ROLLING_BACK`
 - `INSTALLING`
 - `READY`
 - `UPDATE_REQUIRED`
@@ -104,8 +109,8 @@ Fields:
 ## Testing mode without downloadable bundles
 
 - Quest simulator responds to:
-  - `SYNC_CATALOG` (publishes full `GAME_INSTALL_STATUS` snapshot),
-  - `INSTALL_GAME` (state `INSTALLING` -> `READY` after short delay),
+  - `SYNC_CATALOG` (state `SYNCING_MANIFEST` -> stable catalog snapshot),
+  - `INSTALL_GAME` (state `SYNCING_MANIFEST` -> `DOWNLOADING` -> `VERIFYING` -> `ACTIVATING` -> `READY`, with optional verify-failure rollback path `ROLLING_BACK`),
   - `UNINSTALL_GAME` (state -> `NOT_INSTALLED`).
 - Simulator state persistence:
   - runtime writes lifecycle snapshot to `Application.persistentDataPath/session_resilience/content_delivery_state.json`,
@@ -114,6 +119,6 @@ Fields:
 
 ## Deferred
 
-- Quest-side production installer lifecycle implementation (download/verify/activate/rollback).
+- Quest-side production installer lifecycle implementation (real manifest fetch/download/verify/activate/rollback).
 - Backend policy for ownership/license-authorized install requests.
 - Retry/backoff + operation timeout state machine for long installs.

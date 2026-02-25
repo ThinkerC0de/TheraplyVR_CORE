@@ -319,6 +319,11 @@ namespace TheraplyCore.Games.Contracts
     public static class ContentRuntimeStatusValues
     {
         public const string NotInstalled = "NOT_INSTALLED";
+        public const string SyncingManifest = "SYNCING_MANIFEST";
+        public const string Downloading = "DOWNLOADING";
+        public const string Verifying = "VERIFYING";
+        public const string Activating = "ACTIVATING";
+        public const string RollingBack = "ROLLING_BACK";
         public const string Installing = "INSTALLING";
         public const string Ready = "READY";
         public const string UpdateRequired = "UPDATE_REQUIRED";

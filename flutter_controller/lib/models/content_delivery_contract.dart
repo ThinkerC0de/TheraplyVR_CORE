@@ -2,6 +2,11 @@ import 'dart:convert';
 
 enum ContentRuntimeStatus {
   notInstalled,
+  syncingManifest,
+  downloading,
+  verifying,
+  activating,
+  rollingBack,
   installing,
   ready,
   updateRequired,
@@ -20,6 +25,16 @@ extension ContentRuntimeStatusCodec on ContentRuntimeStatus {
     switch (wireValue?.trim().toUpperCase()) {
       case 'INSTALLING':
         return ContentRuntimeStatus.installing;
+      case 'SYNCING_MANIFEST':
+        return ContentRuntimeStatus.syncingManifest;
+      case 'DOWNLOADING':
+        return ContentRuntimeStatus.downloading;
+      case 'VERIFYING':
+        return ContentRuntimeStatus.verifying;
+      case 'ACTIVATING':
+        return ContentRuntimeStatus.activating;
+      case 'ROLLING_BACK':
+        return ContentRuntimeStatus.rollingBack;
       case 'READY':
         return ContentRuntimeStatus.ready;
       case 'UPDATE_REQUIRED':
@@ -36,6 +51,16 @@ extension ContentRuntimeStatusCodec on ContentRuntimeStatus {
     switch (this) {
       case ContentRuntimeStatus.notInstalled:
         return 'NOT_INSTALLED';
+      case ContentRuntimeStatus.syncingManifest:
+        return 'SYNCING_MANIFEST';
+      case ContentRuntimeStatus.downloading:
+        return 'DOWNLOADING';
+      case ContentRuntimeStatus.verifying:
+        return 'VERIFYING';
+      case ContentRuntimeStatus.activating:
+        return 'ACTIVATING';
+      case ContentRuntimeStatus.rollingBack:
+        return 'ROLLING_BACK';
       case ContentRuntimeStatus.installing:
         return 'INSTALLING';
       case ContentRuntimeStatus.ready:
@@ -154,7 +179,7 @@ class ContentDeliveryTransitionRule {
         if (current == ContentRuntimeStatus.ready) {
           return ContentRuntimeStatus.ready;
         }
-        return ContentRuntimeStatus.installing;
+        return ContentRuntimeStatus.syncingManifest;
       case ContentDeliveryAction.markInstallSuccess:
         return ContentRuntimeStatus.ready;
       case ContentDeliveryAction.markFailure:
