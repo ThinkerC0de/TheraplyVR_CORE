@@ -15,7 +15,7 @@ Goal: create and run a new scene setup without adding per-game logic in core run
 1. Minute 0-2: Prepare a base definition asset in Unity.
    - Open `Theraply/Session Flow/Flow Graph Editor`.
    - Load `DemoCubeFlowDefinition.asset` from `Assets/_YourGames/Samples/SessionFlow`.
-   - Use `Save As` to create a new asset in your game folder.
+   - Use `Save Asset` to create a new asset in your game folder (if no asset is selected, editor asks for target path).
 
 2. Minute 2-6: Author flow nodes and transitions.
    - Edit node list with `Action/Condition/Branch/Timer/Complete/Fail`.
@@ -45,6 +45,19 @@ Goal: create and run a new scene setup without adding per-game logic in core run
    - Start session (`START_GAME`) and verify config payload is schema-built.
    - Trigger runtime update (`UPDATE_CONFIG`) from schema button control if present.
    - Verify no core runtime changes were required.
+
+## Graph Editor Quick Controls
+
+- Canvas:
+  - `MMB drag` = pan.
+  - `Mouse wheel` = zoom in/out.
+  - `RMB` on empty canvas = context menu with categorized node creation.
+- Node:
+  - `RMB` on node = `Select`, `Rename`, `Delete`, `Disconnect Outgoing`, `Disconnect Incoming`, `Disconnect All`.
+  - `Rename` opens rename section in right inspector; apply a stable id like `start_action`.
+- Start node:
+  - Set explicit start in left panel: `Task Graph -> Entry Node`.
+  - Recommended convention: rename first node to `start` or `start_action`, then set it as `Entry Node`.
 
 ## Validation Commands
 

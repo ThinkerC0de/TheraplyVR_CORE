@@ -48,6 +48,9 @@ namespace TheraplyCore.Editor.Authoring
         private const float CanvasHeight = 2400f;
         private const float NodeWidth = 230f;
         private const float NodeHeight = 150f;
+        private const float MinGraphZoom = 0.45f;
+        private const float MaxGraphZoom = 2.2f;
+        private const float GraphZoomStep = 0.08f;
 
         private GameDefinitionAsset _asset;
         private GameDefinition _definition;
@@ -57,6 +60,10 @@ namespace TheraplyCore.Editor.Authoring
         private Vector2 _leftScroll;
         private Vector2 _graphScroll;
         private Vector2 _rightScroll;
+        private float _graphZoom = 1f;
+        private bool _middlePanActive;
+        private string _renameNodeId = string.Empty;
+        private string _renameDraft = string.Empty;
 
         private string _selectedNodeId = string.Empty;
         private bool _layoutDirty = true;
@@ -157,6 +164,8 @@ namespace TheraplyCore.Editor.Authoring
                 _hasValidation = true;
             }
 
+            GUILayout.Space(10f);
+            GUILayout.Label("Zoom " + Mathf.RoundToInt(_graphZoom * 100f) + "%", EditorStyles.miniLabel, GUILayout.Width(78f));
             GUILayout.FlexibleSpace();
             EditorGUILayout.EndHorizontal();
         }
@@ -203,7 +212,11 @@ namespace TheraplyCore.Editor.Authoring
                 GUILayout.ExpandWidth(true));
             GUI.Box(host, GUIContent.none);
 
-            var canvas = new Rect(0f, 0f, CanvasWidth, CanvasHeight);
+            HandleGraphCanvasInput(host);
+
+            var canvasSize = GetZoomedCanvasSize();
+            var canvas = new Rect(0f, 0f, canvasSize.x, canvasSize.y);
+            _graphScroll = ClampGraphScroll(_graphScroll, host, canvasSize);
             _graphScroll = GUI.BeginScrollView(host, _graphScroll, canvas);
 
             if (_layoutDirty)
@@ -225,7 +238,11 @@ namespace TheraplyCore.Editor.Authoring
 
                 var id = SafeNodeId(node.nodeId, i);
                 var pos = ResolveNodePosition(id, i);
-                var rect = new Rect(pos.x, pos.y, NodeWidth, NodeHeight);
+                var rect = new Rect(
+                    pos.x * _graphZoom,
+                    pos.y * _graphZoom,
+                    NodeWidth * _graphZoom,
+                    NodeHeight * _graphZoom);
                 var selected = string.Equals(node.nodeId, _selectedNodeId, StringComparison.OrdinalIgnoreCase);
                 var title = selected ? "* " + node.nodeId + " (" + node.nodeType + ")" : node.nodeId + " (" + node.nodeType + ")";
 
@@ -237,7 +254,7 @@ namespace TheraplyCore.Editor.Authoring
 
                 if (updated.position != rect.position)
                 {
-                    _nodePositions[id] = updated.position;
+                    _nodePositions[id] = updated.position / Mathf.Max(0.001f, _graphZoom);
                 }
             }
             EndWindows();
@@ -245,6 +262,180 @@ namespace TheraplyCore.Editor.Authoring
             GUI.EndScrollView();
             EditorGUILayout.EndVertical();
         }
+
+        private void HandleGraphCanvasInput(Rect host)
+        {
+            var current = Event.current;
+            if (current == null)
+            {
+                return;
+            }
+
+            if (_middlePanActive &&
+                current.rawType == EventType.MouseUp &&
+                current.button == 2)
+            {
+                _middlePanActive = false;
+                Repaint();
+            }
+
+            if (!host.Contains(current.mousePosition))
+            {
+                return;
+            }
+
+            if (current.type == EventType.ScrollWheel)
+            {
+                var previousZoom = _graphZoom;
+                var nextZoom = Mathf.Clamp(
+                    previousZoom * (1f - current.delta.y * GraphZoomStep),
+                    MinGraphZoom,
+                    MaxGraphZoom);
+                if (!Mathf.Approximately(previousZoom, nextZoom))
+                {
+                    var localPointer = current.mousePosition - host.position;
+                    var stableCanvasPoint =
+                        (_graphScroll + localPointer) / Mathf.Max(0.001f, previousZoom);
+                    _graphZoom = nextZoom;
+                    _graphScroll = stableCanvasPoint * _graphZoom - localPointer;
+                    _graphScroll = ClampGraphScroll(_graphScroll, host, GetZoomedCanvasSize());
+                    Repaint();
+                }
+
+                current.Use();
+                return;
+            }
+
+            if (current.type == EventType.MouseDown && current.button == 2)
+            {
+                _middlePanActive = true;
+                current.Use();
+                return;
+            }
+
+            if (_middlePanActive &&
+                current.type == EventType.MouseDrag &&
+                (current.button == 2 || current.button == 0))
+            {
+                _graphScroll -= current.delta;
+                _graphScroll = ClampGraphScroll(_graphScroll, host, GetZoomedCanvasSize());
+                Repaint();
+                current.Use();
+                return;
+            }
+
+            if (_middlePanActive &&
+                current.type == EventType.MouseUp &&
+                (current.button == 2 || current.button == 0))
+            {
+                _middlePanActive = false;
+                current.Use();
+                return;
+            }
+
+            if (current.type == EventType.MouseDown && current.button == 1)
+            {
+                var canvasPosition = ToCanvasPosition(host, current.mousePosition);
+                if (IsPointerOverNode(canvasPosition))
+                {
+                    return;
+                }
+
+                ShowGraphContextMenu(canvasPosition);
+                current.Use();
+            }
+        }
+
+        private void ShowGraphContextMenu(Vector2 canvasPosition)
+        {
+            var menu = new GenericMenu();
+            menu.AddItem(
+                new GUIContent("Add Node/Actions/Action"),
+                false,
+                () => AddNode(TaskGraphNodeTypes.Action, canvasPosition, autoLayoutAfterAdd: false));
+            menu.AddItem(
+                new GUIContent("Add Node/Logic/Condition"),
+                false,
+                () => AddNode(TaskGraphNodeTypes.Condition, canvasPosition, autoLayoutAfterAdd: false));
+            menu.AddItem(
+                new GUIContent("Add Node/Logic/Branch"),
+                false,
+                () => AddNode(TaskGraphNodeTypes.Branch, canvasPosition, autoLayoutAfterAdd: false));
+            menu.AddItem(
+                new GUIContent("Add Node/Flow/Timer"),
+                false,
+                () => AddNode(TaskGraphNodeTypes.Timer, canvasPosition, autoLayoutAfterAdd: false));
+            menu.AddItem(
+                new GUIContent("Add Node/Terminal/Complete"),
+                false,
+                () => AddNode(TaskGraphNodeTypes.Complete, canvasPosition, autoLayoutAfterAdd: false));
+            menu.AddItem(
+                new GUIContent("Add Node/Terminal/Fail"),
+                false,
+                () => AddNode(TaskGraphNodeTypes.Fail, canvasPosition, autoLayoutAfterAdd: false));
+            menu.AddSeparator("Tools/");
+            menu.AddItem(new GUIContent("Tools/Auto Layout"), false, AutoLayout);
+            menu.AddItem(
+                new GUIContent("Tools/Validate"),
+                false,
+                () =>
+                {
+                    _validationPass =
+                        SessionFlowDefinitionValidator.TryValidate(_definition, out _validationReason);
+                    _hasValidation = true;
+                });
+            menu.AddSeparator("View/");
+            menu.AddItem(
+                new GUIContent("View/Reset Zoom"),
+                false,
+                () =>
+                {
+                    _graphZoom = 1f;
+                    _graphScroll = Vector2.zero;
+                    Repaint();
+                });
+            menu.ShowAsContext();
+        }
+
+        private bool IsPointerOverNode(Vector2 canvasPosition)
+        {
+            for (var i = 0; i < _definition.taskGraph.nodes.Count; i++)
+            {
+                var node = _definition.taskGraph.nodes[i];
+                if (node == null)
+                {
+                    continue;
+                }
+
+                if (NodeRect(node.nodeId, i).Contains(canvasPosition))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private Vector2 ToCanvasPosition(Rect host, Vector2 pointer)
+        {
+            var local = pointer - host.position;
+            return (_graphScroll + local) / Mathf.Max(0.001f, _graphZoom);
+        }
+
+        private Vector2 GetZoomedCanvasSize()
+        {
+            return new Vector2(CanvasWidth * _graphZoom, CanvasHeight * _graphZoom);
+        }
+
+        private static Vector2 ClampGraphScroll(Vector2 scroll, Rect host, Vector2 canvasSize)
+        {
+            var maxX = Mathf.Max(0f, canvasSize.x - host.width);
+            var maxY = Mathf.Max(0f, canvasSize.y - host.height);
+            return new Vector2(
+                Mathf.Clamp(scroll.x, 0f, maxX),
+                Mathf.Clamp(scroll.y, 0f, maxY));
+        }
+
         private void DrawRightPanel()
         {
             EditorGUILayout.BeginVertical(GUILayout.Width(RightWidth));
@@ -278,6 +469,8 @@ namespace TheraplyCore.Editor.Authoring
 
         private void DrawNodeCard(int windowId, TaskGraphNodeDefinition node)
         {
+            HandleNodeContextInput(node);
+
             EditorGUILayout.LabelField("Success", string.IsNullOrWhiteSpace(node.nextOnSuccess) ? "-" : node.nextOnSuccess);
             EditorGUILayout.LabelField("Fail", string.IsNullOrWhiteSpace(node.nextOnFail) ? "-" : node.nextOnFail);
             EditorGUILayout.LabelField("Timeout", string.IsNullOrWhiteSpace(node.nextOnTimeout) ? "-" : node.nextOnTimeout);
@@ -288,7 +481,99 @@ namespace TheraplyCore.Editor.Authoring
                 _selectedNodeId = node.nodeId;
             }
 
-            GUI.DragWindow(new Rect(0f, 0f, NodeWidth, 22f));
+            GUI.DragWindow(new Rect(0f, 0f, NodeWidth * _graphZoom, 24f * _graphZoom));
+        }
+
+        private void HandleNodeContextInput(TaskGraphNodeDefinition node)
+        {
+            var current = Event.current;
+            if (current == null || node == null)
+            {
+                return;
+            }
+
+            if (current.type != EventType.MouseDown || current.button != 1)
+            {
+                return;
+            }
+
+            _selectedNodeId = node.nodeId;
+            ShowNodeContextMenu(node.nodeId);
+            current.Use();
+        }
+
+        private void ShowNodeContextMenu(string nodeId)
+        {
+            var node = GetNode(nodeId);
+            if (node == null)
+            {
+                return;
+            }
+
+            var hasOutgoing =
+                !string.IsNullOrWhiteSpace(node.nextOnSuccess) ||
+                !string.IsNullOrWhiteSpace(node.nextOnFail) ||
+                !string.IsNullOrWhiteSpace(node.nextOnTimeout) ||
+                HasConditionTargets(node);
+            var hasIncoming = HasIncomingLinks(nodeId);
+
+            var menu = new GenericMenu();
+            menu.AddItem(
+                new GUIContent("Node/Select"),
+                true,
+                () => _selectedNodeId = nodeId);
+            menu.AddItem(
+                new GUIContent("Node/Rename"),
+                false,
+                () => BeginRenameNode(nodeId));
+            menu.AddSeparator("Node/");
+            menu.AddItem(
+                new GUIContent("Node/Delete"),
+                false,
+                () => RemoveNode(nodeId));
+
+            menu.AddSeparator("Connections/");
+            if (hasOutgoing)
+            {
+                menu.AddItem(
+                    new GUIContent("Connections/Disconnect Outgoing"),
+                    false,
+                    () => DisconnectNodeOutgoing(nodeId));
+            }
+            else
+            {
+                menu.AddDisabledItem(new GUIContent("Connections/Disconnect Outgoing"));
+            }
+
+            if (hasIncoming)
+            {
+                menu.AddItem(
+                    new GUIContent("Connections/Disconnect Incoming"),
+                    false,
+                    () => DisconnectNodeIncoming(nodeId));
+            }
+            else
+            {
+                menu.AddDisabledItem(new GUIContent("Connections/Disconnect Incoming"));
+            }
+
+            if (hasOutgoing || hasIncoming)
+            {
+                menu.AddItem(
+                    new GUIContent("Connections/Disconnect All"),
+                    false,
+                    () =>
+                    {
+                        DisconnectNodeOutgoing(nodeId);
+                        DisconnectNodeIncoming(nodeId);
+                    });
+            }
+            else
+            {
+                menu.AddDisabledItem(new GUIContent("Connections/Disconnect All"));
+            }
+
+            menu.ShowAsContext();
         }
 
         private void DrawNodeInspector()
@@ -347,7 +632,18 @@ namespace TheraplyCore.Editor.Authoring
                 return;
             }
 
-            node.nodeId = EditorGUILayout.TextField("Node Id", node.nodeId);
+            DrawRenameSection(node);
+
+            var editedNodeId = EditorGUILayout.DelayedTextField("Node Id", node.nodeId);
+            if (!string.Equals(editedNodeId, node.nodeId, StringComparison.Ordinal))
+            {
+                RenameNode(node.nodeId, editedNodeId);
+                node = GetNode(_selectedNodeId);
+                if (node == null)
+                {
+                    return;
+                }
+            }
             node.nodeType = DrawPopup("Node Type", node.nodeType, NodeTypes);
             node.timeoutSec = EditorGUILayout.FloatField("Timeout Sec", node.timeoutSec);
 
@@ -371,6 +667,37 @@ namespace TheraplyCore.Editor.Authoring
             {
                 RemoveNode(node.nodeId);
             }
+        }
+
+        private void DrawRenameSection(TaskGraphNodeDefinition node)
+        {
+            var renamingThisNode = string.Equals(node.nodeId, _renameNodeId, StringComparison.OrdinalIgnoreCase);
+            if (!renamingThisNode)
+            {
+                return;
+            }
+
+            EditorGUILayout.BeginVertical("box");
+            EditorGUILayout.LabelField("Rename Node", EditorStyles.miniBoldLabel);
+            _renameDraft = EditorGUILayout.TextField("New Id", _renameDraft);
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("Apply Rename"))
+            {
+                var applied = RenameNode(node.nodeId, _renameDraft);
+                if (applied)
+                {
+                    _renameNodeId = string.Empty;
+                    _renameDraft = string.Empty;
+                }
+            }
+
+            if (GUILayout.Button("Cancel Rename"))
+            {
+                _renameNodeId = string.Empty;
+                _renameDraft = string.Empty;
+            }
+            EditorGUILayout.EndHorizontal();
+            EditorGUILayout.EndVertical();
         }
 
         private void DrawAllowedActions(TaskGraphNodeDefinition node)
@@ -591,7 +918,10 @@ namespace TheraplyCore.Editor.Authoring
             }
         }
 
-        private void AddNode(string nodeType)
+        private void AddNode(
+            string nodeType,
+            Vector2? canvasPosition = null,
+            bool autoLayoutAfterAdd = true)
         {
             EnsureGraph();
             var node = new TaskGraphNodeDefinition
@@ -609,7 +939,17 @@ namespace TheraplyCore.Editor.Authoring
 
             _definition.taskGraph.nodes.Add(node);
             _selectedNodeId = node.nodeId;
-            _layoutDirty = true;
+            if (canvasPosition.HasValue)
+            {
+                var requested = canvasPosition.Value;
+                var clamped = new Vector2(
+                    Mathf.Clamp(requested.x - NodeWidth * 0.5f, 8f, CanvasWidth - NodeWidth - 8f),
+                    Mathf.Clamp(requested.y - NodeHeight * 0.5f, 8f, CanvasHeight - NodeHeight - 8f));
+                _nodePositions[SafeNodeId(node.nodeId, _definition.taskGraph.nodes.Count - 1)] = clamped;
+            }
+
+            _layoutDirty = autoLayoutAfterAdd;
+            Repaint();
         }
 
         private void RemoveNode(string nodeId)
@@ -625,7 +965,17 @@ namespace TheraplyCore.Editor.Authoring
                 return;
             }
 
+            var removedId = _definition.taskGraph.nodes[idx].nodeId;
+            DisconnectNodeIncoming(removedId);
             _definition.taskGraph.nodes.RemoveAt(idx);
+            _nodePositions.Remove(SafeNodeId(removedId, idx));
+            if (string.Equals(_definition.taskGraph.entryNodeId, removedId, StringComparison.OrdinalIgnoreCase))
+            {
+                _definition.taskGraph.entryNodeId = _definition.taskGraph.nodes.Count > 0
+                    ? _definition.taskGraph.nodes[0].nodeId
+                    : string.Empty;
+            }
+
             if (_definition.taskGraph.nodes.Count > 0)
             {
                 _selectedNodeId = _definition.taskGraph.nodes[0].nodeId;
@@ -634,7 +984,299 @@ namespace TheraplyCore.Editor.Authoring
             {
                 _selectedNodeId = string.Empty;
             }
+
+            if (string.Equals(_renameNodeId, removedId, StringComparison.OrdinalIgnoreCase))
+            {
+                _renameNodeId = string.Empty;
+                _renameDraft = string.Empty;
+            }
+
             _layoutDirty = true;
+        }
+
+        private bool RenameNode(string sourceNodeId, string requestedNodeId)
+        {
+            if (string.IsNullOrWhiteSpace(sourceNodeId))
+            {
+                return false;
+            }
+
+            var sourceIndex = IndexOfNode(sourceNodeId);
+            if (sourceIndex < 0)
+            {
+                return false;
+            }
+
+            var normalized = NormalizeNodeId(requestedNodeId);
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                ShowNotification(new GUIContent("Node Id cannot be empty."));
+                return false;
+            }
+
+            var targetNodeId = BuildUniqueNodeId(normalized, sourceNodeId);
+            var node = _definition.taskGraph.nodes[sourceIndex];
+            var originalNodeId = node.nodeId;
+            if (string.Equals(originalNodeId, targetNodeId, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            node.nodeId = targetNodeId;
+
+            if (string.Equals(_definition.taskGraph.entryNodeId, originalNodeId, StringComparison.OrdinalIgnoreCase))
+            {
+                _definition.taskGraph.entryNodeId = targetNodeId;
+            }
+
+            for (var i = 0; i < _definition.taskGraph.nodes.Count; i++)
+            {
+                var other = _definition.taskGraph.nodes[i];
+                if (other == null)
+                {
+                    continue;
+                }
+
+                if (string.Equals(other.nextOnSuccess, originalNodeId, StringComparison.OrdinalIgnoreCase))
+                {
+                    other.nextOnSuccess = targetNodeId;
+                }
+                if (string.Equals(other.nextOnFail, originalNodeId, StringComparison.OrdinalIgnoreCase))
+                {
+                    other.nextOnFail = targetNodeId;
+                }
+                if (string.Equals(other.nextOnTimeout, originalNodeId, StringComparison.OrdinalIgnoreCase))
+                {
+                    other.nextOnTimeout = targetNodeId;
+                }
+
+                if (other.conditions == null)
+                {
+                    continue;
+                }
+
+                for (var c = 0; c < other.conditions.Count; c++)
+                {
+                    var condition = other.conditions[c];
+                    if (condition != null &&
+                        string.Equals(condition.nextNodeId, originalNodeId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        condition.nextNodeId = targetNodeId;
+                    }
+                }
+            }
+
+            var oldPositionKey = SafeNodeId(originalNodeId, sourceIndex);
+            var newPositionKey = SafeNodeId(targetNodeId, sourceIndex);
+            if (_nodePositions.TryGetValue(oldPositionKey, out var savedPosition))
+            {
+                _nodePositions.Remove(oldPositionKey);
+                _nodePositions[newPositionKey] = savedPosition;
+            }
+
+            if (string.Equals(_selectedNodeId, originalNodeId, StringComparison.OrdinalIgnoreCase))
+            {
+                _selectedNodeId = targetNodeId;
+            }
+
+            if (string.Equals(_renameNodeId, originalNodeId, StringComparison.OrdinalIgnoreCase))
+            {
+                _renameNodeId = targetNodeId;
+                _renameDraft = targetNodeId;
+            }
+
+            if (!string.Equals(normalized, targetNodeId, StringComparison.Ordinal))
+            {
+                ShowNotification(new GUIContent("Node Id already existed. Renamed to " + targetNodeId + "."));
+            }
+
+            Repaint();
+            return true;
+        }
+
+        private void BeginRenameNode(string nodeId)
+        {
+            var node = GetNode(nodeId);
+            if (node == null)
+            {
+                return;
+            }
+
+            _selectedNodeId = node.nodeId;
+            _renameNodeId = node.nodeId;
+            _renameDraft = node.nodeId;
+            Repaint();
+        }
+
+        private static string NormalizeNodeId(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            return value.Trim().Replace(' ', '_');
+        }
+
+        private string BuildUniqueNodeId(string desiredNodeId, string currentNodeId)
+        {
+            var normalized = NormalizeNodeId(desiredNodeId);
+            if (string.Equals(normalized, currentNodeId, StringComparison.OrdinalIgnoreCase))
+            {
+                return normalized;
+            }
+
+            if (IndexOfNode(normalized) < 0)
+            {
+                return normalized;
+            }
+
+            var suffix = 1;
+            while (true)
+            {
+                var candidate = normalized + "_" + suffix;
+                var candidateIndex = IndexOfNode(candidate);
+                if (candidateIndex < 0 ||
+                    string.Equals(candidate, currentNodeId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return candidate;
+                }
+
+                suffix++;
+            }
+        }
+
+        private bool HasConditionTargets(TaskGraphNodeDefinition node)
+        {
+            if (node?.conditions == null)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < node.conditions.Count; i++)
+            {
+                var condition = node.conditions[i];
+                if (condition != null && !string.IsNullOrWhiteSpace(condition.nextNodeId))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool HasIncomingLinks(string targetNodeId)
+        {
+            if (string.IsNullOrWhiteSpace(targetNodeId))
+            {
+                return false;
+            }
+
+            for (var i = 0; i < _definition.taskGraph.nodes.Count; i++)
+            {
+                var node = _definition.taskGraph.nodes[i];
+                if (node == null)
+                {
+                    continue;
+                }
+
+                if (string.Equals(node.nextOnSuccess, targetNodeId, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(node.nextOnFail, targetNodeId, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(node.nextOnTimeout, targetNodeId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                if (node.conditions == null)
+                {
+                    continue;
+                }
+
+                for (var c = 0; c < node.conditions.Count; c++)
+                {
+                    var condition = node.conditions[c];
+                    if (condition != null &&
+                        string.Equals(condition.nextNodeId, targetNodeId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private void DisconnectNodeOutgoing(string nodeId)
+        {
+            var node = GetNode(nodeId);
+            if (node == null)
+            {
+                return;
+            }
+
+            node.nextOnSuccess = string.Empty;
+            node.nextOnFail = string.Empty;
+            node.nextOnTimeout = string.Empty;
+            if (node.conditions != null)
+            {
+                for (var i = 0; i < node.conditions.Count; i++)
+                {
+                    var condition = node.conditions[i];
+                    if (condition != null)
+                    {
+                        condition.nextNodeId = string.Empty;
+                    }
+                }
+            }
+
+            Repaint();
+        }
+
+        private void DisconnectNodeIncoming(string nodeId)
+        {
+            if (string.IsNullOrWhiteSpace(nodeId))
+            {
+                return;
+            }
+
+            for (var i = 0; i < _definition.taskGraph.nodes.Count; i++)
+            {
+                var node = _definition.taskGraph.nodes[i];
+                if (node == null)
+                {
+                    continue;
+                }
+
+                if (string.Equals(node.nextOnSuccess, nodeId, StringComparison.OrdinalIgnoreCase))
+                {
+                    node.nextOnSuccess = string.Empty;
+                }
+                if (string.Equals(node.nextOnFail, nodeId, StringComparison.OrdinalIgnoreCase))
+                {
+                    node.nextOnFail = string.Empty;
+                }
+                if (string.Equals(node.nextOnTimeout, nodeId, StringComparison.OrdinalIgnoreCase))
+                {
+                    node.nextOnTimeout = string.Empty;
+                }
+
+                if (node.conditions == null)
+                {
+                    continue;
+                }
+
+                for (var c = 0; c < node.conditions.Count; c++)
+                {
+                    var condition = node.conditions[c];
+                    if (condition != null &&
+                        string.Equals(condition.nextNodeId, nodeId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        condition.nextNodeId = string.Empty;
+                    }
+                }
+            }
+
+            Repaint();
         }
         private void DrawLinks()
         {
@@ -649,7 +1291,7 @@ namespace TheraplyCore.Editor.Authoring
                         continue;
                     }
 
-                    var sourceRect = NodeRect(source.nodeId, i);
+                    var sourceRect = NodeRectScaled(source.nodeId, i);
                     var links = BuildLinks(source);
                     for (var l = 0; l < links.Count; l++)
                     {
@@ -661,7 +1303,7 @@ namespace TheraplyCore.Editor.Authoring
                         }
 
                         var target = _definition.taskGraph.nodes[targetIndex];
-                        var targetRect = NodeRect(target.nodeId, targetIndex);
+                        var targetRect = NodeRectScaled(target.nodeId, targetIndex);
 
                         var start = new Vector3(sourceRect.xMax, sourceRect.center.y, 0f);
                         var end = new Vector3(targetRect.xMin, targetRect.center.y, 0f);
@@ -727,6 +1369,16 @@ namespace TheraplyCore.Editor.Authoring
             var id = SafeNodeId(nodeId, fallback);
             var pos = ResolveNodePosition(id, fallback);
             return new Rect(pos.x, pos.y, NodeWidth, NodeHeight);
+        }
+
+        private Rect NodeRectScaled(string nodeId, int fallback)
+        {
+            var unscaled = NodeRect(nodeId, fallback);
+            return new Rect(
+                unscaled.x * _graphZoom,
+                unscaled.y * _graphZoom,
+                unscaled.width * _graphZoom,
+                unscaled.height * _graphZoom);
         }
 
         private Vector2 ResolveNodePosition(string nodeId, int fallback)
