@@ -5,6 +5,10 @@
 - [02-Creating-Games.md](02-Creating-Games.md)
 - [33-Session-Flow-Action-Card.md](33-Session-Flow-Action-Card.md)
 - [34-Session-Flow-Implementation-Backlog.md](34-Session-Flow-Implementation-Backlog.md)
+- [35-Session-Flow-Smoke-Template.md](35-Session-Flow-Smoke-Template.md)
+- [36-Session-Flow-Scene-Authoring-Checklist.md](36-Session-Flow-Scene-Authoring-Checklist.md)
+- [37-Session-Flow-Debug-Runbook.md](37-Session-Flow-Debug-Runbook.md)
+- [38-Session-Flow-Mechanic-Mapping-Template.md](38-Session-Flow-Mechanic-Mapping-Template.md)
 
 ## Session Resilience Program
 - [03-Session-Resilience-Roadmap.md](03-Session-Resilience-Roadmap.md)

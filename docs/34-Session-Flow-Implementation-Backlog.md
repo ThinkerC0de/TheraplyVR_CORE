@@ -119,59 +119,6 @@ Goal: implement the new framework direction end-to-end so no per-game core rewri
 4. Export quality gates pass with 100% required coverage.
 5. Session runs in both remote and local modes as configured.
 
-## Sprint 1 Plan (Execution Now)
+## Historical Note
 
-Sprint window: 5 working days  
-Sprint goal: establish minimal executable foundation for definition loading and session-safe flow startup.
-
-### Sprint Scope
-
-- `SF-A-001` Define `GameDefinition` runtime model classes.
-- `SF-A-002` Define `TaskGraph` node contracts.
-- `SF-A-003` Define policy contracts.
-- `SF-A-004` Define action runtime contracts.
-- `SF-A-005` Define channel contracts.
-- `SF-B-001` Implement `FlowConfigProvider`.
-- `SF-B-002` Implement `FlowBindingRegistry`.
-- `SF-B-003` Implement `SessionRuntime` bridge.
-
-### Sprint Out Of Scope
-
-- action adapter implementations,
-- effect plugin implementations,
-- scoring runtime implementation,
-- full telemetry export quality gates.
-
-### Day-by-Day Breakdown
-
-| Day | Work Items | Deliverables | Exit Check |
-| --- | --- | --- | --- |
-| Day 1 | `SF-A-001`, `SF-A-005` | Typed contracts for `GameDefinition` + channels | Contracts compile and load basic sample definition |
-| Day 2 | `SF-A-002`, `SF-A-003` | Task graph node + policy contracts | Node/policy validation tests pass |
-| Day 3 | `SF-A-004` | Action runtime contracts (`ActionIntent`, validation/apply results, context) | Contract-level tests pass for required fields and null guards |
-| Day 4 | `SF-B-001` | `FlowConfigProvider` with parse + validation + clear error reasons | Loads valid definition, rejects invalid with deterministic reason codes |
-| Day 5 | `SF-B-002`, `SF-B-003` | `FlowBindingRegistry` + `SessionRuntime` bridge | Can initialize session state path and bind flow resources without runtime exceptions |
-
-### Sprint Acceptance Criteria
-
-1. Runtime can load a valid `GameDefinition` at startup.
-2. Invalid definitions fail fast with explicit reason codes.
-3. Session state transitions follow canonical FSM constraints.
-4. Core startup path compiles and runs without per-game conditionals.
-5. One minimal smoke path can initialize `SessionRuntime` and stop cleanly.
-
-### Sprint Risks and Guards
-
-| Risk | Guardrail |
-| --- | --- |
-| Contract churn in early days | Freeze field names after Day 3; only additive changes allowed in sprint |
-| Over-scoping into adapters/effects | Strictly enforce out-of-scope list during sprint |
-| Hidden dependency on game-specific scripts | Reject any PR adding game-name-specific runtime branches |
-| Weak validation errors | Require deterministic `reasonCode` for all config validation failures |
-
-### Ready-For-Sprint Checklist
-
-- [x] Create sample `GameDefinition` fixture used by tests and smoke path.
-- [ ] Add test stubs for definition validation.
-- [ ] Add test stubs for session FSM bridge.
-- [ ] Confirm naming rules (`no V2/V3`, no project references) in all new files.
+The old "Sprint 1 Plan" section was removed because phases `A-H` are now the active source of truth and are fully marked `DONE`.

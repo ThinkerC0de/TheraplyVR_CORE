@@ -25,9 +25,10 @@ This document defines the core workflow for building new scenes without adding p
 | `channels`, `conditions`, `effects`, `policies` | Covered by dedicated catalogs |
 | `ActionPlugin` and `GameDefinition` | Covered by explicit contracts |
 
-Open implementation items (expected):
+Implementation status:
 
-- adapter integration tests and full hardening suite are pending (Phase G).
+- validation and hardening suite are implemented (`Phase G = DONE`).
+- authoring and operations playbooks are implemented (`Phase H = DONE`).
 
 ## Design Rules
 
@@ -39,7 +40,7 @@ Open implementation items (expected):
 
 ## Runtime Model
 
-`SessionFlowRunner` executes ordered `FlowStep` nodes.
+`SessionFlowRunner` executes ordered `TaskGraphNode` nodes.
 
 `ActionGate` evaluates whether an incoming action is allowed in the active step.
 
@@ -49,7 +50,7 @@ Open implementation items (expected):
 
 `EffectRunner` performs visual/audio/spawn/animation commands on step lifecycle hooks.
 
-`TelemetryLedger` records all flow events and action decisions in canonical schema.
+`InteractionEventBridge` and `GameTelemetryService` persist canonical flow events and action decisions.
 
 ## Runtime Domains Coverage (Requested Checklist)
 
@@ -61,7 +62,7 @@ Open implementation items (expected):
 | `InteractionRuntime` | Input channels and normalization | adapters + `ActionAdapterRegistry` | Implemented |
 | `EffectRuntime` | Narrator/audio/haptics/vfx/ui hint | `EffectRunner` + effect plugins | Implemented |
 | `ScoringRuntime` | points/errors/lives/success thresholds/adaptive difficulty | `ScoringRuntime`, policy evaluators | Implemented |
-| `TelemetryRuntime` | canonical append-only log + outbox + retries + dedupe | `TelemetryLedger`, existing event store/outbox path | Implemented (with export quality gates) |
+| `TelemetryRuntime` | canonical append-only log + outbox + retries + dedupe | `SessionFlowRunner`, `InteractionEventBridge`, `GameTelemetryService`, existing event store/outbox path | Implemented (with export quality gates) |
 | `ControlRuntime` | mobile controller mode and local mode | `ControlRuntimeGateway` + control mode policy | Implemented |
 
 `SessionRuntime` canonical state path:
@@ -253,17 +254,17 @@ Actions are compositions of atoms; games are compositions of actions.
 
 | Atom ID | Meaning | Produced By |
 | --- | --- | --- |
-| `input_pointer_press` | Pointer click/trigger event | `PointerActionAdapter` |
-| `input_tool_impact` | Tool collision event | `ToolImpactActionAdapter` |
-| `input_hand_contact` | Hand collider touch event | `HandContactActionAdapter` |
-| `input_grab_started` | Object grab started | `GrabPlaceActionAdapter` |
-| `input_grab_released` | Object grab released | `GrabPlaceActionAdapter` |
-| `input_zone_entered` | Object entered target zone | `GrabPlaceActionAdapter` |
-| `input_gaze_tick` | Gaze sample on target | `GazeActionAdapter` |
-| `input_breath_phase` | Inhale/hold/exhale sample | `BreathCycleAdapter` |
-| `input_audio_choice` | Player selected sound source | `AudioSourceLocalizationAdapter` |
-| `input_pose_sample` | Body/hand pose sample | `PosePathAdapter` |
-| `input_timeline_tick` | Passive timeline progress sample | `TimelineWatchAdapter` |
+| `input_pointer_press` | Pointer click/trigger event | `PointerSelectActionPlugin` (through `ActionAdapterRegistry`) |
+| `input_tool_impact` | Tool collision event | `ToolImpactActionPlugin` (through `ActionAdapterRegistry`) |
+| `input_hand_contact` | Hand collider touch event | `HandContactActionPlugin` (through `ActionAdapterRegistry`) |
+| `input_grab_started` | Object grab started | `GrabPlaceActionPlugin` (through `ActionAdapterRegistry`) |
+| `input_grab_released` | Object grab released | `GrabPlaceActionPlugin` (through `ActionAdapterRegistry`) |
+| `input_zone_entered` | Object entered target zone | `GrabPlaceActionPlugin` (through `ActionAdapterRegistry`) |
+| `input_gaze_tick` | Gaze sample on target | `GazeActionPlugin` (through `ActionAdapterRegistry`) |
+| `input_breath_phase` | Inhale/hold/exhale sample | `BreathCycleActionPlugin` (through `ActionAdapterRegistry`) |
+| `input_audio_choice` | Player selected sound source | `AudioSourceActionPlugin` (through `ActionAdapterRegistry`) |
+| `input_pose_sample` | Body/hand pose sample | `PosePathActionPlugin` (through `ActionAdapterRegistry`) |
+| `input_timeline_tick` | Passive timeline progress sample | `TimelineWatchActionPlugin` (through `ActionAdapterRegistry`) |
 
 ### Condition Atoms
 
@@ -356,27 +357,26 @@ This is the explicit component set for scene workflow. Keep it per activity, not
 | `TransitionEngine` | Chooses next step on success/fail/timeout/branch | step result + rules | next step id | Implemented |
 | `EffectRunner` | Executes effects on step hooks | effect list + trigger context | scene/audio/vfx changes | Implemented |
 | `FlowBindingRegistry` | Maps binding keys to scene objects/sources | scene references | lookup for actions/effects | Implemented |
-| `TelemetryLedger` | Emits canonical flow/action events | runner/gate/effect signals | `flow_*`, `action_*`, `effect_*` events | Implemented (via canonical interaction bridge path) |
+| `InteractionEventBridge` + `GameTelemetryService` | Emits canonical flow/action events | runner/gate/effect signals | `flow_*`, `action_*`, `effect_*` events | Implemented |
 | `MotionTraceRecorder` | Optional compact motion trace artifact | transform stream | encoded trace + `trace_ref` event | Implemented |
 | `FlowConfigProvider` | Loads flow data (`ScriptableObject` or JSON) | game/session selection | resolved `FlowDefinition` | Implemented |
 | `ActionAdapterRegistry` | Registers adapters for all input channels | adapter components | normalized action stream | Implemented |
 
-### Adapter Components
+### Built-In Plugin Coverage
 
-| Adapter | Covers Action IDs | Status |
+| Plugin | Covers Action IDs | Status |
 | --- | --- | --- |
-| `PointerActionAdapter` | `point_and_select_target`, `confirm_choice`, `choose_reward` | Partial (via existing pointer telemetry path) |
-| `ToolImpactActionAdapter` | `touch_target_with_tool`, `intercept_moving_target`, `avoid_hazard_contact` | Partial (via existing tool impact path) |
-| `ToolGripActionAdapter` | `grab_object` (start), `release_object` | Partial (grip lifecycle exists, object semantics missing) |
-| `HandContactActionAdapter` | `touch_target_with_hand` | Implemented in core plugin path |
-| `GrabPlaceActionAdapter` | `grab_object`, `place_object_in_zone`, `remove_object_from_zone`, `collect_item_to_container` | Implemented in core plugin path |
-| `GazeActionAdapter` | `hold_gaze_on_target`, `select_target_with_gaze_and_tool` | Implemented in core plugin path |
-| `AudioSourceLocalizationAdapter` | `identify_sound_source` | Implemented in core plugin path |
-| `BreathCycleAdapter` | `perform_breath_cycle` | Implemented in core plugin path |
-| `DualHandSyncAdapter` | `mark_left_and_right_targets` | Implemented in core plugin path |
-| `PosePathAdapter` | `hold_pose`, `follow_path` | Implemented in core plugin path |
-| `SequenceReplayAdapter` | `repeat_visual_sequence`, `repeat_audio_sequence`, `select_sequence_in_order`, `match_pair` | Implemented in core plugin path |
-| `TimelineWatchAdapter` | `watch_timeline_segment` | Implemented in core plugin path |
+| `PointerSelectActionPlugin` | `point_and_select_target`, `confirm_choice`, `choose_reward` | Implemented |
+| `ToolImpactActionPlugin` | `touch_target_with_tool`, `intercept_moving_target`, `avoid_hazard_contact` | Implemented |
+| `HandContactActionPlugin` | `touch_target_with_hand` | Implemented |
+| `GrabPlaceActionPlugin` | `grab_object`, `release_object`, `place_object_in_zone`, `remove_object_from_zone`, `collect_item_to_container` | Implemented |
+| `GazeActionPlugin` | `hold_gaze_on_target`, `select_target_with_gaze_and_tool` | Implemented |
+| `BreathCycleActionPlugin` | `perform_breath_cycle` | Implemented |
+| `AudioSourceActionPlugin` | `identify_sound_source` | Implemented |
+| `DualHandActionPlugin` | `mark_left_and_right_targets` | Implemented |
+| `PosePathActionPlugin` | `hold_pose`, `follow_path` | Implemented |
+| `TimelineWatchActionPlugin` | `watch_timeline_segment` | Implemented |
+| `SequenceReplayActionPlugin` | `repeat_visual_sequence`, `repeat_audio_sequence`, `select_sequence_in_order`, `match_pair` | Implemented |
 
 ### Scene Composition Template
 
@@ -391,7 +391,8 @@ For each new scene, target this minimum component layout:
 - `ActionValidator`
 - `TransitionEngine`
 - `EffectRunner`
-- `TelemetryLedger`
+- `InteractionEventBridge`
+- `GameTelemetryService`
 - `MotionTraceRecorder` (optional)
 
 ### Existing Core Building Blocks Already Reusable
@@ -622,7 +623,7 @@ Each decision must contain:
 
 Recommended rejection `reasonCode` values:
 
-- `ACTION_NOT_ALLOWED_IN_STEP`
+- `ACTION_NOT_ALLOWED_IN_NODE`
 - `TARGET_NOT_ALLOWED`
 - `TOOL_ID_MISMATCH`
 - `WRONG_SEQUENCE_ORDER`
@@ -640,7 +641,6 @@ To answer "what, when, how, and why", log all of the events below.
 | `step_entered` | `flowId`, `stepId`, `enteredAtUtc` |
 | `action_received` | `flowId`, `stepId`, `actionId`, `inputSource`, `targetId` |
 | `action_evaluated` | `flowId`, `stepId`, `actionId`, `decision`, `reasonCode`, `reactionSec` |
-| `action_rejected` | `flowId`, `stepId`, `actionId`, `reasonCode` |
 | `step_completed` | `flowId`, `stepId`, `completionMode`, `elapsedSec` |
 | `step_timed_out` | `flowId`, `stepId`, `timeoutSec` |
 | `flow_completed` | `flowId`, `durationSec`, `resultSummary` |
@@ -648,6 +648,8 @@ To answer "what, when, how, and why", log all of the events below.
 | `session_terminal` | `sessionId`, `terminalState`, `reasonCode` |
 | `effect_executed` | `flowId`, `stepId`, `effectId`, `trigger` |
 | `trace_ref` | `flowId`, `traceType`, `traceId`, `encoding` |
+
+Rejected actions are represented as `action_evaluated` with `decision = rejected`.
 
 Mandatory correlation keys in every event:
 
@@ -680,29 +682,23 @@ Mandatory correlation keys in every event:
 | Grab/insert/swap environment interaction | `grab_object`, `place_object_in_zone`, `remove_object_from_zone` |
 | Item sorting and container assignment | `collect_item_to_container`, `point_and_select_target`, `confirm_choice` |
 
-## What Is Already In Core vs To Add
+## Current Core Coverage
 
 Available now:
 
-- pointer interaction telemetry path
-- tool impact telemetry path
-- grip lifecycle telemetry path
-- sequence/outcome aggregation primitives
+- full built-in plugin coverage for pointer/tool/hand/grab/gaze/breath/audio/dual-hand/pose-path/timeline/sequence actions,
+- canonical flow telemetry through `SessionFlowRunner` + `InteractionEventBridge` + `GameTelemetryService`,
+- durable delivery and quality gates through existing outbox/export paths.
 
-Needed for full coverage:
+When a new mechanic appears:
 
-- hand contact adapter for `touch_target_with_hand`
-- grab/place adapter for object manipulation actions
-- gaze adapter for dwell and combined gaze-tool selection
-- audio-source localization adapter
-- breath input adapter
-- dual-hand synchronization adapter
-- pose/path tracking adapter
-- timeline watcher adapter
+- add a new `IActionPlugin` implementation,
+- register it in `SessionFlowBuiltInPlugins` (or via runtime registration),
+- keep `GameDefinition` and `TaskGraph` data-driven without per-game runtime branches.
 
 ## Definition Of Done For New Scene
 
-- Scene is authored as flow data + object bindings + adapters.
+- Scene is authored as flow data + object bindings + plugin-compatible channel events.
 - No game-specific core changes are required.
 - Every allowed and rejected action is emitted with reason code.
 - Step transitions are deterministic and replayable from telemetry.
