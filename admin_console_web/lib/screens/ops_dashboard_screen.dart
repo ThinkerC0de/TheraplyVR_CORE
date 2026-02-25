@@ -6,6 +6,7 @@ import 'package:admin_console_web/models/entitlement_access.dart';
 import 'package:admin_console_web/models/entitlement_grant_contract.dart';
 import 'package:admin_console_web/services/entitlement_admin_service.dart';
 import 'package:admin_console_web/services/firebase_service.dart';
+import 'package:admin_console_web/services/game_catalog_seed_source.dart';
 
 class OpsDashboardScreen extends StatefulWidget {
   const OpsDashboardScreen({super.key});
@@ -15,131 +16,6 @@ class OpsDashboardScreen extends StatefulWidget {
 }
 
 class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
-  static const List<_KnownGameEntry> _knownGames = <_KnownGameEntry>[
-    _KnownGameEntry(
-      gameId: 'smoke_test_game',
-      title: 'Smoke Test Game',
-      targetContentVersion: '1.0.0',
-      description: 'Minimal connectivity and command smoke game.',
-      packageUri: '',
-      thumbnailUrl: '',
-      supportsSaveResume: false,
-      availableForPurchase: false,
-      requiresExplicitLicense: false,
-      runtimeLaunchEnabled: true,
-      sortOrder: 5,
-      active: true,
-      previewLines: <String>['Smoke validation and connectivity checks.'],
-    ),
-    _KnownGameEntry(
-      gameId: 'demo_cube_clicker',
-      title: 'Demo Cube Clicker',
-      targetContentVersion: '1.2.0',
-      description: 'Primary demo interaction game for resilience checks.',
-      packageUri: '',
-      thumbnailUrl: '',
-      supportsSaveResume: true,
-      availableForPurchase: false,
-      requiresExplicitLicense: false,
-      runtimeLaunchEnabled: true,
-      sortOrder: 10,
-      active: true,
-      previewLines: <String>[
-        'Basic / alternation / random target color modes.'
-      ],
-    ),
-    _KnownGameEntry(
-      gameId: 'pulse_target_tap',
-      title: 'Pulse Target Tap',
-      targetContentVersion: '1.0.0',
-      description: 'Second sample game with timed target taps.',
-      packageUri: '',
-      thumbnailUrl: '',
-      supportsSaveResume: false,
-      availableForPurchase: false,
-      requiresExplicitLicense: false,
-      runtimeLaunchEnabled: true,
-      sortOrder: 20,
-      active: true,
-      previewLines: <String>['Adaptive difficulty and label pipeline.'],
-    ),
-    _KnownGameEntry(
-      gameId: 'puzzle_paths',
-      title: 'Puzzle Paths',
-      targetContentVersion: '0.9.0',
-      description: 'Store placeholder: puzzle session package.',
-      packageUri: 'https://cdn.theraply.local/content/puzzle_paths_0_9_0',
-      thumbnailUrl: '',
-      supportsSaveResume: false,
-      availableForPurchase: true,
-      requiresExplicitLicense: true,
-      runtimeLaunchEnabled: false,
-      sortOrder: 30,
-      active: true,
-      previewLines: <String>['Catalog/store placeholder entry.'],
-    ),
-    _KnownGameEntry(
-      gameId: 'memory_orchard',
-      title: 'Memory Orchard',
-      targetContentVersion: '0.9.0',
-      description: 'Store placeholder: memory session package.',
-      packageUri: 'https://cdn.theraply.local/content/memory_orchard_0_9_0',
-      thumbnailUrl: '',
-      supportsSaveResume: false,
-      availableForPurchase: true,
-      requiresExplicitLicense: true,
-      runtimeLaunchEnabled: false,
-      sortOrder: 40,
-      active: true,
-      previewLines: <String>['Catalog/store placeholder entry.'],
-    ),
-    _KnownGameEntry(
-      gameId: 'sunflower_defense',
-      title: 'Sunflower Defense',
-      targetContentVersion: '0.9.0',
-      description: 'Store placeholder: sunflower defense package.',
-      packageUri: 'https://cdn.theraply.local/content/sunflower_defense_0_9_0',
-      thumbnailUrl: '',
-      supportsSaveResume: false,
-      availableForPurchase: true,
-      requiresExplicitLicense: true,
-      runtimeLaunchEnabled: false,
-      sortOrder: 50,
-      active: true,
-      previewLines: <String>['Catalog/store placeholder entry.'],
-    ),
-    _KnownGameEntry(
-      gameId: 'coding_master',
-      title: 'Coding Master',
-      targetContentVersion: '0.9.0',
-      description: 'Store placeholder: coding master package.',
-      packageUri: 'https://cdn.theraply.local/content/coding_master_0_9_0',
-      thumbnailUrl: '',
-      supportsSaveResume: false,
-      availableForPurchase: true,
-      requiresExplicitLicense: true,
-      runtimeLaunchEnabled: false,
-      sortOrder: 60,
-      active: true,
-      previewLines: <String>['Catalog/store placeholder entry.'],
-    ),
-    _KnownGameEntry(
-      gameId: 'bilateral_markers',
-      title: 'Bilateral Markers',
-      targetContentVersion: '0.9.0',
-      description: 'Store placeholder: bilateral markers package.',
-      packageUri: 'https://cdn.theraply.local/content/bilateral_markers_0_9_0',
-      thumbnailUrl: '',
-      supportsSaveResume: false,
-      availableForPurchase: true,
-      requiresExplicitLicense: true,
-      runtimeLaunchEnabled: false,
-      sortOrder: 70,
-      active: true,
-      previewLines: <String>['Catalog/store placeholder entry.'],
-    ),
-  ];
-
   final TextEditingController _targetUserIdController = TextEditingController();
   final TextEditingController _operationReasonController =
       TextEditingController();
@@ -173,6 +49,10 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
   bool _savingEntitlement = false;
   bool _savingGrant = false;
   bool _seedingGameCatalog = false;
+  bool _loadingCatalogSeed = true;
+  String _catalogSeedError = '';
+  List<AdminGameCatalogSeedEntry> _catalogSeedEntries =
+      const <AdminGameCatalogSeedEntry>[];
 
   String get _targetUserId => _targetUserIdController.text.trim();
 
@@ -180,6 +60,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
   void initState() {
     super.initState();
     _targetUserIdController.addListener(_refresh);
+    _loadCatalogSeed();
   }
 
   @override
@@ -200,6 +81,39 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
 
   void _refresh() {
     setState(() {});
+  }
+
+  Future<void> _loadCatalogSeed() async {
+    setState(() {
+      _loadingCatalogSeed = true;
+      _catalogSeedError = '';
+    });
+
+    try {
+      final entries = await GameCatalogSeedSource.loadDefault();
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _catalogSeedEntries = entries;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _catalogSeedEntries = const <AdminGameCatalogSeedEntry>[];
+        _catalogSeedError = error.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingCatalogSeed = false;
+        });
+      }
+    }
   }
 
   int _readDays(TextEditingController controller, int fallback) {
@@ -479,6 +393,21 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
   }
 
   Future<void> _seedGameCatalog() async {
+    if (_loadingCatalogSeed) {
+      _snack('Catalog seed loading in progress.', error: true);
+      return;
+    }
+
+    if (_catalogSeedEntries.isEmpty) {
+      _snack(
+        _catalogSeedError.isEmpty
+            ? 'Catalog seed is empty. Check assets/contracts/game_catalog_seed.json.'
+            : 'Catalog seed unavailable: $_catalogSeedError',
+        error: true,
+      );
+      return;
+    }
+
     final reason = _resolveReason('seed-game-catalog');
     final correlationId = _resolveCorrelationId();
 
@@ -487,25 +416,10 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
     });
 
     try {
-      final payload = _knownGames
-          .map(
-            (entry) => AdminGameCatalogSeedEntry(
-              gameId: entry.gameId,
-              title: entry.title,
-              description: entry.description,
-              targetContentVersion: entry.targetContentVersion,
-              packageUri: entry.packageUri,
-              thumbnailUrl: entry.thumbnailUrl,
-              supportsSaveResume: entry.supportsSaveResume,
-              availableForPurchase: entry.availableForPurchase,
-              requiresExplicitLicense: entry.requiresExplicitLicense,
-              runtimeLaunchEnabled: entry.runtimeLaunchEnabled,
-              sortOrder: entry.sortOrder,
-              active: entry.active,
-              previewLines: entry.previewLines,
-            ),
-          )
-          .toList(growable: false);
+      final payload = List<AdminGameCatalogSeedEntry>.from(
+        _catalogSeedEntries,
+        growable: false,
+      );
 
       await EntitlementAdminService.seedGameCatalog(
         entries: payload,
@@ -839,16 +753,27 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                   style: TextStyle(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Known catalog used by mobile store/installed tabs. You can seed game_catalog with one click.',
+                Text(
+                  _loadingCatalogSeed
+                      ? 'Loading catalog seed from contracts...'
+                      : 'Catalog seed is loaded from assets/contracts/game_catalog_seed.json. You can seed game_catalog with one click.',
                 ),
+                if (_catalogSeedError.trim().isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Catalog seed load error: $_catalogSeedError',
+                    style: TextStyle(color: Colors.red.shade700),
+                  ),
+                ],
                 const SizedBox(height: 10),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   children: [
                     ElevatedButton.icon(
-                      onPressed: _seedingGameCatalog ? null : _seedGameCatalog,
+                      onPressed: (_seedingGameCatalog || _loadingCatalogSeed)
+                          ? null
+                          : _seedGameCatalog,
                       icon: _seedingGameCatalog
                           ? const SizedBox(
                               width: 14,
@@ -861,6 +786,17 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                             ? 'Seeding...'
                             : 'Seed game_catalog',
                       ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _loadingCatalogSeed ? null : _loadCatalogSeed,
+                      icon: _loadingCatalogSeed
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.refresh),
+                      label: const Text('Reload seed'),
                     ),
                     OutlinedButton.icon(
                       onPressed: _useCurrentUserUidAsTarget,
@@ -876,7 +812,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                     final statsByGameId =
                         snapshot.data ?? const <String, AdminGameGrantStats>{};
                     final knownIds =
-                        _knownGames.map((entry) => entry.gameId).toSet();
+                        _catalogSeedEntries.map((entry) => entry.gameId).toSet();
                     final unknownGrantGames = statsByGameId.keys
                         .where((gameId) => !knownIds.contains(gameId))
                         .toList()
@@ -884,7 +820,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
 
                     return Column(
                       children: [
-                        for (final game in _knownGames)
+                        for (final game in _catalogSeedEntries)
                           _buildGameCard(
                             title: game.title,
                             gameId: game.gameId,
@@ -1533,36 +1469,4 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
       ),
     );
   }
-}
-
-class _KnownGameEntry {
-  final String gameId;
-  final String title;
-  final String targetContentVersion;
-  final String description;
-  final String packageUri;
-  final String thumbnailUrl;
-  final bool supportsSaveResume;
-  final bool availableForPurchase;
-  final bool requiresExplicitLicense;
-  final bool runtimeLaunchEnabled;
-  final int sortOrder;
-  final bool active;
-  final List<String> previewLines;
-
-  const _KnownGameEntry({
-    required this.gameId,
-    required this.title,
-    required this.targetContentVersion,
-    required this.description,
-    required this.packageUri,
-    required this.thumbnailUrl,
-    required this.supportsSaveResume,
-    required this.availableForPurchase,
-    required this.requiresExplicitLicense,
-    required this.runtimeLaunchEnabled,
-    required this.sortOrder,
-    required this.active,
-    required this.previewLines,
-  });
 }

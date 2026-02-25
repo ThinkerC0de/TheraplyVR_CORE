@@ -414,13 +414,16 @@ if ([string]::IsNullOrWhiteSpace($CatalogPath)) {
 if ([string]::IsNullOrWhiteSpace($ManifestPath)) {
     $ManifestPath = Join-Path $RepoRoot "contracts\game_definition_export_manifest.json"
 }
+$adminCatalogAssetPath = Join-Path $RepoRoot "admin_console_web\assets\contracts\game_catalog_seed.json"
 
 Write-Host "Repo root: $RepoRoot"
 Write-Host "Catalog path: $CatalogPath"
 Write-Host "Manifest path: $ManifestPath"
+Write-Host "Admin catalog asset: $adminCatalogAssetPath"
 
 $catalog = Read-JsonFile -Path $CatalogPath
 $manifest = Read-JsonFile -Path $ManifestPath
+$adminCatalogAsset = Read-JsonFile -Path $adminCatalogAssetPath
 
 $catalogEntriesByGameId = @{}
 $catalogSchemaByGameId = @{}
@@ -459,6 +462,14 @@ if ($null -ne $catalog) {
                 $catalogSchemaByGameId[$gameId.ToLowerInvariant()] = $embeddedSchema
             }
         }
+    }
+}
+
+if ($null -ne $catalog -and $null -ne $adminCatalogAsset) {
+    $catalogNormalized = Normalize-JsonObject -Object $catalog
+    $adminCatalogNormalized = Normalize-JsonObject -Object $adminCatalogAsset
+    if (-not [string]::Equals($catalogNormalized, $adminCatalogNormalized, [System.StringComparison]::Ordinal)) {
+        Add-ValidationError "admin_console_web catalog seed asset is out of sync with contracts/game_catalog_seed.json."
     }
 }
 

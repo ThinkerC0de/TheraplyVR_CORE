@@ -55,6 +55,7 @@ powershell -ExecutionPolicy Bypass -File scripts/unity_export_authoring_contract
 ```
 
 `unity_export_authoring_contracts.ps1` also synchronizes `mobile_control_schema_*.json` into `contracts/game_catalog_seed.json`.
+It also synchronizes admin console seed asset: `admin_console_web/assets/contracts/game_catalog_seed.json`.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/authoring_contract_gate.ps1

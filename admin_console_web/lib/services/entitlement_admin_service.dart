@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -398,6 +400,7 @@ class AdminGameCatalogSeedEntry {
   final int sortOrder;
   final bool active;
   final List<String> previewLines;
+  final Map<String, dynamic>? mobileControlSchema;
 
   const AdminGameCatalogSeedEntry({
     required this.gameId,
@@ -413,7 +416,70 @@ class AdminGameCatalogSeedEntry {
     required this.sortOrder,
     required this.active,
     required this.previewLines,
+    this.mobileControlSchema,
   });
+
+  factory AdminGameCatalogSeedEntry.fromSeedMap(Map<String, dynamic> map) {
+    String readString(String key, {String fallback = ''}) {
+      final value = map[key];
+      if (value is String) {
+        return value.trim();
+      }
+      return fallback;
+    }
+
+    bool readBool(String key, {bool fallback = false}) {
+      final value = map[key];
+      if (value is bool) {
+        return value;
+      }
+      return fallback;
+    }
+
+    int readInt(String key, {int fallback = 0}) {
+      final value = map[key];
+      if (value is int) {
+        return value;
+      }
+      if (value is num) {
+        return value.toInt();
+      }
+      return fallback;
+    }
+
+    final rawPreviewLines = map['previewLines'];
+    final previewLines = <String>[];
+    if (rawPreviewLines is List) {
+      for (final item in rawPreviewLines) {
+        if (item is String && item.trim().isNotEmpty) {
+          previewLines.add(item.trim());
+        }
+      }
+    }
+
+    final rawSchema = map['mobileControlSchema'];
+    Map<String, dynamic>? mobileControlSchema;
+    if (rawSchema is Map) {
+      mobileControlSchema = _deepCopyMap(rawSchema);
+    }
+
+    return AdminGameCatalogSeedEntry(
+      gameId: readString('gameId'),
+      title: readString('title'),
+      description: readString('description'),
+      targetContentVersion: readString('targetContentVersion'),
+      packageUri: readString('packageUri'),
+      thumbnailUrl: readString('thumbnailUrl'),
+      supportsSaveResume: readBool('supportsSaveResume'),
+      availableForPurchase: readBool('availableForPurchase'),
+      requiresExplicitLicense: readBool('requiresExplicitLicense'),
+      runtimeLaunchEnabled: readBool('runtimeLaunchEnabled'),
+      sortOrder: readInt('sortOrder'),
+      active: readBool('active', fallback: true),
+      previewLines: previewLines,
+      mobileControlSchema: mobileControlSchema,
+    );
+  }
 
   Map<String, dynamic> toFirestore() {
     return <String, dynamic>{
@@ -430,6 +496,17 @@ class AdminGameCatalogSeedEntry {
       'sortOrder': sortOrder,
       'active': active,
       'previewLines': List<String>.from(previewLines),
+      if (mobileControlSchema != null)
+        'mobileControlSchema': _deepCopyMap(mobileControlSchema!),
     };
+  }
+
+  static Map<String, dynamic> _deepCopyMap(Map raw) {
+    final json = jsonEncode(raw);
+    final decoded = jsonDecode(json);
+    if (decoded is Map<String, dynamic>) {
+      return decoded;
+    }
+    return Map<String, dynamic>.from(raw);
   }
 }

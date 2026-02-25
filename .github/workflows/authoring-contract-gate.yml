@@ -8,11 +8,17 @@ on:
       - "scripts/authoring_contract_gate.ps1"
       - "scripts/unity_export_authoring_contracts.ps1"
       - "scripts/sync_mobile_control_schemas_to_catalog.ps1"
+      - "scripts/sync_admin_console_seed_assets.ps1"
       - "unity-quest-template/Assets/_TheraplyCore/Editor/Authoring/**"
       - "flutter_controller/lib/models/**"
       - "flutter_controller/lib/widgets/mobile_control_renderer.dart"
       - "flutter_controller/lib/screens/control_screen.dart"
       - "flutter_controller/test/**"
+      - "admin_console_web/lib/screens/ops_dashboard_screen.dart"
+      - "admin_console_web/lib/services/entitlement_admin_service.dart"
+      - "admin_console_web/lib/services/game_catalog_seed_source.dart"
+      - "admin_console_web/assets/contracts/game_catalog_seed.json"
+      - "admin_console_web/pubspec.yaml"
   push:
     branches:
       - main
@@ -22,11 +28,17 @@ on:
       - "scripts/authoring_contract_gate.ps1"
       - "scripts/unity_export_authoring_contracts.ps1"
       - "scripts/sync_mobile_control_schemas_to_catalog.ps1"
+      - "scripts/sync_admin_console_seed_assets.ps1"
       - "unity-quest-template/Assets/_TheraplyCore/Editor/Authoring/**"
       - "flutter_controller/lib/models/**"
       - "flutter_controller/lib/widgets/mobile_control_renderer.dart"
       - "flutter_controller/lib/screens/control_screen.dart"
       - "flutter_controller/test/**"
+      - "admin_console_web/lib/screens/ops_dashboard_screen.dart"
+      - "admin_console_web/lib/services/entitlement_admin_service.dart"
+      - "admin_console_web/lib/services/game_catalog_seed_source.dart"
+      - "admin_console_web/assets/contracts/game_catalog_seed.json"
+      - "admin_console_web/pubspec.yaml"
 
 jobs:
   authoring-contracts:

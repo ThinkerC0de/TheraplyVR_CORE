@@ -157,6 +157,30 @@ void main() {
           sortOrder: 10,
           active: true,
           previewLines: <String>['Preview'],
+          mobileControlSchema: <String, dynamic>{
+            'schema': 'THERAPLY_MOBILE_CONTROL_SCHEMA',
+            'schemaVersion': '2026-02-25',
+            'gameId': 'demo_cube_clicker',
+            'title': 'Demo Controls',
+            'layout': <String, dynamic>{'mode': 'stack', 'columns': 1},
+            'payload': <String, dynamic>{
+              'target': 'game_config',
+              'gameConfigType': 'demo_cube_config_v1',
+              'gameConfigVersion': 1,
+            },
+            'controls': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'controlId': 'cube_count',
+                'type': 'slider',
+                'label': 'Cube Count',
+                'binding': <String, dynamic>{
+                  'target': 'game_config',
+                  'path': 'cubeCount',
+                  'valueType': 'int',
+                },
+              },
+            ],
+          },
         ),
         AdminGameCatalogSeedEntry(
           gameId: 'puzzle_paths',
@@ -188,6 +212,10 @@ void main() {
     expect(payload['runtimeLaunchEnabled'], isTrue);
     expect(payload['updatedBy'], 'admin-user-1');
     expect(payload['correlationId'], correlationId);
+    final mobileSchema =
+        payload['mobileControlSchema'] as Map<String, dynamic>? ??
+            const <String, dynamic>{};
+    expect(mobileSchema['schema'], 'THERAPLY_MOBILE_CONTROL_SCHEMA');
 
     final auditSnapshot = await firestore
         .collection('admin_audit_trail')
@@ -195,5 +223,34 @@ void main() {
         .get();
     expect(auditSnapshot.docs, hasLength(1));
     expect(auditSnapshot.docs.single.data()['action'], 'SEED_GAME_CATALOG');
+  });
+
+  test('AdminGameCatalogSeedEntry.fromSeedMap parses optional mobile schema', () {
+    final entry = AdminGameCatalogSeedEntry.fromSeedMap(
+      <String, dynamic>{
+        'gameId': 'pulse_target_tap',
+        'title': 'Pulse Targets',
+        'description': 'Demo',
+        'targetContentVersion': '1.0.0',
+        'packageUri': '',
+        'thumbnailUrl': '',
+        'supportsSaveResume': false,
+        'availableForPurchase': false,
+        'requiresExplicitLicense': false,
+        'runtimeLaunchEnabled': true,
+        'sortOrder': 20,
+        'active': true,
+        'previewLines': <String>['Adaptive'],
+        'mobileControlSchema': <String, dynamic>{
+          'schema': 'THERAPLY_MOBILE_CONTROL_SCHEMA',
+          'schemaVersion': '2026-02-25',
+          'gameId': 'pulse_target_tap',
+        },
+      },
+    );
+
+    expect(entry.gameId, 'pulse_target_tap');
+    expect(entry.mobileControlSchema, isNotNull);
+    expect(entry.mobileControlSchema?['schema'], 'THERAPLY_MOBILE_CONTROL_SCHEMA');
   });
 }

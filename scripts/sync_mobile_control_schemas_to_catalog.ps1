@@ -70,7 +70,12 @@ foreach ($entry in $entries) {
         continue
     }
 
-    $entry.mobileControlSchema = $schemaByGameId[$key]
+    if ($entry.PSObject.Properties.Name -contains 'mobileControlSchema') {
+        $entry.mobileControlSchema = $schemaByGameId[$key]
+    }
+    else {
+        Add-Member -InputObject $entry -NotePropertyName 'mobileControlSchema' -NotePropertyValue $schemaByGameId[$key]
+    }
     $syncedCount++
 }
 

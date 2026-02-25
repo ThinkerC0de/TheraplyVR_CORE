@@ -348,6 +348,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\unity_export_authoring_contra
 powershell -ExecutionPolicy Bypass -File .\scripts\authoring_contract_gate.ps1
 ```
 
+`unity_export_authoring_contracts.ps1` synchronizes:
+- `contracts/mobile_control_schema_*.json` -> `contracts/game_catalog_seed.json`
+- `contracts/game_catalog_seed.json` -> `admin_console_web/assets/contracts/game_catalog_seed.json`
+
 ```bash
 # from flutter_controller/
 flutter analyze

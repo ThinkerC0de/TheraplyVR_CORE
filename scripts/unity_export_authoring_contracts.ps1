@@ -41,6 +41,7 @@ function Resolve-UnityExecutable {
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptRoot
 $syncScript = Join-Path $scriptRoot "sync_mobile_control_schemas_to_catalog.ps1"
+$syncAdminAssetsScript = Join-Path $scriptRoot "sync_admin_console_seed_assets.ps1"
 
 if ([string]::IsNullOrWhiteSpace($ProjectPath)) {
     $ProjectPath = Join-Path $repoRoot "unity-quest-template"
@@ -90,6 +91,14 @@ if ($exitCode -ne 0) {
 
 if (-not $SkipCatalogSync) {
     & powershell -ExecutionPolicy Bypass -File $syncScript -RepoRoot $repoRoot | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw "sync_mobile_control_schemas_to_catalog.ps1 failed."
+    }
+
+    & powershell -ExecutionPolicy Bypass -File $syncAdminAssetsScript -RepoRoot $repoRoot | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw "sync_admin_console_seed_assets.ps1 failed."
+    }
 }
 
 Write-Host "[DONE] Unity authoring export completed successfully."
