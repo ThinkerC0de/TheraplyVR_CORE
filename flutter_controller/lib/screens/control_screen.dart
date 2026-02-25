@@ -245,6 +245,7 @@ class _ControlScreenState extends State<ControlScreen>
   final Map<String, PurchasedContentState> _contentStatesByGameId =
       <String, PurchasedContentState>{};
   final Set<String> _contentActionsInFlight = <String>{};
+  final Set<String> _questReportedContentGameIds = <String>{};
 
   StreamSubscription<bool>? _connectionSubscription;
   StreamSubscription<Map<String, dynamic>>? _messageSubscription;
@@ -349,6 +350,7 @@ class _ControlScreenState extends State<ControlScreen>
       final wasConnected = _isConnected;
       setState(() {
         _isConnected = connected;
+        _questReportedContentGameIds.clear();
         if (!connected) {
           _sessionAttachReady = false;
           _lastDevicePresenceSignal = null;
@@ -2950,6 +2952,9 @@ class _ControlScreenState extends State<ControlScreen>
     _contentStatesByGameId.removeWhere(
       (gameId, _) => !knownGameIds.contains(gameId),
     );
+    _questReportedContentGameIds.removeWhere(
+      (gameId) => !knownGameIds.contains(gameId),
+    );
   }
 
   PurchasedContentState _contentStateForGame(String gameId) {
@@ -2998,12 +3003,57 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   bool _isLaunchableContentState(PurchasedContentState state) {
+    return ContentLaunchGate.isLaunchable(
+      state: state,
+      contentDeliveryEnabled: _contentDeliveryEnabled,
+      hasQuestStatusSignal: _hasQuestReportedContentState(state.gameId),
+    );
+  }
+
+  bool _hasQuestReportedContentState(String gameId) {
     if (!_contentDeliveryEnabled) {
-      return state.owned;
+      return true;
     }
-    return state.owned &&
-        state.runtimeStatus == ContentRuntimeStatus.ready &&
-        !state.updateRequired;
+
+    return _questReportedContentGameIds.contains(gameId);
+  }
+
+  String _buildLaunchReadinessHint(
+    _GameCatalogEntry entry,
+    PurchasedContentState state,
+  ) {
+    if (!_contentDeliveryEnabled) {
+      return 'Selected game `${entry.title}` is not available for launch.';
+    }
+
+    if (!_hasQuestReportedContentState(state.gameId)) {
+      return 'Waiting for headset install status sync. Tap Refresh in catalog first.';
+    }
+
+    if (!state.owned) {
+      return entry.availableForPurchase
+          ? 'Selected game `${entry.title}` is not owned yet. Add/install it from Store first.'
+          : 'Selected game `${entry.title}` is not licensed for this account.';
+    }
+
+    if (state.runtimeStatus == ContentRuntimeStatus.installing) {
+      return 'Selected game `${entry.title}` is currently installing. Wait for READY status.';
+    }
+
+    if (state.runtimeStatus == ContentRuntimeStatus.updateRequired ||
+        state.updateRequired) {
+      return 'Selected game `${entry.title}` requires update before launch.';
+    }
+
+    if (state.runtimeStatus == ContentRuntimeStatus.failed) {
+      final lastError = state.lastError?.trim() ?? '';
+      if (lastError.isNotEmpty) {
+        return 'Selected game `${entry.title}` is in FAILED state ($lastError). Run install/update again.';
+      }
+      return 'Selected game `${entry.title}` is in FAILED state. Run install/update again.';
+    }
+
+    return 'Selected game `${entry.title}` needs install/update before opening.';
   }
 
   void _applyContentInstallStatusSignal(ContentInstallStatusSignal signal) {
@@ -3014,6 +3064,7 @@ class _ControlScreenState extends State<ControlScreen>
 
     setState(() {
       _contentStatesByGameId[state.gameId] = state;
+      _questReportedContentGameIds.add(state.gameId);
       _contentActionsInFlight.remove(state.gameId);
       if (_contentActionsInFlight.isEmpty) {
         _contentSyncInFlight = false;
@@ -4285,11 +4336,13 @@ class _ControlScreenState extends State<ControlScreen>
         return;
       }
 
+      final launchReadinessHint = _buildLaunchReadinessHint(
+        _selectedGameEntry,
+        selectedContentState,
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Game not ready: ${selectedContentState.runtimeStatus.wireValue}. Install/update from catalog first.',
-          ),
+          content: Text(launchReadinessHint),
           backgroundColor: Colors.orange,
         ),
       );
@@ -5945,6 +5998,9 @@ class _ControlScreenState extends State<ControlScreen>
         ? installedCatalog
         : storeCatalog;
     final selectedEntry = _selectedGameEntry;
+    final selectedContentState = _selectedContentState;
+    final launchReadinessHint =
+        _buildLaunchReadinessHint(selectedEntry, selectedContentState);
     final planGateBannerText = _planGateBannerText;
 
     return Column(
@@ -6086,8 +6142,7 @@ class _ControlScreenState extends State<ControlScreen>
           _buildStateBanner(
             icon: Icons.warning_amber_rounded,
             color: Colors.orange.shade800,
-            text:
-                'Selected game `${selectedEntry.title}` needs install/update before opening.',
+            text: launchReadinessHint,
           ),
           const SizedBox(height: 6),
         ],
@@ -6410,6 +6465,7 @@ class _ControlScreenState extends State<ControlScreen>
   Widget _buildGameSetupStep() {
     final entry = _selectedGameEntry;
     final contentState = _selectedContentState;
+    final launchReadinessHint = _buildLaunchReadinessHint(entry, contentState);
     final setupLockedByRuntime = _isSetupLockedByRuntime;
 
     return Column(
@@ -6489,8 +6545,7 @@ class _ControlScreenState extends State<ControlScreen>
                 _buildStateBanner(
                   icon: Icons.warning_amber_rounded,
                   color: Colors.orange.shade800,
-                  text:
-                      'This game is not launch-ready. Return to catalog and run install/update.',
+                  text: launchReadinessHint,
                 ),
                 const SizedBox(height: 8),
               ],

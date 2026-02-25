@@ -58,4 +58,58 @@ void main() {
     expect(payload['targetVersion'], '2.0.0');
     expect(payload['issuedAtUtc'], timestamp.toIso8601String());
   });
+
+  test('launch gate requires quest status signal when delivery is enabled', () {
+    final readyState = PurchasedContentState(
+      gameId: 'demo_cube_clicker',
+      owned: true,
+      installedVersion: '1.2.0',
+      targetVersion: '1.2.0',
+      updateRequired: false,
+      updateOptional: false,
+      runtimeStatus: ContentRuntimeStatus.ready,
+      lastError: null,
+      updatedAtUtc: DateTime.utc(2026, 2, 25, 17, 0, 0),
+    );
+
+    expect(
+      ContentLaunchGate.isLaunchable(
+        state: readyState,
+        contentDeliveryEnabled: true,
+        hasQuestStatusSignal: false,
+      ),
+      isFalse,
+    );
+    expect(
+      ContentLaunchGate.isLaunchable(
+        state: readyState,
+        contentDeliveryEnabled: true,
+        hasQuestStatusSignal: true,
+      ),
+      isTrue,
+    );
+  });
+
+  test('launch gate blocks READY state flagged as updateRequired', () {
+    final updateRequiredState = PurchasedContentState(
+      gameId: 'demo_cube_clicker',
+      owned: true,
+      installedVersion: '1.1.0',
+      targetVersion: '1.2.0',
+      updateRequired: true,
+      updateOptional: false,
+      runtimeStatus: ContentRuntimeStatus.ready,
+      lastError: null,
+      updatedAtUtc: DateTime.utc(2026, 2, 25, 17, 1, 0),
+    );
+
+    expect(
+      ContentLaunchGate.isLaunchable(
+        state: updateRequiredState,
+        contentDeliveryEnabled: true,
+        hasQuestStatusSignal: true,
+      ),
+      isFalse,
+    );
+  });
 }

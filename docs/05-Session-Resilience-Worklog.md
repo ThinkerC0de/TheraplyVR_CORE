@@ -109,7 +109,7 @@
 | Item ID | Task | Status | Notes |
 |---|---|---|---|
 | R-P6-001 | Define shared game catalog contract for mobile and Quest (`gameId`, `sceneKey`, `contentVersion`, `parameterSchema`, `entitlementKey`) | TODO | Contract must be runtime-safe, versioned, and backward compatible with already installed content |
-| R-P6-002 | Add mobile game-catalog UI with runtime availability and install state | TODO | Therapist sees full allowed list; launch only when Quest reports game as ready |
+| R-P6-002 | Add mobile game-catalog UI with runtime availability and install state | DONE | Catalog/store UI is active in `ControlScreen` with `GAME_INSTALL_STATUS` chips/actions and launch-gate that now requires Quest-reported status (`READY` + no `updateRequired`) before `START_GAME` |
 | R-P6-003 | Implement role/license entitlement model (`THERAPIST_FULL`, `PARENT_PURCHASED_PACKS`) | TODO | One source of truth for visible + launchable games across Flutter and Unity |
 | R-P6-004 | Implement Quest game content lifecycle (manifest sync, download, verify, install, activate, rollback) | IN_PROGRESS | Dev simulator lifecycle state now persists to `Application.persistentDataPath/session_resilience/content_delivery_state.json` and restores on startup for deterministic reconnect/restart behavior; real manifest/download/verify/rollback path remains TODO |
 | R-P6-005 | Extend protocol with content-management commands/events | DONE | `SYNC_CATALOG`, `INSTALL_GAME`, `UNINSTALL_GAME`, and `GAME_INSTALL_STATUS` are wired end-to-end; content management commands now use critical envelope ACK/NACK path with retry semantics (`COMMAND_ACK`) |
@@ -226,3 +226,4 @@
 - P6 update (2026-02-25, authoring lane): `R-P6-011` is now `DONE` with shared mobile-control schema contract + validators (`docs/40-Mobile-Control-Schema-Contract.md`), Unity flow authoring/export tooling, Flutter dynamic control rendering, contract gate CI, and admin-console manifest freshness/status visibility.
 - P6 update (2026-02-25, protocol lane): `R-P6-005` is now `DONE`; content commands (`SYNC_CATALOG`, `INSTALL_GAME`, `UNINSTALL_GAME`) are treated as critical transport commands on both mobile and Unity, and are executed with ACK/NACK retry semantics through `COMMAND_ACK`.
 - P6 update (2026-02-25, content lifecycle lane): `R-P6-004` moved to `IN_PROGRESS`; `GameRuntimeService` now persists simulated content lifecycle state to local storage and rehydrates it on runtime boot so install/update/uninstall state survives app reconnect/restart.
+- P6 update (2026-02-25, mobile catalog lane): `R-P6-002` is now `DONE`; Flutter catalog/setup screens use runtime availability chips plus Quest-authoritative launch gating (game can start only after headset status sync reports launch-ready state).

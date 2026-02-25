@@ -74,7 +74,8 @@ class PurchasedContentState {
   bool get isInstalled =>
       installedVersion != null && installedVersion!.isNotEmpty;
 
-  bool get isLaunchable => owned && runtimeStatus == ContentRuntimeStatus.ready;
+  bool get isLaunchable =>
+      owned && runtimeStatus == ContentRuntimeStatus.ready && !updateRequired;
 
   factory PurchasedContentState.fromJson(Map<String, dynamic> json) {
     return PurchasedContentState(
@@ -159,6 +160,24 @@ class ContentDeliveryTransitionRule {
       case ContentDeliveryAction.markFailure:
         return ContentRuntimeStatus.failed;
     }
+  }
+}
+
+class ContentLaunchGate {
+  static bool isLaunchable({
+    required PurchasedContentState state,
+    required bool contentDeliveryEnabled,
+    required bool hasQuestStatusSignal,
+  }) {
+    if (!contentDeliveryEnabled) {
+      return state.owned;
+    }
+
+    if (!hasQuestStatusSignal) {
+      return false;
+    }
+
+    return state.isLaunchable;
   }
 }
 

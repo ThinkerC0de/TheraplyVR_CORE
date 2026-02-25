@@ -80,7 +80,7 @@ Fields:
 - UI exposes:
   - state chips (`runtime`, ownership, installed->target version),
   - actions (`Sync`, `Install/Update`, `Uninstall`),
-  - launch gating (game setup/start blocked when state is not launchable).
+  - launch gating (game setup/start blocked when state is not launchable and until Quest publishes at least one `GAME_INSTALL_STATUS` for selected game).
 - Incoming `GAME_INSTALL_STATUS` updates local state and clears in-flight operation markers.
 
 ## Implemented artifacts
