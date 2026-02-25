@@ -43,6 +43,29 @@ namespace TheraplyCore.Games.Runtime
             public DateTime updatedAtUtc;
         }
 
+        [Serializable]
+        private sealed class SimulatedContentStateRecord
+        {
+            public string gameId;
+            public bool owned;
+            public string installedVersion;
+            public string targetVersion;
+            public bool updateRequired;
+            public bool updateOptional;
+            public string runtimeStatus;
+            public string lastError;
+            public string updatedAtUtc;
+        }
+
+        [Serializable]
+        private sealed class SimulatedContentStateStore
+        {
+            public string schema;
+            public string schemaVersion;
+            public string generatedAtUtc;
+            public List<SimulatedContentStateRecord> states = new List<SimulatedContentStateRecord>();
+        }
+
         [Header("Dependencies")]
         [SerializeField] private GameRegistryService _registryService;
         [SerializeField] private GameContextService _contextService;
@@ -60,6 +83,9 @@ namespace TheraplyCore.Games.Runtime
         [SerializeField] private bool _publishContentCatalogOnClientConnect = false;
         [SerializeField] private float _simulatedInstallDurationSeconds = 1.2f;
         [SerializeField] private string _defaultSimulatedContentVersion = "1.0.0";
+        [SerializeField] private bool _persistContentDeliverySimulationState = true;
+        [SerializeField] private string _contentDeliveryStateFolder = "session_resilience";
+        [SerializeField] private string _contentDeliveryStateFileName = "content_delivery_state.json";
         [SerializeField] private List<SimulatedContentCatalogEntry> _simulatedContentCatalog =
             new List<SimulatedContentCatalogEntry>
             {
@@ -127,6 +153,7 @@ namespace TheraplyCore.Games.Runtime
         private DateTime _lastPublishedDevicePresenceAtUtc = DateTime.MinValue;
         private bool _lastAppPaused;
         private bool _lastAppFocused = true;
+        private string _contentDeliveryStatePath = string.Empty;
 
         public GameContracts.IGameModule ActiveGame => _activeGame;
         public string ActiveGameId => _activeGameId;
@@ -141,6 +168,7 @@ namespace TheraplyCore.Games.Runtime
             if (_tcpServerService == null) _tcpServerService = FindFirstObjectByType<TCPServerService>();
             if (_firebaseDataService == null) _firebaseDataService = FindFirstObjectByType<FirebaseDataService>();
             _sessionContext = ResolveSessionContext();
+            EnsureContentDeliveryStatePathInitialized();
 
             if (!string.IsNullOrWhiteSpace(_defaultGameId))
             {
@@ -869,6 +897,7 @@ namespace TheraplyCore.Games.Runtime
                 state.runtimeStatus = ContentRuntimeStatusValues.Failed;
                 state.lastError = "NOT_OWNED";
                 state.updatedAtUtc = DateTime.UtcNow;
+                PersistSimulatedContentStates("INSTALL_NOT_OWNED");
                 _ = PublishGameInstallStatusAsync(
                     state,
                     command == null ? string.Empty : command.correlationId,
@@ -883,6 +912,7 @@ namespace TheraplyCore.Games.Runtime
             state.updateRequired = false;
             state.lastError = string.Empty;
             state.updatedAtUtc = DateTime.UtcNow;
+            PersistSimulatedContentStates("INSTALL_STARTED");
             _ = PublishGameInstallStatusAsync(
                 state,
                 command == null ? string.Empty : command.correlationId,
@@ -921,11 +951,208 @@ namespace TheraplyCore.Games.Runtime
             state.updateRequired = false;
             state.lastError = string.Empty;
             state.updatedAtUtc = DateTime.UtcNow;
+            PersistSimulatedContentStates("UNINSTALL_COMPLETED");
 
             _ = PublishGameInstallStatusAsync(
                 state,
                 command == null ? string.Empty : command.correlationId,
                 "UNINSTALL_COMPLETED");
+        }
+
+        private void EnsureContentDeliveryStatePathInitialized()
+        {
+            if (!_enableContentDeliverySimulation || !_persistContentDeliverySimulationState)
+            {
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(_contentDeliveryStatePath))
+            {
+                return;
+            }
+
+            var folder = string.IsNullOrWhiteSpace(_contentDeliveryStateFolder)
+                ? "session_resilience"
+                : _contentDeliveryStateFolder.Trim();
+            var fileName = string.IsNullOrWhiteSpace(_contentDeliveryStateFileName)
+                ? "content_delivery_state.json"
+                : _contentDeliveryStateFileName.Trim();
+
+            try
+            {
+                var directory = Path.Combine(Application.persistentDataPath, folder);
+                Directory.CreateDirectory(directory);
+                _contentDeliveryStatePath = Path.Combine(directory, fileName);
+            }
+            catch (Exception e)
+            {
+                _contentDeliveryStatePath = string.Empty;
+                Logger.Warning($"[GameRuntime] Failed to initialize content state path: {e.Message}");
+            }
+        }
+
+        private void ApplyPersistedSimulatedContentStates()
+        {
+            if (!_enableContentDeliverySimulation || !_persistContentDeliverySimulationState)
+            {
+                return;
+            }
+
+            EnsureContentDeliveryStatePathInitialized();
+            if (string.IsNullOrWhiteSpace(_contentDeliveryStatePath) ||
+                !File.Exists(_contentDeliveryStatePath))
+            {
+                return;
+            }
+
+            try
+            {
+                var json = File.ReadAllText(_contentDeliveryStatePath);
+                if (string.IsNullOrWhiteSpace(json))
+                {
+                    return;
+                }
+
+                var store = JsonUtility.FromJson<SimulatedContentStateStore>(json);
+                if (store == null || store.states == null || store.states.Count == 0)
+                {
+                    return;
+                }
+
+                for (var i = 0; i < store.states.Count; i++)
+                {
+                    var record = store.states[i];
+                    if (record == null || string.IsNullOrWhiteSpace(record.gameId))
+                    {
+                        continue;
+                    }
+
+                    var gameId = record.gameId.Trim();
+                    if (!_simulatedContentStateByGameId.TryGetValue(gameId, out var state))
+                    {
+                        state = new SimulatedContentState
+                        {
+                            gameId = gameId,
+                            owned = true,
+                            installedVersion = string.Empty,
+                            targetVersion = NormalizeContentVersion(
+                                record.targetVersion,
+                                _defaultSimulatedContentVersion),
+                            updateRequired = false,
+                            updateOptional = false,
+                            runtimeStatus = ContentRuntimeStatusValues.NotInstalled,
+                            lastError = string.Empty,
+                            updatedAtUtc = DateTime.UtcNow,
+                        };
+                        _simulatedContentStateByGameId[gameId] = state;
+                    }
+
+                    state.owned = record.owned;
+                    state.installedVersion = string.IsNullOrWhiteSpace(record.installedVersion)
+                        ? string.Empty
+                        : record.installedVersion.Trim();
+                    state.targetVersion = NormalizeContentVersion(
+                        record.targetVersion,
+                        state.targetVersion);
+                    var computedUpdateRequired = state.owned &&
+                                                !string.IsNullOrWhiteSpace(state.installedVersion) &&
+                                                !string.Equals(
+                                                    state.installedVersion,
+                                                    state.targetVersion,
+                                                    StringComparison.OrdinalIgnoreCase);
+                    state.updateRequired = record.updateRequired || computedUpdateRequired;
+                    state.updateOptional = record.updateOptional;
+                    state.lastError = string.IsNullOrWhiteSpace(record.lastError)
+                        ? string.Empty
+                        : record.lastError.Trim();
+                    state.runtimeStatus = string.IsNullOrWhiteSpace(record.runtimeStatus)
+                        ? ResolveRuntimeStatusForContentState(
+                            state.owned,
+                            state.installedVersion,
+                            state.updateRequired)
+                        : record.runtimeStatus.Trim();
+                    state.updatedAtUtc = ParseContentStateUpdatedAt(record.updatedAtUtc);
+                }
+            }
+            catch (Exception e)
+            {
+                Logger.Warning($"[GameRuntime] Failed to load persisted content state: {e.Message}");
+            }
+        }
+
+        private void PersistSimulatedContentStates(string reasonCode)
+        {
+            if (!_enableContentDeliverySimulation || !_persistContentDeliverySimulationState)
+            {
+                return;
+            }
+
+            EnsureContentDeliveryStatePathInitialized();
+            if (string.IsNullOrWhiteSpace(_contentDeliveryStatePath))
+            {
+                return;
+            }
+
+            try
+            {
+                var snapshot = new SimulatedContentStateStore
+                {
+                    schema = "THERAPLY_CONTENT_DELIVERY_STATE",
+                    schemaVersion = "2026-02-25",
+                    generatedAtUtc = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture),
+                };
+
+                var keys = new List<string>(_simulatedContentStateByGameId.Keys);
+                keys.Sort(StringComparer.OrdinalIgnoreCase);
+                for (var i = 0; i < keys.Count; i++)
+                {
+                    var gameId = keys[i];
+                    if (!_simulatedContentStateByGameId.TryGetValue(gameId, out var state) || state == null)
+                    {
+                        continue;
+                    }
+
+                    snapshot.states.Add(new SimulatedContentStateRecord
+                    {
+                        gameId = gameId,
+                        owned = state.owned,
+                        installedVersion = state.installedVersion ?? string.Empty,
+                        targetVersion = state.targetVersion ?? string.Empty,
+                        updateRequired = state.updateRequired,
+                        updateOptional = state.updateOptional,
+                        runtimeStatus = state.runtimeStatus ?? string.Empty,
+                        lastError = state.lastError ?? string.Empty,
+                        updatedAtUtc = (state.updatedAtUtc == DateTime.MinValue
+                                ? DateTime.UtcNow
+                                : state.updatedAtUtc.ToUniversalTime())
+                            .ToString("O", CultureInfo.InvariantCulture),
+                    });
+                }
+
+                var json = JsonUtility.ToJson(snapshot, true);
+                File.WriteAllText(_contentDeliveryStatePath, json);
+            }
+            catch (Exception e)
+            {
+                Logger.Warning(
+                    $"[GameRuntime] Failed to persist content state (reason={reasonCode ?? string.Empty}): {e.Message}");
+            }
+        }
+
+        private static DateTime ParseContentStateUpdatedAt(string value)
+        {
+            if (DateTime.TryParse(
+                    value,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                    out var parsedUtc))
+            {
+                return parsedUtc.Kind == DateTimeKind.Utc
+                    ? parsedUtc
+                    : parsedUtc.ToUniversalTime();
+            }
+
+            return DateTime.UtcNow;
         }
 
         private void EnsureSimulatedContentStatesInitialized()
@@ -1004,6 +1231,8 @@ namespace TheraplyCore.Games.Runtime
                     updatedAtUtc = DateTime.UtcNow,
                 };
             }
+
+            ApplyPersistedSimulatedContentStates();
         }
 
         private bool TryGetOrCreateSimulatedContentState(
@@ -1022,6 +1251,8 @@ namespace TheraplyCore.Games.Runtime
                 if (!string.IsNullOrWhiteSpace(requestedTargetVersion))
                 {
                     state.targetVersion = NormalizeContentVersion(requestedTargetVersion, state.targetVersion);
+                    state.updatedAtUtc = DateTime.UtcNow;
+                    PersistSimulatedContentStates("CONTENT_STATE_TARGET_VERSION_UPDATED");
                 }
 
                 return true;
@@ -1042,6 +1273,7 @@ namespace TheraplyCore.Games.Runtime
                 updatedAtUtc = DateTime.UtcNow,
             };
             _simulatedContentStateByGameId[gameId] = state;
+            PersistSimulatedContentStates("CONTENT_STATE_CREATED");
             return true;
         }
 
@@ -1074,6 +1306,7 @@ namespace TheraplyCore.Games.Runtime
             state.runtimeStatus = ContentRuntimeStatusValues.Ready;
             state.lastError = string.Empty;
             state.updatedAtUtc = DateTime.UtcNow;
+            PersistSimulatedContentStates("INSTALL_COMPLETED");
             _ = PublishGameInstallStatusAsync(state, correlationId, "INSTALL_COMPLETED");
             _simulatedInstallRoutineByGameId.Remove(state.gameId);
         }

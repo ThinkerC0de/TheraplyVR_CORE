@@ -100,6 +100,9 @@ Fields:
   - `SYNC_CATALOG` (publishes full `GAME_INSTALL_STATUS` snapshot),
   - `INSTALL_GAME` (state `INSTALLING` -> `READY` after short delay),
   - `UNINSTALL_GAME` (state -> `NOT_INSTALLED`).
+- Simulator state persistence:
+  - runtime writes lifecycle snapshot to `Application.persistentDataPath/session_resilience/content_delivery_state.json`,
+  - startup reloads the snapshot so status is deterministic after reconnect/restart.
 - This mode enables end-to-end mobile<->Quest contract testing even when real package download/install pipeline is not implemented.
 
 ## Deferred
