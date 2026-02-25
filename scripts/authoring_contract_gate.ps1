@@ -432,6 +432,11 @@ $catalogEntriesByGameId = @{}
 $catalogSchemaByGameId = @{}
 
 if ($null -ne $catalog) {
+    $schema = Get-TrimmedString -Object $catalog -Name "schema"
+    if (-not [string]::IsNullOrWhiteSpace($schema) -and -not [string]::Equals($schema, "THERAPLY_GAME_CATALOG", [System.StringComparison]::Ordinal)) {
+        Add-ValidationError "Catalog schema must be 'THERAPLY_GAME_CATALOG' when present. actual=$schema"
+    }
+
     $collection = Get-TrimmedString -Object $catalog -Name "collection"
     if (-not [string]::Equals($collection, "game_catalog", [System.StringComparison]::Ordinal)) {
         Add-ValidationError "Catalog collection must be 'game_catalog'. actual=$collection"
@@ -459,6 +464,20 @@ if ($null -ne $catalog) {
             }
 
             $catalogEntriesByGameId[$gameId.ToLowerInvariant()] = $entry
+
+            $deliveryMode = Get-TrimmedString -Object $entry -Name "deliveryMode"
+            if (-not [string]::IsNullOrWhiteSpace($deliveryMode)) {
+                $normalizedDeliveryMode = $deliveryMode.Trim().ToLowerInvariant()
+                if (-not ($normalizedDeliveryMode -eq "bundled" -or $normalizedDeliveryMode -eq "on_demand")) {
+                    Add-ValidationError "Catalog entry '$gameId' has unsupported deliveryMode '$deliveryMode'. Allowed: bundled, on_demand."
+                }
+            }
+
+            $parameterSchema = Get-PropertyValue -Object $entry -Name "parameterSchema"
+            if ($null -ne $parameterSchema -and -not ($parameterSchema -is [System.Collections.IDictionary])) {
+                Add-ValidationError "Catalog entry '$gameId' parameterSchema must be an object when present."
+            }
+
             $embeddedSchema = Get-PropertyValue -Object $entry -Name "mobileControlSchema"
             if (Has-MobileControlSchemaPayload -Schema $embeddedSchema) {
                 Test-MobileControlSchema -Schema $embeddedSchema -Context "catalog entry '$gameId' embedded schema" -ExpectedGameId $gameId

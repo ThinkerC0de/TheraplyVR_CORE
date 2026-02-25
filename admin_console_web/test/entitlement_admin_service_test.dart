@@ -209,6 +209,10 @@ void main() {
     expect(gameDoc.exists, isTrue);
     final payload = gameDoc.data()!;
     expect(payload['targetContentVersion'], '1.2.0');
+    expect(payload['contentVersion'], '1.2.0');
+    expect(payload['sceneKey'], 'demo_cube_clicker');
+    expect(payload['entitlementKey'], 'game:demo_cube_clicker');
+    expect(payload['deliveryMode'], 'bundled');
     expect(payload['runtimeLaunchEnabled'], isTrue);
     expect(payload['updatedBy'], 'admin-user-1');
     expect(payload['correlationId'], correlationId);
@@ -225,7 +229,8 @@ void main() {
     expect(auditSnapshot.docs.single.data()['action'], 'SEED_GAME_CATALOG');
   });
 
-  test('AdminGameCatalogSeedEntry.fromSeedMap parses optional mobile schema', () {
+  test('AdminGameCatalogSeedEntry.fromSeedMap parses optional mobile schema',
+      () {
     final entry = AdminGameCatalogSeedEntry.fromSeedMap(
       <String, dynamic>{
         'gameId': 'pulse_target_tap',
@@ -250,7 +255,48 @@ void main() {
     );
 
     expect(entry.gameId, 'pulse_target_tap');
+    expect(entry.contentVersion, '1.0.0');
+    expect(entry.sceneKey, 'pulse_target_tap');
+    expect(entry.entitlementKey, 'game:pulse_target_tap');
+    expect(entry.deliveryMode, 'bundled');
+    expect(entry.parameterSchema, isNull);
     expect(entry.mobileControlSchema, isNotNull);
-    expect(entry.mobileControlSchema?['schema'], 'THERAPLY_MOBILE_CONTROL_SCHEMA');
+    expect(
+        entry.mobileControlSchema?['schema'], 'THERAPLY_MOBILE_CONTROL_SCHEMA');
+  });
+
+  test('AdminGameCatalogSeedEntry.fromSeedMap parses shared contract fields',
+      () {
+    final entry = AdminGameCatalogSeedEntry.fromSeedMap(
+      <String, dynamic>{
+        'gameId': 'demo_cube_clicker',
+        'title': 'Demo',
+        'description': 'Demo',
+        'targetContentVersion': '1.2.0',
+        'contentVersion': '1.3.0',
+        'sceneKey': 'DemoCubeScene',
+        'entitlementKey': 'game:demo_cube_clicker',
+        'deliveryMode': 'on_demand',
+        'parameterSchema': <String, dynamic>{
+          'schema': 'demo_parameter_schema',
+          'schemaVersion': '2026-02-25',
+        },
+        'packageUri': '',
+        'thumbnailUrl': '',
+        'supportsSaveResume': true,
+        'availableForPurchase': false,
+        'requiresExplicitLicense': false,
+        'runtimeLaunchEnabled': true,
+        'sortOrder': 10,
+        'active': true,
+        'previewLines': <String>['Preview'],
+      },
+    );
+
+    expect(entry.contentVersion, '1.3.0');
+    expect(entry.sceneKey, 'DemoCubeScene');
+    expect(entry.entitlementKey, 'game:demo_cube_clicker');
+    expect(entry.deliveryMode, 'on_demand');
+    expect(entry.parameterSchema?['schema'], 'demo_parameter_schema');
   });
 }

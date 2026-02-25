@@ -131,6 +131,46 @@ namespace TheraplyCore.Editor.Automation
                 invalidMobileReason,
                 "Unexpected reason code for unsupported mobile control type.");
 
+            var catalogEntry = new GameCatalogContractEntry
+            {
+                gameId = "demo_cube_clicker",
+                title = "Demo Cube Clicker",
+                targetContentVersion = "1.2.0",
+                deliveryMode = string.Empty,
+                sceneKey = string.Empty,
+                contentVersion = string.Empty,
+                entitlementKey = string.Empty,
+            };
+            AssertTrue(
+                catalogEntry.TryValidate(out var catalogReason),
+                "Catalog entry should validate with backward-compatible defaults. reason=" + catalogReason);
+            AssertEqual(
+                "demo_cube_clicker",
+                catalogEntry.sceneKey,
+                "Catalog sceneKey should fallback to gameId when missing.");
+            AssertEqual(
+                "1.2.0",
+                catalogEntry.contentVersion,
+                "Catalog contentVersion should fallback to targetContentVersion when missing.");
+            AssertEqual(
+                "game:demo_cube_clicker",
+                catalogEntry.entitlementKey,
+                "Catalog entitlementKey should fallback to game-scoped key when missing.");
+            AssertEqual(
+                GameCatalogDeliveryModes.Bundled,
+                catalogEntry.deliveryMode,
+                "Catalog deliveryMode should fallback to bundled when missing.");
+
+            var invalidCatalogEntry = GameCatalogContractEntry.CreateDefault("demo_cube_clicker", "Demo");
+            invalidCatalogEntry.deliveryMode = "unsupported_mode";
+            AssertFalse(
+                invalidCatalogEntry.TryValidate(out var invalidCatalogReason),
+                "Catalog entry with unsupported delivery mode should fail.");
+            AssertEqual(
+                GameCatalogContractReasonCodes.DeliveryModeUnsupported,
+                invalidCatalogReason,
+                "Unexpected reason code for unsupported catalog delivery mode.");
+
             var calendarPolicy = sampleDefinition.policies.calendarPolicy;
             AssertTrue(calendarPolicy != null, "Calendar policy should exist in default policies.");
             AssertTrue(
@@ -180,7 +220,7 @@ namespace TheraplyCore.Editor.Automation
             AssertTrue(validResult.accepted, "Expected action acceptance for valid control mode and input range.");
             AssertEqual("ACTION_ACCEPTED", validResult.reasonCode, "Unexpected reason code for valid action.");
 
-            return "definitionValidation=OK; conditionContracts=OK; localizationPolicy=OK; mobileControlSchema=OK; calendarPolicy=OK; actionValidator=OK";
+            return "definitionValidation=OK; conditionContracts=OK; localizationPolicy=OK; mobileControlSchema=OK; catalogContract=OK; calendarPolicy=OK; actionValidator=OK";
         }
 
         private static void PersistValidationResult(string status, string details)

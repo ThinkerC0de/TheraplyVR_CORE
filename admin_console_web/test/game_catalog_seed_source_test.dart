@@ -6,6 +6,8 @@ void main() {
     test('sorts entries by sortOrder and gameId', () {
       const json = '''
 {
+  "schema": "THERAPLY_GAME_CATALOG",
+  "schemaVersion": "2026-02-25",
   "collection": "game_catalog",
   "entries": [
     {
@@ -47,6 +49,37 @@ void main() {
       expect(parsed, hasLength(2));
       expect(parsed[0].gameId, 'alpha_game');
       expect(parsed[1].gameId, 'zeta_game');
+    });
+
+    test('throws for unsupported schema id when schema is present', () {
+      const json = '''
+{
+  "schema": "UNSUPPORTED_CATALOG_SCHEMA",
+  "collection": "game_catalog",
+  "entries": [
+    {
+      "gameId": "demo",
+      "title": "Demo",
+      "description": "Demo",
+      "targetContentVersion": "1.0.0",
+      "packageUri": "",
+      "thumbnailUrl": "",
+      "supportsSaveResume": false,
+      "availableForPurchase": false,
+      "requiresExplicitLicense": false,
+      "runtimeLaunchEnabled": true,
+      "sortOrder": 10,
+      "active": true,
+      "previewLines": []
+    }
+  ]
+}
+''';
+
+      expect(
+        () => GameCatalogSeedSource.parseCatalogSeedJson(json),
+        throwsA(isA<FormatException>()),
+      );
     });
   });
 

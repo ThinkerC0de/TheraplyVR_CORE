@@ -387,10 +387,18 @@ class _AdminActor {
 }
 
 class AdminGameCatalogSeedEntry {
+  static const String deliveryModeBundled = 'bundled';
+  static const String deliveryModeOnDemand = 'on_demand';
+
   final String gameId;
   final String title;
   final String description;
   final String targetContentVersion;
+  final String contentVersion;
+  final String sceneKey;
+  final String entitlementKey;
+  final String deliveryMode;
+  final Map<String, dynamic>? parameterSchema;
   final String packageUri;
   final String thumbnailUrl;
   final bool supportsSaveResume;
@@ -407,6 +415,11 @@ class AdminGameCatalogSeedEntry {
     required this.title,
     required this.description,
     required this.targetContentVersion,
+    this.contentVersion = '',
+    this.sceneKey = '',
+    this.entitlementKey = '',
+    this.deliveryMode = deliveryModeBundled,
+    this.parameterSchema,
     required this.packageUri,
     required this.thumbnailUrl,
     required this.supportsSaveResume,
@@ -462,12 +475,36 @@ class AdminGameCatalogSeedEntry {
     if (rawSchema is Map) {
       mobileControlSchema = _deepCopyMap(rawSchema);
     }
+    final rawParameterSchema = map['parameterSchema'];
+    Map<String, dynamic>? parameterSchema;
+    if (rawParameterSchema is Map) {
+      parameterSchema = _deepCopyMap(rawParameterSchema);
+    }
+
+    final gameId = readString('gameId');
+    final targetContentVersion = readString('targetContentVersion');
+    final rawContentVersion =
+        readString('contentVersion', fallback: targetContentVersion);
+    final contentVersion =
+        rawContentVersion.isEmpty ? targetContentVersion : rawContentVersion;
+    final rawSceneKey = readString('sceneKey', fallback: gameId);
+    final sceneKey = rawSceneKey.isEmpty ? gameId : rawSceneKey;
+    final rawEntitlementKey =
+        readString('entitlementKey', fallback: 'game:$gameId');
+    final entitlementKey =
+        rawEntitlementKey.isEmpty ? 'game:$gameId' : rawEntitlementKey;
+    final deliveryMode = _normalizeDeliveryMode(readString('deliveryMode'));
 
     return AdminGameCatalogSeedEntry(
-      gameId: readString('gameId'),
+      gameId: gameId,
       title: readString('title'),
       description: readString('description'),
-      targetContentVersion: readString('targetContentVersion'),
+      targetContentVersion: targetContentVersion,
+      contentVersion: contentVersion,
+      sceneKey: sceneKey,
+      entitlementKey: entitlementKey,
+      deliveryMode: deliveryMode,
+      parameterSchema: parameterSchema,
       packageUri: readString('packageUri'),
       thumbnailUrl: readString('thumbnailUrl'),
       supportsSaveResume: readBool('supportsSaveResume'),
@@ -482,11 +519,29 @@ class AdminGameCatalogSeedEntry {
   }
 
   Map<String, dynamic> toFirestore() {
+    final normalizedGameId = gameId.trim();
+    final normalizedTargetVersion = targetContentVersion.trim();
+    final normalizedContentVersion = contentVersion.trim().isEmpty
+        ? normalizedTargetVersion
+        : contentVersion.trim();
+    final normalizedSceneKey =
+        sceneKey.trim().isEmpty ? normalizedGameId : sceneKey.trim();
+    final normalizedEntitlementKey = entitlementKey.trim().isEmpty
+        ? 'game:$normalizedGameId'
+        : entitlementKey.trim();
+    final normalizedDeliveryMode = _normalizeDeliveryMode(deliveryMode);
+
     return <String, dynamic>{
-      'gameId': gameId.trim(),
+      'gameId': normalizedGameId,
       'title': title.trim(),
       'description': description.trim(),
-      'targetContentVersion': targetContentVersion.trim(),
+      'targetContentVersion': normalizedTargetVersion,
+      'contentVersion': normalizedContentVersion,
+      'sceneKey': normalizedSceneKey,
+      'entitlementKey': normalizedEntitlementKey,
+      'deliveryMode': normalizedDeliveryMode,
+      if (parameterSchema != null)
+        'parameterSchema': _deepCopyMap(parameterSchema!),
       'packageUri': packageUri.trim(),
       'thumbnailUrl': thumbnailUrl.trim(),
       'supportsSaveResume': supportsSaveResume,
@@ -508,5 +563,13 @@ class AdminGameCatalogSeedEntry {
       return decoded;
     }
     return Map<String, dynamic>.from(raw);
+  }
+
+  static String _normalizeDeliveryMode(String value) {
+    final normalized = value.trim().toLowerCase();
+    if (normalized == deliveryModeOnDemand) {
+      return deliveryModeOnDemand;
+    }
+    return deliveryModeBundled;
   }
 }

@@ -27,6 +27,13 @@ class GameCatalogSeedSource {
   static List<AdminGameCatalogSeedEntry> parseCatalogSeedJson(String rawJson) {
     final decoded = _parseRootObject(rawJson, context: 'Catalog seed');
 
+    final schemaRaw = decoded['schema'];
+    if (schemaRaw is String && schemaRaw.trim().isNotEmpty) {
+      if (schemaRaw.trim() != 'THERAPLY_GAME_CATALOG') {
+        throw FormatException('Unsupported catalog seed schema: $schemaRaw');
+      }
+    }
+
     final collection = decoded['collection'];
     if (collection is! String || collection.trim() != 'game_catalog') {
       throw const FormatException(

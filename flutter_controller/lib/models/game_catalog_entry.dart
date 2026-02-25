@@ -1,10 +1,33 @@
 import 'package:flutter_controller/models/mobile_control_schema.dart';
 
+class GameCatalogDeliveryModes {
+  static const String bundled = 'bundled';
+  static const String onDemand = 'on_demand';
+
+  static bool isSupported(String? value) {
+    final normalized = normalize(value);
+    return normalized == bundled || normalized == onDemand;
+  }
+
+  static String normalize(String? value) {
+    final normalized = (value ?? '').trim().toLowerCase();
+    if (normalized == onDemand) {
+      return onDemand;
+    }
+    return bundled;
+  }
+}
+
 class GameCatalogEntry {
   final String gameId;
   final String title;
   final String description;
   final String targetContentVersion;
+  final String contentVersion;
+  final String sceneKey;
+  final String entitlementKey;
+  final String deliveryMode;
+  final Map<String, dynamic>? parameterSchema;
   final String packageUri;
   final String thumbnailUrl;
   final bool supportsSaveResume;
@@ -22,6 +45,11 @@ class GameCatalogEntry {
     required this.title,
     required this.description,
     required this.targetContentVersion,
+    required this.contentVersion,
+    required this.sceneKey,
+    required this.entitlementKey,
+    required this.deliveryMode,
+    required this.parameterSchema,
     required this.packageUri,
     required this.thumbnailUrl,
     required this.supportsSaveResume,
@@ -37,6 +65,22 @@ class GameCatalogEntry {
 
   factory GameCatalogEntry.fromMap(Map<String, dynamic> data) {
     final rawGameId = (data['gameId'] as String? ?? '').trim();
+    final targetContentVersion =
+        (data['targetContentVersion'] as String? ?? '1.0.0').trim();
+    final rawContentVersion =
+        (data['contentVersion'] as String? ?? targetContentVersion).trim();
+    final contentVersion =
+        rawContentVersion.isEmpty ? targetContentVersion : rawContentVersion;
+    final rawSceneKey = (data['sceneKey'] as String? ?? rawGameId).trim();
+    final sceneKey = rawSceneKey.isEmpty ? rawGameId : rawSceneKey;
+    final rawEntitlementKey =
+        (data['entitlementKey'] as String? ?? 'game:$rawGameId').trim();
+    final entitlementKey =
+        rawEntitlementKey.isEmpty ? 'game:$rawGameId' : rawEntitlementKey;
+    final deliveryMode = GameCatalogDeliveryModes.normalize(
+      data['deliveryMode'] as String?,
+    );
+    final parameterSchema = _parseSchemaMap(data['parameterSchema']);
     final rawSchema = data['mobileControlSchema'];
     MobileControlSchema? parsedSchema;
     var parsedSchemaReasonCode = '';
@@ -56,8 +100,12 @@ class GameCatalogEntry {
       gameId: rawGameId,
       title: (data['title'] as String? ?? rawGameId).trim(),
       description: (data['description'] as String? ?? '').trim(),
-      targetContentVersion:
-          (data['targetContentVersion'] as String? ?? '1.0.0').trim(),
+      targetContentVersion: targetContentVersion,
+      contentVersion: contentVersion,
+      sceneKey: sceneKey,
+      entitlementKey: entitlementKey,
+      deliveryMode: deliveryMode,
+      parameterSchema: parameterSchema,
       packageUri: (data['packageUri'] as String? ?? '').trim(),
       thumbnailUrl: (data['thumbnailUrl'] as String? ?? '').trim(),
       supportsSaveResume: data['supportsSaveResume'] as bool? ?? false,
@@ -79,6 +127,11 @@ class GameCatalogEntry {
       'title': title,
       'description': description,
       'targetContentVersion': targetContentVersion,
+      'contentVersion': contentVersion,
+      'sceneKey': sceneKey,
+      'entitlementKey': entitlementKey,
+      'deliveryMode': deliveryMode,
+      'parameterSchema': parameterSchema,
       'packageUri': packageUri,
       'thumbnailUrl': thumbnailUrl,
       'supportsSaveResume': supportsSaveResume,
@@ -121,5 +174,13 @@ class GameCatalogEntry {
       }
     }
     return fallback;
+  }
+
+  static Map<String, dynamic>? _parseSchemaMap(dynamic value) {
+    if (value is! Map) {
+      return null;
+    }
+
+    return Map<String, dynamic>.from(value);
   }
 }

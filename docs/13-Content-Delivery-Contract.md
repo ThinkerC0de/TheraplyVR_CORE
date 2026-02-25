@@ -35,11 +35,18 @@ Canonical payload (`GAME_INSTALL_STATUS`) fields:
 
 Mobile store/installed tabs can be sourced from Firestore collection `game_catalog`.
 
+Shared catalog metadata contract is documented in `docs/43-Game-Catalog-Contract.md`.
+
 Recommended document fields:
 - `gameId`
 - `title`
 - `description`
 - `targetContentVersion`
+- `contentVersion`
+- `sceneKey`
+- `entitlementKey`
+- `deliveryMode`
+- `parameterSchema`
 - `packageUri`
 - `thumbnailUrl`
 - `supportsSaveResume`
