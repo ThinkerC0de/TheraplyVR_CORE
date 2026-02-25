@@ -55,6 +55,7 @@ Goal: create and run a new scene setup without adding per-game logic in core run
 - Node:
   - `RMB` on node = `Select`, `Rename`, `Set As Entry (Start)`, `Delete`, `Disconnect Outgoing`, `Disconnect Incoming`, `Disconnect All`.
   - `RMB` on node = `Effects -> Add On Enter -> Spawn Prefab Wave` adds ready-to-edit spawn preset.
+  - `RMB` on node = `Effects -> Add On Enter -> Random Material Color` adds random color preset.
   - `Rename` opens rename section in right inspector; apply a stable id like `start_action`.
 - Start node:
   - Set explicit start in left panel: `Task Graph -> Entry Node`.
@@ -72,6 +73,18 @@ Use effect id: `spawn_prefab_wave`
 - `durationSec`: total spawn duration (`0` = instant batch).
 - `areaSizeX`, `areaSizeY`, `areaSizeZ`: spawn box size around `spawnPointKey`.
 - `randomYaw`: random Y rotation per spawned instance.
+
+## Random Material Color Parameters
+
+Use effect id: `set_random_material_color`
+
+- `spawnBindingPrefix`: optional prefix for spawned instances from `SceneRuntimeController` (`targets` matches `targets_1`, `targets_2`, ...).
+- `bindingKey`: optional static binding key from `FlowBindingRegistry` (`binding` field can also be used).
+- `minHue`, `maxHue`: hue range in `[0..1]`.
+- `minSaturation`, `maxSaturation`: saturation range in `[0..1]`.
+- `minValue`, `maxValue`: value/brightness range in `[0..1]`.
+- `alpha`: output alpha in `[0..1]`.
+- `includeInactive`: include inactive child renderers.
 
 ## Validation Commands
 
@@ -114,5 +127,6 @@ flutter test test/widget_test.dart test/game_catalog_service_test.dart test/mobi
 - Nodes in sample graph:
   - `start` (`Action`, timeout to next node)
   - `spawn_wave` (`Timer`, on-enter `spawn_prefab_wave`)
+  - `random_color` (`Timer`, on-enter `set_random_material_color`)
   - `complete` (`Complete`)
   - `fail` (`Fail`)

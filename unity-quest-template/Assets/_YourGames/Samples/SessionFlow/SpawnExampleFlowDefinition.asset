@@ -111,7 +111,7 @@ MonoBehaviour:
         nodeType: Timer
         allowedActions: []
         conditions: []
-        timeoutSec: 8
+        timeoutSec: 4
         onEnterEffects:
         - effectId: spawn_prefab_wave
           binding: 
@@ -134,6 +134,40 @@ MonoBehaviour:
             value: 2.8
           - key: randomYaw
             value: true
+        onExitEffects: []
+        onAcceptedEffects: []
+        onRejectedEffects: []
+        onTimeoutEffects: []
+        nextOnSuccess: random_color
+        nextOnFail: fail
+        nextOnTimeout: random_color
+      - nodeId: random_color
+        nodeType: Timer
+        allowedActions: []
+        conditions: []
+        timeoutSec: 0.5
+        onEnterEffects:
+        - effectId: set_random_material_color
+          binding: 
+          parameters:
+          - key: spawnBindingPrefix
+            value: targets
+          - key: includeInactive
+            value: true
+          - key: minHue
+            value: 0.0
+          - key: maxHue
+            value: 1.0
+          - key: minSaturation
+            value: 0.55
+          - key: maxSaturation
+            value: 0.95
+          - key: minValue
+            value: 0.60
+          - key: maxValue
+            value: 1.00
+          - key: alpha
+            value: 1.00
         onExitEffects: []
         onAcceptedEffects: []
         onRejectedEffects: []

@@ -72,6 +72,7 @@ namespace TheraplyCore.Games.Runtime
             registry.Register(new DelegateEffectPlugin("set_ui_text", ExecuteSetUiText), replaceExisting);
             registry.Register(new DelegateEffectPlugin("update_score", ExecuteUpdateScore), replaceExisting);
             registry.Register(new DelegateEffectPlugin("fade_screen", ExecuteFadeScreen), replaceExisting);
+            registry.Register(new DelegateEffectPlugin("set_random_material_color", ExecuteSetRandomMaterialColor), replaceExisting);
             registry.Register(new DelegateEffectPlugin("teleport_actor", ExecuteTeleportActor), replaceExisting);
             registry.Register(new DelegateEffectPlugin("emit_hint", ExecuteEmitHint), replaceExisting);
             registry.Register(new DelegateEffectPlugin("set_locale", ExecuteSetLocale), replaceExisting);
@@ -533,6 +534,114 @@ namespace TheraplyCore.Games.Runtime
 
             reasonCode = string.Empty;
             return true;
+        }
+
+        private static bool ExecuteSetRandomMaterialColor(
+            GameContracts.EffectDefinition effect,
+            EffectExecutionContext context,
+            EffectRuntimeServices services,
+            out string reasonCode)
+        {
+            reasonCode = string.Empty;
+
+            var includeInactive = ReadBoolParameter(effect, "includeInactive", true);
+            var minHue = ReadFloatParameter(effect, "minHue", 0f);
+            var maxHue = ReadFloatParameter(effect, "maxHue", 1f);
+            var minSaturation = ReadFloatParameter(effect, "minSaturation", 0.55f);
+            var maxSaturation = ReadFloatParameter(effect, "maxSaturation", 0.95f);
+            var minValue = ReadFloatParameter(effect, "minValue", 0.6f);
+            var maxValue = ReadFloatParameter(effect, "maxValue", 1f);
+            var alpha = Clamp01(ReadFloatParameter(effect, "alpha", 1f));
+
+            Normalize01Range(ref minHue, ref maxHue);
+            Normalize01Range(ref minSaturation, ref maxSaturation);
+            Normalize01Range(ref minValue, ref maxValue);
+
+            var updatedRendererCount = 0;
+            var requestedAnyTarget = false;
+            var firstFailureReason = string.Empty;
+
+            var spawnBindingPrefix = ReadParameter(effect, "spawnBindingPrefix", string.Empty);
+            if (!string.IsNullOrWhiteSpace(spawnBindingPrefix))
+            {
+                requestedAnyTarget = true;
+                if (services == null || services.sceneRuntime == null)
+                {
+                    firstFailureReason = "SCENE_RUNTIME_MISSING";
+                }
+                else if (services.sceneRuntime.TrySetRandomMaterialColorOnSpawned(
+                             spawnBindingPrefix,
+                             includeInactive,
+                             minHue,
+                             maxHue,
+                             minSaturation,
+                             maxSaturation,
+                             minValue,
+                             maxValue,
+                             alpha,
+                             out var spawnedCount,
+                             out var spawnedReasonCode))
+                {
+                    updatedRendererCount += spawnedCount;
+                }
+                else if (string.IsNullOrWhiteSpace(firstFailureReason))
+                {
+                    firstFailureReason = spawnedReasonCode;
+                }
+            }
+
+            var bindingKey = ReadParameter(effect, "bindingKey", effect == null ? string.Empty : effect.binding);
+            if (!string.IsNullOrWhiteSpace(bindingKey))
+            {
+                requestedAnyTarget = true;
+                if (services == null || services.bindings == null)
+                {
+                    if (string.IsNullOrWhiteSpace(firstFailureReason))
+                    {
+                        firstFailureReason = "FLOW_BINDINGS_MISSING";
+                    }
+                }
+                else if (!services.bindings.TryGetObject(bindingKey.Trim(), out var target) || target == null)
+                {
+                    if (string.IsNullOrWhiteSpace(firstFailureReason))
+                    {
+                        firstFailureReason = "EFFECT_BINDING_NOT_FOUND";
+                    }
+                }
+                else if (TryApplyRandomMaterialColor(
+                             target,
+                             includeInactive,
+                             minHue,
+                             maxHue,
+                             minSaturation,
+                             maxSaturation,
+                             minValue,
+                             maxValue,
+                             alpha,
+                             out var updatedCount))
+                {
+                    updatedRendererCount += updatedCount;
+                }
+                else if (string.IsNullOrWhiteSpace(firstFailureReason))
+                {
+                    firstFailureReason = "MATERIAL_COLOR_PROPERTY_NOT_FOUND";
+                }
+            }
+
+            if (updatedRendererCount > 0)
+            {
+                reasonCode = string.Empty;
+                return true;
+            }
+
+            if (!requestedAnyTarget)
+            {
+                reasonCode = "EFFECT_BINDING_REQUIRED";
+                return false;
+            }
+
+            reasonCode = NormalizeOrFallback(firstFailureReason, "MATERIAL_COLOR_PROPERTY_NOT_FOUND");
+            return false;
         }
 
         private static bool ExecuteTeleportActor(
@@ -1226,6 +1335,59 @@ namespace TheraplyCore.Games.Runtime
                     collider.enabled = enabled;
                 }
             }
+        }
+
+        private static bool TryApplyRandomMaterialColor(
+            GameObject target,
+            bool includeInactive,
+            float minHue,
+            float maxHue,
+            float minSaturation,
+            float maxSaturation,
+            float minValue,
+            float maxValue,
+            float alpha,
+            out int updatedRendererCount)
+        {
+            updatedRendererCount = 0;
+            if (target == null)
+            {
+                return false;
+            }
+
+            var renderers = target.GetComponentsInChildren<Renderer>(includeInactive);
+            for (var i = 0; i < renderers.Length; i++)
+            {
+                var renderer = renderers[i];
+                if (renderer == null || renderer.material == null || !renderer.material.HasProperty("_Color"))
+                {
+                    continue;
+                }
+
+                var hue = UnityEngine.Random.Range(minHue, maxHue);
+                var saturation = UnityEngine.Random.Range(minSaturation, maxSaturation);
+                var value = UnityEngine.Random.Range(minValue, maxValue);
+                var color = Color.HSVToRGB(hue, saturation, value);
+                color.a = Clamp01(alpha);
+                renderer.material.color = color;
+                updatedRendererCount++;
+            }
+
+            return updatedRendererCount > 0;
+        }
+
+        private static void Normalize01Range(ref float minValue, ref float maxValue)
+        {
+            minValue = Clamp01(minValue);
+            maxValue = Clamp01(maxValue);
+            if (maxValue >= minValue)
+            {
+                return;
+            }
+
+            var swap = minValue;
+            minValue = maxValue;
+            maxValue = swap;
         }
 
         private static bool TrySetKnownTextComponent(GameObject target, string text, out string reasonCode)

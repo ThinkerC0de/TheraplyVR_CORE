@@ -473,6 +473,83 @@ namespace TheraplyCore.Games.Runtime
             return true;
         }
 
+        public bool TrySetRandomMaterialColorOnSpawned(
+            string bindingKeyPrefix,
+            bool includeInactive,
+            float minHue,
+            float maxHue,
+            float minSaturation,
+            float maxSaturation,
+            float minValue,
+            float maxValue,
+            float alpha,
+            out int updatedRendererCount,
+            out string reasonCode)
+        {
+            updatedRendererCount = 0;
+            reasonCode = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(bindingKeyPrefix))
+            {
+                reasonCode = "BINDING_KEY_PREFIX_REQUIRED";
+                return false;
+            }
+
+            Normalize01Range(ref minHue, ref maxHue);
+            Normalize01Range(ref minSaturation, ref maxSaturation);
+            Normalize01Range(ref minValue, ref maxValue);
+            var normalizedAlpha = Mathf.Clamp01(alpha);
+
+            var normalizedPrefix = bindingKeyPrefix.Trim();
+            var matchedAny = false;
+
+            foreach (var pair in _spawnById)
+            {
+                var record = pair.Value;
+                if (record == null || record.instance == null || string.IsNullOrWhiteSpace(record.bindingKey))
+                {
+                    continue;
+                }
+
+                if (!record.bindingKey.StartsWith(normalizedPrefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                matchedAny = true;
+                if (TryApplyRandomMaterialColor(
+                        record.instance,
+                        includeInactive,
+                        minHue,
+                        maxHue,
+                        minSaturation,
+                        maxSaturation,
+                        minValue,
+                        maxValue,
+                        normalizedAlpha,
+                        out var updatedCount))
+                {
+                    updatedRendererCount += updatedCount;
+                }
+            }
+
+            if (!matchedAny)
+            {
+                reasonCode = "SPAWNED_BINDING_PREFIX_NOT_FOUND";
+                return false;
+            }
+
+            if (updatedRendererCount <= 0)
+            {
+                reasonCode = "MATERIAL_COLOR_PROPERTY_NOT_FOUND";
+                return false;
+            }
+
+            reasonCode = "MATERIAL_COLOR_RANDOMIZED";
+            MaybeLog("RANDOMIZE_MATERIAL_COLOR:" + normalizedPrefix + ":" + updatedRendererCount);
+            return true;
+        }
+
         public bool TryDespawnByInstanceId(string instanceId, out string reasonCode)
         {
             reasonCode = string.Empty;
@@ -690,6 +767,59 @@ namespace TheraplyCore.Games.Runtime
 
             var yawRotation = Quaternion.AngleAxis(UnityEngine.Random.Range(0f, 360f), Vector3.up);
             return yawRotation * baseRotation;
+        }
+
+        private static bool TryApplyRandomMaterialColor(
+            GameObject target,
+            bool includeInactive,
+            float minHue,
+            float maxHue,
+            float minSaturation,
+            float maxSaturation,
+            float minValue,
+            float maxValue,
+            float alpha,
+            out int updatedRendererCount)
+        {
+            updatedRendererCount = 0;
+            if (target == null)
+            {
+                return false;
+            }
+
+            var renderers = target.GetComponentsInChildren<Renderer>(includeInactive);
+            for (var i = 0; i < renderers.Length; i++)
+            {
+                var renderer = renderers[i];
+                if (renderer == null || renderer.material == null || !renderer.material.HasProperty("_Color"))
+                {
+                    continue;
+                }
+
+                var hue = UnityEngine.Random.Range(minHue, maxHue);
+                var saturation = UnityEngine.Random.Range(minSaturation, maxSaturation);
+                var value = UnityEngine.Random.Range(minValue, maxValue);
+                var color = Color.HSVToRGB(hue, saturation, value);
+                color.a = Mathf.Clamp01(alpha);
+                renderer.material.color = color;
+                updatedRendererCount++;
+            }
+
+            return updatedRendererCount > 0;
+        }
+
+        private static void Normalize01Range(ref float minValue, ref float maxValue)
+        {
+            minValue = Mathf.Clamp01(minValue);
+            maxValue = Mathf.Clamp01(maxValue);
+            if (maxValue >= minValue)
+            {
+                return;
+            }
+
+            var swap = minValue;
+            minValue = maxValue;
+            maxValue = swap;
         }
 
         private static void IndexPrefabs(

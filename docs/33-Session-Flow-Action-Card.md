@@ -621,6 +621,7 @@ These actions cover target therapeutic gameplay mechanics for this framework.
 | `enable_interaction` | Allow adapters/colliders/input |
 | `disable_interaction` | Block adapters/colliders/input |
 | `set_ui_text` | Update instruction/score UI text |
+| `set_random_material_color` | Assign random material color to bound/spawned objects |
 | `update_score` | Update runtime score/metric |
 | `fade_screen` | Fade in/out transition |
 | `teleport_actor` | Move helper/avatar/guide actor |

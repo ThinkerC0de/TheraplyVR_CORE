@@ -591,6 +591,10 @@ namespace TheraplyCore.Editor.Authoring
                 new GUIContent("Effects/Add On Enter/Spawn Prefab Wave"),
                 false,
                 () => AddSpawnWavePresetToNode(nodeId));
+            menu.AddItem(
+                new GUIContent("Effects/Add On Enter/Random Material Color"),
+                false,
+                () => AddRandomMaterialColorPresetToNode(nodeId));
 
             menu.ShowAsContext();
         }
@@ -809,6 +813,11 @@ namespace TheraplyCore.Editor.Authoring
             if (GUILayout.Button("Add Spawn Prefab Wave"))
             {
                 effects.Add(CreateSpawnWavePresetEffect());
+            }
+
+            if (GUILayout.Button("Add Random Material Color"))
+            {
+                effects.Add(CreateRandomMaterialColorPresetEffect());
             }
         }
         private void DrawChannels()
@@ -1339,6 +1348,20 @@ namespace TheraplyCore.Editor.Authoring
             Repaint();
         }
 
+        private void AddRandomMaterialColorPresetToNode(string nodeId)
+        {
+            var node = GetNode(nodeId);
+            if (node == null)
+            {
+                return;
+            }
+
+            node.onEnterEffects ??= new List<EffectDefinition>();
+            node.onEnterEffects.Add(CreateRandomMaterialColorPresetEffect());
+            _selectedNodeId = node.nodeId;
+            Repaint();
+        }
+
         private static EffectDefinition CreateSpawnWavePresetEffect()
         {
             return new EffectDefinition
@@ -1356,6 +1379,27 @@ namespace TheraplyCore.Editor.Authoring
                     new KeyValuePairString { key = "areaSizeY", value = "0.0" },
                     new KeyValuePairString { key = "areaSizeZ", value = "2.0" },
                     new KeyValuePairString { key = "randomYaw", value = "true" },
+                },
+            };
+        }
+
+        private static EffectDefinition CreateRandomMaterialColorPresetEffect()
+        {
+            return new EffectDefinition
+            {
+                effectId = "set_random_material_color",
+                binding = string.Empty,
+                parameters = new List<KeyValuePairString>
+                {
+                    new KeyValuePairString { key = "spawnBindingPrefix", value = "targets" },
+                    new KeyValuePairString { key = "includeInactive", value = "true" },
+                    new KeyValuePairString { key = "minHue", value = "0.0" },
+                    new KeyValuePairString { key = "maxHue", value = "1.0" },
+                    new KeyValuePairString { key = "minSaturation", value = "0.55" },
+                    new KeyValuePairString { key = "maxSaturation", value = "0.95" },
+                    new KeyValuePairString { key = "minValue", value = "0.60" },
+                    new KeyValuePairString { key = "maxValue", value = "1.0" },
+                    new KeyValuePairString { key = "alpha", value = "1.0" },
                 },
             };
         }
