@@ -244,6 +244,41 @@ class EntitlementService {
         access.isGameAllowedByPlan(gameId);
   }
 
+  static String resolveRuntimeProfileId() {
+    final access = _activeAccess;
+    if (access == null) {
+      return RuntimeEntitlementProfileIds.unknown;
+    }
+
+    return access.runtimeProfileId;
+  }
+
+  static Set<String> resolveRuntimeEntitledGameIds(
+    Iterable<String> candidateGameIds, {
+    DateTime? atUtc,
+  }) {
+    final access = _activeAccess;
+    if (access == null) {
+      return const <String>{};
+    }
+
+    final nowUtc = atUtc ?? DateTime.now().toUtc();
+    final result = <String>{};
+    for (final rawGameId in candidateGameIds) {
+      final gameId = rawGameId.trim();
+      if (gameId.isEmpty) {
+        continue;
+      }
+
+      if (access.hasGameAccess(gameId: gameId, atUtc: nowUtc) &&
+          access.isGameAllowedByPlan(gameId)) {
+        result.add(gameId);
+      }
+    }
+
+    return result;
+  }
+
   static EntitlementGateDecision _evaluateAccess(
     EntitlementAccess access,
     DateTime nowUtc,

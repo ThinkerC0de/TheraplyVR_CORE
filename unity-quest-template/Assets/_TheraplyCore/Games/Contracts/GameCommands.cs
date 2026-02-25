@@ -67,8 +67,23 @@ namespace TheraplyCore.Games.Contracts
         public string patientId;
         public string therapistId;
         public string reasonCode;
+        public string entitlementProfile;
+        public string entitlementRole;
+        public string entitlementPlanTier;
+        public string entitlementPolicyVersion;
+        public string entitlementSourceTag;
+        public string entitlementEvaluatedAtUtc;
+        public string entitledGameIdsCsv;
+        public int entitledGameIdsCount;
 
         public string CorrelationId => correlationId;
+    }
+
+    public static class RuntimeEntitlementProfileIds
+    {
+        public const string TherapistFull = "THERAPIST_FULL";
+        public const string ParentPurchasedPacks = "PARENT_PURCHASED_PACKS";
+        public const string Unknown = "UNKNOWN";
     }
 
     [Serializable]

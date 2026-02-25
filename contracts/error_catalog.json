@@ -431,6 +431,34 @@
       "operatorAction": "Retry end session and validate active game shutdown path."
     },
     {
+      "errorId": "E-2315",
+      "reasonCode": "START_GAME_GAME_NOT_ENTITLED",
+      "severity": "error",
+      "title": "Start game blocked by entitlement",
+      "operatorAction": "Grant license for this game or switch to an entitled game."
+    },
+    {
+      "errorId": "E-2316",
+      "reasonCode": "START_GAME_ENTITLEMENT_PROFILE_UNKNOWN",
+      "severity": "error",
+      "title": "Start game blocked by unknown entitlement profile",
+      "operatorAction": "Refresh session attach context and verify role/profile mapping."
+    },
+    {
+      "errorId": "E-2317",
+      "reasonCode": "INSTALL_GAME_GAME_NOT_ENTITLED",
+      "severity": "warning",
+      "title": "Install blocked by entitlement",
+      "operatorAction": "Grant install license for this game before retrying."
+    },
+    {
+      "errorId": "E-2318",
+      "reasonCode": "INSTALL_GAME_ENTITLEMENT_PROFILE_UNKNOWN",
+      "severity": "error",
+      "title": "Install blocked by unknown entitlement profile",
+      "operatorAction": "Refresh session attach context and verify role/profile mapping."
+    },
+    {
       "errorId": "E-2401",
       "reasonCode": "ACTION_AFTER_TIMEOUT",
       "severity": "warning",

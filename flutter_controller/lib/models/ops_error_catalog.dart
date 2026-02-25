@@ -326,6 +326,26 @@ class OpsErrorCatalog {
       reasonCode: 'END_SESSION_STOP_FAILED',
       description: 'End session failed while stopping game.',
     ),
+    'START_GAME_GAME_NOT_ENTITLED': const OpsErrorCatalogEntry(
+      errorId: 'E-2315',
+      reasonCode: 'START_GAME_GAME_NOT_ENTITLED',
+      description: 'Start game blocked by entitlement.',
+    ),
+    'START_GAME_ENTITLEMENT_PROFILE_UNKNOWN': const OpsErrorCatalogEntry(
+      errorId: 'E-2316',
+      reasonCode: 'START_GAME_ENTITLEMENT_PROFILE_UNKNOWN',
+      description: 'Start game blocked by unknown entitlement profile.',
+    ),
+    'INSTALL_GAME_GAME_NOT_ENTITLED': const OpsErrorCatalogEntry(
+      errorId: 'E-2317',
+      reasonCode: 'INSTALL_GAME_GAME_NOT_ENTITLED',
+      description: 'Install blocked by entitlement.',
+    ),
+    'INSTALL_GAME_ENTITLEMENT_PROFILE_UNKNOWN': const OpsErrorCatalogEntry(
+      errorId: 'E-2318',
+      reasonCode: 'INSTALL_GAME_ENTITLEMENT_PROFILE_UNKNOWN',
+      description: 'Install blocked by unknown entitlement profile.',
+    ),
     'ACTION_AFTER_TIMEOUT': const OpsErrorCatalogEntry(
       errorId: 'E-2401',
       reasonCode: 'ACTION_AFTER_TIMEOUT',

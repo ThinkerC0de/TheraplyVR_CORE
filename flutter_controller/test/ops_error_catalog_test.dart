@@ -74,6 +74,15 @@ void main() {
       expect(entry.reasonCode, 'STOP_GAME_FAILED');
     });
 
+    test('maps entitlement runtime gate rejection identifier', () {
+      final entry =
+          OpsErrorCatalog.lookupByReasonCode('START_GAME_GAME_NOT_ENTITLED');
+
+      expect(entry, isNotNull);
+      expect(entry!.errorId, 'E-2315');
+      expect(entry.reasonCode, 'START_GAME_GAME_NOT_ENTITLED');
+    });
+
     test('maps workflow decision reason code', () {
       final entry =
           OpsErrorCatalog.lookupByReasonCode('THERAPIST_START_NEW_DECISION');

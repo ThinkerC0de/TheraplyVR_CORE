@@ -271,16 +271,17 @@ namespace TheraplyCore.Games.Runtime
                     Logger.Error($"[GameCommandBus] Handler failed for {message.commandId}: {e.Message}", e);
                     if (isCritical)
                     {
+                        var handlerReasonCode = ResolveHandlerFailureReasonCode(e);
                         var failedSessionId = string.IsNullOrWhiteSpace(envelopeSessionId) ? initialSessionId : envelopeSessionId;
                         CompleteCriticalCommand(
                             message,
                             failedSessionId,
                             CommandJournalStatus.Failed,
-                            AckReasonCodes.HandlerException);
+                            handlerReasonCode);
                         _ = SendCriticalAckAsync(
                             message,
                             CommandAckStatus.Nack,
-                            AckReasonCodes.HandlerException,
+                            handlerReasonCode,
                             failedSessionId);
                     }
                     return;
@@ -1050,6 +1051,51 @@ namespace TheraplyCore.Games.Runtime
             public const string SessionOwnershipConflict = "SESSION_OWNERSHIP_CONFLICT";
             public const string SessionOwnershipMissing = "SESSION_OWNERSHIP_MISSING";
             public const string Unspecified = "UNSPECIFIED";
+        }
+
+        private static string ResolveHandlerFailureReasonCode(Exception exception)
+        {
+            var current = exception;
+            while (current != null)
+            {
+                if (current is System.Reflection.TargetInvocationException targetInvocation &&
+                    targetInvocation.InnerException != null)
+                {
+                    current = targetInvocation.InnerException;
+                    continue;
+                }
+
+                var candidate = string.IsNullOrWhiteSpace(current.Message)
+                    ? string.Empty
+                    : current.Message.Trim();
+                if (LooksLikeReasonCode(candidate))
+                {
+                    return candidate.ToUpperInvariant();
+                }
+
+                current = current.InnerException;
+            }
+
+            return AckReasonCodes.HandlerException;
+        }
+
+        private static bool LooksLikeReasonCode(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value) || value.Length > 96)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < value.Length; i++)
+            {
+                var ch = value[i];
+                if (!char.IsLetterOrDigit(ch) && ch != '_')
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private string EnsureCommandIdMapping(Type commandType)

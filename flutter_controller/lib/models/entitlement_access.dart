@@ -82,6 +82,12 @@ class EntitlementFeatureKeys {
   static const String rewardsUnlocks = 'rewards_unlocks';
 }
 
+class RuntimeEntitlementProfileIds {
+  static const String therapistFull = 'THERAPIST_FULL';
+  static const String parentPurchasedPacks = 'PARENT_PURCHASED_PACKS';
+  static const String unknown = 'UNKNOWN';
+}
+
 class EntitlementPlanProfile {
   final SubscriptionPlanTier tier;
   final Map<String, bool> featureFlags;
@@ -427,6 +433,17 @@ class EntitlementAccess {
 
   bool isGameAllowedByPlan(String gameId) {
     return planProfile.isGameAllowed(gameId);
+  }
+
+  String get runtimeProfileId {
+    switch (role) {
+      case EntitlementRole.therapist:
+        return RuntimeEntitlementProfileIds.therapistFull;
+      case EntitlementRole.parent:
+        return RuntimeEntitlementProfileIds.parentPurchasedPacks;
+      case EntitlementRole.unknown:
+        return RuntimeEntitlementProfileIds.unknown;
+    }
   }
 
   Map<String, dynamic> toMap() {

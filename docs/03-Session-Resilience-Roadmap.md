@@ -203,7 +203,7 @@ Target: align game availability between mobile and Quest, with role-aware access
 Deliverables:
 1. Shared game catalog contract (`gameId`, `displayName`, `contentVersion`, `sceneKey`, `parameterSchema`, `entitlementKey`, `deliveryMode`) (`R-P6-001` delivered on 2026-02-25 with backward-compatible fallback semantics).
 2. Mobile game selection screen backed by catalog + runtime availability state (`R-P6-002` delivered on 2026-02-25 with Quest-authoritative launch gating).
-3. Entitlements service for role/license (`THERAPIST_FULL`, `PARENT_PURCHASED_PACKS`) with offline cache and expiration policy.
+3. Entitlements service for role/license (`THERAPIST_FULL`, `PARENT_PURCHASED_PACKS`) with offline cache and expiration policy (`R-P6-003` delivered on 2026-02-25 with `SESSION_ATTACH` runtime snapshot + Unity launch/install enforcement).
 4. Quest content lifecycle for on-demand game delivery (manifest check, download, verify, install/activate, rollback), started as `R-P6-004` on 2026-02-25 with persisted simulator install-state restore across runtime restart.
 5. Protocol commands/events for catalog and content state (`SYNC_CATALOG`, `INSTALL_GAME`, `UNINSTALL_GAME`, `GAME_INSTALL_STATUS`) with critical ACK/NACK transport semantics (`R-P6-005` delivered on 2026-02-25).
 6. Therapist program builder for reusable session templates and per-game parameter presets.
@@ -230,7 +230,7 @@ Current checkpoint status:
 ## Execution Update (2026-02-17, Unity Follow-Up)
 - Firebase network automation now resolves validation `gameId` dynamically (CLI arg/runtime default/registered module) instead of hardcoded `smoke_test_game` in core automation logic.
 - Demo gameplay prototype remains in examples (`demo_cube_clicker`, `DemoCubeScene`) and is launchable by explicit `gameId` through existing runtime command flow.
-- P6 is now partially started (`R-P6-001`, `R-P6-002`, `R-P6-005`, `R-P6-011` delivered; `R-P6-004` in progress with deterministic simulator state restore); catalog/licensing/full production lifecycle scope remains open.
+- P6 is now partially started (`R-P6-001`, `R-P6-002`, `R-P6-003`, `R-P6-005`, `R-P6-011` delivered; `R-P6-004` in progress with deterministic simulator state restore); catalog/licensing/full production lifecycle scope remains open.
 
 ## Tracking and Execution Rules
 1. Every completed task must update `docs/05-Session-Resilience-Worklog.md`.

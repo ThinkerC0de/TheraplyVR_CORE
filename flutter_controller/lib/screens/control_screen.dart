@@ -898,6 +898,10 @@ class _ControlScreenState extends State<ControlScreen>
       targetSessionId,
       therapistIdOverride: therapistId,
     );
+    final entitlementEvaluatedAtUtc = DateTime.now().toUtc();
+    final entitledGameIds =
+        _resolveRuntimeEntitledGameIds(entitlementEvaluatedAtUtc);
+    final entitlementAccess = EntitlementService.activeAccess;
     _sessionAttachInFlight = true;
     var retryAttachWithEndSessionOverride = false;
     if (mounted) {
@@ -923,6 +927,18 @@ class _ControlScreenState extends State<ControlScreen>
           'sessionKey': sessionKey,
           'reasonCode': reasonCode,
           'origin': 'mobile_controller',
+          'entitlementProfile': EntitlementService.resolveRuntimeProfileId(),
+          'entitlementRole':
+              (entitlementAccess?.role ?? EntitlementRole.unknown).wireValue,
+          'entitlementPlanTier':
+              (entitlementAccess?.planProfile.tier ?? SubscriptionPlanTier.unknown)
+                  .wireValue,
+          'entitlementPolicyVersion': entitlementAccess?.policyVersion ?? '',
+          'entitlementSourceTag': entitlementAccess?.sourceTag ?? '',
+          'entitlementEvaluatedAtUtc':
+              entitlementEvaluatedAtUtc.toIso8601String(),
+          'entitledGameIdsCsv': _serializeGameIdsCsv(entitledGameIds),
+          'entitledGameIdsCount': entitledGameIds.length,
         },
         expiresAtUtc: DateTime.now().toUtc().add(const Duration(seconds: 30)),
       );
@@ -1574,6 +1590,26 @@ class _ControlScreenState extends State<ControlScreen>
       therapistId: therapistIdOverride ?? _resolveActorTherapistId(),
       studentId: widget.student.id,
     );
+  }
+
+  Set<String> _resolveRuntimeEntitledGameIds(DateTime atUtc) {
+    return EntitlementService.resolveRuntimeEntitledGameIds(
+      _effectiveGameCatalog.map((entry) => entry.gameId),
+      atUtc: atUtc,
+    );
+  }
+
+  static String _serializeGameIdsCsv(Set<String> gameIds) {
+    if (gameIds.isEmpty) {
+      return '';
+    }
+
+    final sorted = gameIds
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false)
+      ..sort();
+    return sorted.join(',');
   }
 
   String _resolveSessionKey(

@@ -3,11 +3,11 @@
 ## Goal
 Keep operator-facing failures stable and actionable via `E-xxxx`, without breaking existing wire contracts.
 
-## Current Status (2026-02-22)
+## Current Status (2026-02-25)
 - `DONE`: critical command ACK/NACK reasons mapped to `E-1xxx`.
 - `DONE`: entitlement/login gate reasons mapped to `E-2xxx`.
 - `DONE`: runtime presence/connectivity reasons mapped to `E-21xx`.
-- `DONE`: runtime/manual-resync and attach internal failure identifiers mapped to `E-22xx` and `E-23xx`.
+- `DONE`: runtime/manual-resync, attach, and entitlement gate failure identifiers mapped to `E-22xx` and `E-23xx`.
 - `DONE`: adaptive/sequence/trace pipeline reason codes and workflow decision reason codes mapped to `E-24xx` and `E-25xx`.
 - `DONE`: current scoped audit reports zero unmapped `reasonCode` and zero unmapped internal runtime exception identifiers.
 

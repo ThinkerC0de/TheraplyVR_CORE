@@ -66,6 +66,30 @@ namespace TheraplyCore.Games.Runtime
             public List<SimulatedContentStateRecord> states = new List<SimulatedContentStateRecord>();
         }
 
+        private static class RuntimeEntitlementReasonCodes
+        {
+            public const string SnapshotApplied = "ENTITLEMENT_SNAPSHOT_APPLIED";
+            public const string SnapshotLegacyFallback = "ENTITLEMENT_SNAPSHOT_LEGACY_FALLBACK";
+            public const string SnapshotCountMismatch = "ENTITLEMENT_IDS_COUNT_MISMATCH";
+            public const string GameIdRequiredSuffix = "GAME_ID_REQUIRED";
+            public const string GameNotEntitledSuffix = "GAME_NOT_ENTITLED";
+            public const string ProfileUnknownSuffix = "ENTITLEMENT_PROFILE_UNKNOWN";
+        }
+
+        private sealed class RuntimeEntitlementSnapshot
+        {
+            public bool hasExplicitSnapshot;
+            public string profileId = RuntimeEntitlementProfileIds.TherapistFull;
+            public string role = "THERAPIST";
+            public string planTier = "BASIC";
+            public string policyVersion = string.Empty;
+            public string sourceTag = string.Empty;
+            public string evaluatedAtUtc = string.Empty;
+            public int declaredEntitledGameIdsCount;
+            public HashSet<string> entitledGameIds =
+                new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
+
         [Header("Dependencies")]
         [SerializeField] private GameRegistryService _registryService;
         [SerializeField] private GameContextService _contextService;
@@ -154,6 +178,8 @@ namespace TheraplyCore.Games.Runtime
         private bool _lastAppPaused;
         private bool _lastAppFocused = true;
         private string _contentDeliveryStatePath = string.Empty;
+        private RuntimeEntitlementSnapshot _runtimeEntitlementSnapshot =
+            new RuntimeEntitlementSnapshot();
 
         public GameContracts.IGameModule ActiveGame => _activeGame;
         public string ActiveGameId => _activeGameId;
@@ -561,6 +587,8 @@ namespace TheraplyCore.Games.Runtime
                     _sessionContext.BeginSession(patientId, therapistId, requestedSessionId);
                 }
 
+                ApplyRuntimeEntitlementSnapshot(command);
+
                 TrackCriticalRuntimeEvent("session_attach", new Dictionary<string, object>
                 {
                     { "sessionId", requestedSessionId },
@@ -586,6 +614,8 @@ namespace TheraplyCore.Games.Runtime
                 throw new InvalidOperationException("SESSION_ATTACH_RESTORE_FAILED");
             }
 
+            ApplyRuntimeEntitlementSnapshot(command);
+
             TrackCriticalRuntimeEvent("session_attach", new Dictionary<string, object>
             {
                 { "sessionId", requestedSessionId },
@@ -601,6 +631,14 @@ namespace TheraplyCore.Games.Runtime
             if (!TryResolveCommandGame(command?.gameId))
             {
                 throw new InvalidOperationException("START_GAME_NO_ACTIVE_GAME");
+            }
+
+            if (!TryAuthorizeGameCommandByEntitlement(
+                    GameCommandIds.StartGame,
+                    _activeGameId,
+                    out var entitlementReasonCode))
+            {
+                throw new InvalidOperationException(entitlementReasonCode);
             }
 
             TryApplyStartCommandConfig(command);
@@ -884,6 +922,31 @@ namespace TheraplyCore.Games.Runtime
             }
 
             var normalizedGameId = requestedGameId.Trim();
+            if (!TryAuthorizeGameCommandByEntitlement(
+                    GameCommandIds.InstallGame,
+                    normalizedGameId,
+                    out var entitlementReasonCode))
+            {
+                if (TryGetOrCreateSimulatedContentState(
+                        normalizedGameId,
+                        command == null ? null : command.targetVersion,
+                        out var deniedState))
+                {
+                    deniedState.runtimeStatus = ContentRuntimeStatusValues.Failed;
+                    deniedState.lastError = entitlementReasonCode;
+                    deniedState.updatedAtUtc = DateTime.UtcNow;
+                    PersistSimulatedContentStates(entitlementReasonCode);
+                    _ = PublishGameInstallStatusAsync(
+                        deniedState,
+                        command == null ? string.Empty : command.correlationId,
+                        entitlementReasonCode);
+                }
+
+                Logger.Warning(
+                    $"[GameRuntime] INSTALL_GAME rejected by entitlement gate: game={normalizedGameId}, reason={entitlementReasonCode}");
+                return;
+            }
+
             if (!TryGetOrCreateSimulatedContentState(
                     normalizedGameId,
                     command == null ? null : command.targetVersion,
@@ -1417,6 +1480,287 @@ namespace TheraplyCore.Games.Runtime
             }
 
             return EnsureActiveGame();
+        }
+
+        private void ApplyRuntimeEntitlementSnapshot(SessionAttachCommand command)
+        {
+            var profileRaw = command == null ? string.Empty : command.entitlementProfile;
+            var roleRaw = command == null ? string.Empty : command.entitlementRole;
+            var planTierRaw = command == null ? string.Empty : command.entitlementPlanTier;
+            var policyVersionRaw = command == null ? string.Empty : command.entitlementPolicyVersion;
+            var sourceTagRaw = command == null ? string.Empty : command.entitlementSourceTag;
+            var evaluatedAtUtcRaw = command == null ? string.Empty : command.entitlementEvaluatedAtUtc;
+            var entitledGameIdsCsv = command == null ? string.Empty : command.entitledGameIdsCsv;
+            var declaredEntitledGameIdsCount = Math.Max(0, command == null ? 0 : command.entitledGameIdsCount);
+
+            var hasExplicitSnapshot =
+                !string.IsNullOrWhiteSpace(profileRaw) ||
+                !string.IsNullOrWhiteSpace(roleRaw) ||
+                !string.IsNullOrWhiteSpace(planTierRaw) ||
+                !string.IsNullOrWhiteSpace(policyVersionRaw) ||
+                !string.IsNullOrWhiteSpace(sourceTagRaw) ||
+                !string.IsNullOrWhiteSpace(evaluatedAtUtcRaw) ||
+                !string.IsNullOrWhiteSpace(entitledGameIdsCsv) ||
+                declaredEntitledGameIdsCount > 0;
+
+            var parsedEntitledGameIds = ParseEntitledGameIdsCsv(entitledGameIdsCsv);
+            _runtimeEntitlementSnapshot = new RuntimeEntitlementSnapshot
+            {
+                hasExplicitSnapshot = hasExplicitSnapshot,
+                profileId = NormalizeEntitlementProfileId(
+                    profileRaw,
+                    roleRaw,
+                    hasExplicitSnapshot,
+                    parsedEntitledGameIds.Count),
+                role = NormalizeOrFallback(roleRaw, "THERAPIST"),
+                planTier = NormalizeOrFallback(planTierRaw, "BASIC"),
+                policyVersion = NormalizeOrFallback(policyVersionRaw, string.Empty),
+                sourceTag = NormalizeOrFallback(sourceTagRaw, string.Empty),
+                evaluatedAtUtc = NormalizeOrFallback(evaluatedAtUtcRaw, string.Empty),
+                declaredEntitledGameIdsCount = declaredEntitledGameIdsCount,
+                entitledGameIds = parsedEntitledGameIds,
+            };
+
+            TrackCriticalRuntimeEvent("runtime_entitlement_snapshot", new Dictionary<string, object>
+            {
+                { "reasonCode", hasExplicitSnapshot
+                    ? RuntimeEntitlementReasonCodes.SnapshotApplied
+                    : RuntimeEntitlementReasonCodes.SnapshotLegacyFallback },
+                { "profileId", _runtimeEntitlementSnapshot.profileId },
+                { "role", _runtimeEntitlementSnapshot.role },
+                { "planTier", _runtimeEntitlementSnapshot.planTier },
+                { "policyVersion", _runtimeEntitlementSnapshot.policyVersion },
+                { "sourceTag", _runtimeEntitlementSnapshot.sourceTag },
+                { "evaluatedAtUtc", _runtimeEntitlementSnapshot.evaluatedAtUtc },
+                { "entitledGameIdsCount", _runtimeEntitlementSnapshot.entitledGameIds.Count },
+                { "declaredEntitledGameIdsCount", _runtimeEntitlementSnapshot.declaredEntitledGameIdsCount },
+                { "hasExplicitSnapshot", _runtimeEntitlementSnapshot.hasExplicitSnapshot },
+            });
+
+            if (_runtimeEntitlementSnapshot.declaredEntitledGameIdsCount > 0 &&
+                _runtimeEntitlementSnapshot.declaredEntitledGameIdsCount !=
+                _runtimeEntitlementSnapshot.entitledGameIds.Count)
+            {
+                TrackCriticalRuntimeEvent("runtime_entitlement_snapshot", new Dictionary<string, object>
+                {
+                    { "reasonCode", RuntimeEntitlementReasonCodes.SnapshotCountMismatch },
+                    { "profileId", _runtimeEntitlementSnapshot.profileId },
+                    { "role", _runtimeEntitlementSnapshot.role },
+                    { "declaredEntitledGameIdsCount", _runtimeEntitlementSnapshot.declaredEntitledGameIdsCount },
+                    { "entitledGameIdsCount", _runtimeEntitlementSnapshot.entitledGameIds.Count },
+                });
+            }
+        }
+
+        private bool TryAuthorizeGameCommandByEntitlement(
+            string commandId,
+            string gameId,
+            out string reasonCode)
+        {
+            reasonCode = string.Empty;
+
+            var normalizedCommandId = string.IsNullOrWhiteSpace(commandId)
+                ? "COMMAND"
+                : commandId.Trim().ToUpperInvariant();
+            var normalizedGameId = string.IsNullOrWhiteSpace(gameId)
+                ? string.Empty
+                : gameId.Trim();
+            if (string.IsNullOrWhiteSpace(normalizedGameId))
+            {
+                reasonCode = BuildCommandEntitlementReasonCode(
+                    normalizedCommandId,
+                    RuntimeEntitlementReasonCodes.GameIdRequiredSuffix);
+                TrackRuntimeEntitlementDecision(
+                    normalizedCommandId,
+                    normalizedGameId,
+                    allowed: false,
+                    reasonCode: reasonCode);
+                return false;
+            }
+
+            if (_runtimeEntitlementSnapshot == null)
+            {
+                _runtimeEntitlementSnapshot = new RuntimeEntitlementSnapshot();
+            }
+
+            var snapshot = _runtimeEntitlementSnapshot;
+            var entitledGameIds = snapshot.entitledGameIds ??
+                                  new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var hasEntitledGameList = entitledGameIds.Count > 0;
+            if (hasEntitledGameList && entitledGameIds.Contains(normalizedGameId))
+            {
+                TrackRuntimeEntitlementDecision(
+                    normalizedCommandId,
+                    normalizedGameId,
+                    allowed: true,
+                    reasonCode: RuntimeEntitlementReasonCodes.SnapshotApplied);
+                return true;
+            }
+
+            var normalizedProfile = NormalizeEntitlementProfileId(
+                snapshot.profileId,
+                snapshot.role,
+                snapshot.hasExplicitSnapshot,
+                entitledGameIds.Count);
+            if (string.Equals(
+                    normalizedProfile,
+                    RuntimeEntitlementProfileIds.TherapistFull,
+                    StringComparison.Ordinal))
+            {
+                if (!hasEntitledGameList)
+                {
+                    TrackRuntimeEntitlementDecision(
+                        normalizedCommandId,
+                        normalizedGameId,
+                        allowed: true,
+                        reasonCode: snapshot.hasExplicitSnapshot
+                            ? RuntimeEntitlementReasonCodes.SnapshotApplied
+                            : RuntimeEntitlementReasonCodes.SnapshotLegacyFallback);
+                    return true;
+                }
+
+                reasonCode = BuildCommandEntitlementReasonCode(
+                    normalizedCommandId,
+                    RuntimeEntitlementReasonCodes.GameNotEntitledSuffix);
+                TrackRuntimeEntitlementDecision(
+                    normalizedCommandId,
+                    normalizedGameId,
+                    allowed: false,
+                    reasonCode: reasonCode);
+                return false;
+            }
+
+            if (string.Equals(
+                    normalizedProfile,
+                    RuntimeEntitlementProfileIds.ParentPurchasedPacks,
+                    StringComparison.Ordinal))
+            {
+                reasonCode = BuildCommandEntitlementReasonCode(
+                    normalizedCommandId,
+                    RuntimeEntitlementReasonCodes.GameNotEntitledSuffix);
+                TrackRuntimeEntitlementDecision(
+                    normalizedCommandId,
+                    normalizedGameId,
+                    allowed: false,
+                    reasonCode: reasonCode);
+                return false;
+            }
+
+            reasonCode = BuildCommandEntitlementReasonCode(
+                normalizedCommandId,
+                RuntimeEntitlementReasonCodes.ProfileUnknownSuffix);
+            TrackRuntimeEntitlementDecision(
+                normalizedCommandId,
+                normalizedGameId,
+                allowed: false,
+                reasonCode: reasonCode);
+            return false;
+        }
+
+        private void TrackRuntimeEntitlementDecision(
+            string commandId,
+            string gameId,
+            bool allowed,
+            string reasonCode)
+        {
+            if (_runtimeEntitlementSnapshot == null)
+            {
+                _runtimeEntitlementSnapshot = new RuntimeEntitlementSnapshot();
+            }
+
+            TrackCriticalRuntimeEvent("runtime_entitlement_gate", new Dictionary<string, object>
+            {
+                { "commandId", commandId ?? string.Empty },
+                { "gameId", gameId ?? string.Empty },
+                { "allowed", allowed },
+                { "reasonCode", reasonCode ?? string.Empty },
+                { "profileId", _runtimeEntitlementSnapshot.profileId ?? string.Empty },
+                { "role", _runtimeEntitlementSnapshot.role ?? string.Empty },
+                { "planTier", _runtimeEntitlementSnapshot.planTier ?? string.Empty },
+                { "policyVersion", _runtimeEntitlementSnapshot.policyVersion ?? string.Empty },
+                { "sourceTag", _runtimeEntitlementSnapshot.sourceTag ?? string.Empty },
+                { "hasExplicitSnapshot", _runtimeEntitlementSnapshot.hasExplicitSnapshot },
+                { "entitledGameIdsCount", _runtimeEntitlementSnapshot.entitledGameIds == null
+                    ? 0
+                    : _runtimeEntitlementSnapshot.entitledGameIds.Count },
+                { "declaredEntitledGameIdsCount", _runtimeEntitlementSnapshot.declaredEntitledGameIdsCount },
+            });
+        }
+
+        private static string BuildCommandEntitlementReasonCode(string commandId, string reasonSuffix)
+        {
+            var normalizedCommand = string.IsNullOrWhiteSpace(commandId)
+                ? "COMMAND"
+                : commandId.Trim().ToUpperInvariant();
+            var normalizedSuffix = string.IsNullOrWhiteSpace(reasonSuffix)
+                ? RuntimeEntitlementReasonCodes.GameNotEntitledSuffix
+                : reasonSuffix.Trim().ToUpperInvariant();
+            return $"{normalizedCommand}_{normalizedSuffix}";
+        }
+
+        private static string NormalizeEntitlementProfileId(
+            string profileId,
+            string role,
+            bool hasExplicitSnapshot,
+            int entitledGameIdsCount)
+        {
+            var normalizedProfile = NormalizeOrFallback(profileId, string.Empty).ToUpperInvariant();
+            if (string.Equals(normalizedProfile, RuntimeEntitlementProfileIds.TherapistFull, StringComparison.Ordinal) ||
+                string.Equals(normalizedProfile, RuntimeEntitlementProfileIds.ParentPurchasedPacks, StringComparison.Ordinal) ||
+                string.Equals(normalizedProfile, RuntimeEntitlementProfileIds.Unknown, StringComparison.Ordinal))
+            {
+                return normalizedProfile;
+            }
+
+            var normalizedRole = NormalizeOrFallback(role, string.Empty).ToUpperInvariant();
+            if (string.Equals(normalizedRole, "PARENT", StringComparison.Ordinal))
+            {
+                return RuntimeEntitlementProfileIds.ParentPurchasedPacks;
+            }
+
+            if (string.Equals(normalizedRole, "THERAPIST", StringComparison.Ordinal))
+            {
+                return RuntimeEntitlementProfileIds.TherapistFull;
+            }
+
+            if (!hasExplicitSnapshot && entitledGameIdsCount <= 0)
+            {
+                return RuntimeEntitlementProfileIds.TherapistFull;
+            }
+
+            return RuntimeEntitlementProfileIds.Unknown;
+        }
+
+        private static HashSet<string> ParseEntitledGameIdsCsv(string entitledGameIdsCsv)
+        {
+            var parsed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (string.IsNullOrWhiteSpace(entitledGameIdsCsv))
+            {
+                return parsed;
+            }
+
+            var values = entitledGameIdsCsv.Split(',');
+            for (var i = 0; i < values.Length; i++)
+            {
+                var normalized = values[i] == null ? string.Empty : values[i].Trim();
+                if (!string.IsNullOrWhiteSpace(normalized))
+                {
+                    parsed.Add(normalized);
+                }
+            }
+
+            return parsed;
+        }
+
+        private static string NormalizeOrFallback(string value, string fallback)
+        {
+            var normalized = string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+            if (!string.IsNullOrWhiteSpace(normalized))
+            {
+                return normalized;
+            }
+
+            return fallback ?? string.Empty;
         }
 
         private void TryApplyStartCommandConfig(StartGameCommand command)
