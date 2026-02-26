@@ -3058,7 +3058,30 @@ class _ControlScreenState extends State<ControlScreen>
       return true;
     }
 
+    if (!_requiresQuestInstallState(gameId)) {
+      return true;
+    }
+
     return _questReportedContentGameIds.contains(gameId);
+  }
+
+  bool _requiresQuestInstallState(String gameId) {
+    if (!_contentDeliveryEnabled) {
+      return false;
+    }
+
+    for (final entry in _effectiveGameCatalog) {
+      if (entry.gameId != gameId) {
+        continue;
+      }
+
+      final hasPackageUri = entry.packageUri.trim().isNotEmpty;
+      return entry.requiresExplicitLicense ||
+          entry.availableForPurchase ||
+          hasPackageUri;
+    }
+
+    return true;
   }
 
   String _buildLaunchReadinessHint(
@@ -6609,7 +6632,10 @@ class _ControlScreenState extends State<ControlScreen>
                         final contentState = _contentStateForGame(entry.gameId);
                         final actionInFlight =
                             _contentActionsInFlight.contains(entry.gameId);
-                        final shouldInstallOrUpdate = contentState.owned &&
+                        final installManaged =
+                            _requiresQuestInstallState(entry.gameId);
+                        final shouldInstallOrUpdate = installManaged &&
+                            contentState.owned &&
                             (contentState.runtimeStatus ==
                                     ContentRuntimeStatus.notInstalled ||
                                 contentState.runtimeStatus ==
@@ -6766,7 +6792,8 @@ class _ControlScreenState extends State<ControlScreen>
                                                 : 'Buy (sim)',
                                           ),
                                         )
-                                      : (_contentDeliveryEnabled
+                                      : (_contentDeliveryEnabled &&
+                                              installManaged
                                           ? Row(
                                               children: [
                                                 Expanded(
