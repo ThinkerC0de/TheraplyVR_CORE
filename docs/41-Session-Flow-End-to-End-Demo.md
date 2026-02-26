@@ -13,7 +13,7 @@ Date: 2026-02-25
 
 ## End-to-end path
 
-1. Unity author opens `Theraply/Session Flow/Flow Graph Editor` and loads `DemoCubeFlowDefinition.asset`.
+1. Unity author opens `Theraply/Session Flow/Flow Graph Editor (Legacy WIP)` and loads `DemoCubeFlowDefinition.asset`.
 2. Author edits graph/policies/channels in one place and validates with `SessionFlowDefinitionValidator` from the editor window.
 3. Catalog source (`game_catalog`) is seeded from `contracts/game_catalog_seed.json`.
 4. Flutter controller opens `demo_cube_clicker` setup:

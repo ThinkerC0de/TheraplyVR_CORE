@@ -18,6 +18,7 @@ Goal: implement the new framework direction end-to-end so no per-game core rewri
 - `IN_PROGRESS`
 - `DONE`
 - `BLOCKED`
+- `PARKED`
 
 ## Phase A - Contracts and Definitions
 
@@ -128,10 +129,20 @@ Execution details: `docs/39-Core-Gap-Closure-Execution-Plan.md`
 | ID | Task | Status | Acceptance Criteria | Depends On |
 | --- | --- | --- | --- | --- |
 | SF-J-001 | Add mobile control schema contract and validators | DONE | Unity and Flutter parse and validate one `THERAPLY_MOBILE_CONTROL_SCHEMA` contract with reason-coded validation failures | SF-A-001, SF-G-001 |
-| SF-J-002 | Add Unity flow graph editor window | DONE | Editor supports node editing (`Action/Condition/Branch/Timer/Complete/Fail`), transitions, policies, channels, save/load, import/export, and validator panel | SF-B-009, SF-I-001 |
+| SF-J-002 | Add Unity flow graph editor window | PARKED | Editor supports node editing (`Action/Condition/Branch/Timer/Complete/Fail`), transitions, policies, channels, save/load, import/export, and validator panel | SF-B-009, SF-I-001 |
 | SF-J-003 | Add Flutter schema-driven dynamic control renderer | DONE | Mobile setup renders controls from schema and builds `START_GAME` plus `UPDATE_CONFIG` payloads without per-game runtime branching | SF-J-001, SF-F-002 |
-| SF-J-004 | Add end-to-end authoring sample | DONE | One sample `GameDefinitionAsset` and one sample mobile schema prove Unity authoring -> mobile dynamic rendering -> unchanged core runtime execution path | SF-J-002, SF-J-003 |
-| SF-J-005 | Publish authoring runbook and status updates | DONE | "15-minute" guide and backlog/status docs reflect delivered authoring stack | SF-J-004 |
+| SF-J-004 | Add end-to-end authoring sample | PARKED | One sample `GameDefinitionAsset` and one sample mobile schema prove Unity authoring -> mobile dynamic rendering -> unchanged core runtime execution path | SF-J-002, SF-J-003 |
+| SF-J-005 | Publish authoring runbook and status updates | PARKED | "15-minute" guide and backlog/status docs reflect delivered authoring stack | SF-J-004 |
+
+## Phase K - Scene Controller + Mobile Layout Pivot (Active)
+
+| ID | Task | Status | Acceptance Criteria | Depends On |
+| --- | --- | --- | --- | --- |
+| SF-K-001 | Define `SceneGameController` base contract | TODO | One script per game owns scene logic and object wiring, mapped to runtime start/pause/resume/stop/config hooks | SF-B-009 |
+| SF-K-002 | Add Unity mobile layout authoring asset | TODO | Control layout (type/position/scale/label/binding) can be authored and serialized in Unity | SF-J-001 |
+| SF-K-003 | Add Unity mobile layout editor window | TODO | Author can visually arrange controls for game card and export contract without coding | SF-K-002 |
+| SF-K-004 | Wire layout contract to Flutter dynamic renderer | TODO | Mobile controller renders and submits `START_GAME/UPDATE_CONFIG` from authored layout bindings | SF-J-003, SF-K-003 |
+| SF-K-005 | Preserve canonical telemetry + ML dataset compatibility | TODO | Scene-script games keep canonical event quality gates and export readiness | SF-E-007, SF-K-001 |
 
 ## Global Definition Of Done
 
@@ -141,7 +152,8 @@ Execution details: `docs/39-Core-Gap-Closure-Execution-Plan.md`
 4. Export quality gates pass with 100% required coverage.
 5. Session runs in both remote and local modes as configured.
 6. Phase `SF-I-001` to `SF-I-005` are delivered and marked `DONE`.
-7. Phase `SF-J-001` to `SF-J-005` are delivered and marked `DONE`.
+7. Phase `SF-J-001` and `SF-J-003` remain delivered; `SF-J-002/SF-J-004/SF-J-005` are parked as legacy node-graph WIP.
+8. Phase `SF-K-001` to `SF-K-005` are delivered for the active scene-controller path.
 
 ## Historical Note
 

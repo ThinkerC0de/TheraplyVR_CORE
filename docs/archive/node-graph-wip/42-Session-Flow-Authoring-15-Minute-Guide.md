@@ -1,0 +1,192 @@
+# Session Flow Authoring 15-Minute Guide
+
+Date: 2026-02-25
+Status: `LEGACY/WIP` (archived attempt)
+
+Goal: create and run a new scene setup without adding per-game logic in core runtime.
+
+## Prerequisites
+
+- Unity project opens (`unity-quest-template`).
+- Flutter controller builds (`flutter_controller`).
+- Catalog source can be updated from `contracts/game_catalog_seed.json`.
+
+## 15-Minute Path
+
+1. Minute 0-2: Prepare a base definition asset in Unity.
+   - Open `Theraply/Session Flow/Flow Graph Editor`.
+   - Load `DemoCubeFlowDefinition.asset` from `Assets/_YourGames/Samples/SessionFlow`.
+   - Use `Save Asset` to create a new asset in your game folder (if no asset is selected, editor asks for target path).
+
+2. Minute 2-6: Author flow nodes and transitions.
+   - Edit node list with `Action/Condition/Branch/Timer/Complete/Fail`.
+   - Configure `allowedActions`, `conditions`, `onEnter/onExit` effects, and transition targets.
+   - Set policies and channels in the same window.
+
+3. Minute 6-7: Validate the definition in editor.
+   - Run `Validate`.
+   - Resolve reason-coded errors from `SessionFlowDefinitionValidator`.
+   - Click `Export Contracts` to save asset and export contracts from Unity to `contracts/`.
+
+4. Minute 7-10: Author mobile controls schema.
+   - Start from `contracts/mobile_control_schema_demo_cube_clicker.json`.
+   - Update `gameId`, section labels, controls, bindings, and validation rules.
+   - Keep payload target as `game_config` for dynamic config path.
+
+5. Minute 10-12: Register schema in catalog.
+   - Add or update `mobileControlSchema` for your game entry in `contracts/game_catalog_seed.json`.
+   - Keep control IDs and binding paths aligned with runtime config fields.
+
+6. Minute 12-14: Run mobile setup and verify dynamic rendering.
+   - Open game setup on Flutter controller.
+   - Confirm controls are rendered from schema.
+   - Confirm fallback hardcoded UI appears only when schema is missing.
+
+7. Minute 14-15: Run runtime command path check.
+   - Start session (`START_GAME`) and verify config payload is schema-built.
+   - Trigger runtime update (`UPDATE_CONFIG`) from schema button control if present.
+   - Verify no core runtime changes were required.
+
+## Graph Editor Quick Controls
+
+- Canvas:
+  - `MMB drag` = pan.
+  - `Mouse wheel` = zoom in/out.
+  - `RMB` on empty canvas = context menu with categorized node creation.
+  - Top bar `Quick Template` = one-click scaffold for `Touch 4 Hits` or `Place Object In Zone`.
+- Node:
+  - `RMB` on node = `Select`, `Rename`, `Set As Entry (Start)`, `Delete`, `Disconnect Outgoing`, `Disconnect Incoming`, `Disconnect All`.
+  - `RMB` on node = `Effects -> Add On Enter -> Spawn Prefab Wave` adds ready-to-edit spawn preset.
+  - `RMB` on node = `Effects -> Add On Enter -> Instruction Text (Spawn)` adds world text instruction preset.
+  - `RMB` on node = `Effects -> Add On Enter -> Set Material Color` adds deterministic material color preset.
+  - `RMB` on node = `Effects -> Add On Enter -> Random Material Color` adds random color preset.
+  - `RMB` on node = `Effects -> Add On Enter -> Set Transform` adds transform preset (position/rotation/scale toggles).
+  - `Rename` opens rename section in right inspector; apply a stable id like `start_action`.
+- Start node:
+  - Set explicit start in left panel: `Task Graph -> Entry Node`.
+  - Renaming node id to `start` auto-assigns it as `Entry Node`.
+  - Recommended convention: rename first node to `start`.
+
+## Spawn Prefab Wave Parameters
+
+Use effect id: `spawn_prefab_wave`
+
+- `prefabKey`: prefab registry key from `SceneRuntimeController`.
+- `spawnPointKey`: optional transform key used as spawn center.
+- `bindingKeyPrefix`: prefix assigned to spawned instances (`prefix_1`, `prefix_2`, ...).
+- `count`: number of spawned prefabs.
+- `durationSec`: total spawn duration (`0` = instant batch).
+- `areaSizeX`, `areaSizeY`, `areaSizeZ`: spawn box size around `spawnPointKey`.
+- `randomYaw`: random Y rotation per spawned instance.
+- `randomColorOnSpawn`: if `true`, each spawned instance gets random material color immediately at spawn time.
+- `colorIncludeInactive`: include inactive child renderers when applying color on spawn.
+- `minHue`, `maxHue`: hue range in `[0..1]` used by on-spawn randomization.
+- `minSaturation`, `maxSaturation`: saturation range in `[0..1]` used by on-spawn randomization.
+- `minValue`, `maxValue`: value/brightness range in `[0..1]` used by on-spawn randomization.
+- `alpha`: output alpha in `[0..1]` used by on-spawn randomization.
+- `rotationOnSpawn`: if `true`, each spawned instance gets rotator component at spawn time.
+- `rotationRandom`: rotation mode for each spawned instance (`true` = random per object, default).
+- `rotationSpeed`: speed multiplier used in manual mode.
+- `rotationAngleX`, `rotationAngleY`, `rotationAngleZ`: base rotation angles (deg/s before multiplier) in manual mode.
+- `rotationMinSpeed`, `rotationMaxSpeed`: random speed multiplier range used when `rotationRandom=true`.
+- `rotationMinAngleX`, `rotationMaxAngleX`: random X-angle range (deg/s before multiplier).
+- `rotationMinAngleY`, `rotationMaxAngleY`: random Y-angle range (deg/s before multiplier).
+- `rotationMinAngleZ`, `rotationMaxAngleZ`: random Z-angle range (deg/s before multiplier).
+
+## Random Material Color Parameters
+
+Use effect id: `set_random_material_color`
+
+- `spawnBindingPrefix`: optional prefix for spawned instances from `SceneRuntimeController` (`targets` matches `targets_1`, `targets_2`, ...).
+- `bindingKey`: optional static binding key from `FlowBindingRegistry` (`binding` field can also be used).
+- `minHue`, `maxHue`: hue range in `[0..1]`.
+- `minSaturation`, `maxSaturation`: saturation range in `[0..1]`.
+- `minValue`, `maxValue`: value/brightness range in `[0..1]`.
+- `alpha`: output alpha in `[0..1]`.
+- `includeInactive`: include inactive child renderers.
+
+## Instruction Text Parameters
+
+Use effect id: `show_instruction_text`
+
+- `text` or `value`: text content.
+- `bindingKey`: stable runtime key (default `instruction_text`) used to update existing text object.
+- `spawnPointKey`: optional anchor key from `SceneRuntimeController`.
+- `offsetX`, `offsetY`, `offsetZ`: offset from anchor/world position.
+- `fontSize`, `characterSize`: text mesh sizing.
+- `r`, `g`, `b`, `a`: text color.
+- `faceCamera`: billboard toward camera.
+- `yawOnly`: billboard only on Y axis.
+
+## Material Color Parameters
+
+Use effect id: `set_material_color`
+
+- `binding` or `bindingKey`: object binding key.
+- `includeInactive`: include inactive child renderers.
+- `r`, `g`, `b`, `a`: exact color channels `[0..1]`.
+
+## Transform Parameters
+
+Use effect id: `set_transform`
+
+- `binding` or `bindingKey`: object binding key.
+- `space`: `world` or `local`.
+- `setPosition`: enable position update (`positionX`, `positionY`, `positionZ`).
+- `setRotation`: enable rotation update (`rotationX`, `rotationY`, `rotationZ` in euler degrees).
+- `setScale`: enable local scale update (`scaleX`, `scaleY`, `scaleZ`).
+
+## Touch And Place Tracking
+
+- Touch tracking:
+  - Use action `touch_target_with_hand`.
+  - Enable channel `hand_contact`.
+  - In constraints use `requiredChannelId=hand_contact`; optionally add `requiredTargetId=target_1`.
+- Place tracking:
+  - Use action `place_object_in_zone`.
+  - Enable channel `hand_grab`.
+  - In constraints use `requiredChannelId=hand_grab` and `requiredTargetId=<zoneId>` (e.g. `zone_a`).
+
+## Validation Commands
+
+Run after authoring updates:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/unity_export_authoring_contracts.ps1
+```
+
+`unity_export_authoring_contracts.ps1` also synchronizes `mobile_control_schema_*.json` into `contracts/game_catalog_seed.json`.
+It also synchronizes admin console seed asset: `admin_console_web/assets/contracts/game_catalog_seed.json`.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/authoring_contract_gate.ps1
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/unity_session_flow_validation_pack.ps1 -SkipCompile
+```
+
+```powershell
+cd flutter_controller
+flutter analyze
+flutter test test/widget_test.dart test/game_catalog_service_test.dart test/mobile_control_schema_test.dart
+```
+
+## Done Checklist
+
+- New `GameDefinitionAsset` is valid in Unity editor.
+- Mobile schema passes Unity and Flutter contract parsing.
+- Flutter setup renders controls dynamically from schema.
+- `START_GAME` and optional `UPDATE_CONFIG` payloads are schema-driven.
+- Core runtime stays generic (no per-game branch logic).
+
+## SpawnExample Local Test
+
+- Generate from menu: `Theraply/Examples/Generate Spawn Example`.
+- Scene: `Assets/_Examples/Scenes/SpawnExample.unity`.
+- Flow asset: `Assets/_YourGames/Samples/SessionFlow/SpawnExampleFlowDefinition.asset`.
+- Nodes in sample graph:
+  - `start` (`Action`, timeout to next node)
+  - `spawn_wave` (`Timer`, on-enter `spawn_prefab_wave` with `randomColorOnSpawn=true` and `rotationOnSpawn=true`)
+  - `complete` (`Complete`)
+  - `fail` (`Fail`)

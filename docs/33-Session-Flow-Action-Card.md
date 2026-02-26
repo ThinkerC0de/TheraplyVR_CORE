@@ -32,7 +32,10 @@ Implementation status:
 - validation and hardening suite are implemented (`Phase G = DONE`).
 - authoring and operations playbooks are implemented (`Phase H = DONE`).
 - core gap closure for runtime behavior is implemented (`Phase I = DONE`).
-- authoring automation stack (schema + editor + dynamic mobile renderer + demo) is implemented (`Phase J = DONE`).
+- authoring automation stack is partially delivered (`Phase J`):
+  - `SF-J-001` and `SF-J-003` remain `DONE`,
+  - node-graph authoring pieces (`SF-J-002`, `SF-J-004`, `SF-J-005`) are parked as `Legacy/WIP` for future completion.
+- active execution path is `Phase K`: `SceneGameController` + mobile control layout editor.
 
 ## Design Rules
 

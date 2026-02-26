@@ -71,11 +71,12 @@ namespace TheraplyCore.Editor.Authoring
         private bool _validationPass;
         private string _validationReason = string.Empty;
 
-        [MenuItem("Theraply/Session Flow/Flow Graph Editor")]
+        [MenuItem("Theraply/Legacy/Session Flow/Flow Graph Editor (WIP)")]
+        [MenuItem("Theraply/Session Flow/Flow Graph Editor (Legacy WIP)")]
         public static void OpenWindow()
         {
             var window = GetWindow<SessionFlowGraphEditorWindow>();
-            window.titleContent = new GUIContent("Flow Graph Editor");
+            window.titleContent = new GUIContent("Flow Graph Editor (WIP)");
             window.minSize = new Vector2(1450f, 780f);
             window.Show();
         }
@@ -91,6 +92,9 @@ namespace TheraplyCore.Editor.Authoring
             EnsureDefinition();
 
             DrawToolbar();
+            EditorGUILayout.HelpBox(
+                "Legacy/WIP authoring attempt. Kept for future completion. Active direction: SceneGameController + mobile control layout editor.",
+                MessageType.Warning);
 
             EditorGUILayout.BeginHorizontal();
             DrawLeftPanel();

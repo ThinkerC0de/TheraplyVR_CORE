@@ -14,6 +14,10 @@
 - [41-Session-Flow-End-to-End-Demo.md](41-Session-Flow-End-to-End-Demo.md)
 - [42-Session-Flow-Authoring-15-Minute-Guide.md](42-Session-Flow-Authoring-15-Minute-Guide.md)
 - [43-Guided-Session-Plan-Authoring.md](43-Guided-Session-Plan-Authoring.md)
+- [44-Scene-Controller-Mobile-Layout-MVP.md](44-Scene-Controller-Mobile-Layout-MVP.md)
+
+## Archive (WIP Attempts)
+- [archive/node-graph-wip/README.md](archive/node-graph-wip/README.md)
 
 ## Session Resilience Program
 - [03-Session-Resilience-Roadmap.md](03-Session-Resilience-Roadmap.md)
