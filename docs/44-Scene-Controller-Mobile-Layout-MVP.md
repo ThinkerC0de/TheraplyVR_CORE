@@ -52,6 +52,10 @@ Implementation status (2026-02-26):
   - `MobileControlLayoutConverter` maps layout contract to existing `MobileControlSchema`.
 - Flutter contract parser (ready for editor/runtime wiring in next step):
   - `flutter_controller/lib/models/mobile_control_layout_contract.dart`
+- Unity visual editor:
+  - `unity-quest-template/Assets/_TheraplyCore/Editor/Authoring/MobileControlLayoutEditorWindow.cs`
+  - menu: `Theraply > Scene Controller > Mobile Layout Editor`
+  - supports visual control arrangement in preview canvas (drag), contract validation, and export (`layout`/`schema` JSON).
 
 ## Acceptance criteria
 

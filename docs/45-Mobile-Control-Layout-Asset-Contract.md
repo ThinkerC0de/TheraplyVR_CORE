@@ -70,6 +70,9 @@ Define one Unity-authored card layout contract that captures control semantics a
 
 - Unity asset + validator + converter:
   - `unity-quest-template/Assets/_TheraplyCore/Games/Contracts/MobileControlLayoutContracts.cs`
+- Unity editor window:
+  - `unity-quest-template/Assets/_TheraplyCore/Editor/Authoring/MobileControlLayoutEditorWindow.cs`
+  - menu: `Theraply > Scene Controller > Mobile Layout Editor`
 - Unity schema contract extension (`visual` metadata):
   - `unity-quest-template/Assets/_TheraplyCore/Games/Contracts/MobileControlSchemaContracts.cs`
 - Flutter parser:
