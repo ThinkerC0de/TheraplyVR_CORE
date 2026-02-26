@@ -203,6 +203,9 @@ class _ControlScreenState extends State<ControlScreen>
 
   static const String _demoCubeGameId = 'demo_cube_clicker';
   static const String _pulseTargetGameId = 'pulse_target_tap';
+  static const Set<String> _localBundledAlwaysReadyGameIds = <String>{
+    'bilateral_markers',
+  };
   static const String _updateConfigCommandId = 'UPDATE_CONFIG';
   static const String _interruptedAutoCloseReasonCode =
       'INTERRUPTED_AUTO_CLOSED_TIMEOUT';
@@ -2665,6 +2668,10 @@ class _ControlScreenState extends State<ControlScreen>
       return true;
     }
 
+    if (_isLocalBundledAlwaysReadyGame(normalizedGameId)) {
+      return true;
+    }
+
     final access = EntitlementService.activeAccess;
     final nowUtc = atUtc ?? DateTime.now().toUtc();
     if (access == null) {
@@ -2955,13 +2962,18 @@ class _ControlScreenState extends State<ControlScreen>
       final isOwnedByEntitlement =
           _isGameOwnedByEntitlement(entry, atUtc: nowUtc);
       final existing = _contentStatesByGameId[entry.gameId];
+      final localBundledAlwaysReady =
+          _isLocalBundledAlwaysReadyGame(entry.gameId);
 
-      final defaultInstalledVersion =
-          entry.requiresExplicitLicense ? null : entry.targetContentVersion;
+      final defaultInstalledVersion = localBundledAlwaysReady
+          ? entry.targetContentVersion
+          : (entry.requiresExplicitLicense ? null : entry.targetContentVersion);
       final defaultRuntimeStatus = isOwnedByEntitlement
-          ? (entry.requiresExplicitLicense
-              ? ContentRuntimeStatus.notInstalled
-              : ContentRuntimeStatus.ready)
+          ? (localBundledAlwaysReady
+              ? ContentRuntimeStatus.ready
+              : (entry.requiresExplicitLicense
+                  ? ContentRuntimeStatus.notInstalled
+                  : ContentRuntimeStatus.ready))
           : ContentRuntimeStatus.notInstalled;
       if (existing == null) {
         _contentStatesByGameId[entry.gameId] = PurchasedContentState(
@@ -2981,13 +2993,25 @@ class _ControlScreenState extends State<ControlScreen>
       _contentStatesByGameId[entry.gameId] = existing.copyWith(
         owned: isOwnedByEntitlement,
         targetVersion: entry.targetContentVersion,
-        installedVersion:
-            isOwnedByEntitlement ? existing.installedVersion : null,
+        installedVersion: isOwnedByEntitlement
+            ? (localBundledAlwaysReady
+                ? entry.targetContentVersion
+                : existing.installedVersion)
+            : null,
         runtimeStatus: isOwnedByEntitlement
-            ? existing.runtimeStatus
+            ? (localBundledAlwaysReady
+                ? ContentRuntimeStatus.ready
+                : existing.runtimeStatus)
             : ContentRuntimeStatus.notInstalled,
-        updateRequired: isOwnedByEntitlement ? existing.updateRequired : false,
-        lastError: isOwnedByEntitlement ? existing.lastError : null,
+        updateRequired: isOwnedByEntitlement
+            ? (localBundledAlwaysReady ? false : existing.updateRequired)
+            : false,
+        updateOptional: isOwnedByEntitlement
+            ? (localBundledAlwaysReady ? false : existing.updateOptional)
+            : false,
+        lastError: isOwnedByEntitlement
+            ? (localBundledAlwaysReady ? null : existing.lastError)
+            : null,
         updatedAtUtc: nowUtc,
       );
     }
@@ -3014,18 +3038,22 @@ class _ControlScreenState extends State<ControlScreen>
         entry,
         atUtc: DateTime.now().toUtc(),
       );
+      final localBundledAlwaysReady = _isLocalBundledAlwaysReadyGame(gameId);
       return PurchasedContentState(
         gameId: gameId,
         owned: isOwnedByEntitlement,
-        installedVersion:
-            entry.requiresExplicitLicense ? null : entry.targetContentVersion,
+        installedVersion: localBundledAlwaysReady
+            ? entry.targetContentVersion
+            : (entry.requiresExplicitLicense ? null : entry.targetContentVersion),
         targetVersion: entry.targetContentVersion,
         updateRequired: false,
         updateOptional: false,
         runtimeStatus: isOwnedByEntitlement
-            ? (entry.requiresExplicitLicense
-                ? ContentRuntimeStatus.notInstalled
-                : ContentRuntimeStatus.ready)
+            ? (localBundledAlwaysReady
+                ? ContentRuntimeStatus.ready
+                : (entry.requiresExplicitLicense
+                    ? ContentRuntimeStatus.notInstalled
+                    : ContentRuntimeStatus.ready))
             : ContentRuntimeStatus.notInstalled,
         lastError: null,
         updatedAtUtc: DateTime.now().toUtc(),
@@ -3065,8 +3093,21 @@ class _ControlScreenState extends State<ControlScreen>
     return _questReportedContentGameIds.contains(gameId);
   }
 
+  bool _isLocalBundledAlwaysReadyGame(String gameId) {
+    final normalized = gameId.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return false;
+    }
+
+    return _localBundledAlwaysReadyGameIds.contains(normalized);
+  }
+
   bool _requiresQuestInstallState(String gameId) {
     if (!_contentDeliveryEnabled) {
+      return false;
+    }
+
+    if (_isLocalBundledAlwaysReadyGame(gameId)) {
       return false;
     }
 
@@ -3148,10 +3189,38 @@ class _ControlScreenState extends State<ControlScreen>
       return;
     }
 
+    var nextState = state;
+    if (_isLocalBundledAlwaysReadyGame(state.gameId)) {
+      var targetVersion = state.targetVersion.trim();
+      if (targetVersion.isEmpty) {
+        for (final entry in _effectiveGameCatalog) {
+          if (entry.gameId == state.gameId) {
+            targetVersion = entry.targetContentVersion.trim();
+            break;
+          }
+        }
+      }
+
+      if (targetVersion.isEmpty) {
+        targetVersion = '1.0.0';
+      }
+
+      nextState = state.copyWith(
+        owned: true,
+        targetVersion: targetVersion,
+        installedVersion: targetVersion,
+        runtimeStatus: ContentRuntimeStatus.ready,
+        updateRequired: false,
+        updateOptional: false,
+        lastError: null,
+        updatedAtUtc: DateTime.now().toUtc(),
+      );
+    }
+
     setState(() {
-      _contentStatesByGameId[state.gameId] = state;
-      _questReportedContentGameIds.add(state.gameId);
-      _contentActionsInFlight.remove(state.gameId);
+      _contentStatesByGameId[nextState.gameId] = nextState;
+      _questReportedContentGameIds.add(nextState.gameId);
+      _contentActionsInFlight.remove(nextState.gameId);
       if (_contentActionsInFlight.isEmpty) {
         _contentSyncInFlight = false;
       }
