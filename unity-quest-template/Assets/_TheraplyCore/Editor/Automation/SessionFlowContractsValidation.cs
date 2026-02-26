@@ -157,6 +157,69 @@ namespace TheraplyCore.Editor.Automation
                 sceneConfigFromCommand.ResumeFromSaved,
                 "Scene config should preserve resumeFromSaved from START_GAME command.");
 
+            var layoutContract = MobileControlLayoutContract.CreateDefault(sampleDefinition.gameId);
+            layoutContract.payload.gameConfigType = "scene_layout_config";
+            layoutContract.sections.Add(new MobileControlLayoutGroupDefinition
+            {
+                sectionId = "main",
+                label = "Main",
+                order = 0,
+            });
+            layoutContract.controls.Add(new MobileControlLayoutControlDefinition
+            {
+                controlId = "target_count",
+                type = MobileControlTypes.Slider,
+                label = "Target Count",
+                description = "How many targets to spawn.",
+                sectionId = "main",
+                bindingKey = "targetCount",
+                bindingTarget = MobileControlPayloadTargets.GameConfig,
+                valueType = MobileControlValueTypes.Integer,
+                minValue = "3",
+                maxValue = "32",
+                step = "1",
+                defaultValue = "8",
+                visual = new MobileControlVisualDefinition
+                {
+                    x = 0f,
+                    y = 0f,
+                    width = 1f,
+                    height = 0.25f,
+                    scale = 1f,
+                },
+            });
+            AssertTrue(
+                layoutContract.TryValidate(out var layoutReason),
+                "Mobile control layout contract should validate. reason=" + layoutReason);
+            AssertTrue(
+                MobileControlLayoutConverter.TryToMobileControlSchema(
+                    layoutContract,
+                    out var convertedSchema,
+                    out var convertReason),
+                "Mobile control layout contract should convert to schema. reason=" + convertReason);
+            AssertTrue(
+                convertedSchema != null &&
+                convertedSchema.controls != null &&
+                convertedSchema.controls.Count == 1 &&
+                convertedSchema.controls[0].visual != null &&
+                Math.Abs(convertedSchema.controls[0].visual.height - 0.25f) < 0.0001f,
+                "Converted schema should preserve layout visual metadata.");
+
+            var invalidLayoutContract = MobileControlLayoutContract.CreateDefault(sampleDefinition.gameId);
+            invalidLayoutContract.controls.Add(new MobileControlLayoutControlDefinition
+            {
+                controlId = "broken_control",
+                type = MobileControlTypes.Slider,
+                bindingKey = string.Empty,
+            });
+            AssertFalse(
+                invalidLayoutContract.TryValidate(out var invalidLayoutReason),
+                "Layout contract without binding key should fail validation.");
+            AssertEqual(
+                MobileControlLayoutReasonCodes.BindingKeyRequired,
+                invalidLayoutReason,
+                "Unexpected reason code for missing layout binding key.");
+
             var invalidMobileSchema = MobileControlSchema.CreateDefault(sampleDefinition.gameId);
             invalidMobileSchema.controls.Add(new MobileControlDefinition
             {
@@ -174,6 +237,44 @@ namespace TheraplyCore.Editor.Automation
                 MobileControlSchemaReasonCodes.ControlTypeUnsupported,
                 invalidMobileReason,
                 "Unexpected reason code for unsupported mobile control type.");
+
+            var invalidVisualSchema = MobileControlSchema.CreateDefault(sampleDefinition.gameId);
+            invalidVisualSchema.controls.Add(new MobileControlDefinition
+            {
+                controlId = "visual_invalid",
+                type = MobileControlTypes.Slider,
+                label = "Visual Invalid",
+                defaultValue = "1",
+                binding = new MobileControlBindingDefinition
+                {
+                    target = MobileControlPayloadTargets.GameConfig,
+                    path = "value",
+                    valueType = MobileControlValueTypes.Integer,
+                    emitOnStartGame = true,
+                    emitOnUpdateConfig = true,
+                },
+                validation = new MobileControlValidationDefinition
+                {
+                    minValue = "0",
+                    maxValue = "10",
+                    step = "1",
+                },
+                visual = new MobileControlVisualDefinition
+                {
+                    x = 0f,
+                    y = 0f,
+                    width = 1.4f,
+                    height = 0.5f,
+                    scale = 1f,
+                },
+            });
+            AssertFalse(
+                invalidVisualSchema.TryValidate(out var invalidVisualReason),
+                "Invalid visual metadata should fail schema validation.");
+            AssertEqual(
+                MobileControlSchemaReasonCodes.VisualInvalid,
+                invalidVisualReason,
+                "Unexpected reason code for invalid visual metadata.");
 
             var catalogEntry = new GameCatalogContractEntry
             {
@@ -264,7 +365,7 @@ namespace TheraplyCore.Editor.Automation
             AssertTrue(validResult.accepted, "Expected action acceptance for valid control mode and input range.");
             AssertEqual("ACTION_ACCEPTED", validResult.reasonCode, "Unexpected reason code for valid action.");
 
-            return "definitionValidation=OK; conditionContracts=OK; localizationPolicy=OK; mobileControlSchema=OK; sceneGameController=OK; catalogContract=OK; calendarPolicy=OK; actionValidator=OK";
+            return "definitionValidation=OK; conditionContracts=OK; localizationPolicy=OK; mobileControlSchema=OK; sceneGameController=OK; mobileControlLayout=OK; catalogContract=OK; calendarPolicy=OK; actionValidator=OK";
         }
 
         private static void PersistValidationResult(string status, string details)

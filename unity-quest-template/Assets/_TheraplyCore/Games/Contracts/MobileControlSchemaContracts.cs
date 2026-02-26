@@ -151,6 +151,7 @@ namespace TheraplyCore.Games.Contracts
         public const string SelectOptionValueRequired = "MOBILE_SCHEMA_SELECT_OPTION_VALUE_REQUIRED";
         public const string SectionReferenceMissing = "MOBILE_SCHEMA_SECTION_REFERENCE_MISSING";
         public const string RangeInvalid = "MOBILE_SCHEMA_RANGE_INVALID";
+        public const string VisualInvalid = "MOBILE_SCHEMA_VISUAL_INVALID";
         public const string ButtonCommandRequired = "MOBILE_SCHEMA_BUTTON_COMMAND_REQUIRED";
     }
 
@@ -247,6 +248,7 @@ namespace TheraplyCore.Games.Contracts
         public string buttonCommandId = "UPDATE_CONFIG";
         public MobileControlBindingDefinition binding = MobileControlBindingDefinition.CreateDefault();
         public MobileControlValidationDefinition validation = MobileControlValidationDefinition.CreateDefault();
+        public MobileControlVisualDefinition visual = MobileControlVisualDefinition.CreateDefault();
         public List<MobileControlOptionDefinition> options = new List<MobileControlOptionDefinition>();
     }
 
@@ -303,6 +305,40 @@ namespace TheraplyCore.Games.Contracts
     {
         public string value = string.Empty;
         public string label = string.Empty;
+    }
+
+    [Serializable]
+    public sealed class MobileControlVisualDefinition
+    {
+        public float x = -1f;
+        public float y = -1f;
+        public float width = 1f;
+        public float height = 1f;
+        public float scale = 1f;
+
+        public MobileControlVisualDefinition Clone()
+        {
+            return new MobileControlVisualDefinition
+            {
+                x = x,
+                y = y,
+                width = width,
+                height = height,
+                scale = scale,
+            };
+        }
+
+        public static MobileControlVisualDefinition CreateDefault()
+        {
+            return new MobileControlVisualDefinition
+            {
+                x = -1f,
+                y = -1f,
+                width = 1f,
+                height = 1f,
+                scale = 1f,
+            };
+        }
     }
 
     public static class MobileControlSchemaValidator
@@ -466,9 +502,49 @@ namespace TheraplyCore.Games.Contracts
                 {
                     return false;
                 }
+
+                if (!TryValidateVisual(control.visual, out reasonCode))
+                {
+                    return false;
+                }
             }
 
             reasonCode = string.Empty;
+            return true;
+        }
+
+        private static bool TryValidateVisual(MobileControlVisualDefinition visual, out string reasonCode)
+        {
+            reasonCode = string.Empty;
+            if (visual == null)
+            {
+                return true;
+            }
+
+            if (visual.scale <= 0f || visual.scale > 4f)
+            {
+                reasonCode = MobileControlSchemaReasonCodes.VisualInvalid;
+                return false;
+            }
+
+            if (visual.width <= 0f || visual.width > 1f)
+            {
+                reasonCode = MobileControlSchemaReasonCodes.VisualInvalid;
+                return false;
+            }
+
+            if (visual.height <= 0f || visual.height > 1f)
+            {
+                reasonCode = MobileControlSchemaReasonCodes.VisualInvalid;
+                return false;
+            }
+
+            if ((visual.x >= 0f && visual.x > 1f) || (visual.y >= 0f && visual.y > 1f))
+            {
+                reasonCode = MobileControlSchemaReasonCodes.VisualInvalid;
+                return false;
+            }
+
             return true;
         }
 

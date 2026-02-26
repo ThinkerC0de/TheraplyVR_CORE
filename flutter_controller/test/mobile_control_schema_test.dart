@@ -47,6 +47,13 @@ void main() {
               'maxValue': '40',
               'step': '1',
             },
+            'visual': <String, dynamic>{
+              'x': 0.0,
+              'y': 0.0,
+              'width': 1.0,
+              'height': 0.25,
+              'scale': 1.0,
+            },
             'options': const <Map<String, dynamic>>[],
           },
         ],
@@ -101,6 +108,23 @@ void main() {
 
       expect(result.isValid, isFalse);
       expect(result.reasonCode, MobileControlSchemaReasonCodes.rangeInvalid);
+    });
+
+    test('rejects invalid visual metadata', () {
+      final source = buildValidSchema();
+      final control = (source['controls'] as List<dynamic>).first;
+      control['visual'] = <String, dynamic>{
+        'x': 0.2,
+        'y': 0.2,
+        'width': 1.2,
+        'height': 0.3,
+        'scale': 1.0,
+      };
+
+      final result = MobileControlSchema.tryParse(source);
+
+      expect(result.isValid, isFalse);
+      expect(result.reasonCode, MobileControlSchemaReasonCodes.visualInvalid);
     });
   });
 }

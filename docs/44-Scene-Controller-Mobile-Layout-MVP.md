@@ -44,6 +44,15 @@ Implementation status (2026-02-26):
   - value constraints: `min/max/step/default`, options list
 - Export to contract consumed by Flutter dynamic renderer.
 
+Implementation status (2026-02-26):
+
+- Unity contract/asset:
+  - `unity-quest-template/Assets/_TheraplyCore/Games/Contracts/MobileControlLayoutContracts.cs`
+- Runtime compatibility bridge:
+  - `MobileControlLayoutConverter` maps layout contract to existing `MobileControlSchema`.
+- Flutter contract parser (ready for editor/runtime wiring in next step):
+  - `flutter_controller/lib/models/mobile_control_layout_contract.dart`
+
 ## Acceptance criteria
 
 1. New game can be created by scene script + layout asset without core runtime edits.

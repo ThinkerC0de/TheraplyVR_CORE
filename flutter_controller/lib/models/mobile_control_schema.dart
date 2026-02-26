@@ -104,6 +104,7 @@ class MobileControlSchemaReasonCodes {
   static const String sectionReferenceMissing =
       'MOBILE_SCHEMA_SECTION_REFERENCE_MISSING';
   static const String rangeInvalid = 'MOBILE_SCHEMA_RANGE_INVALID';
+  static const String visualInvalid = 'MOBILE_SCHEMA_VISUAL_INVALID';
   static const String buttonCommandRequired =
       'MOBILE_SCHEMA_BUTTON_COMMAND_REQUIRED';
 }
@@ -283,6 +284,10 @@ class MobileControlSchema {
       if (!control.validation.hasValidRange) {
         return MobileControlSchemaReasonCodes.rangeInvalid;
       }
+
+      if (!control.visual.isValid) {
+        return MobileControlSchemaReasonCodes.visualInvalid;
+      }
     }
 
     return null;
@@ -441,6 +446,7 @@ class MobileControlDefinition {
   final String buttonCommandId;
   final MobileControlBindingDefinition binding;
   final MobileControlValidationDefinition validation;
+  final MobileControlVisualDefinition visual;
   final List<MobileControlOptionDefinition> options;
 
   const MobileControlDefinition({
@@ -455,6 +461,7 @@ class MobileControlDefinition {
     required this.buttonCommandId,
     required this.binding,
     required this.validation,
+    required this.visual,
     required this.options,
   });
 
@@ -479,6 +486,9 @@ class MobileControlDefinition {
       validation: MobileControlValidationDefinition.fromMap(
         MobileControlSchema._asMap(data['validation']),
       ),
+      visual: MobileControlVisualDefinition.fromMap(
+        MobileControlSchema._asMap(data['visual']),
+      ),
       options: MobileControlSchema._asList(data['options'])
           .map((entry) => MobileControlOptionDefinition.fromMap(
               MobileControlSchema._asMap(entry)))
@@ -499,6 +509,7 @@ class MobileControlDefinition {
       'buttonCommandId': buttonCommandId,
       'binding': binding.toMap(),
       'validation': validation.toMap(),
+      'visual': visual.toMap(),
       'options': options.map((entry) => entry.toMap()).toList(growable: false),
     };
   }
@@ -541,6 +552,58 @@ class MobileControlBindingDefinition {
       'emitOnStartGame': emitOnStartGame,
       'emitOnUpdateConfig': emitOnUpdateConfig,
     };
+  }
+}
+
+class MobileControlVisualDefinition {
+  final double x;
+  final double y;
+  final double width;
+  final double height;
+  final double scale;
+
+  const MobileControlVisualDefinition({
+    required this.x,
+    required this.y,
+    required this.width,
+    required this.height,
+    required this.scale,
+  });
+
+  factory MobileControlVisualDefinition.fromMap(Map<String, dynamic> data) {
+    return MobileControlVisualDefinition(
+      x: _readDoubleDynamic(data['x'], -1.0),
+      y: _readDoubleDynamic(data['y'], -1.0),
+      width: _readDoubleDynamic(data['width'], 1.0),
+      height: _readDoubleDynamic(data['height'], 1.0),
+      scale: _readDoubleDynamic(data['scale'], 1.0),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return <String, dynamic>{
+      'x': x,
+      'y': y,
+      'width': width,
+      'height': height,
+      'scale': scale,
+    };
+  }
+
+  bool get isValid {
+    if (scale <= 0 || scale > 4) {
+      return false;
+    }
+    if (width <= 0 || width > 1) {
+      return false;
+    }
+    if (height <= 0 || height > 1) {
+      return false;
+    }
+    if ((x >= 0 && x > 1) || (y >= 0 && y > 1)) {
+      return false;
+    }
+    return true;
   }
 }
 
@@ -677,4 +740,17 @@ double? _readDouble(String value) {
     return null;
   }
   return double.tryParse(trimmed);
+}
+
+double _readDoubleDynamic(dynamic value, double fallback) {
+  if (value is double) {
+    return value;
+  }
+  if (value is num) {
+    return value.toDouble();
+  }
+  if (value is String) {
+    return double.tryParse(value.trim()) ?? fallback;
+  }
+  return fallback;
 }

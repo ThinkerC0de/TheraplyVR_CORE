@@ -60,6 +60,7 @@ Define one declarative schema used by content authoring and the mobile controlle
 | `buttonCommandId` | string | required for `button` | Command emitted by button control (typically `UPDATE_CONFIG`). |
 | `binding` | object | required for non-button | Maps UI value into payload config key. |
 | `validation` | object | no | Required/range/length/regex metadata. |
+| `visual` | object | no | Optional authored card placement metadata (`x`, `y`, `width`, `height`, `scale`). |
 | `options` | array | required for `select` | Select options. |
 
 ## Binding contract
@@ -84,6 +85,16 @@ Define one declarative schema used by content authoring and the mobile controlle
 | `maxLength` | int | no | Text maximum length. |
 | `regex` | string | no | Regex pattern for text inputs. |
 
+## Visual contract (optional)
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `x` | float | no | Normalized X in card grid; `< 0` means auto placement. |
+| `y` | float | no | Normalized Y in card grid; `< 0` means auto placement. |
+| `width` | float | no | Normalized width `(0, 1]`. |
+| `height` | float | no | Normalized height `(0, 1]`. |
+| `scale` | float | no | UI scale multiplier `(0, 4]`. |
+
 ## Canonical validation reason codes
 
 - `MOBILE_SCHEMA_NULL`
@@ -106,6 +117,7 @@ Define one declarative schema used by content authoring and the mobile controlle
 - `MOBILE_SCHEMA_SELECT_OPTION_VALUE_REQUIRED`
 - `MOBILE_SCHEMA_SECTION_REFERENCE_MISSING`
 - `MOBILE_SCHEMA_RANGE_INVALID`
+- `MOBILE_SCHEMA_VISUAL_INVALID`
 - `MOBILE_SCHEMA_BUTTON_COMMAND_REQUIRED`
 
 ## Reference implementation paths
