@@ -138,7 +138,7 @@ Execution details: `docs/39-Core-Gap-Closure-Execution-Plan.md`
 
 | ID | Task | Status | Acceptance Criteria | Depends On |
 | --- | --- | --- | --- | --- |
-| SF-K-001 | Define `SceneGameController` base contract | TODO | One script per game owns scene logic and object wiring, mapped to runtime start/pause/resume/stop/config hooks | SF-B-009 |
+| SF-K-001 | Define `SceneGameController` base contract | DONE | `SceneGameController` + `SceneGameConfig` provide one-script lifecycle hooks and contract bridge for `START_GAME`/`UPDATE_CONFIG` via `IStartCommandConfigProvider` without core per-game branching | SF-B-009 |
 | SF-K-002 | Add Unity mobile layout authoring asset | TODO | Control layout (type/position/scale/label/binding) can be authored and serialized in Unity | SF-J-001 |
 | SF-K-003 | Add Unity mobile layout editor window | TODO | Author can visually arrange controls for game card and export contract without coding | SF-K-002 |
 | SF-K-004 | Wire layout contract to Flutter dynamic renderer | TODO | Mobile controller renders and submits `START_GAME/UPDATE_CONFIG` from authored layout bindings | SF-J-003, SF-K-003 |

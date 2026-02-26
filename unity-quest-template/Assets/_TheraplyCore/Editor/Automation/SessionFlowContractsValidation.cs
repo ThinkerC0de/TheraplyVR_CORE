@@ -113,6 +113,50 @@ namespace TheraplyCore.Editor.Automation
                 sampleMobileSchema.TryValidate(out var mobileSchemaReason),
                 "Sample mobile control schema should validate. reason=" + mobileSchemaReason);
 
+            var sceneConfigDefault = SceneGameConfig.CreateDefault(
+                sampleDefinition.gameId,
+                "sample_scene_config",
+                3,
+                "{\"targetCount\":12}");
+            AssertEqual(
+                sampleDefinition.gameId,
+                sceneConfigDefault.GameId,
+                "Scene config default gameId should match definition.");
+            AssertEqual(
+                "sample_scene_config",
+                sceneConfigDefault.ConfigType,
+                "Scene config default type should match supplied type.");
+            AssertEqual(
+                "3",
+                sceneConfigDefault.ConfigVersion.ToString(),
+                "Scene config default version should match supplied version.");
+
+            var sceneConfigFromCommand = SceneGameConfig.CreateFromStartCommand(
+                new StartGameCommand
+                {
+                    gameId = sampleDefinition.gameId,
+                    gameConfigType = "scene_runtime_config",
+                    gameConfigVersion = 5,
+                    gameConfigJson = "{\"targetCount\":20}",
+                    resumeFromSaved = true,
+                },
+                sceneConfigDefault,
+                sampleDefinition.gameId,
+                "fallback_scene_config",
+                1,
+                "{}");
+            AssertEqual(
+                "scene_runtime_config",
+                sceneConfigFromCommand.ConfigType,
+                "Scene config type should be resolved from START_GAME command.");
+            AssertEqual(
+                "5",
+                sceneConfigFromCommand.ConfigVersion.ToString(),
+                "Scene config version should be resolved from START_GAME command.");
+            AssertTrue(
+                sceneConfigFromCommand.ResumeFromSaved,
+                "Scene config should preserve resumeFromSaved from START_GAME command.");
+
             var invalidMobileSchema = MobileControlSchema.CreateDefault(sampleDefinition.gameId);
             invalidMobileSchema.controls.Add(new MobileControlDefinition
             {
@@ -220,7 +264,7 @@ namespace TheraplyCore.Editor.Automation
             AssertTrue(validResult.accepted, "Expected action acceptance for valid control mode and input range.");
             AssertEqual("ACTION_ACCEPTED", validResult.reasonCode, "Unexpected reason code for valid action.");
 
-            return "definitionValidation=OK; conditionContracts=OK; localizationPolicy=OK; mobileControlSchema=OK; catalogContract=OK; calendarPolicy=OK; actionValidator=OK";
+            return "definitionValidation=OK; conditionContracts=OK; localizationPolicy=OK; mobileControlSchema=OK; sceneGameController=OK; catalogContract=OK; calendarPolicy=OK; actionValidator=OK";
         }
 
         private static void PersistValidationResult(string status, string details)

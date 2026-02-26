@@ -27,6 +27,16 @@ Ship playable demos quickly using a simple authoring path:
   - `StopGame()`
 - Controller must emit canonical gameplay events through `InteractionEventBridge`.
 
+Implementation status (2026-02-26):
+
+- Base runtime contract is implemented in
+  - `unity-quest-template/Assets/_TheraplyCore/Games/Runtime/SceneGameController.cs`
+- Core bridge behavior:
+  - `START_GAME` and `UPDATE_CONFIG` are resolved through `SceneGameConfig` using existing `IStartCommandConfigProvider` path in `GameRuntimeService`.
+  - no per-game branching is added to core runtime handlers.
+- Authoring expectation:
+  - each new game script inherits `SceneGameController` and overrides scene hooks (`OnStarted`, `OnPaused`, `OnResumed`, `OnStopped`, `ApplyConfig`).
+
 ## Mobile layout authoring contract
 
 - `MobileControlLayoutAsset` (Unity):
