@@ -44,11 +44,14 @@ namespace TheraplyExamples
         [SerializeField] private Transform _rightRayOrigin;
         [SerializeField] private Transform _leftRayOrigin;
         [SerializeField] private bool _autoDetectRayOrigins = true;
+        [SerializeField] private bool _preferLeftRayOrigin = true;
+        [SerializeField] private bool _switchRayOriginToPressedHand = true;
 
         [Header("Raycast")]
         [SerializeField] private float _maxDistance = 20f;
         [SerializeField] private LayerMask _hitMask = ~0;
         [SerializeField] private bool _includeTriggerColliders = true;
+        [SerializeField] private bool _ignorePointerRigColliders = true;
 
         [Header("Laser Pointer")]
         [SerializeField] private bool _showLaser = true;
@@ -61,6 +64,8 @@ namespace TheraplyExamples
         [SerializeField] private float _wandLength = 0.24f;
         [SerializeField] private float _wandRadius = 0.008f;
         [SerializeField] private float _wandTipRadius = 0.016f;
+        [SerializeField] private bool _hidePointerVisualsInBilateralMarkers = true;
+        [SerializeField] private string _bilateralMarkersGameId = "bilateral_markers";
         [SerializeField] private bool _colorFromSessionIndicator = true;
         [SerializeField] private Color _wandFallbackColor = new Color(0.2f, 0.9f, 1f, 0.95f);
 
@@ -131,6 +136,14 @@ namespace TheraplyExamples
         private void Update()
         {
             RefreshControllersIfNeeded();
+            if (IsPointerSuppressedForActiveGame())
+            {
+                HidePointerVisuals();
+                ReleaseToolGripIfNeeded();
+                _wasPressed = false;
+                return;
+            }
+
             UpdateLaserVisual();
             UpdateWandVisual();
 
@@ -390,12 +403,68 @@ namespace TheraplyExamples
         private bool TryRaycastFromPointer(out Ray ray, out RaycastHit hit)
         {
             ray = BuildPointerRay();
+            hit = default;
 
             var triggerInteraction = _includeTriggerColliders
                 ? QueryTriggerInteraction.Collide
                 : QueryTriggerInteraction.Ignore;
+            var hits = Physics.RaycastAll(ray, _maxDistance, _hitMask, triggerInteraction);
+            if (hits == null || hits.Length == 0)
+            {
+                return false;
+            }
 
-            return Physics.Raycast(ray, out hit, _maxDistance, _hitMask, triggerInteraction);
+            System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+            for (var i = 0; i < hits.Length; i++)
+            {
+                if (ShouldIgnoreRaycastHit(hits[i]))
+                {
+                    continue;
+                }
+
+                hit = hits[i];
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool ShouldIgnoreRaycastHit(RaycastHit hit)
+        {
+            if (!_ignorePointerRigColliders || hit.collider == null)
+            {
+                return false;
+            }
+
+            var colliderTransform = hit.collider.transform;
+            if (colliderTransform == null)
+            {
+                return false;
+            }
+
+            if (transform != null &&
+                (colliderTransform == transform || colliderTransform.IsChildOf(transform)))
+            {
+                return true;
+            }
+
+            if (_rightRayOrigin != null &&
+                (colliderTransform == _rightRayOrigin ||
+                 colliderTransform.IsChildOf(_rightRayOrigin) ||
+                 _rightRayOrigin.IsChildOf(colliderTransform)))
+            {
+                return true;
+            }
+
+            if (_leftRayOrigin != null &&
+                (colliderTransform == _leftRayOrigin ||
+                 colliderTransform.IsChildOf(_leftRayOrigin) ||
+                 _leftRayOrigin.IsChildOf(colliderTransform)))
+            {
+                return true;
+            }
+
+            return false;
         }
 
         private void EmitPointerTelemetry(PointerShotRecord shot)
@@ -850,17 +919,84 @@ namespace TheraplyExamples
 
         private Transform ResolveRayOriginTransform()
         {
-            if (_rightRayOrigin != null)
+            if (_switchRayOriginToPressedHand)
             {
-                return _rightRayOrigin;
+                if (string.Equals(_lastActivationHand, "LEFT", System.StringComparison.OrdinalIgnoreCase) &&
+                    _leftRayOrigin != null)
+                {
+                    return _leftRayOrigin;
+                }
+
+                if (string.Equals(_lastActivationHand, "RIGHT", System.StringComparison.OrdinalIgnoreCase) &&
+                    _rightRayOrigin != null)
+                {
+                    return _rightRayOrigin;
+                }
             }
 
-            if (_leftRayOrigin != null)
+            if (_preferLeftRayOrigin)
             {
-                return _leftRayOrigin;
+                if (_leftRayOrigin != null)
+                {
+                    return _leftRayOrigin;
+                }
+
+                if (_rightRayOrigin != null)
+                {
+                    return _rightRayOrigin;
+                }
+            }
+            else
+            {
+                if (_rightRayOrigin != null)
+                {
+                    return _rightRayOrigin;
+                }
+
+                if (_leftRayOrigin != null)
+                {
+                    return _leftRayOrigin;
+                }
             }
 
             return null;
+        }
+
+        private bool IsPointerSuppressedForActiveGame()
+        {
+            if (!_hidePointerVisualsInBilateralMarkers)
+            {
+                return false;
+            }
+
+            var activeGameId = ResolveActiveGameId();
+            if (string.IsNullOrWhiteSpace(activeGameId) || string.IsNullOrWhiteSpace(_bilateralMarkersGameId))
+            {
+                return false;
+            }
+
+            return string.Equals(
+                activeGameId.Trim(),
+                _bilateralMarkersGameId.Trim(),
+                System.StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void HidePointerVisuals()
+        {
+            if (_laserLine != null)
+            {
+                _laserLine.enabled = false;
+            }
+
+            if (_wandBody != null)
+            {
+                _wandBody.gameObject.SetActive(false);
+            }
+
+            if (_wandTip != null)
+            {
+                _wandTip.gameObject.SetActive(false);
+            }
         }
 
         private static Transform FindRayOriginCandidate(bool isRight)
