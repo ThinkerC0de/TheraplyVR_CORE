@@ -1,8 +1,8 @@
 {
     "schema": "THERAPLY_GAME_DEFINITION_EXPORT_MANIFEST",
     "schemaVersion": "2026-02-25",
-    "exportedAtUtc": "2026-02-25T15:12:17.6936566Z",
-    "entryCount": 3,
+    "exportedAtUtc": "2026-02-26T17:42:00.0000000Z",
+    "entryCount": 4,
     "entries": [
         {
             "gameId": "demo_cube_clicker",
@@ -21,6 +21,12 @@
             "definitionAssetPath": "Assets/_YourGames/Samples/SessionFlow/PuzzlePathsFlowDefinition.asset",
             "definitionJsonPath": "contracts/game_definitions/puzzle_paths.json",
             "mobileControlSchemaJsonPath": "contracts/mobile_control_schema_puzzle_paths.json"
+        },
+        {
+            "gameId": "bilateral_markers",
+            "definitionAssetPath": "Assets/_YourGames/BilateralMarkers/SessionFlow/BilateralMarkersFlowDefinition.asset",
+            "definitionJsonPath": "contracts/game_definitions/bilateral_markers.json",
+            "mobileControlSchemaJsonPath": "contracts/mobile_control_schema_bilateral_markers.json"
         }
     ]
 }

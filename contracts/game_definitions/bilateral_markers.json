@@ -1,0 +1,612 @@
+{
+    "gameId": "bilateral_markers",
+    "displayName": "Bilateral Markers Flow Definition",
+    "commentVersion": "2026-02-26 bilateral markers production baseline",
+    "controlMode": "remote_only",
+    "config": {
+        "difficulty": "custom",
+        "timeLimitSec": 90,
+        "targetCount": 1,
+        "extras": [
+            {
+                "key": "level",
+                "value": "0"
+            },
+            {
+                "key": "tempoBpm",
+                "value": "72"
+            }
+        ]
+    },
+    "bindings": {
+        "objects": [],
+        "zones": [],
+        "audio": [],
+        "timeline": []
+    },
+    "channels": [
+        {
+            "channelId": "pointer",
+            "enabled": false
+        },
+        {
+            "channelId": "tool_impact",
+            "enabled": false
+        },
+        {
+            "channelId": "hand_contact",
+            "enabled": false
+        },
+        {
+            "channelId": "hand_grab",
+            "enabled": false
+        },
+        {
+            "channelId": "gaze",
+            "enabled": false
+        },
+        {
+            "channelId": "breath",
+            "enabled": false
+        },
+        {
+            "channelId": "audio_source",
+            "enabled": false
+        },
+        {
+            "channelId": "dual_hand",
+            "enabled": true
+        },
+        {
+            "channelId": "pose_path",
+            "enabled": true
+        },
+        {
+            "channelId": "sequence",
+            "enabled": false
+        },
+        {
+            "channelId": "timeline",
+            "enabled": true
+        }
+    ],
+    "policies": {
+        "wrongActionPolicy": "warn",
+        "retryPolicy": {
+            "maxRetries": 3,
+            "cooldownSec": 0.5
+        },
+        "timeoutPolicy": {
+            "defaultTimeoutSec": 90.0
+        },
+        "branchPolicy": {
+            "precedence": "first_match"
+        },
+        "scoringPolicy": {
+            "lives": 1,
+            "pointsPerCorrect": 1,
+            "pointsPerWrong": -1
+        },
+        "difficultyPolicy": {
+            "adaptiveEnabled": true
+        },
+        "safetyPolicy": {
+            "emergencyStopEnabled": true,
+            "rejectDisabledChannels": true
+        },
+        "controlPolicy": {
+            "mode": "remote_only"
+        },
+        "telemetryPolicy": {
+            "requireDecisionForEveryAction": true
+        },
+        "localizationPolicy": {
+            "defaultLocale": "en-US",
+            "fallbackToLanguageCode": true,
+            "fallbackLocales": [
+                "pl"
+            ]
+        },
+        "calendarPolicy": {
+            "timezoneId": "UTC",
+            "fallbackToUtcWhenTimezoneInvalid": true,
+            "allowQaTimeOverride": true,
+            "defaultProfileDateKey": "profile_birthday",
+            "conflictPolicy": "highest_priority",
+            "rules": [],
+            "events": []
+        }
+    },
+    "taskGraph": {
+        "entryNodeId": "n_sync",
+        "nodes": [
+            {
+                "nodeId": "n_sync",
+                "nodeType": "Action",
+                "allowedActions": [
+                    {
+                        "actionId": "mark_left_and_right_targets",
+                        "targetGroup": "bilateral_sync",
+                        "constraints": [
+                            {
+                                "key": "requiredChannelId",
+                                "value": "dual_hand"
+                            }
+                        ]
+                    }
+                ],
+                "conditions": [],
+                "timeoutSec": 12.0,
+                "onEnterEffects": [
+                    {
+                        "effectId": "emit_hint",
+                        "binding": "bilateral_hint",
+                        "parameters": [
+                            {
+                                "key": "message",
+                                "value": "Start moving both hands on their paths."
+                            }
+                        ]
+                    }
+                ],
+                "onExitEffects": [],
+                "onAcceptedEffects": [],
+                "onRejectedEffects": [],
+                "onTimeoutEffects": [],
+                "nextOnSuccess": "n_path",
+                "nextOnFail": "n_fail",
+                "nextOnTimeout": "n_fail"
+            },
+            {
+                "nodeId": "n_path",
+                "nodeType": "Action",
+                "allowedActions": [
+                    {
+                        "actionId": "follow_path",
+                        "targetGroup": "bilateral_paths",
+                        "constraints": [
+                            {
+                                "key": "requiredChannelId",
+                                "value": "pose_path"
+                            }
+                        ]
+                    }
+                ],
+                "conditions": [],
+                "timeoutSec": 90.0,
+                "onEnterEffects": [],
+                "onExitEffects": [],
+                "onAcceptedEffects": [],
+                "onRejectedEffects": [],
+                "onTimeoutEffects": [],
+                "nextOnSuccess": "n_complete",
+                "nextOnFail": "n_fail",
+                "nextOnTimeout": "n_fail"
+            },
+            {
+                "nodeId": "n_complete",
+                "nodeType": "Complete",
+                "allowedActions": [],
+                "conditions": [],
+                "timeoutSec": 0.0,
+                "onEnterEffects": [],
+                "onExitEffects": [],
+                "onAcceptedEffects": [],
+                "onRejectedEffects": [],
+                "onTimeoutEffects": [],
+                "nextOnSuccess": "",
+                "nextOnFail": "",
+                "nextOnTimeout": ""
+            },
+            {
+                "nodeId": "n_fail",
+                "nodeType": "Fail",
+                "allowedActions": [],
+                "conditions": [],
+                "timeoutSec": 0.0,
+                "onEnterEffects": [],
+                "onExitEffects": [],
+                "onAcceptedEffects": [],
+                "onRejectedEffects": [],
+                "onTimeoutEffects": [],
+                "nextOnSuccess": "",
+                "nextOnFail": "",
+                "nextOnTimeout": ""
+            }
+        ]
+    },
+    "mobileControlSchema": {
+        "schema": "THERAPLY_MOBILE_CONTROL_SCHEMA",
+        "schemaVersion": "2026-02-25",
+        "gameId": "bilateral_markers",
+        "title": "Bilateral Markers Controls",
+        "description": "START_GAME setup for bilateral hand-path training on Quest controllers.",
+        "layout": {
+            "mode": "stack",
+            "columns": 1
+        },
+        "payload": {
+            "target": "game_config",
+            "gameConfigType": "bilateral_markers_config",
+            "gameConfigVersion": 1,
+            "includeVersionInGameConfig": true
+        },
+        "sections": [
+            {
+                "sectionId": "core",
+                "label": "Core",
+                "order": 10
+            },
+            {
+                "sectionId": "advanced",
+                "label": "Advanced",
+                "order": 20
+            }
+        ],
+        "controls": [
+            {
+                "controlId": "level",
+                "type": "select",
+                "label": "Difficulty Level",
+                "hint": "Therapeutic mode from 0 to 4.",
+                "placeholder": "",
+                "sectionId": "core",
+                "order": 10,
+                "defaultValue": "0",
+                "binding": {
+                    "target": "game_config",
+                    "path": "level",
+                    "valueType": "int",
+                    "emitOnStartGame": true,
+                    "emitOnUpdateConfig": false
+                },
+                "validation": {
+                    "required": true,
+                    "minValue": "",
+                    "maxValue": "",
+                    "step": "",
+                    "minLength": 0,
+                    "maxLength": 0,
+                    "regex": ""
+                },
+                "options": [
+                    {
+                        "value": "0",
+                        "label": "0 Symmetry"
+                    },
+                    {
+                        "value": "1",
+                        "label": "1 Mirror"
+                    },
+                    {
+                        "value": "2",
+                        "label": "2 Rotational"
+                    },
+                    {
+                        "value": "3",
+                        "label": "3 Asymmetry"
+                    },
+                    {
+                        "value": "4",
+                        "label": "4 Alternating"
+                    }
+                ]
+            },
+            {
+                "controlId": "pattern",
+                "type": "select",
+                "label": "Primary Pattern",
+                "hint": "Default pattern for levels 0-2 and 4.",
+                "placeholder": "",
+                "sectionId": "core",
+                "order": 20,
+                "defaultValue": "wave",
+                "binding": {
+                    "target": "game_config",
+                    "path": "pattern",
+                    "valueType": "string",
+                    "emitOnStartGame": true,
+                    "emitOnUpdateConfig": false
+                },
+                "validation": {
+                    "required": true,
+                    "minValue": "",
+                    "maxValue": "",
+                    "step": "",
+                    "minLength": 0,
+                    "maxLength": 0,
+                    "regex": ""
+                },
+                "options": [
+                    {
+                        "value": "wave",
+                        "label": "Wave"
+                    },
+                    {
+                        "value": "spiral",
+                        "label": "Spiral"
+                    },
+                    {
+                        "value": "figure_eight",
+                        "label": "Figure Eight"
+                    },
+                    {
+                        "value": "zigzag",
+                        "label": "Zigzag"
+                    },
+                    {
+                        "value": "arc",
+                        "label": "Arc"
+                    }
+                ]
+            },
+            {
+                "controlId": "tempo_bpm",
+                "type": "slider",
+                "label": "Tempo (BPM)",
+                "hint": "Pacing cue tempo.",
+                "placeholder": "",
+                "sectionId": "core",
+                "order": 30,
+                "defaultValue": "72",
+                "binding": {
+                    "target": "game_config",
+                    "path": "tempoBpm",
+                    "valueType": "int",
+                    "emitOnStartGame": true,
+                    "emitOnUpdateConfig": false
+                },
+                "validation": {
+                    "required": true,
+                    "minValue": "40",
+                    "maxValue": "120",
+                    "step": "1",
+                    "minLength": 0,
+                    "maxLength": 0,
+                    "regex": ""
+                },
+                "options": []
+            },
+            {
+                "controlId": "duration_sec",
+                "type": "slider",
+                "label": "Round Duration (s)",
+                "hint": "Single round duration for one START_GAME.",
+                "placeholder": "",
+                "sectionId": "core",
+                "order": 40,
+                "defaultValue": "45",
+                "binding": {
+                    "target": "game_config",
+                    "path": "durationSec",
+                    "valueType": "int",
+                    "emitOnStartGame": true,
+                    "emitOnUpdateConfig": false
+                },
+                "validation": {
+                    "required": true,
+                    "minValue": "15",
+                    "maxValue": "90",
+                    "step": "1",
+                    "minLength": 0,
+                    "maxLength": 0,
+                    "regex": ""
+                },
+                "options": []
+            },
+            {
+                "controlId": "dominant_hand",
+                "type": "select",
+                "label": "Dominant Hand",
+                "hint": "Used for level 4 alternation phase order.",
+                "placeholder": "",
+                "sectionId": "advanced",
+                "order": 50,
+                "defaultValue": "right",
+                "binding": {
+                    "target": "game_config",
+                    "path": "dominantHand",
+                    "valueType": "string",
+                    "emitOnStartGame": true,
+                    "emitOnUpdateConfig": false
+                },
+                "validation": {
+                    "required": true,
+                    "minValue": "",
+                    "maxValue": "",
+                    "step": "",
+                    "minLength": 0,
+                    "maxLength": 0,
+                    "regex": ""
+                },
+                "options": [
+                    {
+                        "value": "right",
+                        "label": "Right"
+                    },
+                    {
+                        "value": "left",
+                        "label": "Left"
+                    }
+                ]
+            },
+            {
+                "controlId": "left_pattern",
+                "type": "select",
+                "label": "Asymmetry Left Pattern",
+                "hint": "Applied on level 3 for left hand.",
+                "placeholder": "",
+                "sectionId": "advanced",
+                "order": 60,
+                "defaultValue": "spiral",
+                "binding": {
+                    "target": "game_config",
+                    "path": "leftPattern",
+                    "valueType": "string",
+                    "emitOnStartGame": true,
+                    "emitOnUpdateConfig": false
+                },
+                "validation": {
+                    "required": true,
+                    "minValue": "",
+                    "maxValue": "",
+                    "step": "",
+                    "minLength": 0,
+                    "maxLength": 0,
+                    "regex": ""
+                },
+                "options": [
+                    {
+                        "value": "wave",
+                        "label": "Wave"
+                    },
+                    {
+                        "value": "spiral",
+                        "label": "Spiral"
+                    },
+                    {
+                        "value": "figure_eight",
+                        "label": "Figure Eight"
+                    },
+                    {
+                        "value": "zigzag",
+                        "label": "Zigzag"
+                    },
+                    {
+                        "value": "arc",
+                        "label": "Arc"
+                    }
+                ]
+            },
+            {
+                "controlId": "right_pattern",
+                "type": "select",
+                "label": "Asymmetry Right Pattern",
+                "hint": "Applied on level 3 for right hand.",
+                "placeholder": "",
+                "sectionId": "advanced",
+                "order": 70,
+                "defaultValue": "wave",
+                "binding": {
+                    "target": "game_config",
+                    "path": "rightPattern",
+                    "valueType": "string",
+                    "emitOnStartGame": true,
+                    "emitOnUpdateConfig": false
+                },
+                "validation": {
+                    "required": true,
+                    "minValue": "",
+                    "maxValue": "",
+                    "step": "",
+                    "minLength": 0,
+                    "maxLength": 0,
+                    "regex": ""
+                },
+                "options": [
+                    {
+                        "value": "wave",
+                        "label": "Wave"
+                    },
+                    {
+                        "value": "spiral",
+                        "label": "Spiral"
+                    },
+                    {
+                        "value": "figure_eight",
+                        "label": "Figure Eight"
+                    },
+                    {
+                        "value": "zigzag",
+                        "label": "Zigzag"
+                    },
+                    {
+                        "value": "arc",
+                        "label": "Arc"
+                    }
+                ]
+            },
+            {
+                "controlId": "tunnel_width_m",
+                "type": "slider",
+                "label": "Tunnel Width (m)",
+                "hint": "Allowed path deviation tolerance.",
+                "placeholder": "",
+                "sectionId": "advanced",
+                "order": 80,
+                "defaultValue": "0.11",
+                "binding": {
+                    "target": "game_config",
+                    "path": "tunnelWidthM",
+                    "valueType": "double",
+                    "emitOnStartGame": true,
+                    "emitOnUpdateConfig": false
+                },
+                "validation": {
+                    "required": true,
+                    "minValue": "0.05",
+                    "maxValue": "0.22",
+                    "step": "0.01",
+                    "minLength": 0,
+                    "maxLength": 0,
+                    "regex": ""
+                },
+                "options": []
+            },
+            {
+                "controlId": "alternation_offset_sec",
+                "type": "slider",
+                "label": "Alternation Offset (s)",
+                "hint": "Level 4 planned hand start offset.",
+                "placeholder": "",
+                "sectionId": "advanced",
+                "order": 90,
+                "defaultValue": "0.7",
+                "binding": {
+                    "target": "game_config",
+                    "path": "alternationOffsetSec",
+                    "valueType": "double",
+                    "emitOnStartGame": true,
+                    "emitOnUpdateConfig": false
+                },
+                "validation": {
+                    "required": true,
+                    "minValue": "0.15",
+                    "maxValue": "2.0",
+                    "step": "0.05",
+                    "minLength": 0,
+                    "maxLength": 0,
+                    "regex": ""
+                },
+                "options": []
+            },
+            {
+                "controlId": "adaptive_assist_enabled",
+                "type": "toggle",
+                "label": "Adaptive Assist (TEMP)",
+                "hint": "Simple temporary tunnel widening when invalid ratio is high.",
+                "placeholder": "",
+                "sectionId": "advanced",
+                "order": 100,
+                "defaultValue": "true",
+                "binding": {
+                    "target": "game_config",
+                    "path": "adaptiveAssistEnabled",
+                    "valueType": "bool",
+                    "emitOnStartGame": true,
+                    "emitOnUpdateConfig": false
+                },
+                "validation": {
+                    "required": false,
+                    "minValue": "",
+                    "maxValue": "",
+                    "step": "",
+                    "minLength": 0,
+                    "maxLength": 0,
+                    "regex": ""
+                },
+                "options": []
+            }
+        ]
+    }
+}
