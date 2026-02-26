@@ -1,11 +1,16 @@
 # Mobile Control Layout Asset Contract
 
 Date: 2026-02-26  
-Status: active authoring contract (Unity asset + Unity validator + Flutter parser).
+Status: active authoring contract (Unity asset + Unity validator + Flutter parser + Flutter catalog bridge).
 
 ## Purpose
 
 Define one Unity-authored card layout contract that captures control semantics and placement metadata, then converts safely to runtime `THERAPLY_MOBILE_CONTROL_SCHEMA`.
+
+Flutter catalog resolution order:
+
+1. `mobileControlLayout` (preferred, validated, converted to schema)
+2. `mobileControlSchema` (legacy fallback)
 
 ## Contract identity
 
@@ -77,3 +82,6 @@ Define one Unity-authored card layout contract that captures control semantics a
   - `unity-quest-template/Assets/_TheraplyCore/Games/Contracts/MobileControlSchemaContracts.cs`
 - Flutter parser:
   - `flutter_controller/lib/models/mobile_control_layout_contract.dart`
+- Flutter catalog/runtime wiring:
+  - `flutter_controller/lib/models/game_catalog_entry.dart`
+  - `flutter_controller/lib/screens/control_screen.dart`

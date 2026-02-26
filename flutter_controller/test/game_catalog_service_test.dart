@@ -1,4 +1,5 @@
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
+import 'package:flutter_controller/models/mobile_control_layout_contract.dart';
 import 'package:flutter_controller/models/mobile_control_schema.dart';
 import 'package:flutter_controller/services/game_catalog_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,6 +16,49 @@ void main() {
     tearDown(() {
       GameCatalogService.clearTestingOverrides();
     });
+
+    Map<String, dynamic> buildValidLayoutContract() {
+      return <String, dynamic>{
+        'schema': MobileControlLayoutContractIds.mobileControlLayout,
+        'schemaVersion': '2026-02-26',
+        'gameId': 'demo_cube_clicker',
+        'title': 'Layout',
+        'layout': <String, dynamic>{
+          'mode': 'stack',
+          'columns': 1,
+        },
+        'payload': <String, dynamic>{
+          'target': 'game_config',
+          'gameConfigType': 'demo_cube_config_v1',
+          'gameConfigVersion': 1,
+          'includeVersionInGameConfig': true,
+        },
+        'controls': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'controlId': 'cube_count',
+            'type': 'slider',
+            'label': 'Cube Count',
+            'defaultValue': '12',
+            'bindingKey': 'cubeCount',
+            'bindingTarget': 'game_config',
+            'valueType': 'int',
+            'emitOnStartGame': true,
+            'emitOnUpdateConfig': true,
+            'minValue': '4',
+            'maxValue': '40',
+            'step': '1',
+            'visual': <String, dynamic>{
+              'x': 0.0,
+              'y': 0.0,
+              'width': 1.0,
+              'height': 0.2,
+              'scale': 1.0,
+            },
+            'options': const <Map<String, dynamic>>[],
+          },
+        ],
+      };
+    }
 
     test('watchActiveCatalog returns active entries sorted by sortOrder',
         () async {
@@ -95,6 +139,98 @@ void main() {
 
       expect(entries.single.mobileControlSchema, isNotNull);
       expect(entries.single.mobileControlSchemaReasonCode, isEmpty);
+    });
+
+    test('parses optional mobile control layout contract from catalog entry',
+        () async {
+      await firestore.collection('game_catalog').doc('demo').set(
+        <String, dynamic>{
+          'gameId': 'demo_cube_clicker',
+          'title': 'Demo',
+          'active': true,
+          'mobileControlLayout': buildValidLayoutContract(),
+        },
+      );
+
+      final stream = GameCatalogService.watchActiveCatalog();
+      final entries = await stream.firstWhere((value) => value.isNotEmpty);
+
+      expect(entries.single.mobileControlSchema, isNotNull);
+      expect(
+        entries.single.mobileControlSchema!.controls.single.binding.path,
+        'cubeCount',
+      );
+      expect(entries.single.mobileControlSchemaReasonCode, isEmpty);
+    });
+
+    test(
+        'falls back to legacy mobile control schema when layout contract is invalid',
+        () async {
+      final invalidLayout = buildValidLayoutContract();
+      (invalidLayout['controls'] as List<dynamic>).first['bindingKey'] = '';
+
+      await firestore.collection('game_catalog').doc('demo').set(
+        <String, dynamic>{
+          'gameId': 'demo_cube_clicker',
+          'title': 'Demo',
+          'active': true,
+          'mobileControlLayout': invalidLayout,
+          'mobileControlSchema': <String, dynamic>{
+            'schema': MobileControlSchemaIds.mobileControlSchema,
+            'schemaVersion': '2026-02-25',
+            'gameId': 'demo_cube_clicker',
+            'controls': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'controlId': 'cube_speed',
+                'type': 'slider',
+                'binding': <String, dynamic>{
+                  'path': 'cubeSpeed',
+                  'valueType': 'double',
+                },
+                'validation': <String, dynamic>{
+                  'minValue': '0.2',
+                  'maxValue': '2.2',
+                  'step': '0.1',
+                },
+              },
+            ],
+          },
+        },
+      );
+
+      final stream = GameCatalogService.watchActiveCatalog();
+      final entries = await stream.firstWhere((value) => value.isNotEmpty);
+
+      expect(entries.single.mobileControlSchema, isNotNull);
+      expect(
+        entries.single.mobileControlSchema!.controls.single.binding.path,
+        'cubeSpeed',
+      );
+      expect(entries.single.mobileControlSchemaReasonCode, isEmpty);
+    });
+
+    test('reports layout reason code when both layout and schema are invalid',
+        () async {
+      final invalidLayout = buildValidLayoutContract();
+      (invalidLayout['controls'] as List<dynamic>).first['bindingKey'] = '';
+
+      await firestore.collection('game_catalog').doc('demo').set(
+        <String, dynamic>{
+          'gameId': 'demo_cube_clicker',
+          'title': 'Demo',
+          'active': true,
+          'mobileControlLayout': invalidLayout,
+        },
+      );
+
+      final stream = GameCatalogService.watchActiveCatalog();
+      final entries = await stream.firstWhere((value) => value.isNotEmpty);
+
+      expect(entries.single.mobileControlSchema, isNull);
+      expect(
+        entries.single.mobileControlSchemaReasonCode,
+        MobileControlLayoutReasonCodes.bindingKeyRequired,
+      );
     });
 
     test(

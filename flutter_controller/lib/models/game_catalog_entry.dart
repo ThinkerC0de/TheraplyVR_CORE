@@ -1,3 +1,4 @@
+import 'package:flutter_controller/models/mobile_control_layout_contract.dart';
 import 'package:flutter_controller/models/mobile_control_schema.dart';
 
 class GameCatalogDeliveryModes {
@@ -81,18 +82,33 @@ class GameCatalogEntry {
       data['deliveryMode'] as String?,
     );
     final parameterSchema = _parseSchemaMap(data['parameterSchema']);
-    final rawSchema = data['mobileControlSchema'];
     MobileControlSchema? parsedSchema;
     var parsedSchemaReasonCode = '';
-    if (rawSchema != null) {
-      final parseResult = MobileControlSchema.tryParse(
+
+    final rawLayoutContract = _parseSchemaMap(data['mobileControlLayout']);
+    if (rawLayoutContract != null) {
+      final layoutResult = MobileControlLayoutContract.tryParse(
+        rawLayoutContract,
+        expectedGameId: rawGameId,
+      );
+      if (layoutResult.isValid) {
+        parsedSchema = layoutResult.contract!.toMobileControlSchema();
+      } else {
+        parsedSchemaReasonCode = layoutResult.reasonCode;
+      }
+    }
+
+    final rawSchema = _parseSchemaMap(data['mobileControlSchema']);
+    if (parsedSchema == null && rawSchema != null) {
+      final schemaResult = MobileControlSchema.tryParse(
         rawSchema,
         expectedGameId: rawGameId,
       );
-      if (parseResult.isValid) {
-        parsedSchema = parseResult.schema;
-      } else {
-        parsedSchemaReasonCode = parseResult.reasonCode;
+      if (schemaResult.isValid) {
+        parsedSchema = schemaResult.schema;
+        parsedSchemaReasonCode = '';
+      } else if (parsedSchemaReasonCode.isEmpty) {
+        parsedSchemaReasonCode = schemaResult.reasonCode;
       }
     }
 

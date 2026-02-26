@@ -50,8 +50,10 @@ Implementation status (2026-02-26):
   - `unity-quest-template/Assets/_TheraplyCore/Games/Contracts/MobileControlLayoutContracts.cs`
 - Runtime compatibility bridge:
   - `MobileControlLayoutConverter` maps layout contract to existing `MobileControlSchema`.
-- Flutter contract parser (ready for editor/runtime wiring in next step):
+- Flutter contract parser + catalog wiring:
   - `flutter_controller/lib/models/mobile_control_layout_contract.dart`
+  - `flutter_controller/lib/models/game_catalog_entry.dart` resolves `mobileControlLayout` first and falls back to legacy `mobileControlSchema`.
+  - `flutter_controller/lib/screens/control_screen.dart` consumes resolved schema for dynamic render and `START_GAME` / `UPDATE_CONFIG` payloads.
 - Unity visual editor:
   - `unity-quest-template/Assets/_TheraplyCore/Editor/Authoring/MobileControlLayoutEditorWindow.cs`
   - menu: `Theraply > Scene Controller > Mobile Layout Editor`

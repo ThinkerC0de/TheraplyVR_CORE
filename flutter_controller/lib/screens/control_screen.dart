@@ -6988,7 +6988,7 @@ class _ControlScreenState extends State<ControlScreen>
                   icon: Icons.rule_folder_outlined,
                   color: Colors.orange.shade800,
                   text:
-                      'Invalid mobile schema (${entry.mobileControlSchemaReasonCode}). Falling back to static setup.',
+                      'Invalid mobile controls contract (${entry.mobileControlSchemaReasonCode}). Falling back to static setup.',
                 ),
                 const SizedBox(height: 8),
               ],
