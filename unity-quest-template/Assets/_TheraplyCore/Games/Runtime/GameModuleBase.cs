@@ -106,12 +106,26 @@ namespace TheraplyCore.Games.Runtime
             }
 
             State = reason == GameContracts.GameStopReason.Completed ? GameContracts.GameState.Completed : GameContracts.GameState.Failed;
+            var durationSec = GetDurationSeconds();
+            var finalState = State.ToString();
+            var reasonName = reason.ToString();
+            var reasonCode = ResolveTerminalReasonCode(reason);
 
             TrackEvent("game_stopped", new Dictionary<string, object>
             {
-                { "reason", reason.ToString() },
-                { "durationSec", GetDurationSeconds() },
-                { "finalState", State.ToString() },
+                { "reason", reasonName },
+                { "reasonCode", reasonCode },
+                { "durationSec", durationSec },
+                { "finalState", finalState },
+            });
+
+            TrackEvent("session_terminal", new Dictionary<string, object>
+            {
+                { "reason", reasonName },
+                { "reasonCode", reasonCode },
+                { "durationSec", durationSec },
+                { "finalState", finalState },
+                { "sessionState", finalState },
             });
         }
 
@@ -203,6 +217,26 @@ namespace TheraplyCore.Games.Runtime
             _startedAtRealtime = -1f;
             _pauseStartedAtRealtime = -1f;
             _accumulatedPauseSeconds = 0f;
+        }
+
+        private static string ResolveTerminalReasonCode(GameContracts.GameStopReason reason)
+        {
+            switch (reason)
+            {
+                case GameContracts.GameStopReason.Completed:
+                    return "GAME_COMPLETED";
+                case GameContracts.GameStopReason.TherapistStop:
+                    return "GAME_STOPPED_BY_THERAPIST";
+                case GameContracts.GameStopReason.Timeout:
+                    return "GAME_TIMEOUT";
+                case GameContracts.GameStopReason.UserExit:
+                    return "GAME_STOPPED_BY_USER";
+                case GameContracts.GameStopReason.NetworkLoss:
+                    return "GAME_NETWORK_LOSS";
+                case GameContracts.GameStopReason.Error:
+                default:
+                    return "GAME_RUNTIME_ERROR";
+            }
         }
     }
 

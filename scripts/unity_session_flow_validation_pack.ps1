@@ -159,6 +159,11 @@ $validationSteps = @(
         log = "unity_canonical_flow_telemetry_quality_gate_validation.log"
     },
     @{
+        name = "SceneControllerTelemetryCompatibilityValidation"
+        method = "TheraplyCore.Editor.Automation.SceneControllerTelemetryCompatibilityValidation.RunSceneControllerTelemetryCompatibilityValidation"
+        log = "unity_scene_controller_telemetry_compatibility_validation.log"
+    },
+    @{
         name = "SessionFlowOutboxResilienceValidation"
         method = "TheraplyCore.Editor.Automation.SessionFlowOutboxResilienceValidation.RunSessionFlowOutboxResilienceValidation"
         log = "unity_session_flow_outbox_resilience_validation.log"
@@ -197,8 +202,9 @@ $summaryLines = @(
     "6. TaskGraphRuntimeIntegrationValidation",
     "7. AdapterIntegrationValidation",
     "8. CanonicalFlowTelemetryQualityGateValidation",
-    "9. SessionFlowOutboxResilienceValidation",
-    "10. SessionFlowSmokeTemplateValidation",
+    "9. SceneControllerTelemetryCompatibilityValidation",
+    "10. SessionFlowOutboxResilienceValidation",
+    "11. SessionFlowSmokeTemplateValidation",
     "",
     "Logs:",
     ("- {0}" -f $LogDirectory),

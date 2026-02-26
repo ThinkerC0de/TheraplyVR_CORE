@@ -142,7 +142,7 @@ Execution details: `docs/39-Core-Gap-Closure-Execution-Plan.md`
 | SF-K-002 | Add Unity mobile layout authoring asset | DONE | `MobileControlLayoutAsset` + validator + contract converter allow authoring type/position/scale/label/binding in Unity and conversion to runtime `MobileControlSchema` | SF-J-001 |
 | SF-K-003 | Add Unity mobile layout editor window | DONE | `MobileControlLayoutEditorWindow` enables visual card arrangement (preview + drag), contract editing, validation, and JSON export without coding | SF-K-002 |
 | SF-K-004 | Wire layout contract to Flutter dynamic renderer | DONE | Mobile controller renders and submits `START_GAME/UPDATE_CONFIG` from authored layout bindings | SF-J-003, SF-K-003 |
-| SF-K-005 | Preserve canonical telemetry + ML dataset compatibility | TODO | Scene-script games keep canonical event quality gates and export readiness | SF-E-007, SF-K-001 |
+| SF-K-005 | Preserve canonical telemetry + ML dataset compatibility | DONE | Scene-script games keep canonical event quality gates and export readiness | SF-E-007, SF-K-001 |
 
 ## Global Definition Of Done
 

@@ -34,8 +34,11 @@ Implementation status (2026-02-26):
 - Core bridge behavior:
   - `START_GAME` and `UPDATE_CONFIG` are resolved through `SceneGameConfig` using existing `IStartCommandConfigProvider` path in `GameRuntimeService`.
   - no per-game branching is added to core runtime handlers.
+  - scene-script stop lifecycle emits canonical `SESSION_TERMINAL` with stable reason codes (`GAME_COMPLETED`, `GAME_TIMEOUT`, `GAME_RUNTIME_ERROR`, ...), so flow telemetry quality gates stay export-ready.
 - Authoring expectation:
   - each new game script inherits `SceneGameController` and overrides scene hooks (`OnStarted`, `OnPaused`, `OnResumed`, `OnStopped`, `ApplyConfig`).
+  - telemetry compatibility is covered by automation:
+    - `unity-quest-template/Assets/_TheraplyCore/Editor/Automation/SceneControllerTelemetryCompatibilityValidation.cs`
 
 ## Mobile layout authoring contract
 
