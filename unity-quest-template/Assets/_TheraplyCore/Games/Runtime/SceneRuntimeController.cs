@@ -553,6 +553,18 @@ namespace TheraplyCore.Games.Runtime
             return true;
         }
 
+        public bool TryResolveSpawnPoint(string spawnPointKey, out Transform spawnPoint)
+        {
+            spawnPoint = null;
+            if (string.IsNullOrWhiteSpace(spawnPointKey))
+            {
+                return false;
+            }
+
+            RebuildRegistryIndex();
+            return _spawnPointsByKey.TryGetValue(spawnPointKey.Trim(), out spawnPoint) && spawnPoint != null;
+        }
+
         public bool TrySetRandomMaterialColorOnSpawned(
             string bindingKeyPrefix,
             bool includeInactive,

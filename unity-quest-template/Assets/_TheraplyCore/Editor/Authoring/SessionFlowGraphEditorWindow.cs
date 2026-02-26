@@ -124,6 +124,11 @@ namespace TheraplyCore.Editor.Authoring
                 _layoutDirty = true;
             }
 
+            if (GUILayout.Button("Quick Template", EditorStyles.toolbarButton, GUILayout.Width(108f)))
+            {
+                ShowQuickTemplateMenu();
+            }
+
             if (GUILayout.Button("Load Asset", EditorStyles.toolbarButton, GUILayout.Width(90f)))
             {
                 LoadFromAsset(_asset);
@@ -383,6 +388,15 @@ namespace TheraplyCore.Editor.Authoring
                 false,
                 () => AddNode(TaskGraphNodeTypes.Fail, canvasPosition, autoLayoutAfterAdd: false));
             menu.AddSeparator("Tools/");
+            menu.AddItem(
+                new GUIContent("Tools/Apply Template/Touch 4 Hits"),
+                false,
+                ApplyTemplateTouchFourHits);
+            menu.AddItem(
+                new GUIContent("Tools/Apply Template/Place Object In Zone"),
+                false,
+                ApplyTemplatePlaceObjectInZone);
+            menu.AddSeparator("Tools/");
             menu.AddItem(new GUIContent("Tools/Auto Layout"), false, AutoLayout);
             menu.AddItem(
                 new GUIContent("Tools/Validate"),
@@ -592,9 +606,21 @@ namespace TheraplyCore.Editor.Authoring
                 false,
                 () => AddSpawnWavePresetToNode(nodeId));
             menu.AddItem(
+                new GUIContent("Effects/Add On Enter/Instruction Text (Spawn)"),
+                false,
+                () => AddInstructionTextPresetToNode(nodeId));
+            menu.AddItem(
+                new GUIContent("Effects/Add On Enter/Set Material Color"),
+                false,
+                () => AddSetMaterialColorPresetToNode(nodeId));
+            menu.AddItem(
                 new GUIContent("Effects/Add On Enter/Random Material Color"),
                 false,
                 () => AddRandomMaterialColorPresetToNode(nodeId));
+            menu.AddItem(
+                new GUIContent("Effects/Add On Enter/Set Transform"),
+                false,
+                () => AddSetTransformPresetToNode(nodeId));
 
             menu.ShowAsContext();
         }
@@ -815,9 +841,24 @@ namespace TheraplyCore.Editor.Authoring
                 effects.Add(CreateSpawnWavePresetEffect());
             }
 
+            if (GUILayout.Button("Add Instruction Text (Spawn)"))
+            {
+                effects.Add(CreateShowInstructionTextPresetEffect());
+            }
+
+            if (GUILayout.Button("Add Set Material Color"))
+            {
+                effects.Add(CreateSetMaterialColorPresetEffect());
+            }
+
             if (GUILayout.Button("Add Random Material Color"))
             {
                 effects.Add(CreateRandomMaterialColorPresetEffect());
+            }
+
+            if (GUILayout.Button("Add Set Transform"))
+            {
+                effects.Add(CreateSetTransformPresetEffect());
             }
         }
         private void DrawChannels()
@@ -1362,6 +1403,48 @@ namespace TheraplyCore.Editor.Authoring
             Repaint();
         }
 
+        private void AddInstructionTextPresetToNode(string nodeId)
+        {
+            var node = GetNode(nodeId);
+            if (node == null)
+            {
+                return;
+            }
+
+            node.onEnterEffects ??= new List<EffectDefinition>();
+            node.onEnterEffects.Add(CreateShowInstructionTextPresetEffect());
+            _selectedNodeId = node.nodeId;
+            Repaint();
+        }
+
+        private void AddSetMaterialColorPresetToNode(string nodeId)
+        {
+            var node = GetNode(nodeId);
+            if (node == null)
+            {
+                return;
+            }
+
+            node.onEnterEffects ??= new List<EffectDefinition>();
+            node.onEnterEffects.Add(CreateSetMaterialColorPresetEffect());
+            _selectedNodeId = node.nodeId;
+            Repaint();
+        }
+
+        private void AddSetTransformPresetToNode(string nodeId)
+        {
+            var node = GetNode(nodeId);
+            if (node == null)
+            {
+                return;
+            }
+
+            node.onEnterEffects ??= new List<EffectDefinition>();
+            node.onEnterEffects.Add(CreateSetTransformPresetEffect());
+            _selectedNodeId = node.nodeId;
+            Repaint();
+        }
+
         private static EffectDefinition CreateSpawnWavePresetEffect()
         {
             return new EffectDefinition
@@ -1406,6 +1489,49 @@ namespace TheraplyCore.Editor.Authoring
             };
         }
 
+        private static EffectDefinition CreateShowInstructionTextPresetEffect()
+        {
+            return new EffectDefinition
+            {
+                effectId = "show_instruction_text",
+                binding = string.Empty,
+                parameters = new List<KeyValuePairString>
+                {
+                    new KeyValuePairString { key = "bindingKey", value = "instruction_text" },
+                    new KeyValuePairString { key = "text", value = "Dotknij 4 obiekty." },
+                    new KeyValuePairString { key = "spawnPointKey", value = "instruction_anchor" },
+                    new KeyValuePairString { key = "offsetX", value = "0.0" },
+                    new KeyValuePairString { key = "offsetY", value = "0.0" },
+                    new KeyValuePairString { key = "offsetZ", value = "0.0" },
+                    new KeyValuePairString { key = "fontSize", value = "56" },
+                    new KeyValuePairString { key = "characterSize", value = "0.025" },
+                    new KeyValuePairString { key = "r", value = "1.0" },
+                    new KeyValuePairString { key = "g", value = "1.0" },
+                    new KeyValuePairString { key = "b", value = "1.0" },
+                    new KeyValuePairString { key = "a", value = "1.0" },
+                    new KeyValuePairString { key = "faceCamera", value = "true" },
+                    new KeyValuePairString { key = "yawOnly", value = "false" },
+                },
+            };
+        }
+
+        private static EffectDefinition CreateSetMaterialColorPresetEffect()
+        {
+            return new EffectDefinition
+            {
+                effectId = "set_material_color",
+                binding = "target_primary",
+                parameters = new List<KeyValuePairString>
+                {
+                    new KeyValuePairString { key = "includeInactive", value = "true" },
+                    new KeyValuePairString { key = "r", value = "0.2" },
+                    new KeyValuePairString { key = "g", value = "0.8" },
+                    new KeyValuePairString { key = "b", value = "0.3" },
+                    new KeyValuePairString { key = "a", value = "1.0" },
+                },
+            };
+        }
+
         private static EffectDefinition CreateRandomMaterialColorPresetEffect()
         {
             return new EffectDefinition
@@ -1425,6 +1551,325 @@ namespace TheraplyCore.Editor.Authoring
                     new KeyValuePairString { key = "alpha", value = "1.0" },
                 },
             };
+        }
+
+        private static EffectDefinition CreateSetTransformPresetEffect()
+        {
+            return new EffectDefinition
+            {
+                effectId = "set_transform",
+                binding = "target_primary",
+                parameters = new List<KeyValuePairString>
+                {
+                    new KeyValuePairString { key = "space", value = "world" },
+                    new KeyValuePairString { key = "setPosition", value = "false" },
+                    new KeyValuePairString { key = "positionX", value = "0.0" },
+                    new KeyValuePairString { key = "positionY", value = "1.2" },
+                    new KeyValuePairString { key = "positionZ", value = "2.0" },
+                    new KeyValuePairString { key = "setRotation", value = "true" },
+                    new KeyValuePairString { key = "rotationX", value = "0.0" },
+                    new KeyValuePairString { key = "rotationY", value = "45.0" },
+                    new KeyValuePairString { key = "rotationZ", value = "0.0" },
+                    new KeyValuePairString { key = "setScale", value = "false" },
+                    new KeyValuePairString { key = "scaleX", value = "1.0" },
+                    new KeyValuePairString { key = "scaleY", value = "1.0" },
+                    new KeyValuePairString { key = "scaleZ", value = "1.0" },
+                },
+            };
+        }
+
+        private void ShowQuickTemplateMenu()
+        {
+            var menu = new GenericMenu();
+            menu.AddItem(new GUIContent("Touch 4 Hits"), false, ApplyTemplateTouchFourHits);
+            menu.AddItem(new GUIContent("Place Object In Zone"), false, ApplyTemplatePlaceObjectInZone);
+            menu.ShowAsContext();
+        }
+
+        private void ApplyTemplateTouchFourHits()
+        {
+            EnsureDefinition();
+            _definition.commentVersion = "2026-02-26: quick template touch 4 hits";
+            if (string.IsNullOrWhiteSpace(_definition.gameId))
+            {
+                _definition.gameId = "touch_4_hits";
+            }
+
+            if (string.IsNullOrWhiteSpace(_definition.displayName))
+            {
+                _definition.displayName = "Touch 4 Hits";
+            }
+
+            EnsureConfig();
+            _definition.config.targetCount = Mathf.Max(4, _definition.config.targetCount);
+            EnsureGraph();
+            EnsureChannelState(SessionFlowChannelIds.HandContact, true);
+            EnsureChannelState(SessionFlowChannelIds.HandGrab, false);
+
+            _definition.taskGraph.nodes.Clear();
+            _nodePositions.Clear();
+            _definition.taskGraph.entryNodeId = "start";
+
+            _definition.taskGraph.nodes.Add(
+                new TaskGraphNodeDefinition
+                {
+                    nodeId = "start",
+                    nodeType = TaskGraphNodeTypes.Timer,
+                    timeoutSec = 0.1f,
+                    allowedActions = new List<AllowedActionDefinition>(),
+                    conditions = new List<ConditionDefinition>(),
+                    onEnterEffects = new List<EffectDefinition>
+                    {
+                        CreateShowInstructionTextPresetEffect(),
+                        CreateSpawnWavePresetEffect(),
+                    },
+                    onExitEffects = new List<EffectDefinition>(),
+                    onAcceptedEffects = new List<EffectDefinition>(),
+                    onRejectedEffects = new List<EffectDefinition>(),
+                    onTimeoutEffects = new List<EffectDefinition>(),
+                    nextOnSuccess = "touch",
+                    nextOnFail = "fail",
+                    nextOnTimeout = "touch",
+                });
+
+            _definition.taskGraph.nodes.Add(
+                new TaskGraphNodeDefinition
+                {
+                    nodeId = "touch",
+                    nodeType = TaskGraphNodeTypes.Action,
+                    timeoutSec = 0f,
+                    allowedActions = new List<AllowedActionDefinition>
+                    {
+                        new AllowedActionDefinition
+                        {
+                            actionId = "touch_target_with_hand",
+                            constraints = new List<KeyValuePairString>
+                            {
+                                new KeyValuePairString { key = "requiredChannelId", value = SessionFlowChannelIds.HandContact },
+                            },
+                        },
+                    },
+                    conditions = new List<ConditionDefinition>(),
+                    onEnterEffects = new List<EffectDefinition>(),
+                    onExitEffects = new List<EffectDefinition>(),
+                    onAcceptedEffects = new List<EffectDefinition>(),
+                    onRejectedEffects = new List<EffectDefinition>(),
+                    onTimeoutEffects = new List<EffectDefinition>(),
+                    nextOnSuccess = "check",
+                    nextOnFail = "touch",
+                    nextOnTimeout = "fail",
+                });
+
+            _definition.taskGraph.nodes.Add(
+                new TaskGraphNodeDefinition
+                {
+                    nodeId = "check",
+                    nodeType = TaskGraphNodeTypes.Branch,
+                    timeoutSec = 0f,
+                    allowedActions = new List<AllowedActionDefinition>(),
+                    conditions = new List<ConditionDefinition>
+                    {
+                        new ConditionDefinition
+                        {
+                            conditionId = SessionFlowConditionIds.ScoreThreshold,
+                            subject = "correct_count",
+                            op = "gte",
+                            value = "4",
+                            nextNodeId = "complete",
+                        },
+                    },
+                    onEnterEffects = new List<EffectDefinition>(),
+                    onExitEffects = new List<EffectDefinition>(),
+                    onAcceptedEffects = new List<EffectDefinition>(),
+                    onRejectedEffects = new List<EffectDefinition>(),
+                    onTimeoutEffects = new List<EffectDefinition>(),
+                    nextOnSuccess = "complete",
+                    nextOnFail = "touch",
+                    nextOnTimeout = "fail",
+                });
+
+            _definition.taskGraph.nodes.Add(
+                new TaskGraphNodeDefinition
+                {
+                    nodeId = "complete",
+                    nodeType = TaskGraphNodeTypes.Complete,
+                    allowedActions = new List<AllowedActionDefinition>(),
+                    conditions = new List<ConditionDefinition>(),
+                    onEnterEffects = new List<EffectDefinition>(),
+                    onExitEffects = new List<EffectDefinition>(),
+                    onAcceptedEffects = new List<EffectDefinition>(),
+                    onRejectedEffects = new List<EffectDefinition>(),
+                    onTimeoutEffects = new List<EffectDefinition>(),
+                });
+
+            _definition.taskGraph.nodes.Add(
+                new TaskGraphNodeDefinition
+                {
+                    nodeId = "fail",
+                    nodeType = TaskGraphNodeTypes.Fail,
+                    allowedActions = new List<AllowedActionDefinition>(),
+                    conditions = new List<ConditionDefinition>(),
+                    onEnterEffects = new List<EffectDefinition>(),
+                    onExitEffects = new List<EffectDefinition>(),
+                    onAcceptedEffects = new List<EffectDefinition>(),
+                    onRejectedEffects = new List<EffectDefinition>(),
+                    onTimeoutEffects = new List<EffectDefinition>(),
+                });
+
+            _selectedNodeId = "start";
+            _hasValidation = false;
+            _validationReason = string.Empty;
+            _layoutDirty = true;
+            Repaint();
+        }
+
+        private void ApplyTemplatePlaceObjectInZone()
+        {
+            EnsureDefinition();
+            _definition.commentVersion = "2026-02-26: quick template place object in zone";
+            if (string.IsNullOrWhiteSpace(_definition.gameId))
+            {
+                _definition.gameId = "place_object_zone";
+            }
+
+            if (string.IsNullOrWhiteSpace(_definition.displayName))
+            {
+                _definition.displayName = "Place Object In Zone";
+            }
+
+            EnsureGraph();
+            EnsureChannelState(SessionFlowChannelIds.HandGrab, true);
+            EnsureChannelState(SessionFlowChannelIds.HandContact, false);
+
+            _definition.taskGraph.nodes.Clear();
+            _nodePositions.Clear();
+            _definition.taskGraph.entryNodeId = "start";
+
+            _definition.taskGraph.nodes.Add(
+                new TaskGraphNodeDefinition
+                {
+                    nodeId = "start",
+                    nodeType = TaskGraphNodeTypes.Timer,
+                    timeoutSec = 0.1f,
+                    allowedActions = new List<AllowedActionDefinition>(),
+                    conditions = new List<ConditionDefinition>(),
+                    onEnterEffects = new List<EffectDefinition>
+                    {
+                        new EffectDefinition
+                        {
+                            effectId = "show_instruction_text",
+                            parameters = new List<KeyValuePairString>
+                            {
+                                new KeyValuePairString { key = "bindingKey", value = "instruction_text" },
+                                new KeyValuePairString { key = "text", value = "Zlap obiekt i odloz go do strefy." },
+                                new KeyValuePairString { key = "spawnPointKey", value = "instruction_anchor" },
+                            },
+                        },
+                    },
+                    onExitEffects = new List<EffectDefinition>(),
+                    onAcceptedEffects = new List<EffectDefinition>(),
+                    onRejectedEffects = new List<EffectDefinition>(),
+                    onTimeoutEffects = new List<EffectDefinition>(),
+                    nextOnSuccess = "place",
+                    nextOnFail = "fail",
+                    nextOnTimeout = "place",
+                });
+
+            _definition.taskGraph.nodes.Add(
+                new TaskGraphNodeDefinition
+                {
+                    nodeId = "place",
+                    nodeType = TaskGraphNodeTypes.Action,
+                    timeoutSec = 0f,
+                    allowedActions = new List<AllowedActionDefinition>
+                    {
+                        new AllowedActionDefinition
+                        {
+                            actionId = "place_object_in_zone",
+                            constraints = new List<KeyValuePairString>
+                            {
+                                new KeyValuePairString { key = "requiredChannelId", value = SessionFlowChannelIds.HandGrab },
+                                new KeyValuePairString { key = "requiredTargetId", value = "zone_a" },
+                            },
+                        },
+                    },
+                    conditions = new List<ConditionDefinition>(),
+                    onEnterEffects = new List<EffectDefinition>(),
+                    onExitEffects = new List<EffectDefinition>(),
+                    onAcceptedEffects = new List<EffectDefinition>(),
+                    onRejectedEffects = new List<EffectDefinition>(),
+                    onTimeoutEffects = new List<EffectDefinition>(),
+                    nextOnSuccess = "complete",
+                    nextOnFail = "place",
+                    nextOnTimeout = "fail",
+                });
+
+            _definition.taskGraph.nodes.Add(
+                new TaskGraphNodeDefinition
+                {
+                    nodeId = "complete",
+                    nodeType = TaskGraphNodeTypes.Complete,
+                    allowedActions = new List<AllowedActionDefinition>(),
+                    conditions = new List<ConditionDefinition>(),
+                    onEnterEffects = new List<EffectDefinition>(),
+                    onExitEffects = new List<EffectDefinition>(),
+                    onAcceptedEffects = new List<EffectDefinition>(),
+                    onRejectedEffects = new List<EffectDefinition>(),
+                    onTimeoutEffects = new List<EffectDefinition>(),
+                });
+
+            _definition.taskGraph.nodes.Add(
+                new TaskGraphNodeDefinition
+                {
+                    nodeId = "fail",
+                    nodeType = TaskGraphNodeTypes.Fail,
+                    allowedActions = new List<AllowedActionDefinition>(),
+                    conditions = new List<ConditionDefinition>(),
+                    onEnterEffects = new List<EffectDefinition>(),
+                    onExitEffects = new List<EffectDefinition>(),
+                    onAcceptedEffects = new List<EffectDefinition>(),
+                    onRejectedEffects = new List<EffectDefinition>(),
+                    onTimeoutEffects = new List<EffectDefinition>(),
+                });
+
+            _selectedNodeId = "start";
+            _hasValidation = false;
+            _validationReason = string.Empty;
+            _layoutDirty = true;
+            Repaint();
+        }
+
+        private void EnsureChannelState(string channelId, bool enabled)
+        {
+            if (string.IsNullOrWhiteSpace(channelId))
+            {
+                return;
+            }
+
+            _definition.channels ??= SessionFlowDefaults.CreateDefaultChannels();
+            for (var i = 0; i < _definition.channels.Count; i++)
+            {
+                var channel = _definition.channels[i];
+                if (channel == null || string.IsNullOrWhiteSpace(channel.channelId))
+                {
+                    continue;
+                }
+
+                if (!string.Equals(channel.channelId, channelId, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                channel.enabled = enabled;
+                return;
+            }
+
+            _definition.channels.Add(
+                new SessionFlowChannelConfig
+                {
+                    channelId = channelId.Trim(),
+                    enabled = enabled,
+                });
         }
         private void DrawLinks()
         {

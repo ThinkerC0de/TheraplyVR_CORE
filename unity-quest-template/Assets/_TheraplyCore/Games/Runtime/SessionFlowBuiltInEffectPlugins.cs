@@ -13,6 +13,9 @@ namespace TheraplyCore.Games.Runtime
     /// </summary>
     public static class SessionFlowBuiltInEffectPlugins
     {
+        private static readonly Dictionary<string, GameObject> RuntimeInstructionTextByKey =
+            new Dictionary<string, GameObject>(StringComparer.OrdinalIgnoreCase);
+
         private delegate bool EffectHandler(
             GameContracts.EffectDefinition effect,
             EffectExecutionContext context,
@@ -70,9 +73,12 @@ namespace TheraplyCore.Games.Runtime
             registry.Register(new DelegateEffectPlugin("enable_interaction", ExecuteEnableInteraction), replaceExisting);
             registry.Register(new DelegateEffectPlugin("disable_interaction", ExecuteDisableInteraction), replaceExisting);
             registry.Register(new DelegateEffectPlugin("set_ui_text", ExecuteSetUiText), replaceExisting);
+            registry.Register(new DelegateEffectPlugin("show_instruction_text", ExecuteShowInstructionText), replaceExisting);
             registry.Register(new DelegateEffectPlugin("update_score", ExecuteUpdateScore), replaceExisting);
             registry.Register(new DelegateEffectPlugin("fade_screen", ExecuteFadeScreen), replaceExisting);
+            registry.Register(new DelegateEffectPlugin("set_material_color", ExecuteSetMaterialColor), replaceExisting);
             registry.Register(new DelegateEffectPlugin("set_random_material_color", ExecuteSetRandomMaterialColor), replaceExisting);
+            registry.Register(new DelegateEffectPlugin("set_transform", ExecuteSetTransform), replaceExisting);
             registry.Register(new DelegateEffectPlugin("teleport_actor", ExecuteTeleportActor), replaceExisting);
             registry.Register(new DelegateEffectPlugin("emit_hint", ExecuteEmitHint), replaceExisting);
             registry.Register(new DelegateEffectPlugin("set_locale", ExecuteSetLocale), replaceExisting);
@@ -519,6 +525,122 @@ namespace TheraplyCore.Games.Runtime
             return false;
         }
 
+        private static bool ExecuteShowInstructionText(
+            GameContracts.EffectDefinition effect,
+            EffectExecutionContext context,
+            EffectRuntimeServices services,
+            out string reasonCode)
+        {
+            reasonCode = string.Empty;
+
+            var text = ReadParameter(effect, "text", string.Empty);
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                text = ReadParameter(effect, "value", string.Empty);
+            }
+
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                reasonCode = "INSTRUCTION_TEXT_REQUIRED";
+                return false;
+            }
+
+            var bindingKey = ReadParameter(
+                effect,
+                "bindingKey",
+                string.IsNullOrWhiteSpace(effect == null ? string.Empty : effect.binding)
+                    ? "instruction_text"
+                    : effect.binding);
+            var runtimeKey = BuildInstructionRuntimeKey(context, bindingKey);
+            if (string.IsNullOrWhiteSpace(runtimeKey))
+            {
+                reasonCode = "INSTRUCTION_BINDING_KEY_REQUIRED";
+                return false;
+            }
+
+            if (!RuntimeInstructionTextByKey.TryGetValue(runtimeKey, out var instructionObject) || instructionObject == null)
+            {
+                instructionObject = new GameObject("FlowInstructionText_" + bindingKey);
+                var textMesh = instructionObject.AddComponent<TextMesh>();
+                textMesh.anchor = TextAnchor.MiddleCenter;
+                textMesh.alignment = TextAlignment.Center;
+                RuntimeInstructionTextByKey[runtimeKey] = instructionObject;
+            }
+
+            if (!TrySetKnownTextComponent(instructionObject, text.Trim(), out reasonCode))
+            {
+                return false;
+            }
+
+            var instructionText = instructionObject.GetComponentInChildren<TextMesh>(includeInactive: true);
+            if (instructionText != null)
+            {
+                instructionText.fontSize = Mathf.Max(8, ReadIntParameter(effect, "fontSize", 56));
+                instructionText.characterSize = Mathf.Max(0.005f, ReadFloatParameter(effect, "characterSize", 0.025f));
+                instructionText.color = new Color(
+                    Clamp01(ReadFloatParameter(effect, "r", 1f)),
+                    Clamp01(ReadFloatParameter(effect, "g", 1f)),
+                    Clamp01(ReadFloatParameter(effect, "b", 1f)),
+                    Clamp01(ReadFloatParameter(effect, "a", 1f)));
+            }
+
+            var offset = new Vector3(
+                ReadFloatParameter(effect, "offsetX", 0f),
+                ReadFloatParameter(effect, "offsetY", 1.6f),
+                ReadFloatParameter(effect, "offsetZ", 0f));
+            var spawnPointKey = ReadParameter(effect, "spawnPointKey", string.Empty);
+            var parentBindingKey = ReadParameter(effect, "parentBindingKey", string.Empty);
+
+            if (!string.IsNullOrWhiteSpace(parentBindingKey) &&
+                services != null &&
+                services.bindings != null &&
+                services.bindings.TryGetObject(parentBindingKey.Trim(), out var parentObject) &&
+                parentObject != null)
+            {
+                instructionObject.transform.SetParent(parentObject.transform, worldPositionStays: false);
+                instructionObject.transform.localPosition = offset;
+                instructionObject.transform.localRotation = Quaternion.identity;
+            }
+            else if (!string.IsNullOrWhiteSpace(spawnPointKey) &&
+                     services != null &&
+                     services.sceneRuntime != null &&
+                     services.sceneRuntime.TryResolveSpawnPoint(spawnPointKey, out var spawnPoint) &&
+                     spawnPoint != null)
+            {
+                instructionObject.transform.SetParent(null, worldPositionStays: true);
+                instructionObject.transform.position = spawnPoint.position + spawnPoint.TransformVector(offset);
+                instructionObject.transform.rotation = spawnPoint.rotation;
+            }
+            else
+            {
+                instructionObject.transform.SetParent(null, worldPositionStays: true);
+                instructionObject.transform.position = offset;
+            }
+
+            var faceCamera = ReadBoolParameter(effect, "faceCamera", true);
+            var yawOnly = ReadBoolParameter(effect, "yawOnly", false);
+            var billboard = instructionObject.GetComponent<FlowInstructionBillboard>();
+            if (faceCamera)
+            {
+                if (billboard == null)
+                {
+                    billboard = instructionObject.AddComponent<FlowInstructionBillboard>();
+                }
+
+                if (billboard != null)
+                {
+                    billboard.yawOnly = yawOnly;
+                }
+            }
+            else if (billboard != null)
+            {
+                UnityEngine.Object.Destroy(billboard);
+            }
+
+            reasonCode = string.Empty;
+            return true;
+        }
+
         private static bool ExecuteUpdateScore(
             GameContracts.EffectDefinition effect,
             EffectExecutionContext context,
@@ -584,6 +706,34 @@ namespace TheraplyCore.Games.Runtime
 
             reasonCode = string.Empty;
             return true;
+        }
+
+        private static bool ExecuteSetMaterialColor(
+            GameContracts.EffectDefinition effect,
+            EffectExecutionContext context,
+            EffectRuntimeServices services,
+            out string reasonCode)
+        {
+            if (!TryResolveObject(effect, services, out var target, out reasonCode))
+            {
+                return false;
+            }
+
+            var includeInactive = ReadBoolParameter(effect, "includeInactive", true);
+            var color = new Color(
+                Clamp01(ReadFloatParameter(effect, "r", 1f)),
+                Clamp01(ReadFloatParameter(effect, "g", 1f)),
+                Clamp01(ReadFloatParameter(effect, "b", 1f)),
+                Clamp01(ReadFloatParameter(effect, "a", 1f)));
+
+            if (TryApplyMaterialColor(target, includeInactive, color, out _))
+            {
+                reasonCode = string.Empty;
+                return true;
+            }
+
+            reasonCode = "MATERIAL_COLOR_PROPERTY_NOT_FOUND";
+            return false;
         }
 
         private static bool ExecuteSetRandomMaterialColor(
@@ -692,6 +842,83 @@ namespace TheraplyCore.Games.Runtime
 
             reasonCode = NormalizeOrFallback(firstFailureReason, "MATERIAL_COLOR_PROPERTY_NOT_FOUND");
             return false;
+        }
+
+        private static bool ExecuteSetTransform(
+            GameContracts.EffectDefinition effect,
+            EffectExecutionContext context,
+            EffectRuntimeServices services,
+            out string reasonCode)
+        {
+            if (!TryResolveObject(effect, services, out var target, out reasonCode))
+            {
+                return false;
+            }
+
+            var transform = target.transform;
+            if (transform == null)
+            {
+                reasonCode = "TRANSFORM_TARGET_MISSING";
+                return false;
+            }
+
+            var setPosition = ReadBoolParameter(effect, "setPosition", false);
+            var setRotation = ReadBoolParameter(effect, "setRotation", false);
+            var setScale = ReadBoolParameter(effect, "setScale", false);
+            if (!setPosition && !setRotation && !setScale)
+            {
+                reasonCode = "TRANSFORM_OPERATION_EMPTY";
+                return false;
+            }
+
+            var spaceValue = ReadParameter(effect, "space", "world");
+            var localSpace = string.Equals(spaceValue, "local", StringComparison.OrdinalIgnoreCase);
+
+            if (setPosition)
+            {
+                var currentPosition = localSpace ? transform.localPosition : transform.position;
+                var position = new Vector3(
+                    ReadFloatParameter(effect, "positionX", currentPosition.x),
+                    ReadFloatParameter(effect, "positionY", currentPosition.y),
+                    ReadFloatParameter(effect, "positionZ", currentPosition.z));
+                if (localSpace)
+                {
+                    transform.localPosition = position;
+                }
+                else
+                {
+                    transform.position = position;
+                }
+            }
+
+            if (setRotation)
+            {
+                var currentEuler = localSpace ? transform.localEulerAngles : transform.eulerAngles;
+                var euler = new Vector3(
+                    ReadFloatParameter(effect, "rotationX", currentEuler.x),
+                    ReadFloatParameter(effect, "rotationY", currentEuler.y),
+                    ReadFloatParameter(effect, "rotationZ", currentEuler.z));
+                if (localSpace)
+                {
+                    transform.localRotation = Quaternion.Euler(euler);
+                }
+                else
+                {
+                    transform.rotation = Quaternion.Euler(euler);
+                }
+            }
+
+            if (setScale)
+            {
+                var currentScale = transform.localScale;
+                transform.localScale = new Vector3(
+                    ReadFloatParameter(effect, "scaleX", currentScale.x),
+                    ReadFloatParameter(effect, "scaleY", currentScale.y),
+                    ReadFloatParameter(effect, "scaleZ", currentScale.z));
+            }
+
+            reasonCode = string.Empty;
+            return true;
         }
 
         private static bool ExecuteTeleportActor(
@@ -1426,6 +1653,49 @@ namespace TheraplyCore.Games.Runtime
             return updatedRendererCount > 0;
         }
 
+        private static bool TryApplyMaterialColor(
+            GameObject target,
+            bool includeInactive,
+            Color color,
+            out int updatedRendererCount)
+        {
+            updatedRendererCount = 0;
+            if (target == null)
+            {
+                return false;
+            }
+
+            var renderers = target.GetComponentsInChildren<Renderer>(includeInactive);
+            for (var i = 0; i < renderers.Length; i++)
+            {
+                var renderer = renderers[i];
+                if (renderer == null || renderer.material == null || !renderer.material.HasProperty("_Color"))
+                {
+                    continue;
+                }
+
+                renderer.material.color = color;
+                updatedRendererCount++;
+            }
+
+            return updatedRendererCount > 0;
+        }
+
+        private static string BuildInstructionRuntimeKey(
+            EffectExecutionContext context,
+            string bindingKey)
+        {
+            var normalizedBinding = NormalizeOrFallback(bindingKey, "instruction_text");
+            if (string.IsNullOrWhiteSpace(normalizedBinding))
+            {
+                return string.Empty;
+            }
+
+            var flowId = NormalizeOrFallback(context == null ? string.Empty : context.flowId, "flow");
+            var sessionId = NormalizeOrFallback(context == null ? string.Empty : context.sessionId, "session");
+            return flowId + ":" + sessionId + ":" + normalizedBinding;
+        }
+
         private static void Normalize01Range(ref float minValue, ref float maxValue)
         {
             minValue = Clamp01(minValue);
@@ -1516,6 +1786,38 @@ namespace TheraplyCore.Games.Runtime
             return string.IsNullOrWhiteSpace(value)
                 ? (fallback ?? string.Empty)
                 : value.Trim();
+        }
+    }
+
+    [DisallowMultipleComponent]
+    internal sealed class FlowInstructionBillboard : MonoBehaviour
+    {
+        public bool yawOnly;
+
+        private void LateUpdate()
+        {
+            var camera = Camera.main;
+            if (camera == null)
+            {
+                return;
+            }
+
+            var direction = transform.position - camera.transform.position;
+            if (direction.sqrMagnitude <= 0.0001f)
+            {
+                return;
+            }
+
+            if (yawOnly)
+            {
+                direction.y = 0f;
+                if (direction.sqrMagnitude <= 0.0001f)
+                {
+                    return;
+                }
+            }
+
+            transform.rotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
         }
     }
 }

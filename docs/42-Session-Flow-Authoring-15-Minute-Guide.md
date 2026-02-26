@@ -52,10 +52,14 @@ Goal: create and run a new scene setup without adding per-game logic in core run
   - `MMB drag` = pan.
   - `Mouse wheel` = zoom in/out.
   - `RMB` on empty canvas = context menu with categorized node creation.
+  - Top bar `Quick Template` = one-click scaffold for `Touch 4 Hits` or `Place Object In Zone`.
 - Node:
   - `RMB` on node = `Select`, `Rename`, `Set As Entry (Start)`, `Delete`, `Disconnect Outgoing`, `Disconnect Incoming`, `Disconnect All`.
   - `RMB` on node = `Effects -> Add On Enter -> Spawn Prefab Wave` adds ready-to-edit spawn preset.
+  - `RMB` on node = `Effects -> Add On Enter -> Instruction Text (Spawn)` adds world text instruction preset.
+  - `RMB` on node = `Effects -> Add On Enter -> Set Material Color` adds deterministic material color preset.
   - `RMB` on node = `Effects -> Add On Enter -> Random Material Color` adds random color preset.
+  - `RMB` on node = `Effects -> Add On Enter -> Set Transform` adds transform preset (position/rotation/scale toggles).
   - `Rename` opens rename section in right inspector; apply a stable id like `start_action`.
 - Start node:
   - Set explicit start in left panel: `Task Graph -> Entry Node`.
@@ -99,6 +103,48 @@ Use effect id: `set_random_material_color`
 - `minValue`, `maxValue`: value/brightness range in `[0..1]`.
 - `alpha`: output alpha in `[0..1]`.
 - `includeInactive`: include inactive child renderers.
+
+## Instruction Text Parameters
+
+Use effect id: `show_instruction_text`
+
+- `text` or `value`: text content.
+- `bindingKey`: stable runtime key (default `instruction_text`) used to update existing text object.
+- `spawnPointKey`: optional anchor key from `SceneRuntimeController`.
+- `offsetX`, `offsetY`, `offsetZ`: offset from anchor/world position.
+- `fontSize`, `characterSize`: text mesh sizing.
+- `r`, `g`, `b`, `a`: text color.
+- `faceCamera`: billboard toward camera.
+- `yawOnly`: billboard only on Y axis.
+
+## Material Color Parameters
+
+Use effect id: `set_material_color`
+
+- `binding` or `bindingKey`: object binding key.
+- `includeInactive`: include inactive child renderers.
+- `r`, `g`, `b`, `a`: exact color channels `[0..1]`.
+
+## Transform Parameters
+
+Use effect id: `set_transform`
+
+- `binding` or `bindingKey`: object binding key.
+- `space`: `world` or `local`.
+- `setPosition`: enable position update (`positionX`, `positionY`, `positionZ`).
+- `setRotation`: enable rotation update (`rotationX`, `rotationY`, `rotationZ` in euler degrees).
+- `setScale`: enable local scale update (`scaleX`, `scaleY`, `scaleZ`).
+
+## Touch And Place Tracking
+
+- Touch tracking:
+  - Use action `touch_target_with_hand`.
+  - Enable channel `hand_contact`.
+  - In constraints use `requiredChannelId=hand_contact`; optionally add `requiredTargetId=target_1`.
+- Place tracking:
+  - Use action `place_object_in_zone`.
+  - Enable channel `hand_grab`.
+  - In constraints use `requiredChannelId=hand_grab` and `requiredTargetId=<zoneId>` (e.g. `zone_a`).
 
 ## Validation Commands
 
