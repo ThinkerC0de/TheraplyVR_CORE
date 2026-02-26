@@ -60,7 +60,22 @@ namespace TheraplyGames.BilateralMarkers
         [SerializeField, Range(0.1f, 1f)] private float _pathVisualWidthFactor = 0.35f;
         [SerializeField] private float _pathVisualMinWidthMeters = 0.012f;
         [SerializeField] private float _pathVisualMaxWidthMeters = 0.08f;
+        [SerializeField] private bool _showHandCursors = true;
+        [SerializeField] private float _handCursorSizeMeters = 0.035f;
+        [SerializeField] private Color _cursorValidColor = new Color(1f, 0.95f, 0.25f, 1f);
+        [SerializeField] private Color _cursorInvalidColor = new Color(1f, 0.35f, 0.35f, 1f);
+        [SerializeField] private bool _showProgressTrace = true;
+        [SerializeField, Range(0.2f, 1f)] private float _progressTraceWidthFactor = 0.55f;
+        [SerializeField] private Color _progressTraceValidColor = new Color(1f, 1f, 1f, 0.98f);
+        [SerializeField] private Color _progressTraceInvalidColor = new Color(1f, 0.3f, 0.3f, 0.95f);
         [SerializeField] private bool _showDebugHud;
+
+        [Header("Haptics")]
+        [SerializeField] private bool _enableControllerHaptics = true;
+        [SerializeField] private float _hapticPulseIntervalSec = 0.08f;
+        [SerializeField] private float _hapticPulseDurationSec = 0.03f;
+        [SerializeField] private float _hapticValidAmplitude = 0.18f;
+        [SerializeField] private float _hapticInvalidAmplitude = 0.32f;
 
         [Header("Trace")]
         [SerializeField] private bool _enableTraceRecorder = true;
@@ -157,6 +172,9 @@ namespace TheraplyGames.BilateralMarkers
             public Vector3 previousPosition;
             public float motionRangeMinY = float.MaxValue;
             public float motionRangeMaxY = float.MinValue;
+            public bool lastSampleValid;
+            public bool lastHandActive;
+            public float nextHapticAtSec;
 
             public HandRuntime(string handToken, string targetId, string targetName)
             {
@@ -183,6 +201,9 @@ namespace TheraplyGames.BilateralMarkers
                 previousPosition = Vector3.zero;
                 motionRangeMinY = float.MaxValue;
                 motionRangeMaxY = float.MinValue;
+                lastSampleValid = false;
+                lastHandActive = false;
+                nextHapticAtSec = 0f;
             }
         }
 
@@ -232,7 +253,15 @@ namespace TheraplyGames.BilateralMarkers
         private GameObject _runtimeVisualRoot;
         private LineRenderer _leftPathRenderer;
         private LineRenderer _rightPathRenderer;
+        private LineRenderer _leftProgressRenderer;
+        private LineRenderer _rightProgressRenderer;
+        private Transform _leftHandCursorTransform;
+        private Transform _rightHandCursorTransform;
+        private Renderer _leftHandCursorRenderer;
+        private Renderer _rightHandCursorRenderer;
         private Material _pathMaterial;
+        private Material _leftCursorMaterial;
+        private Material _rightCursorMaterial;
 
         private bool _roundActive;
         private bool _roundFinalizing;
@@ -292,6 +321,18 @@ namespace TheraplyGames.BilateralMarkers
             {
                 Destroy(_pathMaterial);
                 _pathMaterial = null;
+            }
+
+            if (_leftCursorMaterial != null)
+            {
+                Destroy(_leftCursorMaterial);
+                _leftCursorMaterial = null;
+            }
+
+            if (_rightCursorMaterial != null)
+            {
+                Destroy(_rightCursorMaterial);
+                _rightCursorMaterial = null;
             }
         }
 
@@ -595,6 +636,8 @@ namespace TheraplyGames.BilateralMarkers
 
             var hasLeft = TryReadHandPose(XRNode.LeftHand, ref _leftDevice, out var leftPosition, out var leftRotation);
             var hasRight = TryReadHandPose(XRNode.RightHand, ref _rightDevice, out var rightPosition, out var rightRotation);
+            var leftHandActive = IsHandActiveAtCurrentTime("LEFT");
+            var rightHandActive = IsHandActiveAtCurrentTime("RIGHT");
 
             if (!hasLeft && !hasRight)
             {
@@ -610,6 +653,28 @@ namespace TheraplyGames.BilateralMarkers
                         });
                 }
 
+                _leftHandRuntime.lastHandActive = false;
+                _leftHandRuntime.lastSampleValid = false;
+                _rightHandRuntime.lastHandActive = false;
+                _rightHandRuntime.lastSampleValid = false;
+                UpdateHandCursorVisual(
+                    _leftHandCursorTransform,
+                    _leftHandCursorRenderer,
+                    hasPose: false,
+                    worldPosition: Vector3.zero,
+                    worldRotation: Quaternion.identity,
+                    handActive: leftHandActive,
+                    sampleValid: false,
+                    idleColor: _leftPathColor);
+                UpdateHandCursorVisual(
+                    _rightHandCursorTransform,
+                    _rightHandCursorRenderer,
+                    hasPose: false,
+                    worldPosition: Vector3.zero,
+                    worldRotation: Quaternion.identity,
+                    handActive: rightHandActive,
+                    sampleValid: false,
+                    idleColor: _rightPathColor);
                 return;
             }
 
@@ -630,16 +695,43 @@ namespace TheraplyGames.BilateralMarkers
                 _leftHandRuntime,
                 hasLeft,
                 leftPosition,
-                IsHandActiveAtCurrentTime("LEFT"),
+                leftHandActive,
                 elapsed,
                 sampleIntervalSec);
             ProcessHandSample(
                 _rightHandRuntime,
                 hasRight,
                 rightPosition,
-                IsHandActiveAtCurrentTime("RIGHT"),
+                rightHandActive,
                 elapsed,
                 sampleIntervalSec);
+
+            UpdateHandCursorVisual(
+                _leftHandCursorTransform,
+                _leftHandCursorRenderer,
+                hasLeft,
+                leftPosition,
+                leftRotation,
+                leftHandActive,
+                _leftHandRuntime.lastSampleValid,
+                _leftPathColor);
+            UpdateHandCursorVisual(
+                _rightHandCursorTransform,
+                _rightHandCursorRenderer,
+                hasRight,
+                rightPosition,
+                rightRotation,
+                rightHandActive,
+                _rightHandRuntime.lastSampleValid,
+                _rightPathColor);
+            TryEmitControllerHaptic(
+                _leftHandRuntime,
+                XRNode.LeftHand,
+                ref _leftDevice);
+            TryEmitControllerHaptic(
+                _rightHandRuntime,
+                XRNode.RightHand,
+                ref _rightDevice);
         }
 
         private void ProcessHandSample(
@@ -655,8 +747,10 @@ namespace TheraplyGames.BilateralMarkers
                 return;
             }
 
+            hand.lastHandActive = handIsActive;
             if (!hasPose)
             {
+                hand.lastSampleValid = false;
                 return;
             }
 
@@ -700,6 +794,7 @@ namespace TheraplyGames.BilateralMarkers
                     ? "PATH_DEVIATION_EXCEEDED"
                     : BilateralMarkersReasonCodes.HandPhaseLocked);
 
+            hand.lastSampleValid = targetValid;
             hand.progress01 = Mathf.Max(hand.progress01, progress01);
             hand.deviationMeters = deviationMeters;
             hand.sampleCount++;
@@ -760,6 +855,96 @@ namespace TheraplyGames.BilateralMarkers
                 hand.startMarked = true;
                 hand.firstMoveAtSec = elapsedSec;
                 PublishDualHandStartProgress(hand);
+            }
+        }
+
+        private void UpdateHandCursorVisual(
+            Transform cursor,
+            Renderer cursorRenderer,
+            bool hasPose,
+            Vector3 worldPosition,
+            Quaternion worldRotation,
+            bool handActive,
+            bool sampleValid,
+            Color idleColor)
+        {
+            if (cursor == null || cursorRenderer == null)
+            {
+                return;
+            }
+
+            if (!_showHandCursors || !hasPose)
+            {
+                if (cursor.gameObject.activeSelf)
+                {
+                    cursor.gameObject.SetActive(false);
+                }
+
+                return;
+            }
+
+            if (!cursor.gameObject.activeSelf)
+            {
+                cursor.gameObject.SetActive(true);
+            }
+
+            cursor.SetPositionAndRotation(worldPosition, worldRotation);
+            var cursorSize = Mathf.Clamp(_handCursorSizeMeters, 0.01f, 0.12f);
+            cursor.localScale = Vector3.one * cursorSize;
+
+            var color = idleColor;
+            if (handActive)
+            {
+                color = sampleValid ? _cursorValidColor : _cursorInvalidColor;
+            }
+            else
+            {
+                color.a = Mathf.Clamp01(color.a * 0.55f);
+            }
+
+            cursorRenderer.material.color = color;
+        }
+
+        private void TryEmitControllerHaptic(
+            HandRuntime hand,
+            XRNode node,
+            ref InputDevice device)
+        {
+            if (!_enableControllerHaptics || hand == null || !hand.lastHandActive)
+            {
+                return;
+            }
+
+            var now = Time.realtimeSinceStartup;
+            if (now < hand.nextHapticAtSec)
+            {
+                return;
+            }
+
+            if (!device.isValid)
+            {
+                device = InputDevices.GetDeviceAtXRNode(node);
+            }
+
+            if (!device.isValid ||
+                !device.TryGetHapticCapabilities(out var capabilities) ||
+                !capabilities.supportsImpulse ||
+                capabilities.numChannels <= 0)
+            {
+                return;
+            }
+
+            var amplitude = Mathf.Clamp01(hand.lastSampleValid ? _hapticValidAmplitude : _hapticInvalidAmplitude);
+            if (amplitude <= 0.0001f)
+            {
+                return;
+            }
+
+            var duration = Mathf.Clamp(_hapticPulseDurationSec, 0.005f, 0.25f);
+            var sent = device.SendHapticImpulse(0u, amplitude, duration);
+            if (sent)
+            {
+                hand.nextHapticAtSec = now + Mathf.Max(0.03f, _hapticPulseIntervalSec);
             }
         }
 
@@ -1346,6 +1531,18 @@ namespace TheraplyGames.BilateralMarkers
             {
                 _rightPathRenderer = CreatePathRenderer("RightPath");
             }
+
+            if (_leftProgressRenderer == null)
+            {
+                _leftProgressRenderer = CreateProgressRenderer("LeftProgress");
+            }
+
+            if (_rightProgressRenderer == null)
+            {
+                _rightProgressRenderer = CreateProgressRenderer("RightProgress");
+            }
+
+            EnsureHandCursors();
         }
 
         private LineRenderer CreatePathRenderer(string objectName)
@@ -1362,6 +1559,110 @@ namespace TheraplyGames.BilateralMarkers
             renderer.widthCurve = AnimationCurve.Constant(0f, 1f, ResolvePathVisualWidthMeters());
             renderer.material = _pathMaterial;
             return renderer;
+        }
+
+        private LineRenderer CreateProgressRenderer(string objectName)
+        {
+            var lineObject = new GameObject(string.IsNullOrWhiteSpace(objectName) ? "Progress" : objectName);
+            lineObject.transform.SetParent(_runtimeVisualRoot.transform, worldPositionStays: false);
+            var renderer = lineObject.AddComponent<LineRenderer>();
+            renderer.useWorldSpace = true;
+            renderer.loop = false;
+            renderer.numCornerVertices = 4;
+            renderer.numCapVertices = 4;
+            renderer.alignment = LineAlignment.View;
+            renderer.textureMode = LineTextureMode.Stretch;
+            renderer.widthCurve = AnimationCurve.Constant(0f, 1f, ResolveProgressTraceWidthMeters());
+            renderer.material = _pathMaterial;
+            renderer.positionCount = 0;
+            return renderer;
+        }
+
+        private void EnsureHandCursors()
+        {
+            if (_leftHandCursorTransform == null || _leftHandCursorRenderer == null)
+            {
+                if (_leftCursorMaterial != null)
+                {
+                    Destroy(_leftCursorMaterial);
+                    _leftCursorMaterial = null;
+                }
+
+                CreateHandCursor(
+                    "LeftHandCursor",
+                    _leftPathColor,
+                    out _leftHandCursorTransform,
+                    out _leftHandCursorRenderer,
+                    out _leftCursorMaterial);
+            }
+
+            if (_rightHandCursorTransform == null || _rightHandCursorRenderer == null)
+            {
+                if (_rightCursorMaterial != null)
+                {
+                    Destroy(_rightCursorMaterial);
+                    _rightCursorMaterial = null;
+                }
+
+                CreateHandCursor(
+                    "RightHandCursor",
+                    _rightPathColor,
+                    out _rightHandCursorTransform,
+                    out _rightHandCursorRenderer,
+                    out _rightCursorMaterial);
+            }
+        }
+
+        private void CreateHandCursor(
+            string objectName,
+            Color initialColor,
+            out Transform cursorTransform,
+            out Renderer cursorRenderer,
+            out Material cursorMaterial)
+        {
+            cursorTransform = null;
+            cursorRenderer = null;
+            cursorMaterial = null;
+            if (_runtimeVisualRoot == null)
+            {
+                return;
+            }
+
+            var cursor = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            cursor.name = string.IsNullOrWhiteSpace(objectName) ? "HandCursor" : objectName;
+            cursor.transform.SetParent(_runtimeVisualRoot.transform, worldPositionStays: false);
+            cursor.transform.localScale = Vector3.one * Mathf.Clamp(_handCursorSizeMeters, 0.01f, 0.12f);
+            var collider = cursor.GetComponent<Collider>();
+            if (collider != null)
+            {
+                Destroy(collider);
+            }
+
+            cursorRenderer = cursor.GetComponent<Renderer>();
+            if (cursorRenderer != null)
+            {
+                var shader = Shader.Find("Sprites/Default");
+                if (shader == null)
+                {
+                    shader = Shader.Find("Standard");
+                }
+
+                if (shader != null)
+                {
+                    cursorMaterial = new Material(shader)
+                    {
+                        color = initialColor
+                    };
+                    cursorRenderer.material = cursorMaterial;
+                }
+                else
+                {
+                    cursorRenderer.material.color = initialColor;
+                }
+            }
+
+            cursorTransform = cursor.transform;
+            cursor.SetActive(false);
         }
 
         private void UpdatePathRenderer(LineRenderer renderer, List<Vector3> points, Color color)
@@ -1395,6 +1696,9 @@ namespace TheraplyGames.BilateralMarkers
             var width = ResolvePathVisualWidthMeters();
             _leftPathRenderer.widthCurve = AnimationCurve.Constant(0f, 1f, width);
             _rightPathRenderer.widthCurve = AnimationCurve.Constant(0f, 1f, width);
+
+            UpdateProgressTraceVisual(_leftProgressRenderer, _leftHandRuntime);
+            UpdateProgressTraceVisual(_rightProgressRenderer, _rightHandRuntime);
         }
 
         private float ResolvePathVisualWidthMeters()
@@ -1404,6 +1708,48 @@ namespace TheraplyGames.BilateralMarkers
             var maxWidth = Mathf.Max(minWidth, _pathVisualMaxWidthMeters);
             var width = _effectiveTunnelWidthMeters * widthFactor;
             return Mathf.Clamp(width, minWidth, maxWidth);
+        }
+
+        private float ResolveProgressTraceWidthMeters()
+        {
+            var baseWidth = ResolvePathVisualWidthMeters();
+            var widthFactor = Mathf.Clamp(_progressTraceWidthFactor, 0.2f, 1f);
+            return Mathf.Clamp(baseWidth * widthFactor, 0.004f, 0.06f);
+        }
+
+        private void UpdateProgressTraceVisual(LineRenderer renderer, HandRuntime hand)
+        {
+            if (renderer == null || hand == null)
+            {
+                return;
+            }
+
+            if (!_showProgressTrace || hand.points == null || hand.points.Count <= 0 || hand.lastNearestIndex <= 0)
+            {
+                renderer.positionCount = 0;
+                return;
+            }
+
+            var count = Mathf.Clamp(hand.lastNearestIndex + 1, 1, hand.points.Count);
+            renderer.positionCount = count;
+            for (var i = 0; i < count; i++)
+            {
+                renderer.SetPosition(i, hand.points[i]);
+            }
+
+            var traceColor = hand.lastHandActive
+                ? (hand.lastSampleValid ? _progressTraceValidColor : _progressTraceInvalidColor)
+                : (string.Equals(hand.handToken, "LEFT", StringComparison.Ordinal)
+                    ? _leftPathColor
+                    : _rightPathColor);
+            if (!hand.lastHandActive)
+            {
+                traceColor.a = Mathf.Clamp01(traceColor.a * 0.6f);
+            }
+
+            renderer.startColor = traceColor;
+            renderer.endColor = traceColor;
+            renderer.widthCurve = AnimationCurve.Constant(0f, 1f, ResolveProgressTraceWidthMeters());
         }
 
         private void CleanupVisuals()
@@ -1419,6 +1765,23 @@ namespace TheraplyGames.BilateralMarkers
                 Destroy(_rightPathRenderer.gameObject);
                 _rightPathRenderer = null;
             }
+
+            if (_leftProgressRenderer != null)
+            {
+                Destroy(_leftProgressRenderer.gameObject);
+                _leftProgressRenderer = null;
+            }
+
+            if (_rightProgressRenderer != null)
+            {
+                Destroy(_rightProgressRenderer.gameObject);
+                _rightProgressRenderer = null;
+            }
+
+            _leftHandCursorTransform = null;
+            _rightHandCursorTransform = null;
+            _leftHandCursorRenderer = null;
+            _rightHandCursorRenderer = null;
 
             if (_runtimeVisualRoot != null)
             {
