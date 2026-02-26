@@ -151,6 +151,9 @@ namespace TheraplyExamples
             EnsureBinding(
                 PulseTargetsGameConfig.DefaultGameId,
                 "Assets/_Examples/Scenes/PulseTargetsScene.unity");
+            EnsureBinding(
+                "bilateral_markers",
+                "Assets/_YourGames/BilateralMarkers/Scenes/BilateralMarkersScene.unity");
         }
 
         private void EnsureBinding(string gameId, string scenePath)
