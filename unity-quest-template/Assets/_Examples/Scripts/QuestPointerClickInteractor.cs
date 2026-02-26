@@ -23,7 +23,11 @@ namespace TheraplyExamples
     {
         private static readonly string[] RightRayOriginCandidates =
         {
+            "OVRCameraRig/TrackingSpace/RightControllerInHandAnchor",
+            "OVRCameraRig/TrackingSpace/RightHandOnControllerAnchor",
+            "OVRCameraRig/TrackingSpace/RightTouchControllerAnchor",
             "OVRCameraRig/TrackingSpace/RightHandAnchor",
+            "OVRCameraRig/TrackingSpace/RightHandAnchorDetached",
             "XR Origin/Camera Offset/Right Controller",
             "XR Origin/Right Controller",
             "RightHand Controller",
@@ -32,7 +36,11 @@ namespace TheraplyExamples
 
         private static readonly string[] LeftRayOriginCandidates =
         {
+            "OVRCameraRig/TrackingSpace/LeftControllerInHandAnchor",
+            "OVRCameraRig/TrackingSpace/LeftHandOnControllerAnchor",
+            "OVRCameraRig/TrackingSpace/LeftTouchControllerAnchor",
             "OVRCameraRig/TrackingSpace/LeftHandAnchor",
+            "OVRCameraRig/TrackingSpace/LeftHandAnchorDetached",
             "XR Origin/Camera Offset/Left Controller",
             "XR Origin/Left Controller",
             "LeftHand Controller",
@@ -61,6 +69,7 @@ namespace TheraplyExamples
 
         [Header("Wand Indicator")]
         [SerializeField] private bool _showWand = true;
+        [SerializeField] private bool _showDualHandWands = true;
         [SerializeField] private float _wandLength = 0.24f;
         [SerializeField] private float _wandRadius = 0.008f;
         [SerializeField] private float _wandTipRadius = 0.016f;
@@ -68,6 +77,8 @@ namespace TheraplyExamples
         [SerializeField] private string _bilateralMarkersGameId = "bilateral_markers";
         [SerializeField] private bool _colorFromSessionIndicator = true;
         [SerializeField] private Color _wandFallbackColor = new Color(0.2f, 0.9f, 1f, 0.95f);
+        [SerializeField] private Color _leftWandFallbackColor = new Color(0.12f, 0.95f, 0.35f, 0.95f);
+        [SerializeField] private Color _rightWandFallbackColor = new Color(0.15f, 0.55f, 1f, 0.95f);
 
         [Header("Telemetry")]
         [SerializeField] private bool _emitPointerTelemetry = true;
@@ -93,13 +104,19 @@ namespace TheraplyExamples
         private float _nextRayOriginScanAtRealtime;
         private LineRenderer _laserLine;
         private Material _laserMaterial;
-        private Transform _wandBody;
-        private Transform _wandTip;
-        private Material _wandBodyMaterial;
-        private Material _wandTipMaterial;
+        private WandVisual _leftWand = new WandVisual();
+        private WandVisual _rightWand = new WandVisual();
         private string _lastActivationHand = "UNKNOWN";
         private string _lastActivationControl = "UNKNOWN";
         private float _lastActivationValue = 0f;
+
+        private sealed class WandVisual
+        {
+            public Transform body;
+            public Transform tip;
+            public Material bodyMaterial;
+            public Material tipMaterial;
+        }
 
         private struct PointerShotRecord
         {
@@ -130,7 +147,7 @@ namespace TheraplyExamples
 
             ResolveToolTelemetryDependencies();
             EnsureLaserRenderer();
-            EnsureWandVisual();
+            EnsureWandVisuals();
         }
 
         private void Update()
@@ -176,15 +193,8 @@ namespace TheraplyExamples
                 Destroy(_laserMaterial);
             }
 
-            if (_wandBodyMaterial != null)
-            {
-                Destroy(_wandBodyMaterial);
-            }
-
-            if (_wandTipMaterial != null)
-            {
-                Destroy(_wandTipMaterial);
-            }
+            DestroyWandVisual(_leftWand);
+            DestroyWandVisual(_rightWand);
         }
 
         private bool IsActivationPressed()
@@ -245,20 +255,42 @@ namespace TheraplyExamples
 
             _nextRayOriginScanAtRealtime = Time.realtimeSinceStartup + 1f;
 
+            var rightCandidate = FindRayOriginCandidate(true);
             if (_rightRayOrigin == null)
             {
-                _rightRayOrigin = FindRayOriginCandidate(true);
+                _rightRayOrigin = rightCandidate;
+            }
+            else if (ShouldPreferRayOriginCandidate(_rightRayOrigin, rightCandidate, "right"))
+            {
+                _rightRayOrigin = rightCandidate;
             }
 
+            var leftCandidate = FindRayOriginCandidate(false);
             if (_leftRayOrigin == null)
             {
-                _leftRayOrigin = FindRayOriginCandidate(false);
+                _leftRayOrigin = leftCandidate;
+            }
+            else if (ShouldPreferRayOriginCandidate(_leftRayOrigin, leftCandidate, "left"))
+            {
+                _leftRayOrigin = leftCandidate;
             }
 
             if (_rayCamera == null)
             {
                 _rayCamera = Camera.main;
             }
+        }
+
+        private static bool ShouldPreferRayOriginCandidate(Transform current, Transform candidate, string handToken)
+        {
+            if (candidate == null || current == candidate)
+            {
+                return false;
+            }
+
+            var currentScore = ScoreRayOriginCandidate(current, handToken);
+            var candidateScore = ScoreRayOriginCandidate(candidate, handToken);
+            return candidateScore >= currentScore + 20;
         }
 
         private static bool TryReadControllerPress(
@@ -621,51 +653,102 @@ namespace TheraplyExamples
         {
             if (!_showWand)
             {
-                if (_wandBody != null)
-                {
-                    _wandBody.gameObject.SetActive(false);
-                }
-
-                if (_wandTip != null)
-                {
-                    _wandTip.gameObject.SetActive(false);
-                }
+                SetWandActive(_leftWand, false);
+                SetWandActive(_rightWand, false);
 
                 return;
             }
 
-            EnsureWandVisual();
-            if (_wandBody == null || _wandTip == null)
+            EnsureWandVisuals();
+
+            var hasHit = TryRaycastFromPointer(out _, out var hit);
+            var activeColor = ResolveIndicatorColor(hasHit, hit);
+            var activeHand = ResolveActiveHandToken();
+
+            if (_showDualHandWands)
+            {
+                var leftColor = string.Equals(activeHand, "LEFT", System.StringComparison.OrdinalIgnoreCase)
+                    ? activeColor
+                    : _leftWandFallbackColor;
+                var rightColor = string.Equals(activeHand, "RIGHT", System.StringComparison.OrdinalIgnoreCase)
+                    ? activeColor
+                    : _rightWandFallbackColor;
+
+                UpdateSingleWandVisual("LEFT", _leftWand, leftColor);
+                UpdateSingleWandVisual("RIGHT", _rightWand, rightColor);
+                return;
+            }
+
+            if (string.Equals(activeHand, "LEFT", System.StringComparison.OrdinalIgnoreCase))
+            {
+                UpdateSingleWandVisual("LEFT", _leftWand, activeColor);
+                SetWandActive(_rightWand, false);
+                return;
+            }
+
+            UpdateSingleWandVisual("RIGHT", _rightWand, activeColor);
+            SetWandActive(_leftWand, false);
+        }
+
+        private void UpdateSingleWandVisual(string handToken, WandVisual wand, Color color)
+        {
+            if (wand == null)
             {
                 return;
             }
 
-            var hasHit = TryRaycastFromPointer(out var ray, out var hit);
+            var origin = ResolveRayOriginTransformForHand(handToken, allowFallbackToOtherHand: false);
+            if (origin == null)
+            {
+                SetWandActive(wand, false);
+                return;
+            }
+
+            if (wand.body == null || wand.tip == null)
+            {
+                return;
+            }
+
+            var ray = new Ray(origin.position, origin.forward);
             var direction = ray.direction.sqrMagnitude > 0f ? ray.direction.normalized : Vector3.forward;
             var length = Mathf.Max(0.05f, _wandLength);
             var radius = Mathf.Max(0.001f, _wandRadius);
             var tipRadius = Mathf.Max(radius * 1.1f, _wandTipRadius);
-            var color = ResolveIndicatorColor(hasHit, hit);
 
-            _wandBody.gameObject.SetActive(true);
-            _wandTip.gameObject.SetActive(true);
+            SetWandActive(wand, true);
+            wand.body.position = ray.origin + (direction * (length * 0.5f));
+            wand.body.rotation = Quaternion.FromToRotation(Vector3.up, direction);
+            wand.body.localScale = new Vector3(radius * 2f, length * 0.5f, radius * 2f);
+            wand.tip.position = ray.origin + (direction * length);
+            wand.tip.rotation = Quaternion.identity;
+            wand.tip.localScale = Vector3.one * tipRadius;
 
-            _wandBody.position = ray.origin + (direction * (length * 0.5f));
-            _wandBody.rotation = Quaternion.FromToRotation(Vector3.up, direction);
-            _wandBody.localScale = new Vector3(radius * 2f, length * 0.5f, radius * 2f);
-
-            _wandTip.position = ray.origin + (direction * length);
-            _wandTip.rotation = Quaternion.identity;
-            _wandTip.localScale = Vector3.one * tipRadius;
-
-            if (_wandBodyMaterial != null)
+            if (wand.bodyMaterial != null)
             {
-                _wandBodyMaterial.color = color;
+                wand.bodyMaterial.color = color;
             }
 
-            if (_wandTipMaterial != null)
+            if (wand.tipMaterial != null)
             {
-                _wandTipMaterial.color = color;
+                wand.tipMaterial.color = color;
+            }
+        }
+
+        private void SetWandActive(WandVisual wand, bool isActive)
+        {
+            if (wand == null)
+            {
+                return;
+            }
+
+            if (wand.body != null)
+            {
+                wand.body.gameObject.SetActive(isActive);
+            }
+
+            if (wand.tip != null)
+            {
+                wand.tip.gameObject.SetActive(isActive);
             }
         }
 
@@ -709,15 +792,22 @@ namespace TheraplyExamples
             ApplyLaserStyle(ResolveSessionIndicatorColor());
         }
 
-        private void EnsureWandVisual()
+        private void EnsureWandVisuals()
         {
-            if (_wandBody != null && _wandTip != null)
+            EnsureSingleWandVisual(_leftWand, "Left", _leftWandFallbackColor);
+            EnsureSingleWandVisual(_rightWand, "Right", _rightWandFallbackColor);
+        }
+
+        private void EnsureSingleWandVisual(WandVisual wand, string handSuffix, Color fallbackColor)
+        {
+            if (wand == null || (wand.body != null && wand.tip != null))
             {
                 return;
             }
 
+            var safeSuffix = string.IsNullOrWhiteSpace(handSuffix) ? "Unknown" : handSuffix.Trim();
             var body = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            body.name = "QuestPointerWandBody";
+            body.name = "QuestPointerWandBody" + safeSuffix;
             body.transform.SetParent(transform, worldPositionStays: true);
             var bodyCollider = body.GetComponent<Collider>();
             if (bodyCollider != null)
@@ -726,7 +816,7 @@ namespace TheraplyExamples
             }
 
             var tip = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            tip.name = "QuestPointerWandTip";
+            tip.name = "QuestPointerWandTip" + safeSuffix;
             tip.transform.SetParent(transform, worldPositionStays: true);
             var tipCollider = tip.GetComponent<Collider>();
             if (tipCollider != null)
@@ -734,27 +824,49 @@ namespace TheraplyExamples
                 Destroy(tipCollider);
             }
 
-            _wandBody = body.transform;
-            _wandTip = tip.transform;
+            wand.body = body.transform;
+            wand.tip = tip.transform;
 
             var bodyRenderer = body.GetComponent<Renderer>();
             if (bodyRenderer != null)
             {
-                _wandBodyMaterial = new Material(bodyRenderer.sharedMaterial)
+                wand.bodyMaterial = new Material(bodyRenderer.sharedMaterial)
                 {
-                    name = "QuestPointerWandBodyMaterial"
+                    name = "QuestPointerWandBodyMaterial" + safeSuffix,
+                    color = fallbackColor
                 };
-                bodyRenderer.material = _wandBodyMaterial;
+                bodyRenderer.material = wand.bodyMaterial;
             }
 
             var tipRenderer = tip.GetComponent<Renderer>();
             if (tipRenderer != null)
             {
-                _wandTipMaterial = new Material(tipRenderer.sharedMaterial)
+                wand.tipMaterial = new Material(tipRenderer.sharedMaterial)
                 {
-                    name = "QuestPointerWandTipMaterial"
+                    name = "QuestPointerWandTipMaterial" + safeSuffix,
+                    color = fallbackColor
                 };
-                tipRenderer.material = _wandTipMaterial;
+                tipRenderer.material = wand.tipMaterial;
+            }
+        }
+
+        private void DestroyWandVisual(WandVisual wand)
+        {
+            if (wand == null)
+            {
+                return;
+            }
+
+            if (wand.bodyMaterial != null)
+            {
+                Destroy(wand.bodyMaterial);
+                wand.bodyMaterial = null;
+            }
+
+            if (wand.tipMaterial != null)
+            {
+                Destroy(wand.tipMaterial);
+                wand.tipMaterial = null;
             }
         }
 
@@ -901,7 +1013,7 @@ namespace TheraplyExamples
             var origin = ResolveRayOriginTransform();
             if (origin != null)
             {
-                return new Ray(origin.position, origin.forward);
+                return BuildRayFromTransform(origin);
             }
 
             if (_rayCamera == null)
@@ -917,21 +1029,107 @@ namespace TheraplyExamples
             return new Ray(Vector3.zero, Vector3.forward);
         }
 
+        private static Ray BuildRayFromTransform(Transform origin)
+        {
+            if (origin == null)
+            {
+                return new Ray(Vector3.zero, Vector3.forward);
+            }
+
+            return new Ray(origin.position, origin.forward);
+        }
+
+        private string ResolveActiveHandToken()
+        {
+            if (string.Equals(_lastActivationHand, "LEFT", System.StringComparison.OrdinalIgnoreCase) &&
+                _leftRayOrigin != null)
+            {
+                return "LEFT";
+            }
+
+            if (string.Equals(_lastActivationHand, "RIGHT", System.StringComparison.OrdinalIgnoreCase) &&
+                _rightRayOrigin != null)
+            {
+                return "RIGHT";
+            }
+
+            if (_preferLeftRayOrigin)
+            {
+                if (_leftRayOrigin != null)
+                {
+                    return "LEFT";
+                }
+
+                if (_rightRayOrigin != null)
+                {
+                    return "RIGHT";
+                }
+            }
+            else
+            {
+                if (_rightRayOrigin != null)
+                {
+                    return "RIGHT";
+                }
+
+                if (_leftRayOrigin != null)
+                {
+                    return "LEFT";
+                }
+            }
+
+            return "RIGHT";
+        }
+
         private Transform ResolveRayOriginTransform()
         {
             if (_switchRayOriginToPressedHand)
             {
-                if (string.Equals(_lastActivationHand, "LEFT", System.StringComparison.OrdinalIgnoreCase) &&
-                    _leftRayOrigin != null)
+                var pressedHandOrigin = ResolveRayOriginTransformForHand(
+                    _lastActivationHand,
+                    allowFallbackToOtherHand: false);
+                if (pressedHandOrigin != null)
                 {
-                    return _leftRayOrigin;
+                    return pressedHandOrigin;
                 }
+            }
 
-                if (string.Equals(_lastActivationHand, "RIGHT", System.StringComparison.OrdinalIgnoreCase) &&
-                    _rightRayOrigin != null)
-                {
-                    return _rightRayOrigin;
-                }
+            if (_preferLeftRayOrigin)
+            {
+                return ResolveRayOriginTransformForHand("LEFT", allowFallbackToOtherHand: true);
+            }
+
+            return ResolveRayOriginTransformForHand("RIGHT", allowFallbackToOtherHand: true);
+        }
+
+        private Transform ResolveRayOriginTransformForHand(string handToken, bool allowFallbackToOtherHand)
+        {
+            var isLeftHand = string.Equals(handToken, "LEFT", System.StringComparison.OrdinalIgnoreCase);
+            var isRightHand = string.Equals(handToken, "RIGHT", System.StringComparison.OrdinalIgnoreCase);
+
+            if (isLeftHand && _leftRayOrigin != null)
+            {
+                return _leftRayOrigin;
+            }
+
+            if (isRightHand && _rightRayOrigin != null)
+            {
+                return _rightRayOrigin;
+            }
+
+            if (!allowFallbackToOtherHand)
+            {
+                return null;
+            }
+
+            if (isLeftHand)
+            {
+                return _rightRayOrigin;
+            }
+
+            if (isRightHand)
+            {
+                return _leftRayOrigin;
             }
 
             if (_preferLeftRayOrigin)
@@ -941,25 +1139,15 @@ namespace TheraplyExamples
                     return _leftRayOrigin;
                 }
 
-                if (_rightRayOrigin != null)
-                {
-                    return _rightRayOrigin;
-                }
+                return _rightRayOrigin;
             }
-            else
+
+            if (_rightRayOrigin != null)
             {
-                if (_rightRayOrigin != null)
-                {
-                    return _rightRayOrigin;
-                }
-
-                if (_leftRayOrigin != null)
-                {
-                    return _leftRayOrigin;
-                }
+                return _rightRayOrigin;
             }
 
-            return null;
+            return _leftRayOrigin;
         }
 
         private bool IsPointerSuppressedForActiveGame()
@@ -988,15 +1176,8 @@ namespace TheraplyExamples
                 _laserLine.enabled = false;
             }
 
-            if (_wandBody != null)
-            {
-                _wandBody.gameObject.SetActive(false);
-            }
-
-            if (_wandTip != null)
-            {
-                _wandTip.gameObject.SetActive(false);
-            }
+            SetWandActive(_leftWand, false);
+            SetWandActive(_rightWand, false);
         }
 
         private static Transform FindRayOriginCandidate(bool isRight)
@@ -1013,9 +1194,17 @@ namespace TheraplyExamples
 
             var allTransforms = Object.FindObjectsByType<Transform>(FindObjectsSortMode.None);
             var handToken = isRight ? "right" : "left";
+            Transform bestCandidate = null;
+            var bestScore = int.MinValue;
             for (var i = 0; i < allTransforms.Length; i++)
             {
-                var name = allTransforms[i].name;
+                var candidate = allTransforms[i];
+                if (candidate == null)
+                {
+                    continue;
+                }
+
+                var name = candidate.name;
                 if (string.IsNullOrEmpty(name))
                 {
                     continue;
@@ -1025,11 +1214,98 @@ namespace TheraplyExamples
                 if (normalized.Contains(handToken) &&
                     (normalized.Contains("hand") || normalized.Contains("controller") || normalized.Contains("anchor")))
                 {
-                    return allTransforms[i];
+                    var score = ScoreRayOriginCandidate(candidate, handToken);
+                    if (score > bestScore)
+                    {
+                        bestScore = score;
+                        bestCandidate = candidate;
+                    }
                 }
             }
 
-            return null;
+            return bestCandidate;
+        }
+
+        private static int ScoreRayOriginCandidate(Transform candidate, string handToken)
+        {
+            if (candidate == null)
+            {
+                return int.MinValue;
+            }
+
+            var normalizedName = (candidate.name ?? string.Empty).ToLowerInvariant();
+            var score = 0;
+            if (normalizedName.Contains(handToken))
+            {
+                score += 60;
+            }
+
+            if (normalizedName.Contains("inhand"))
+            {
+                score += 120;
+            }
+
+            if (normalizedName.Contains("oncontroller"))
+            {
+                score += 100;
+            }
+
+            if (normalizedName.Contains("touchcontroller"))
+            {
+                score += 90;
+            }
+
+            if (normalizedName.Contains("controller"))
+            {
+                score += 75;
+            }
+
+            if (normalizedName.Contains("handanchor"))
+            {
+                score += 50;
+            }
+
+            if (normalizedName.Contains("anchor"))
+            {
+                score += 25;
+            }
+
+            if (normalizedName.Contains("detached"))
+            {
+                score -= 80;
+            }
+
+            var path = BuildTransformPath(candidate);
+            if (path.Contains("trackingspace"))
+            {
+                score += 20;
+            }
+
+            if (path.Contains("ovrcamerarig"))
+            {
+                score += 20;
+            }
+
+            return score;
+        }
+
+        private static string BuildTransformPath(Transform transform)
+        {
+            if (transform == null)
+            {
+                return string.Empty;
+            }
+
+            var pathParts = new List<string>(8);
+            var current = transform;
+            while (current != null)
+            {
+                pathParts.Add(current.name ?? string.Empty);
+                current = current.parent;
+            }
+
+            pathParts.Reverse();
+            return string.Join("/", pathParts).ToLowerInvariant();
         }
     }
 
