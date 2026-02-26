@@ -61,6 +61,34 @@ namespace TheraplyCore.Games.Runtime
         public string ActiveTraceId => _traceId;
         public int SampleCount => _samples.Count;
 
+        public void ConfigureTrackedTransforms(
+            Transform head,
+            Transform leftHand,
+            Transform rightHand,
+            bool disableAutoResolveWhenProvided = true)
+        {
+            if (head != null)
+            {
+                _head = head;
+            }
+
+            if (leftHand != null)
+            {
+                _leftHand = leftHand;
+            }
+
+            if (rightHand != null)
+            {
+                _rightHand = rightHand;
+            }
+
+            if (disableAutoResolveWhenProvided &&
+                (head != null || leftHand != null || rightHand != null))
+            {
+                _autoResolveRigTransforms = false;
+            }
+        }
+
         private void Awake()
         {
             ResolveDependencies();

@@ -437,7 +437,11 @@ namespace TheraplyCore.Games.Runtime
             var shouldEmitSessionStart = _sessionContext != null &&
                                          _sessionContext.SessionState == GameContracts.SessionLifecycleState.CREATED;
 
-            if (_activeGame.State == GameContracts.GameState.NotInitialized)
+            var requiresInitialization = _activeGame.State == GameContracts.GameState.NotInitialized ||
+                                         _activeGame.State == GameContracts.GameState.Completed ||
+                                         _activeGame.State == GameContracts.GameState.Failed;
+
+            if (requiresInitialization)
             {
                 if (_contextService == null)
                 {
