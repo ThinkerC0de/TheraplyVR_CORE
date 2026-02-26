@@ -57,6 +57,9 @@ namespace TheraplyGames.BilateralMarkers
         [Header("Visuals")]
         [SerializeField] private Color _leftPathColor = new Color(0.12f, 0.95f, 0.35f, 1f);
         [SerializeField] private Color _rightPathColor = new Color(0.15f, 0.55f, 1f, 1f);
+        [SerializeField, Range(0.1f, 1f)] private float _pathVisualWidthFactor = 0.35f;
+        [SerializeField] private float _pathVisualMinWidthMeters = 0.012f;
+        [SerializeField] private float _pathVisualMaxWidthMeters = 0.08f;
         [SerializeField] private bool _showDebugHud;
 
         [Header("Trace")]
@@ -1356,7 +1359,7 @@ namespace TheraplyGames.BilateralMarkers
             renderer.numCapVertices = 6;
             renderer.alignment = LineAlignment.View;
             renderer.textureMode = LineTextureMode.Stretch;
-            renderer.widthCurve = AnimationCurve.Constant(0f, 1f, Mathf.Max(0.01f, _settings.tunnelWidthMeters * 2f));
+            renderer.widthCurve = AnimationCurve.Constant(0f, 1f, ResolvePathVisualWidthMeters());
             renderer.material = _pathMaterial;
             return renderer;
         }
@@ -1372,7 +1375,7 @@ namespace TheraplyGames.BilateralMarkers
             renderer.SetPositions(points.ToArray());
             renderer.startColor = color;
             renderer.endColor = color;
-            renderer.widthCurve = AnimationCurve.Constant(0f, 1f, Mathf.Max(0.01f, _effectiveTunnelWidthMeters * 2f));
+            renderer.widthCurve = AnimationCurve.Constant(0f, 1f, ResolvePathVisualWidthMeters());
         }
 
         private void UpdatePathVisualFeedback()
@@ -1388,9 +1391,19 @@ namespace TheraplyGames.BilateralMarkers
             _leftPathRenderer.endColor = Color.Lerp(Color.red, _leftPathColor, leftAccuracy);
             _rightPathRenderer.startColor = Color.Lerp(Color.red, _rightPathColor, rightAccuracy);
             _rightPathRenderer.endColor = Color.Lerp(Color.red, _rightPathColor, rightAccuracy);
-            var width = Mathf.Max(0.01f, _effectiveTunnelWidthMeters * 2f);
+            // Keep visual lanes readable even when scoring tunnel is wide.
+            var width = ResolvePathVisualWidthMeters();
             _leftPathRenderer.widthCurve = AnimationCurve.Constant(0f, 1f, width);
             _rightPathRenderer.widthCurve = AnimationCurve.Constant(0f, 1f, width);
+        }
+
+        private float ResolvePathVisualWidthMeters()
+        {
+            var widthFactor = Mathf.Clamp(_pathVisualWidthFactor, 0.1f, 1f);
+            var minWidth = Mathf.Max(0.004f, _pathVisualMinWidthMeters);
+            var maxWidth = Mathf.Max(minWidth, _pathVisualMaxWidthMeters);
+            var width = _effectiveTunnelWidthMeters * widthFactor;
+            return Mathf.Clamp(width, minWidth, maxWidth);
         }
 
         private void CleanupVisuals()
