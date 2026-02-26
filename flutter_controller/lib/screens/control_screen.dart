@@ -947,6 +947,9 @@ class _ControlScreenState extends State<ControlScreen>
           'entitledGameIdsCount': entitledGameIds.length,
         },
         expiresAtUtc: DateTime.now().toUtc().add(const Duration(seconds: 30)),
+        ackTimeout:
+            _resolveCriticalCommandAckTimeout(CriticalCommandIds.sessionAttach),
+        maxRetries: _resolveCriticalCommandMaxRetries(),
       );
 
       if (!mounted) {
@@ -3669,6 +3672,36 @@ class _ControlScreenState extends State<ControlScreen>
     return activeSessionId;
   }
 
+  int _resolveCriticalCommandMaxRetries() {
+    final configured = _therapistSessionSettings.criticalCommandMaxRetries;
+    if (configured < TherapistSessionSettings.minCriticalCommandMaxRetries) {
+      return TherapistSessionSettings.minCriticalCommandMaxRetries;
+    }
+    if (configured > TherapistSessionSettings.maxCriticalCommandMaxRetries) {
+      return TherapistSessionSettings.maxCriticalCommandMaxRetries;
+    }
+    return configured;
+  }
+
+  Duration _resolveCriticalCommandAckTimeout(String commandId) {
+    var timeoutMs = _therapistSessionSettings.criticalCommandAckTimeoutMs;
+
+    if ((commandId == CriticalCommandIds.startGame ||
+            commandId == CriticalCommandIds.resumeGame) &&
+        timeoutMs < 6000) {
+      timeoutMs = 6000;
+    }
+
+    if (timeoutMs < TherapistSessionSettings.minCriticalCommandAckTimeoutMs) {
+      timeoutMs = TherapistSessionSettings.minCriticalCommandAckTimeoutMs;
+    } else if (timeoutMs >
+        TherapistSessionSettings.maxCriticalCommandAckTimeoutMs) {
+      timeoutMs = TherapistSessionSettings.maxCriticalCommandAckTimeoutMs;
+    }
+
+    return Duration(milliseconds: timeoutMs);
+  }
+
   void _promptSessionDecisionIfNeeded() {
     if (!mounted || !_requiresSessionDecision || _isSessionDecisionDialogOpen) {
       return;
@@ -3961,6 +3994,9 @@ class _ControlScreenState extends State<ControlScreen>
           sessionId: remoteSessionId,
         ),
         expiresAtUtc: DateTime.now().toUtc().add(const Duration(seconds: 30)),
+        ackTimeout:
+            _resolveCriticalCommandAckTimeout(CriticalCommandIds.endSession),
+        maxRetries: _resolveCriticalCommandMaxRetries(),
       );
       _markSessionAsRecentlyEnded(remoteSessionId);
       await _persistStartNewDecisionOutcome(remoteSessionId);
@@ -4217,6 +4253,8 @@ class _ControlScreenState extends State<ControlScreen>
             extraPayload: extraPayload,
           ),
           expiresAtUtc: DateTime.now().toUtc().add(const Duration(seconds: 30)),
+          ackTimeout: _resolveCriticalCommandAckTimeout(command),
+          maxRetries: _resolveCriticalCommandMaxRetries(),
         );
       } else {
         await _connection.sendCommand(command, extraPayload);
