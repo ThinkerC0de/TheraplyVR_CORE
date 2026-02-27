@@ -80,6 +80,7 @@ namespace TheraplyExamples
         [SerializeField] private float _wandLength = 0.24f;
         [SerializeField] private float _wandRadius = 0.008f;
         [SerializeField] private float _wandTipRadius = 0.016f;
+        [SerializeField] private bool _hideWandInBilateralMarkers = true;
         [SerializeField] private bool _hidePointerVisualsInBilateralMarkers = false;
         [SerializeField] private string _bilateralMarkersGameId = "bilateral_markers";
         [SerializeField] private bool _colorFromSessionIndicator = true;
@@ -722,7 +723,7 @@ namespace TheraplyExamples
 
         private void UpdateWandVisual()
         {
-            if (!_showWand)
+            if (!_showWand || ShouldHideWandForActiveGame())
             {
                 SetWandActive(_leftWand, false);
                 SetWandActive(_rightWand, false);
@@ -1325,6 +1326,11 @@ namespace TheraplyExamples
             }
         }
 
+        private bool ShouldHideWandForActiveGame()
+        {
+            return _hideWandInBilateralMarkers && IsBilateralMarkersActiveGame();
+        }
+
         private bool IsPointerSuppressedForActiveGame()
         {
             if (!_hidePointerVisualsInBilateralMarkers)
@@ -1332,6 +1338,11 @@ namespace TheraplyExamples
                 return false;
             }
 
+            return IsBilateralMarkersActiveGame();
+        }
+
+        private bool IsBilateralMarkersActiveGame()
+        {
             var activeGameId = ResolveActiveGameId();
             if (string.IsNullOrWhiteSpace(activeGameId) || string.IsNullOrWhiteSpace(_bilateralMarkersGameId))
             {

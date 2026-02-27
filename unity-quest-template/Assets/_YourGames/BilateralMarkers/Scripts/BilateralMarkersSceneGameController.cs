@@ -20,6 +20,8 @@ namespace TheraplyGames.BilateralMarkers
         public const string RoundStopped = "BILATERAL_ROUND_STOPPED";
         public const string InputUnavailable = "BILATERAL_INPUT_UNAVAILABLE";
         public const string HandPhaseLocked = "BILATERAL_HAND_PHASE_LOCKED";
+        public const string RayStartGatePending = "BILATERAL_RAY_START_GATE_PENDING";
+        public const string RayStartGateSatisfied = "BILATERAL_RAY_START_GATE_SATISFIED";
         public const string TracePublished = "BILATERAL_TRACE_PUBLISHED";
         public const string TempAdaptiveApplied = "BILATERAL_ADAPTIVE_TEMP_APPLIED";
         public const string AlternationSyncConfirmed = "BILATERAL_ALTERNATION_SYNC_CONFIRMED";
@@ -57,6 +59,8 @@ namespace TheraplyGames.BilateralMarkers
         [SerializeField] private float _controllerRayOriginForwardOffsetMeters = 0.04f;
         [SerializeField] private float _rayProjectionMaxDistanceMeters = 1.6f;
         [SerializeField] private float _minimumProgressMotionStepMeters = 0.003f;
+        [SerializeField] private bool _requireRayStartGate = true;
+        [SerializeField, Range(0.01f, 0.3f)] private float _rayStartGateWindowProgress01 = 0.08f;
 
         [Header("Visuals")]
         [SerializeField] private Color _leftPathColor = new Color(0.12f, 0.95f, 0.35f, 1f);
@@ -64,7 +68,7 @@ namespace TheraplyGames.BilateralMarkers
         [SerializeField, Range(0.1f, 1f)] private float _pathVisualWidthFactor = 0.35f;
         [SerializeField] private float _pathVisualMinWidthMeters = 0.012f;
         [SerializeField] private float _pathVisualMaxWidthMeters = 0.08f;
-        [SerializeField] private bool _showHandCursors = true;
+        [SerializeField] private bool _showHandCursors = false;
         [SerializeField] private float _handCursorSizeMeters = 0.035f;
         [SerializeField] private Color _cursorValidColor = new Color(1f, 0.95f, 0.25f, 1f);
         [SerializeField] private Color _cursorInvalidColor = new Color(1f, 0.35f, 0.35f, 1f);
@@ -180,6 +184,7 @@ namespace TheraplyGames.BilateralMarkers
             public bool lastSampleValid;
             public bool lastHandActive;
             public float nextHapticAtSec;
+            public bool rayStartGateSatisfied;
 
             public HandRuntime(string handToken, string targetId, string targetName)
             {
@@ -209,6 +214,7 @@ namespace TheraplyGames.BilateralMarkers
                 lastSampleValid = false;
                 lastHandActive = false;
                 nextHapticAtSec = 0f;
+                rayStartGateSatisfied = false;
             }
         }
 
@@ -687,42 +693,46 @@ namespace TheraplyGames.BilateralMarkers
             var elapsed = GetDurationSeconds();
             var leftSamplePosition = leftPosition;
             var rightSamplePosition = rightPosition;
+            var hasLeftSample = hasLeft;
+            var hasRightSample = hasRight;
             if (hasLeft)
             {
-                leftSamplePosition = ResolveSamplePositionForHand(
+                hasLeftSample = TryResolveSamplePositionForHand(
                     _leftHandRuntime,
                     leftPosition,
-                    leftRotation);
+                    leftRotation,
+                    out leftSamplePosition);
             }
 
             if (hasRight)
             {
-                rightSamplePosition = ResolveSamplePositionForHand(
+                hasRightSample = TryResolveSamplePositionForHand(
                     _rightHandRuntime,
                     rightPosition,
-                    rightRotation);
+                    rightRotation,
+                    out rightSamplePosition);
             }
 
-            if (_leftTraceTransform != null && hasLeft)
+            if (_leftTraceTransform != null && hasLeftSample)
             {
                 _leftTraceTransform.SetPositionAndRotation(leftSamplePosition, leftRotation);
             }
 
-            if (_rightTraceTransform != null && hasRight)
+            if (_rightTraceTransform != null && hasRightSample)
             {
                 _rightTraceTransform.SetPositionAndRotation(rightSamplePosition, rightRotation);
             }
 
             ProcessHandSample(
                 _leftHandRuntime,
-                hasLeft,
+                hasLeftSample,
                 leftSamplePosition,
                 leftHandActive,
                 elapsed,
                 sampleIntervalSec);
             ProcessHandSample(
                 _rightHandRuntime,
-                hasRight,
+                hasRightSample,
                 rightSamplePosition,
                 rightHandActive,
                 elapsed,
@@ -731,7 +741,7 @@ namespace TheraplyGames.BilateralMarkers
             UpdateHandCursorVisual(
                 _leftHandCursorTransform,
                 _leftHandCursorRenderer,
-                hasLeft,
+                hasLeftSample,
                 leftSamplePosition,
                 leftRotation,
                 leftHandActive,
@@ -740,7 +750,7 @@ namespace TheraplyGames.BilateralMarkers
             UpdateHandCursorVisual(
                 _rightHandCursorTransform,
                 _rightHandCursorRenderer,
-                hasRight,
+                hasRightSample,
                 rightSamplePosition,
                 rightRotation,
                 rightHandActive,
@@ -773,6 +783,7 @@ namespace TheraplyGames.BilateralMarkers
             if (!hasPose)
             {
                 hand.lastSampleValid = false;
+                hand.lastHandActive = false;
                 return;
             }
 
@@ -808,28 +819,63 @@ namespace TheraplyGames.BilateralMarkers
             var nearestIndex = FindNearestPathIndex(hand.points, worldPosition, hand.lastNearestIndex);
             var nearestPoint = hand.points[Mathf.Clamp(nearestIndex, 0, hand.points.Count - 1)];
             var deviationMeters = Vector3.Distance(worldPosition, nearestPoint);
+            var requireStartGate = _useControllerRayProjectionSampling && _requireRayStartGate;
+            var startGateMaxIndex = Mathf.Clamp(
+                Mathf.CeilToInt((hand.points.Count - 1) * Mathf.Clamp01(_rayStartGateWindowProgress01)),
+                1,
+                hand.points.Count - 1);
+            var insideStartGateZone = nearestIndex <= startGateMaxIndex;
+            if (requireStartGate &&
+                !hand.rayStartGateSatisfied &&
+                handIsActive &&
+                movedEnough &&
+                insideStartGateZone)
+            {
+                hand.rayStartGateSatisfied = true;
+                TrackSceneLifecycle(
+                    "bilateral_ray_start_gate_satisfied",
+                    BilateralMarkersReasonCodes.RayStartGateSatisfied,
+                    new Dictionary<string, object>
+                    {
+                        { "hand", hand.handToken },
+                        { "nearestIndex", nearestIndex },
+                        { "startGateMaxIndex", startGateMaxIndex },
+                    });
+            }
+
+            var startGateOpen = !requireStartGate || hand.rayStartGateSatisfied;
+            var gateAllowsProgress = startGateOpen || insideStartGateZone;
             if (handIsActive && nearestIndex > hand.lastNearestIndex)
             {
-                if (movedEnough)
+                if (movedEnough && gateAllowsProgress)
                 {
                     hand.lastNearestIndex = nearestIndex;
                 }
-                else if (hand.lastNearestIndex <= 0)
+                else if (hand.lastNearestIndex <= 0 && gateAllowsProgress)
                 {
                     // Avoid false completion when an idle hand spawns near late path samples.
                     hand.lastNearestIndex = Mathf.Min(nearestIndex, 2);
                 }
             }
 
+            if (requireStartGate &&
+                !hand.rayStartGateSatisfied &&
+                hand.lastNearestIndex > startGateMaxIndex)
+            {
+                hand.lastNearestIndex = startGateMaxIndex;
+            }
+
             var progress01 = hand.points.Count <= 1
                 ? 0f
                 : (float)hand.lastNearestIndex / (hand.points.Count - 1);
-            var targetValid = handIsActive && deviationMeters <= _effectiveTunnelWidthMeters;
-            var reasonCode = targetValid
-                ? "PATH_PROGRESS"
-                : (handIsActive
-                    ? "PATH_DEVIATION_EXCEEDED"
-                    : BilateralMarkersReasonCodes.HandPhaseLocked);
+            var targetValid = handIsActive &&
+                gateAllowsProgress &&
+                deviationMeters <= _effectiveTunnelWidthMeters;
+            var reasonCode = !handIsActive
+                ? BilateralMarkersReasonCodes.HandPhaseLocked
+                : (!startGateOpen && !insideStartGateZone)
+                    ? BilateralMarkersReasonCodes.RayStartGatePending
+                    : (targetValid ? "PATH_PROGRESS" : "PATH_DEVIATION_EXCEEDED");
 
             hand.lastSampleValid = targetValid;
             hand.progress01 = Mathf.Max(hand.progress01, progress01);
@@ -888,6 +934,7 @@ namespace TheraplyGames.BilateralMarkers
             if (!hand.startMarked &&
                 handIsActive &&
                 movedEnough &&
+                startGateOpen &&
                 hand.progress01 >= TempSimpleStartProgressThreshold)
             {
                 hand.startMarked = true;
@@ -896,30 +943,36 @@ namespace TheraplyGames.BilateralMarkers
             }
         }
 
-        private Vector3 ResolveSamplePositionForHand(
+        private bool TryResolveSamplePositionForHand(
             HandRuntime hand,
             Vector3 posePosition,
-            Quaternion poseRotation)
+            Quaternion poseRotation,
+            out Vector3 samplePosition)
         {
+            samplePosition = posePosition;
             if (!_useControllerRayProjectionSampling ||
                 hand == null ||
                 hand.points == null ||
                 hand.points.Count <= 1)
             {
-                return posePosition;
+                return true;
             }
 
             var direction = poseRotation * Vector3.forward;
             if (direction.sqrMagnitude <= 0.0001f)
             {
-                return posePosition;
+                return false;
             }
 
             direction.Normalize();
             var origin = posePosition + (direction * Mathf.Max(0f, _controllerRayOriginForwardOffsetMeters));
-            return TryProjectRayToPath(hand.points, origin, direction, out var projectedPoint)
-                ? projectedPoint
-                : posePosition;
+            if (!TryProjectRayToPath(hand.points, origin, direction, out var projectedPoint))
+            {
+                return false;
+            }
+
+            samplePosition = projectedPoint;
+            return true;
         }
 
         private bool TryProjectRayToPath(
