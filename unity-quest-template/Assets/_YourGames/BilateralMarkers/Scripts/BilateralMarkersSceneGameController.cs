@@ -53,6 +53,10 @@ namespace TheraplyGames.BilateralMarkers
         [Header("Sampling")]
         [SerializeField] private float _sampleIntervalSec = 0.05f;
         [SerializeField] private bool _emitDetailedSampleEvents = true;
+        [SerializeField] private bool _useControllerRayProjectionSampling = true;
+        [SerializeField] private float _controllerRayOriginForwardOffsetMeters = 0.04f;
+        [SerializeField] private float _rayProjectionMaxDistanceMeters = 1.6f;
+        [SerializeField] private float _minimumProgressMotionStepMeters = 0.003f;
 
         [Header("Visuals")]
         [SerializeField] private Color _leftPathColor = new Color(0.12f, 0.95f, 0.35f, 1f);
@@ -76,6 +80,7 @@ namespace TheraplyGames.BilateralMarkers
         [SerializeField] private float _hapticPulseDurationSec = 0.03f;
         [SerializeField] private float _hapticValidAmplitude = 0.18f;
         [SerializeField] private float _hapticInvalidAmplitude = 0.32f;
+        [SerializeField] private float _invalidHapticMaxDeviationMultiplier = 1.8f;
 
         [Header("Trace")]
         [SerializeField] private bool _enableTraceRecorder = true;
@@ -680,28 +685,45 @@ namespace TheraplyGames.BilateralMarkers
 
             _inputUnavailableLogged = false;
             var elapsed = GetDurationSeconds();
+            var leftSamplePosition = leftPosition;
+            var rightSamplePosition = rightPosition;
+            if (hasLeft)
+            {
+                leftSamplePosition = ResolveSamplePositionForHand(
+                    _leftHandRuntime,
+                    leftPosition,
+                    leftRotation);
+            }
+
+            if (hasRight)
+            {
+                rightSamplePosition = ResolveSamplePositionForHand(
+                    _rightHandRuntime,
+                    rightPosition,
+                    rightRotation);
+            }
 
             if (_leftTraceTransform != null && hasLeft)
             {
-                _leftTraceTransform.SetPositionAndRotation(leftPosition, leftRotation);
+                _leftTraceTransform.SetPositionAndRotation(leftSamplePosition, leftRotation);
             }
 
             if (_rightTraceTransform != null && hasRight)
             {
-                _rightTraceTransform.SetPositionAndRotation(rightPosition, rightRotation);
+                _rightTraceTransform.SetPositionAndRotation(rightSamplePosition, rightRotation);
             }
 
             ProcessHandSample(
                 _leftHandRuntime,
                 hasLeft,
-                leftPosition,
+                leftSamplePosition,
                 leftHandActive,
                 elapsed,
                 sampleIntervalSec);
             ProcessHandSample(
                 _rightHandRuntime,
                 hasRight,
-                rightPosition,
+                rightSamplePosition,
                 rightHandActive,
                 elapsed,
                 sampleIntervalSec);
@@ -710,7 +732,7 @@ namespace TheraplyGames.BilateralMarkers
                 _leftHandCursorTransform,
                 _leftHandCursorRenderer,
                 hasLeft,
-                leftPosition,
+                leftSamplePosition,
                 leftRotation,
                 leftHandActive,
                 _leftHandRuntime.lastSampleValid,
@@ -719,7 +741,7 @@ namespace TheraplyGames.BilateralMarkers
                 _rightHandCursorTransform,
                 _rightHandCursorRenderer,
                 hasRight,
-                rightPosition,
+                rightSamplePosition,
                 rightRotation,
                 rightHandActive,
                 _rightHandRuntime.lastSampleValid,
@@ -764,6 +786,13 @@ namespace TheraplyGames.BilateralMarkers
                 hand.motionRangeMaxY = worldPosition.y;
             }
 
+            var hadPreviousPosition = hand.hasPreviousPosition;
+            var movementDistance = hadPreviousPosition
+                ? Vector3.Distance(hand.previousPosition, worldPosition)
+                : 0f;
+            var minimumStep = Mathf.Max(0.0005f, _minimumProgressMotionStepMeters);
+            var movedEnough = hadPreviousPosition && movementDistance >= minimumStep;
+
             if (hand.hasPreviousPosition)
             {
                 var speed = Vector3.Distance(hand.previousPosition, worldPosition) / Mathf.Max(0.001f, sampleIntervalSec);
@@ -781,7 +810,15 @@ namespace TheraplyGames.BilateralMarkers
             var deviationMeters = Vector3.Distance(worldPosition, nearestPoint);
             if (handIsActive && nearestIndex > hand.lastNearestIndex)
             {
-                hand.lastNearestIndex = nearestIndex;
+                if (movedEnough)
+                {
+                    hand.lastNearestIndex = nearestIndex;
+                }
+                else if (hand.lastNearestIndex <= 0)
+                {
+                    // Avoid false completion when an idle hand spawns near late path samples.
+                    hand.lastNearestIndex = Mathf.Min(nearestIndex, 2);
+                }
             }
 
             var progress01 = hand.points.Count <= 1
@@ -850,12 +887,83 @@ namespace TheraplyGames.BilateralMarkers
 
             if (!hand.startMarked &&
                 handIsActive &&
+                movedEnough &&
                 hand.progress01 >= TempSimpleStartProgressThreshold)
             {
                 hand.startMarked = true;
                 hand.firstMoveAtSec = elapsedSec;
                 PublishDualHandStartProgress(hand);
             }
+        }
+
+        private Vector3 ResolveSamplePositionForHand(
+            HandRuntime hand,
+            Vector3 posePosition,
+            Quaternion poseRotation)
+        {
+            if (!_useControllerRayProjectionSampling ||
+                hand == null ||
+                hand.points == null ||
+                hand.points.Count <= 1)
+            {
+                return posePosition;
+            }
+
+            var direction = poseRotation * Vector3.forward;
+            if (direction.sqrMagnitude <= 0.0001f)
+            {
+                return posePosition;
+            }
+
+            direction.Normalize();
+            var origin = posePosition + (direction * Mathf.Max(0f, _controllerRayOriginForwardOffsetMeters));
+            return TryProjectRayToPath(hand.points, origin, direction, out var projectedPoint)
+                ? projectedPoint
+                : posePosition;
+        }
+
+        private bool TryProjectRayToPath(
+            List<Vector3> pathPoints,
+            Vector3 rayOrigin,
+            Vector3 rayDirection,
+            out Vector3 projectedPoint)
+        {
+            projectedPoint = rayOrigin;
+            if (pathPoints == null || pathPoints.Count <= 0 || rayDirection.sqrMagnitude <= 0.0001f)
+            {
+                return false;
+            }
+
+            var maxDistance = Mathf.Max(0.25f, _rayProjectionMaxDistanceMeters);
+            var hasCandidate = false;
+            var bestDistanceSq = float.MaxValue;
+            var bestT = 0f;
+            for (var i = 0; i < pathPoints.Count; i++)
+            {
+                var toPoint = pathPoints[i] - rayOrigin;
+                var t = Vector3.Dot(toPoint, rayDirection);
+                if (t < 0f || t > maxDistance)
+                {
+                    continue;
+                }
+
+                var candidatePoint = rayOrigin + (rayDirection * t);
+                var distanceSq = (pathPoints[i] - candidatePoint).sqrMagnitude;
+                if (!hasCandidate || distanceSq < bestDistanceSq)
+                {
+                    hasCandidate = true;
+                    bestDistanceSq = distanceSq;
+                    bestT = t;
+                }
+            }
+
+            if (!hasCandidate)
+            {
+                return false;
+            }
+
+            projectedPoint = rayOrigin + (rayDirection * bestT);
+            return true;
         }
 
         private void UpdateHandCursorVisual(
@@ -932,6 +1040,17 @@ namespace TheraplyGames.BilateralMarkers
                 capabilities.numChannels <= 0)
             {
                 return;
+            }
+
+            if (!hand.lastSampleValid)
+            {
+                var invalidDeviationLimit = Mathf.Max(
+                    _effectiveTunnelWidthMeters,
+                    _effectiveTunnelWidthMeters * Mathf.Max(1f, _invalidHapticMaxDeviationMultiplier));
+                if (hand.deviationMeters > invalidDeviationLimit)
+                {
+                    return;
+                }
             }
 
             var amplitude = Mathf.Clamp01(hand.lastSampleValid ? _hapticValidAmplitude : _hapticInvalidAmplitude);

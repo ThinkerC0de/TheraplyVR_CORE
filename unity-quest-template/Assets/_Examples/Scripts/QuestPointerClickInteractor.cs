@@ -54,6 +54,10 @@ namespace TheraplyExamples
         [SerializeField] private bool _autoDetectRayOrigins = true;
         [SerializeField] private bool _preferLeftRayOrigin = true;
         [SerializeField] private bool _switchRayOriginToPressedHand = true;
+        [SerializeField] private bool _useCameraHandFallbackWhenOriginMissing = true;
+        [SerializeField] private float _cameraHandFallbackHorizontalOffset = 0.14f;
+        [SerializeField] private float _cameraHandFallbackVerticalOffset = -0.05f;
+        [SerializeField] private float _cameraHandFallbackForwardOffset = 0.12f;
 
         [Header("Raycast")]
         [SerializeField] private float _maxDistance = 20f;
@@ -262,7 +266,7 @@ namespace TheraplyExamples
 
             _nextRayOriginScanAtRealtime = Time.realtimeSinceStartup + 1f;
 
-            var rightCandidate = FindRayOriginCandidate(true);
+            var rightCandidate = FindRayOriginCandidate(true, _leftRayOrigin);
             if (_rightRayOrigin == null)
             {
                 _rightRayOrigin = rightCandidate;
@@ -272,7 +276,7 @@ namespace TheraplyExamples
                 _rightRayOrigin = rightCandidate;
             }
 
-            var leftCandidate = FindRayOriginCandidate(false);
+            var leftCandidate = FindRayOriginCandidate(false, _rightRayOrigin);
             if (_leftRayOrigin == null)
             {
                 _leftRayOrigin = leftCandidate;
@@ -281,6 +285,8 @@ namespace TheraplyExamples
             {
                 _leftRayOrigin = leftCandidate;
             }
+
+            EnsureDistinctRayOrigins();
 
             if (_rayCamera == null)
             {
@@ -664,14 +670,15 @@ namespace TheraplyExamples
                 return;
             }
 
-            var origin = ResolveRayOriginTransformForHand(handToken, allowFallbackToOtherHand: false);
-            if (origin == null)
+            if (!TryBuildRayForHand(
+                    handToken,
+                    allowFallbackToOtherHand: false,
+                    out var ray))
             {
                 SetLaserActive(laser, false);
                 return;
             }
 
-            var ray = BuildRayFromTransform(origin);
             var hasHit = TryRaycastFromRay(ray, out var hit);
             if (!hasHit && !_showLaserWhenNoHit)
             {
@@ -761,8 +768,10 @@ namespace TheraplyExamples
                 return;
             }
 
-            var origin = ResolveRayOriginTransformForHand(handToken, allowFallbackToOtherHand: false);
-            if (origin == null)
+            if (!TryBuildRayForHand(
+                    handToken,
+                    allowFallbackToOtherHand: false,
+                    out var ray))
             {
                 SetWandActive(wand, false);
                 return;
@@ -773,7 +782,6 @@ namespace TheraplyExamples
                 return;
             }
 
-            var ray = new Ray(origin.position, origin.forward);
             var direction = ray.direction.sqrMagnitude > 0f ? ray.direction.normalized : Vector3.forward;
             var length = Mathf.Max(0.05f, _wandLength);
             var radius = Mathf.Max(0.001f, _wandRadius);
@@ -1106,10 +1114,35 @@ namespace TheraplyExamples
 
         private Ray BuildPointerRay()
         {
-            var origin = ResolveRayOriginTransform();
-            if (origin != null)
+            if (_switchRayOriginToPressedHand &&
+                TryBuildRayForHand(_lastActivationHand, allowFallbackToOtherHand: false, out var pressedHandRay))
             {
-                return BuildRayFromTransform(origin);
+                return pressedHandRay;
+            }
+
+            if (_preferLeftRayOrigin)
+            {
+                if (TryBuildRayForHand("LEFT", allowFallbackToOtherHand: true, out var leftRay))
+                {
+                    return leftRay;
+                }
+
+                if (TryBuildRayForHand("RIGHT", allowFallbackToOtherHand: true, out var rightRay))
+                {
+                    return rightRay;
+                }
+            }
+            else
+            {
+                if (TryBuildRayForHand("RIGHT", allowFallbackToOtherHand: true, out var rightRay))
+                {
+                    return rightRay;
+                }
+
+                if (TryBuildRayForHand("LEFT", allowFallbackToOtherHand: true, out var leftRay))
+                {
+                    return leftRay;
+                }
             }
 
             if (_rayCamera == null)
@@ -1123,6 +1156,50 @@ namespace TheraplyExamples
             }
 
             return new Ray(Vector3.zero, Vector3.forward);
+        }
+
+        private bool TryBuildRayForHand(string handToken, bool allowFallbackToOtherHand, out Ray ray)
+        {
+            var origin = ResolveRayOriginTransformForHand(handToken, allowFallbackToOtherHand);
+            if (origin != null)
+            {
+                ray = BuildRayFromTransform(origin);
+                return true;
+            }
+
+            if (_useCameraHandFallbackWhenOriginMissing &&
+                TryBuildCameraFallbackRay(handToken, out ray))
+            {
+                return true;
+            }
+
+            ray = default;
+            return false;
+        }
+
+        private bool TryBuildCameraFallbackRay(string handToken, out Ray ray)
+        {
+            if (_rayCamera == null)
+            {
+                _rayCamera = Camera.main;
+            }
+
+            if (_rayCamera == null)
+            {
+                ray = default;
+                return false;
+            }
+
+            var safeHorizontal = Mathf.Max(0.02f, _cameraHandFallbackHorizontalOffset);
+            var handSign = string.Equals(handToken, "LEFT", System.StringComparison.OrdinalIgnoreCase)
+                ? -1f
+                : 1f;
+            var origin = _rayCamera.transform.position +
+                (_rayCamera.transform.right * safeHorizontal * handSign) +
+                (_rayCamera.transform.up * _cameraHandFallbackVerticalOffset) +
+                (_rayCamera.transform.forward * _cameraHandFallbackForwardOffset);
+            ray = new Ray(origin, _rayCamera.transform.forward);
+            return true;
         }
 
         private static Ray BuildRayFromTransform(Transform origin)
@@ -1177,27 +1254,6 @@ namespace TheraplyExamples
             return "RIGHT";
         }
 
-        private Transform ResolveRayOriginTransform()
-        {
-            if (_switchRayOriginToPressedHand)
-            {
-                var pressedHandOrigin = ResolveRayOriginTransformForHand(
-                    _lastActivationHand,
-                    allowFallbackToOtherHand: false);
-                if (pressedHandOrigin != null)
-                {
-                    return pressedHandOrigin;
-                }
-            }
-
-            if (_preferLeftRayOrigin)
-            {
-                return ResolveRayOriginTransformForHand("LEFT", allowFallbackToOtherHand: true);
-            }
-
-            return ResolveRayOriginTransformForHand("RIGHT", allowFallbackToOtherHand: true);
-        }
-
         private Transform ResolveRayOriginTransformForHand(string handToken, bool allowFallbackToOtherHand)
         {
             var isLeftHand = string.Equals(handToken, "LEFT", System.StringComparison.OrdinalIgnoreCase);
@@ -1246,6 +1302,29 @@ namespace TheraplyExamples
             return _leftRayOrigin;
         }
 
+        private void EnsureDistinctRayOrigins()
+        {
+            if (_leftRayOrigin == null ||
+                _rightRayOrigin == null ||
+                _leftRayOrigin != _rightRayOrigin)
+            {
+                return;
+            }
+
+            var preferredLeft = FindRayOriginCandidate(isRight: false, excludedCandidate: _rightRayOrigin);
+            if (preferredLeft != null && preferredLeft != _rightRayOrigin)
+            {
+                _leftRayOrigin = preferredLeft;
+                return;
+            }
+
+            var preferredRight = FindRayOriginCandidate(isRight: true, excludedCandidate: _leftRayOrigin);
+            if (preferredRight != null && preferredRight != _leftRayOrigin)
+            {
+                _rightRayOrigin = preferredRight;
+            }
+        }
+
         private bool IsPointerSuppressedForActiveGame()
         {
             if (!_hidePointerVisualsInBilateralMarkers)
@@ -1274,13 +1353,13 @@ namespace TheraplyExamples
             SetWandActive(_rightWand, false);
         }
 
-        private static Transform FindRayOriginCandidate(bool isRight)
+        private static Transform FindRayOriginCandidate(bool isRight, Transform excludedCandidate = null)
         {
             var candidates = isRight ? RightRayOriginCandidates : LeftRayOriginCandidates;
             for (var i = 0; i < candidates.Length; i++)
             {
                 var go = GameObject.Find(candidates[i]);
-                if (go != null)
+                if (go != null && go.transform != excludedCandidate)
                 {
                     return go.transform;
                 }
@@ -1294,6 +1373,11 @@ namespace TheraplyExamples
             {
                 var candidate = allTransforms[i];
                 if (candidate == null)
+                {
+                    continue;
+                }
+
+                if (candidate == excludedCandidate)
                 {
                     continue;
                 }

@@ -65,9 +65,187 @@ class _ControlScreenState extends State<ControlScreen>
   static final bool _contentDeliveryEnabled = true;
   static final bool _serverAuthoritativeHandoffGate = true;
   static const bool _showCatalogRescueTerminateButton = false;
-  static const List<_GameCatalogEntry> _fallbackGameCatalog =
+  static final MobileControlSchemaParseResult
+      _fallbackBilateralMarkersSchemaParse = MobileControlSchema.tryParse(
+    const <String, dynamic>{
+      'schema': 'THERAPLY_MOBILE_CONTROL_SCHEMA',
+      'schemaVersion': '2026-02-25',
+      'gameId': 'bilateral_markers',
+      'title': 'Bilateral Markers Controls',
+      'description':
+          'Offline fallback schema for bilateral markers START_GAME setup.',
+      'layout': <String, dynamic>{
+        'mode': 'stack',
+        'columns': 1,
+      },
+      'payload': <String, dynamic>{
+        'target': 'game_config',
+        'gameConfigType': 'bilateral_markers_config',
+        'gameConfigVersion': 1,
+        'includeVersionInGameConfig': true,
+      },
+      'sections': <Map<String, dynamic>>[
+        <String, dynamic>{'sectionId': 'core', 'label': 'Core', 'order': 10},
+        <String, dynamic>{
+          'sectionId': 'advanced',
+          'label': 'Advanced',
+          'order': 20,
+        },
+      ],
+      'controls': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'controlId': 'level',
+          'type': 'select',
+          'label': 'Difficulty Level',
+          'sectionId': 'core',
+          'order': 10,
+          'defaultValue': '0',
+          'binding': <String, dynamic>{
+            'target': 'game_config',
+            'path': 'level',
+            'valueType': 'int',
+            'emitOnStartGame': true,
+            'emitOnUpdateConfig': false,
+          },
+          'validation': <String, dynamic>{'required': true},
+          'options': <Map<String, dynamic>>[
+            <String, dynamic>{'value': '0', 'label': '0 Symmetry'},
+            <String, dynamic>{'value': '1', 'label': '1 Mirror'},
+            <String, dynamic>{'value': '2', 'label': '2 Rotational'},
+            <String, dynamic>{'value': '3', 'label': '3 Asymmetry'},
+            <String, dynamic>{'value': '4', 'label': '4 Alternating'},
+          ],
+        },
+        <String, dynamic>{
+          'controlId': 'pattern',
+          'type': 'select',
+          'label': 'Primary Pattern',
+          'sectionId': 'core',
+          'order': 20,
+          'defaultValue': 'wave',
+          'binding': <String, dynamic>{
+            'target': 'game_config',
+            'path': 'pattern',
+            'valueType': 'string',
+            'emitOnStartGame': true,
+            'emitOnUpdateConfig': false,
+          },
+          'validation': <String, dynamic>{'required': true},
+          'options': <Map<String, dynamic>>[
+            <String, dynamic>{'value': 'wave', 'label': 'Wave'},
+            <String, dynamic>{'value': 'spiral', 'label': 'Spiral'},
+            <String, dynamic>{'value': 'figure_eight', 'label': 'Figure Eight'},
+            <String, dynamic>{'value': 'zigzag', 'label': 'Zigzag'},
+            <String, dynamic>{'value': 'arc', 'label': 'Arc'},
+          ],
+        },
+        <String, dynamic>{
+          'controlId': 'tempo_bpm',
+          'type': 'slider',
+          'label': 'Tempo (BPM)',
+          'sectionId': 'core',
+          'order': 30,
+          'defaultValue': '72',
+          'binding': <String, dynamic>{
+            'target': 'game_config',
+            'path': 'tempoBpm',
+            'valueType': 'int',
+            'emitOnStartGame': true,
+            'emitOnUpdateConfig': false,
+          },
+          'validation': <String, dynamic>{
+            'required': true,
+            'minValue': '40',
+            'maxValue': '120',
+            'step': '1',
+          },
+        },
+        <String, dynamic>{
+          'controlId': 'duration_sec',
+          'type': 'slider',
+          'label': 'Round Duration (s)',
+          'sectionId': 'core',
+          'order': 40,
+          'defaultValue': '45',
+          'binding': <String, dynamic>{
+            'target': 'game_config',
+            'path': 'durationSec',
+            'valueType': 'int',
+            'emitOnStartGame': true,
+            'emitOnUpdateConfig': false,
+          },
+          'validation': <String, dynamic>{
+            'required': true,
+            'minValue': '15',
+            'maxValue': '90',
+            'step': '1',
+          },
+        },
+        <String, dynamic>{
+          'controlId': 'tunnel_width_m',
+          'type': 'slider',
+          'label': 'Tunnel Width (m)',
+          'sectionId': 'advanced',
+          'order': 50,
+          'defaultValue': '0.11',
+          'binding': <String, dynamic>{
+            'target': 'game_config',
+            'path': 'tunnelWidthM',
+            'valueType': 'double',
+            'emitOnStartGame': true,
+            'emitOnUpdateConfig': false,
+          },
+          'validation': <String, dynamic>{
+            'required': true,
+            'minValue': '0.05',
+            'maxValue': '0.22',
+            'step': '0.01',
+          },
+        },
+        <String, dynamic>{
+          'controlId': 'dominant_hand',
+          'type': 'select',
+          'label': 'Dominant Hand',
+          'sectionId': 'advanced',
+          'order': 60,
+          'defaultValue': 'right',
+          'binding': <String, dynamic>{
+            'target': 'game_config',
+            'path': 'dominantHand',
+            'valueType': 'string',
+            'emitOnStartGame': true,
+            'emitOnUpdateConfig': false,
+          },
+          'validation': <String, dynamic>{'required': true},
+          'options': <Map<String, dynamic>>[
+            <String, dynamic>{'value': 'right', 'label': 'Right'},
+            <String, dynamic>{'value': 'left', 'label': 'Left'},
+          ],
+        },
+        <String, dynamic>{
+          'controlId': 'adaptive_assist_enabled',
+          'type': 'toggle',
+          'label': 'Adaptive Assist',
+          'sectionId': 'advanced',
+          'order': 70,
+          'defaultValue': 'true',
+          'binding': <String, dynamic>{
+            'target': 'game_config',
+            'path': 'adaptiveAssistEnabled',
+            'valueType': 'bool',
+            'emitOnStartGame': true,
+            'emitOnUpdateConfig': false,
+          },
+          'validation': <String, dynamic>{'required': false},
+        },
+      ],
+    },
+    expectedGameId: 'bilateral_markers',
+  );
+
+  static final List<_GameCatalogEntry> _fallbackGameCatalog =
       <_GameCatalogEntry>[
-    _GameCatalogEntry(
+    const _GameCatalogEntry(
       gameId: 'demo_cube_clicker',
       title: 'Demo Cube Clicker',
       description:
@@ -86,7 +264,7 @@ class _ControlScreenState extends State<ControlScreen>
         'Poziom random target: aktywny kolor celu zmienia sie dynamicznie.',
       ],
     ),
-    _GameCatalogEntry(
+    const _GameCatalogEntry(
       gameId: 'pulse_target_tap',
       title: 'Pulse Targets',
       description:
@@ -105,7 +283,7 @@ class _ControlScreenState extends State<ControlScreen>
         'Generuje TASK_OUTCOME_SUMMARY + TASK_LABEL_GENERATED.',
       ],
     ),
-    _GameCatalogEntry(
+    const _GameCatalogEntry(
       gameId: 'puzzle_paths',
       title: 'Puzzle Paths',
       description:
@@ -123,7 +301,7 @@ class _ControlScreenState extends State<ControlScreen>
         'Docelowo: panel dynamiczny z kontrolkami z Unity schema.',
       ],
     ),
-    _GameCatalogEntry(
+    const _GameCatalogEntry(
       gameId: 'memory_orchard',
       title: 'Memory Orchard',
       description:
@@ -140,7 +318,7 @@ class _ControlScreenState extends State<ControlScreen>
         'Kontrolki i konfiguracja beda ladowane po schema.',
       ],
     ),
-    _GameCatalogEntry(
+    const _GameCatalogEntry(
       gameId: 'sunflower_defense',
       title: 'Sunflower Defense',
       description:
@@ -157,7 +335,7 @@ class _ControlScreenState extends State<ControlScreen>
         'Sciezka pod test pipeline instalacji i statusow.',
       ],
     ),
-    _GameCatalogEntry(
+    const _GameCatalogEntry(
       gameId: 'coding_master',
       title: 'Coding Master',
       description:
@@ -191,6 +369,9 @@ class _ControlScreenState extends State<ControlScreen>
         'Jedna sesja to jedna runda uruchamiana przez START_GAME.',
         'Schema-driven setup: poziomy 0-4 i parametry ruchu oburecz.',
       ],
+      mobileControlSchema: _fallbackBilateralMarkersSchemaParse.schema,
+      mobileControlSchemaReasonCode:
+          _fallbackBilateralMarkersSchemaParse.reasonCode,
     ),
   ];
 
@@ -936,9 +1117,9 @@ class _ControlScreenState extends State<ControlScreen>
           'entitlementProfile': EntitlementService.resolveRuntimeProfileId(),
           'entitlementRole':
               (entitlementAccess?.role ?? EntitlementRole.unknown).wireValue,
-          'entitlementPlanTier':
-              (entitlementAccess?.planProfile.tier ?? SubscriptionPlanTier.unknown)
-                  .wireValue,
+          'entitlementPlanTier': (entitlementAccess?.planProfile.tier ??
+                  SubscriptionPlanTier.unknown)
+              .wireValue,
           'entitlementPolicyVersion': entitlementAccess?.policyVersion ?? '',
           'entitlementSourceTag': entitlementAccess?.sourceTag ?? '',
           'entitlementEvaluatedAtUtc':
@@ -3047,7 +3228,9 @@ class _ControlScreenState extends State<ControlScreen>
         owned: isOwnedByEntitlement,
         installedVersion: localBundledAlwaysReady
             ? entry.targetContentVersion
-            : (entry.requiresExplicitLicense ? null : entry.targetContentVersion),
+            : (entry.requiresExplicitLicense
+                ? null
+                : entry.targetContentVersion),
         targetVersion: entry.targetContentVersion,
         updateRequired: false,
         updateOptional: false,
@@ -4083,7 +4266,8 @@ class _ControlScreenState extends State<ControlScreen>
       persistedSessionId: persistedSessionId,
       persistedState: persisted.state,
       persistedRequiresHandoffDecision: persisted.requiresHandoffDecision,
-      persistedSessionRecentlyEnded: _wasSessionRecentlyEnded(persistedSessionId),
+      persistedSessionRecentlyEnded:
+          _wasSessionRecentlyEnded(persistedSessionId),
     );
     if (!requiresClosure) {
       return true;
@@ -4576,7 +4760,8 @@ class _ControlScreenState extends State<ControlScreen>
         if (!preset.containsKey(control.controlId)) {
           continue;
         }
-        _dynamicControlValuesByControlId[control.controlId] = _coerceSchemaValue(
+        _dynamicControlValuesByControlId[control.controlId] =
+            _coerceSchemaValue(
           control.binding.valueType,
           preset[control.controlId],
         );
@@ -4686,7 +4871,8 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     final persistedSessionId = persisted.sessionId.trim();
-    if (persistedSessionId.isEmpty || _wasSessionRecentlyEnded(persistedSessionId)) {
+    if (persistedSessionId.isEmpty ||
+        _wasSessionRecentlyEnded(persistedSessionId)) {
       return true;
     }
 
@@ -4740,7 +4926,8 @@ class _ControlScreenState extends State<ControlScreen>
     if (!_sessionAttachReady && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Waiting for headset session attach before guided resume.'),
+          content:
+              Text('Waiting for headset session attach before guided resume.'),
           backgroundColor: Colors.orange,
         ),
       );
