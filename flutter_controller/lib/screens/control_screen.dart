@@ -402,6 +402,18 @@ class _ControlScreenState extends State<ControlScreen>
   static const Duration _connectionSignalGracePeriod = Duration(seconds: 8);
   static const Duration _connectionSignalFallbackTimeout =
       Duration(seconds: 12);
+  static const Duration _transientIncidentThrottleWindow = Duration(seconds: 8);
+  static const Set<String> _transportFailureReasonCodes = <String>{
+    'ACK_TIMEOUT',
+    'DISCONNECTED',
+    'NO_ACTIVE_TCP_ROUTE',
+    'TRANSPORT_CLOSED',
+    'SOCKET_CLOSED',
+    'TCP_LINK_LOST',
+    'NO_RUNTIME_SIGNAL_TIMEOUT',
+    'RUNTIME_SIGNAL_STALE',
+    'TCP_CLIENT_DISCONNECTED',
+  };
   static final Map<String, DateTime> _recentlyEndedSessionIds =
       <String, DateTime>{};
   static const List<String> _demoLevelModes = <String>[
@@ -477,6 +489,12 @@ class _ControlScreenState extends State<ControlScreen>
   int _reconnectLoopEpoch = 0;
   final Map<String, _AppliedGameConfigSnapshot> _appliedConfigBySessionGame =
       <String, _AppliedGameConfigSnapshot>{};
+  final Map<String, DateTime> _recentTransientIncidentByFingerprint =
+      <String, DateTime>{};
+  final Map<String, String> _lastCriticalFailureReasonByCommand =
+      <String, String>{};
+  MediaPreviewState _mediaPreviewState = MediaPreviewState.initializing;
+  DateTime? _lastMediaPreviewStateAtUtc;
 
   _WorkflowStep _workflowStep = _WorkflowStep.gameCatalog;
 
@@ -551,6 +569,11 @@ class _ControlScreenState extends State<ControlScreen>
         if (!connected) {
           _sessionAttachReady = false;
           _lastDevicePresenceSignal = null;
+          _mediaPreviewState = MediaPreviewState.waitingForStream;
+          _lastMediaPreviewStateAtUtc = DateTime.now().toUtc();
+        } else if (!wasConnected) {
+          _mediaPreviewState = MediaPreviewState.waitingForStream;
+          _lastMediaPreviewStateAtUtc = DateTime.now().toUtc();
         }
       });
 
@@ -1977,11 +2000,27 @@ class _ControlScreenState extends State<ControlScreen>
     final fallbackReasonCode = normalizedReasonCode.isNotEmpty
         ? normalizedReasonCode
         : (OpsErrorCatalog.tryExtractReasonCode(message) ?? 'UNKNOWN');
+    final nowUtc = DateTime.now().toUtc();
+
+    if (_isTransportFailureReasonCode(fallbackReasonCode)) {
+      final normalizedTitle = title.trim().toUpperCase();
+      final normalizedSource = source.trim().toUpperCase();
+      final incidentKey =
+          '$normalizedSource|$normalizedTitle|$fallbackReasonCode';
+      final lastOccurredAtUtc =
+          _recentTransientIncidentByFingerprint[incidentKey];
+      if (lastOccurredAtUtc != null &&
+          nowUtc.difference(lastOccurredAtUtc) <
+              _transientIncidentThrottleWindow) {
+        return;
+      }
+      _recentTransientIncidentByFingerprint[incidentKey] = nowUtc;
+    }
 
     _incidentPopupQueue.enqueue(
       context,
       OperatorIncidentAlert(
-        occurredAtUtc: DateTime.now().toUtc(),
+        occurredAtUtc: nowUtc,
         source: source,
         title: title,
         message: message,
@@ -2007,6 +2046,9 @@ class _ControlScreenState extends State<ControlScreen>
       'selectedGameId': _selectedGameId,
       'connected': _isConnected,
       'sessionAttachReady': _sessionAttachReady,
+      'mediaPreviewState': _mediaPreviewState.name,
+      'mediaPreviewStateAtUtc':
+          _lastMediaPreviewStateAtUtc?.toIso8601String() ?? '',
       'sessionAttachInFlight': _sessionAttachInFlight,
       'requiresSessionDecision': _requiresSessionDecision,
       'workflowStep': _workflowStep.name,
@@ -2022,6 +2064,25 @@ class _ControlScreenState extends State<ControlScreen>
       context.addAll(extras);
     }
     return context;
+  }
+
+  bool _isTransportFailureReasonCode(String reasonCode) {
+    final normalized = reasonCode.trim().toUpperCase();
+    if (normalized.isEmpty) {
+      return false;
+    }
+    return _transportFailureReasonCodes.contains(normalized);
+  }
+
+  void _handleMediaPreviewStateChanged(MediaPreviewState state) {
+    if (!mounted || _mediaPreviewState == state) {
+      return;
+    }
+
+    setState(() {
+      _mediaPreviewState = state;
+      _lastMediaPreviewStateAtUtc = DateTime.now().toUtc();
+    });
   }
 
   String _resolveActorTherapistId() {
@@ -4526,6 +4587,7 @@ class _ControlScreenState extends State<ControlScreen>
         'reason': 'TherapistInterruptedAfterRecoveryWindow',
         'reasonCode': 'THERAPIST_ABORTED_AFTER_RECOVERY_WINDOW',
       },
+      allowLocalFallbackOnTransportFailure: true,
     );
     if (!ended || !mounted) {
       return;
@@ -4548,6 +4610,7 @@ class _ControlScreenState extends State<ControlScreen>
         'reason': 'TherapistEndedAfterRecoveryWindow',
         'reasonCode': 'THERAPIST_CONFIRMED_END_AFTER_RECOVERY_WINDOW',
       },
+      allowLocalFallbackOnTransportFailure: true,
     );
     if (!ended || !mounted) {
       return;
@@ -4771,6 +4834,11 @@ class _ControlScreenState extends State<ControlScreen>
     Map<String, dynamic>? extraPayload,
     bool showSuccessSnack = true,
   }) async {
+    final isCriticalCommand = CriticalCommandIds.isCritical(command);
+    if (isCriticalCommand) {
+      _lastCriticalFailureReasonByCommand.remove(command);
+    }
+
     if (_gameScopedCriticalCommands.contains(command) &&
         _selectedGameId.trim().isEmpty) {
       if (!mounted) {
@@ -4936,6 +5004,9 @@ class _ControlScreenState extends State<ControlScreen>
       }
 
       if (!mounted || !showSuccessSnack) {
+        if (isCriticalCommand) {
+          _lastCriticalFailureReasonByCommand.remove(command);
+        }
         return true;
       }
 
@@ -4945,13 +5016,21 @@ class _ControlScreenState extends State<ControlScreen>
           duration: const Duration(seconds: 1),
         ),
       );
+      if (isCriticalCommand) {
+        _lastCriticalFailureReasonByCommand.remove(command);
+      }
       return true;
     } catch (e) {
       if (!mounted) {
         return false;
       }
 
-      final isCritical = CriticalCommandIds.isCritical(command);
+      final isCritical = isCriticalCommand;
+      final failureReasonCode = OpsErrorCatalog.tryExtractReasonCode(e) ??
+          (isCritical ? 'UNSPECIFIED' : 'UNKNOWN');
+      if (isCritical) {
+        _lastCriticalFailureReasonByCommand[command] = failureReasonCode;
+      }
       final errorSummary = OpsErrorCatalog.buildOperatorSummary(
         error: e,
       );
@@ -4962,8 +5041,7 @@ class _ControlScreenState extends State<ControlScreen>
       _enqueueIncidentAlert(
         title: 'Command failed: $command',
         message: message,
-        reasonCode: OpsErrorCatalog.tryExtractReasonCode(e) ??
-            (isCritical ? 'UNSPECIFIED' : 'UNKNOWN'),
+        reasonCode: failureReasonCode,
         severity: OperatorIncidentSeverity.error,
       );
       return false;
@@ -5728,8 +5806,21 @@ class _ControlScreenState extends State<ControlScreen>
   Future<bool> _sendEndSessionWithConfirmation({
     String reasonCode = 'THERAPIST_CONFIRMED_END',
     Map<String, dynamic>? extraPayload,
+    bool allowLocalFallbackOnTransportFailure = false,
   }) async {
+    final sessionIdToEnd = _resolveSessionIdForCriticalCommand(
+      CriticalCommandIds.endSession,
+    );
+
     if (!_isConnected) {
+      if (allowLocalFallbackOnTransportFailure) {
+        await _applyLocalEndSessionFallback(
+          sessionIdToEnd: sessionIdToEnd,
+          reasonCode: reasonCode,
+          failureReasonCode: 'DISCONNECTED',
+        );
+        return true;
+      }
       if (!mounted) {
         return false;
       }
@@ -5743,9 +5834,6 @@ class _ControlScreenState extends State<ControlScreen>
       return false;
     }
 
-    final sessionIdToEnd = _resolveSessionIdForCriticalCommand(
-      CriticalCommandIds.endSession,
-    );
     _logAttachDecision(
       decision: 'END_SESSION_REQUEST',
       reasonCode: reasonCode,
@@ -5762,6 +5850,18 @@ class _ControlScreenState extends State<ControlScreen>
       showSuccessSnack: false,
     );
     if (!ended) {
+      final failureReasonCode =
+          _lastCriticalFailureReasonByCommand[CriticalCommandIds.endSession] ??
+              'UNSPECIFIED';
+      if (allowLocalFallbackOnTransportFailure &&
+          _isTransportFailureReasonCode(failureReasonCode)) {
+        await _applyLocalEndSessionFallback(
+          sessionIdToEnd: sessionIdToEnd,
+          reasonCode: reasonCode,
+          failureReasonCode: failureReasonCode,
+        );
+        return true;
+      }
       return false;
     }
 
@@ -5783,6 +5883,63 @@ class _ControlScreenState extends State<ControlScreen>
       });
     }
     return true;
+  }
+
+  Future<void> _applyLocalEndSessionFallback({
+    required String sessionIdToEnd,
+    required String reasonCode,
+    required String failureReasonCode,
+  }) async {
+    final normalizedSessionId = sessionIdToEnd.trim();
+    if (normalizedSessionId.isEmpty) {
+      return;
+    }
+    final normalizedFailureReason = failureReasonCode.trim().isEmpty
+        ? 'UNSPECIFIED'
+        : failureReasonCode.trim().toUpperCase();
+
+    await _persistCommandSideEffects(
+      CriticalCommandIds.endSession,
+      sessionIdOverride: normalizedSessionId,
+      extraPayload: <String, dynamic>{
+        'reasonCode': reasonCode,
+        'origin': 'local_end_session_fallback',
+        'remoteAckReceived': false,
+        'remoteFailureReasonCode': normalizedFailureReason,
+      },
+    );
+
+    _markSessionAsRecentlyEnded(normalizedSessionId);
+    _clearDeferredHandoff(
+      sessionId: normalizedSessionId,
+      source: 'command',
+      reasonCode: reasonCode,
+    );
+    _markSessionAsRecentlyEnded(_lastSessionStateUpdateSessionId);
+    _markSessionAsRecentlyEnded(_lastRuntimeStatusSessionId);
+    _markSessionAsRecentlyEnded(_remoteSessionIdPendingDecision);
+    _markSessionAsRecentlyEnded(_latestPersistedSession?.sessionId);
+
+    if (mounted) {
+      setState(() {
+        _requiresSessionDecision = false;
+        _remoteSessionIdPendingDecision = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Headset did not confirm END_SESSION. Applied local closure fallback.',
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+
+    debugPrint(
+      '[ControlScreen] Local END_SESSION fallback applied: '
+      'session=$normalizedSessionId reason=$reasonCode '
+      'failure=$normalizedFailureReason',
+    );
   }
 
   Future<bool> _handleSystemBackPressed() async {
@@ -5827,7 +5984,9 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     if (choice == _ExitChoice.endSession) {
-      final ended = await _sendEndSessionWithConfirmation();
+      final ended = await _sendEndSessionWithConfirmation(
+        allowLocalFallbackOnTransportFailure: true,
+      );
       if (!ended) {
         return false;
       }
@@ -5856,6 +6015,9 @@ class _ControlScreenState extends State<ControlScreen>
   @override
   Widget build(BuildContext context) {
     final isCatalogScreen = _workflowStep == _WorkflowStep.gameCatalog;
+    final previewStreaming = _mediaPreviewState == MediaPreviewState.streaming;
+    final connectedReady = _isConnected && previewStreaming;
+    final connectedDegraded = _isConnected && !previewStreaming;
 
     return PopScope(
       canPop: false,
@@ -5898,33 +6060,49 @@ class _ControlScreenState extends State<ControlScreen>
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: _isConnected
+                    color: connectedReady
                         ? Colors.green.shade50
-                        : Colors.red.shade50,
+                        : (connectedDegraded
+                            ? Colors.orange.shade50
+                            : Colors.red.shade50),
                     borderRadius: BorderRadius.circular(999),
                     border: Border.all(
-                      color: _isConnected
+                      color: connectedReady
                           ? Colors.green.shade200
-                          : Colors.red.shade200,
+                          : (connectedDegraded
+                              ? Colors.orange.shade200
+                              : Colors.red.shade200),
                     ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        _isConnected ? Icons.wifi : Icons.wifi_off,
-                        color: _isConnected
+                        connectedReady
+                            ? Icons.wifi
+                            : (connectedDegraded
+                                ? Icons.wifi_tethering_error_rounded
+                                : Icons.wifi_off),
+                        color: connectedReady
                             ? Colors.green.shade700
-                            : Colors.red.shade700,
+                            : (connectedDegraded
+                                ? Colors.orange.shade800
+                                : Colors.red.shade700),
                         size: 16,
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        _isConnected ? 'Connected' : 'Reconnecting',
+                        connectedReady
+                            ? 'Connected'
+                            : (connectedDegraded
+                                ? 'No Preview'
+                                : 'Reconnecting'),
                         style: TextStyle(
-                          color: _isConnected
+                          color: connectedReady
                               ? Colors.green.shade800
-                              : Colors.red.shade800,
+                              : (connectedDegraded
+                                  ? Colors.orange.shade900
+                                  : Colors.red.shade800),
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                         ),
@@ -5990,6 +6168,7 @@ class _ControlScreenState extends State<ControlScreen>
                   connection: _connection,
                   deviceIP: widget.device.ip,
                   port: widget.device.videoPort,
+                  onStateChanged: _handleMediaPreviewStateChanged,
                 ),
               ),
             ),
@@ -6786,7 +6965,9 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     await _runPrimaryAction(() async {
-      final ended = await _sendEndSessionWithConfirmation();
+      final ended = await _sendEndSessionWithConfirmation(
+        allowLocalFallbackOnTransportFailure: true,
+      );
       if (!ended) {
         return;
       }
@@ -7169,8 +7350,10 @@ class _ControlScreenState extends State<ControlScreen>
     required _GameCatalogEntry entry,
     required PurchasedContentState contentState,
   }) {
-    final controlsReady =
-        _isConnected && _sessionAttachReady && !_isHeadsetPresenceBlocking;
+    final controlsReady = _isConnected &&
+        _mediaPreviewState == MediaPreviewState.streaming &&
+        _sessionAttachReady &&
+        !_isHeadsetPresenceBlocking;
     final planLaunchBlocked = _isPlanBlockingLaunch;
     final canStart = controlsReady &&
         !_isPrimaryActionInFlight &&
@@ -7412,6 +7595,14 @@ class _ControlScreenState extends State<ControlScreen>
             text: _contentDeliveryEnabled
                 ? 'Headset is offline. Install/update actions will stay disabled until reconnect.'
                 : 'Headset is offline. Reconnect to continue.',
+          ),
+          const SizedBox(height: 6),
+        ] else if (_mediaPreviewState != MediaPreviewState.streaming) ...[
+          _buildStateBanner(
+            icon: Icons.wifi_tethering_error_rounded,
+            color: Colors.orange.shade800,
+            text:
+                'Control transport is up, but VR preview is unavailable. Treat this as degraded connection until stream returns.',
           ),
           const SizedBox(height: 6),
         ] else if (_headsetPresenceBannerText != null) ...[
@@ -7758,6 +7949,7 @@ class _ControlScreenState extends State<ControlScreen>
         ],
         ElevatedButton.icon(
           onPressed: _isConnected &&
+                  _mediaPreviewState == MediaPreviewState.streaming &&
                   _sessionAttachReady &&
                   !_isHeadsetPresenceBlocking &&
                   !_isPlanBlockingLaunch &&
@@ -7773,17 +7965,19 @@ class _ControlScreenState extends State<ControlScreen>
           label: Text(
             !_sessionAttachReady
                 ? 'Wait for session sync first'
-                : _isHeadsetPresenceBlocking
-                    ? 'Headset not in active VR app yet'
-                    : _isPlanBlockingLaunch
-                        ? 'Current plan blocks launching this session'
-                        : !selectedEntry.runtimeLaunchEnabled
-                            ? 'Selected game is catalog-only for now'
-                            : _isSelectedGameLaunchable
-                                ? 'Open game session'
-                                : _contentDeliveryEnabled
-                                    ? 'Install or update selected game first'
-                                    : 'Select available game first',
+                : _mediaPreviewState != MediaPreviewState.streaming
+                    ? 'Wait for VR preview to recover'
+                    : _isHeadsetPresenceBlocking
+                        ? 'Headset not in active VR app yet'
+                        : _isPlanBlockingLaunch
+                            ? 'Current plan blocks launching this session'
+                            : !selectedEntry.runtimeLaunchEnabled
+                                ? 'Selected game is catalog-only for now'
+                                : _isSelectedGameLaunchable
+                                    ? 'Open game session'
+                                    : _contentDeliveryEnabled
+                                        ? 'Install or update selected game first'
+                                        : 'Select available game first',
           ),
           style: ElevatedButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -7849,6 +8043,14 @@ class _ControlScreenState extends State<ControlScreen>
                   color: Colors.red.shade700,
                   text:
                       'Headset is offline. Controls are disabled until reconnect.',
+                ),
+                const SizedBox(height: 8),
+              ] else if (_mediaPreviewState != MediaPreviewState.streaming) ...[
+                _buildStateBanner(
+                  icon: Icons.wifi_tethering_error_rounded,
+                  color: Colors.orange.shade800,
+                  text:
+                      'VR preview is unavailable. Control link is degraded and commands can timeout until preview recovers.',
                 ),
                 const SizedBox(height: 8),
               ] else if (_headsetPresenceBannerText != null) ...[

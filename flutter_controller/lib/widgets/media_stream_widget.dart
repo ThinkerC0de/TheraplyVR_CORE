@@ -4,17 +4,26 @@ import 'package:flutter_controller/services/webrtc_media_service.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'dart:async';
 
+enum MediaPreviewState {
+  initializing,
+  waitingForStream,
+  streaming,
+  error,
+}
+
 /// Displays live media stream from Quest via WebRTC (signaling over TCP).
 class MediaStreamWidget extends StatefulWidget {
   final ConnectionService connection;
   final String? deviceIP;
   final int port;
+  final ValueChanged<MediaPreviewState>? onStateChanged;
 
   const MediaStreamWidget({
     super.key,
     required this.connection,
     this.deviceIP,
     this.port = 8081,
+    this.onStateChanged,
   });
 
   @override
@@ -32,6 +41,7 @@ class _MediaStreamWidgetState extends State<MediaStreamWidget> {
   bool _rendererReady = false;
   bool _pttPressed = false;
   bool _questAudioEnabled = false;
+  MediaPreviewState _previewState = MediaPreviewState.initializing;
 
   @override
   void initState() {
@@ -40,13 +50,18 @@ class _MediaStreamWidgetState extends State<MediaStreamWidget> {
   }
 
   Future<void> _initWebRTC() async {
+    _setPreviewState(MediaPreviewState.initializing);
     try {
       _renderer = RTCVideoRenderer();
       await _renderer!.initialize();
       if (!mounted) return;
       setState(() => _rendererReady = true);
+      _setPreviewState(MediaPreviewState.waitingForStream);
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      if (mounted) {
+        setState(() => _error = e.toString());
+      }
+      _setPreviewState(MediaPreviewState.error);
       return;
     }
     _webrtcService = WebRTCMediaService(widget.connection);
@@ -58,6 +73,7 @@ class _MediaStreamWidgetState extends State<MediaStreamWidget> {
           enabled: _resolveEffectiveQuestAudioEnabled(),
         );
         setState(() => _renderer?.srcObject = stream);
+        _setPreviewState(MediaPreviewState.streaming);
       }
     });
 
@@ -66,8 +82,17 @@ class _MediaStreamWidgetState extends State<MediaStreamWidget> {
       if (!connected) {
         unawaited(_setPtt(false));
         setState(() => _renderer?.srcObject = null);
+        _setPreviewState(MediaPreviewState.waitingForStream);
       }
     });
+  }
+
+  void _setPreviewState(MediaPreviewState nextState) {
+    if (_previewState == nextState) {
+      return;
+    }
+    _previewState = nextState;
+    widget.onStateChanged?.call(nextState);
   }
 
   @override

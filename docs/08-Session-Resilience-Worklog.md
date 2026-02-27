@@ -2658,3 +2658,36 @@ Go/No-Go decision:
   - usunieto tymczasowy pakiet `docs/evidence/20260227_185119`.
 - `OK` Status:
   - final validation pass: `DONE`.
+## 83) Control UX hardening for missing VR preview + END_SESSION fallback (2026-02-27)
+
+- `OK` Scope:
+  - usunięcie krytycznego rozjazdu UX: zielone `Connected` mimo braku streamingu,
+  - domknięcie ścieżki wyjścia z ekranu, gdy `END_SESSION` timeoutuje (`W-1001` / `ACK_TIMEOUT`).
+- `OK` Implementation (`flutter_controller`):
+  - `lib/widgets/media_stream_widget.dart`:
+    - dodano `MediaPreviewState` + callback `onStateChanged` (initializing/waiting/streaming/error),
+    - publikacja zmian stanu preview do ekranu kontrolnego.
+  - `lib/screens/control_screen.dart`:
+    - badge w AppBar rozdziela stany:
+      - `Connected` (transport + stream),
+      - `No Preview` (transport up, stream down),
+      - `Reconnecting` (transport down),
+    - dodano bannery degradacji dla braku VR preview,
+    - zablokowano otwarcie setup/control buttons gdy preview nie jest `streaming`,
+    - dodano throttling duplikatów popupów dla transient transport reason codes,
+    - dodano tracking ostatniego failure reason dla krytycznych komend,
+    - dodano fallback dla jawnego `END_SESSION`:
+      - przy transport failure (`ACK_TIMEOUT`, `DISCONNECTED`, ...)
+      - aplikowany jest lokalny closure fallback + wyjście do wyboru ucznia,
+      - incydent logowany jako warning z canonical reason code,
+    - fallback włączony dla operatorowych flow kończenia sesji:
+      - `End Session` button,
+      - system back -> `End session`,
+      - decyzje over-window (`Przerwij` / `Zakończ`).
+- `OK` Validation evidence (`docs/evidence/20260227_222742`):
+  - `scripts/unity_session_flow_validation_pack.ps1 -SkipCompile`: PASS,
+  - `flutter_controller`: `flutter analyze` PASS,
+  - `flutter_controller`: `flutter test` PASS,
+  - `scripts/unity_ops_dataset_trace_export_validate.ps1`: PASS.
+- `OK` Status:
+  - blocker UX/exit-path fix: `DONE`.
