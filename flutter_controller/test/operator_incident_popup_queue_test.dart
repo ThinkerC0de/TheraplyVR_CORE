@@ -28,8 +28,8 @@ void main() {
 
       expect(report, contains('1.'));
       expect(report, contains('2.'));
-      expect(report, contains('E-1201 (SESSION_LOCK_CONFLICT)'));
-      expect(report, contains('E-2109 (TCP_LINK_LOST)'));
+      expect(report, contains('W-1201 (SESSION_LOCK_CONFLICT)'));
+      expect(report, contains('W-2109 (TCP_LINK_LOST)'));
       expect(report, contains('Attach failed after retries.'));
       expect(report, contains('Pending writes waiting for network.'));
     });

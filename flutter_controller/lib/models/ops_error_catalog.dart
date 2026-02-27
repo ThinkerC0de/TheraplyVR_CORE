@@ -1,3 +1,9 @@
+enum OpsErrorSeverity {
+  error,
+  warning,
+  info,
+}
+
 class OpsErrorCatalogEntry {
   final String errorId;
   final String reasonCode;
@@ -8,6 +14,12 @@ class OpsErrorCatalogEntry {
     required this.reasonCode,
     required this.description,
   });
+
+  OpsErrorSeverity get severity =>
+      OpsErrorCatalog.severityForReasonCode(reasonCode);
+
+  String get displayCode =>
+      OpsErrorCatalog.buildDisplayCode(errorId: errorId, severity: severity);
 }
 
 class OpsErrorCatalog {
@@ -78,7 +90,8 @@ class OpsErrorCatalog {
     'SESSION_CLOSURE_REQUIRED': const OpsErrorCatalogEntry(
       errorId: 'E-1204',
       reasonCode: 'SESSION_CLOSURE_REQUIRED',
-      description: 'Previous session must be explicitly ended before new start.',
+      description:
+          'Previous session must be explicitly ended before new start.',
     ),
     'SESSION_OWNERSHIP_CONFLICT': const OpsErrorCatalogEntry(
       errorId: 'E-1202',
@@ -541,12 +554,142 @@ class OpsErrorCatalog {
       reasonCode: 'THERAPIST_START_NEW_DECISION',
       description: 'Therapist decision: start new.',
     ),
+    'THERAPIST_ABORTED_AFTER_RECOVERY_WINDOW': const OpsErrorCatalogEntry(
+      errorId: 'E-2521',
+      reasonCode: 'THERAPIST_ABORTED_AFTER_RECOVERY_WINDOW',
+      description: 'Therapist interrupted session after recovery window.',
+    ),
+    'THERAPIST_CONFIRMED_END_AFTER_RECOVERY_WINDOW': const OpsErrorCatalogEntry(
+      errorId: 'E-2522',
+      reasonCode: 'THERAPIST_CONFIRMED_END_AFTER_RECOVERY_WINDOW',
+      description: 'Therapist ended session after recovery window.',
+    ),
+    'CORRUPTED_DUAL_TERMINATION': const OpsErrorCatalogEntry(
+      errorId: 'E-2601',
+      reasonCode: 'CORRUPTED_DUAL_TERMINATION',
+      description: 'Session corrupted by dual app termination.',
+    ),
+  };
+
+  static final Map<String, OpsErrorSeverity> _severityByReasonCode =
+      <String, OpsErrorSeverity>{
+    'ACK_TIMEOUT': OpsErrorSeverity.warning,
+    'ACTION_AFTER_TIMEOUT': OpsErrorSeverity.warning,
+    'ACTIVE_GAME_FAILED': OpsErrorSeverity.warning,
+    'APP_FOCUS_LOST': OpsErrorSeverity.warning,
+    'APP_PAUSED': OpsErrorSeverity.warning,
+    'APP_QUIT': OpsErrorSeverity.warning,
+    'COMMAND_IN_PROGRESS': OpsErrorSeverity.warning,
+    'COMMAND_PRECONDITION': OpsErrorSeverity.warning,
+    'DATASET_EMPTY': OpsErrorSeverity.warning,
+    'DISCONNECTED': OpsErrorSeverity.warning,
+    'END_SESSION_OVERRIDE': OpsErrorSeverity.warning,
+    'ENTITLEMENT_BACKEND_UNAVAILABLE': OpsErrorSeverity.warning,
+    'ENVELOPE_EXPIRED': OpsErrorSeverity.warning,
+    'FIREBASE_DATA_SERVICE_UNAVAILABLE': OpsErrorSeverity.warning,
+    'INSTALL_GAME_GAME_NOT_ENTITLED': OpsErrorSeverity.warning,
+    'NO_ACTIVE_TCP_ROUTE': OpsErrorSeverity.warning,
+    'NO_RUNTIME_SIGNAL_TIMEOUT': OpsErrorSeverity.warning,
+    'PAUSE_GAME_NO_ACTIVE_GAME': OpsErrorSeverity.warning,
+    'RESUME_GAME_NO_ACTIVE_GAME': OpsErrorSeverity.warning,
+    'RUNTIME_SIGNAL_STALE': OpsErrorSeverity.warning,
+    'SESSION_CLOSURE_REQUIRED': OpsErrorSeverity.warning,
+    'SESSION_LOCK_CONFLICT': OpsErrorSeverity.warning,
+    'SESSION_NOT_ACTIVE': OpsErrorSeverity.warning,
+    'SOCKET_CLOSED': OpsErrorSeverity.warning,
+    'STEP_TIMEOUT': OpsErrorSeverity.warning,
+    'STOP_GAME_NO_ACTIVE_GAME': OpsErrorSeverity.warning,
+    'TARGET_MISMATCH': OpsErrorSeverity.warning,
+    'TCP_CLIENT_DISCONNECTED': OpsErrorSeverity.warning,
+    'TCP_LINK_LOST': OpsErrorSeverity.warning,
+    'TEMPORARY_REJECT': OpsErrorSeverity.warning,
+    'THERAPIST_ABORTED_AFTER_RECOVERY_WINDOW': OpsErrorSeverity.warning,
+    'TRACE_CANDIDATES_NOT_FOUND': OpsErrorSeverity.warning,
+    'TRACE_FILE_NOT_FOUND': OpsErrorSeverity.warning,
+    'TRACE_UNINITIALIZED': OpsErrorSeverity.warning,
+    'TRANSPORT_CLOSED': OpsErrorSeverity.warning,
+    'UNINITIALIZED': OpsErrorSeverity.warning,
+    'UNKNOWN': OpsErrorSeverity.warning,
+    'UNSPECIFIED': OpsErrorSeverity.warning,
+    'ACTIVE_GAME_COMPLETED': OpsErrorSeverity.info,
+    'ACTIVE_SESSION_MATCHED': OpsErrorSeverity.info,
+    'ADAPTIVE_DISABLED': OpsErrorSeverity.info,
+    'APP_FOCUS_GAINED': OpsErrorSeverity.info,
+    'APP_LICENSE_ACTIVE': OpsErrorSeverity.info,
+    'APP_RESUMED': OpsErrorSeverity.info,
+    'AUTO_RECONNECT': OpsErrorSeverity.info,
+    'CONTEXT_NOT_ENTRY_OR_RECONNECT': OpsErrorSeverity.info,
+    'DECREASE_DIFFICULTY': OpsErrorSeverity.info,
+    'DUPLICATE_COMMAND': OpsErrorSeverity.info,
+    'END_SESSION_AND_ATTACH_OK': OpsErrorSeverity.info,
+    'HANDOFF_GATE_CLEARED': OpsErrorSeverity.info,
+    'HANDOFF_KEEP_CURRENT': OpsErrorSeverity.info,
+    'HANDOFF_RESUME': OpsErrorSeverity.info,
+    'HANDOFF_START_NEW': OpsErrorSeverity.info,
+    'INCREASE_DIFFICULTY': OpsErrorSeverity.info,
+    'INITIAL_CONNECT': OpsErrorSeverity.info,
+    'KEEP_DIFFICULTY': OpsErrorSeverity.info,
+    'KEEP_DIFFICULTY_MIXED_SIGNALS': OpsErrorSeverity.info,
+    'LEGACY_FALLBACK_FIRESTORE_ERROR': OpsErrorSeverity.info,
+    'LEGACY_FALLBACK_NO_RECORD': OpsErrorSeverity.info,
+    'NO_PENDING_STEP': OpsErrorSeverity.info,
+    'PERSISTED_GATE_CLEARED': OpsErrorSeverity.info,
+    'RECOVERY_UNDER_WINDOW': OpsErrorSeverity.info,
+    'REMOTE_STATE_TERMINAL': OpsErrorSeverity.info,
+    'RESTORE_SNAPSHOT': OpsErrorSeverity.info,
+    'REVIEW_DIALOG_OPENED': OpsErrorSeverity.info,
+    'RUNTIME_GATE_CLEARED': OpsErrorSeverity.info,
+    'SESSION_ATTACH': OpsErrorSeverity.info,
+    'SESSION_RECENTLY_TERMINAL': OpsErrorSeverity.info,
+    'TARGET_MATCHED': OpsErrorSeverity.info,
+    'TASK_LABEL_GENERATED': OpsErrorSeverity.info,
+    'TCP_CLIENT_CONNECTED': OpsErrorSeverity.info,
+    'THERAPIST_CONFIRMED_END': OpsErrorSeverity.info,
+    'THERAPIST_CONFIRMED_END_AFTER_RECOVERY_WINDOW': OpsErrorSeverity.info,
+    'THERAPIST_CONTINUE_UNFINISHED': OpsErrorSeverity.info,
+    'THERAPIST_KEEP_CURRENT': OpsErrorSeverity.info,
+    'THERAPIST_REVIEW_REQUESTED': OpsErrorSeverity.info,
+    'THERAPIST_START_NEW_DECISION': OpsErrorSeverity.info,
   };
 
   static final RegExp _reasonPattern = RegExp(
     r'\breason=([A-Za-z0-9_]+)\b',
     caseSensitive: false,
   );
+
+  static OpsErrorSeverity severityForReasonCode(String reasonCode) {
+    final normalized = reasonCode.trim().toUpperCase();
+    if (normalized.isEmpty) {
+      return OpsErrorSeverity.error;
+    }
+    return _severityByReasonCode[normalized] ?? OpsErrorSeverity.error;
+  }
+
+  static String buildDisplayCode({
+    required String errorId,
+    required OpsErrorSeverity severity,
+  }) {
+    final normalizedErrorId = errorId.trim().toUpperCase();
+    final separatorIndex = normalizedErrorId.indexOf('-');
+    final candidateNumeric = separatorIndex >= 0
+        ? normalizedErrorId.substring(separatorIndex + 1).trim()
+        : normalizedErrorId;
+    final normalizedNumeric = RegExp(r'^\d{1,4}$').hasMatch(candidateNumeric)
+        ? candidateNumeric.padLeft(4, '0')
+        : '0000';
+    return '${_severityPrefix(severity)}-$normalizedNumeric';
+  }
+
+  static String _severityPrefix(OpsErrorSeverity severity) {
+    switch (severity) {
+      case OpsErrorSeverity.warning:
+        return 'W';
+      case OpsErrorSeverity.info:
+        return 'I';
+      case OpsErrorSeverity.error:
+        return 'E';
+    }
+  }
 
   static OpsErrorCatalogEntry? lookupByReasonCode(String reasonCode) {
     final normalized = reasonCode.trim().toUpperCase();
@@ -561,13 +704,13 @@ class OpsErrorCatalog {
     if (entry == null) {
       return null;
     }
-    return '${entry.errorId} (${entry.reasonCode})';
+    return '${entry.displayCode} (${entry.reasonCode})';
   }
 
   static String buildReasonTag(String reasonCode) {
     final normalized = reasonCode.trim().toUpperCase();
     if (normalized.isEmpty) {
-      return '${unknown.errorId} (${unknown.reasonCode})';
+      return '${unknown.displayCode} (${unknown.reasonCode})';
     }
 
     final knownTag = tryBuildKnownReasonTag(normalized);
@@ -575,21 +718,21 @@ class OpsErrorCatalog {
       return knownTag;
     }
 
-    return 'E-0000 ($normalized)';
+    return '${buildDisplayCode(errorId: 'E-0000', severity: OpsErrorSeverity.error)} ($normalized)';
   }
 
   static String buildReasonSummary(String reasonCode) {
     final normalized = reasonCode.trim().toUpperCase();
     if (normalized.isEmpty) {
-      return '${unknown.errorId} (${unknown.reasonCode}) ${unknown.description}';
+      return '${unknown.displayCode} (${unknown.reasonCode}) ${unknown.description}';
     }
 
     final entry = lookupByReasonCode(normalized);
     if (entry != null) {
-      return '${entry.errorId} (${entry.reasonCode}) ${entry.description}';
+      return '${entry.displayCode} (${entry.reasonCode}) ${entry.description}';
     }
 
-    return 'E-0000 ($normalized) Unmapped reason code. See docs/31-Error-Code-Catalog.md.';
+    return '${buildDisplayCode(errorId: 'E-0000', severity: OpsErrorSeverity.error)} ($normalized) Unmapped reason code. See docs/31-Error-Code-Catalog.md.';
   }
 
   static String? tryExtractReasonCode(Object error) {

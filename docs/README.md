@@ -16,6 +16,7 @@
 - [43-Guided-Session-Plan-Authoring.md](43-Guided-Session-Plan-Authoring.md)
 - [44-Scene-Controller-Mobile-Layout-MVP.md](44-Scene-Controller-Mobile-Layout-MVP.md)
 - [45-Mobile-Control-Layout-Asset-Contract.md](45-Mobile-Control-Layout-Asset-Contract.md)
+- [46-Operator-Message-I18n-TODO.md](46-Operator-Message-I18n-TODO.md)
 
 ## Archive (WIP Attempts)
 - [archive/node-graph-wip/README.md](archive/node-graph-wip/README.md)

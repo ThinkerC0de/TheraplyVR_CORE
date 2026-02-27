@@ -52,7 +52,7 @@ void main() {
     test('builds reason tag for known runtime presence reason code', () {
       final reasonTag = OpsErrorCatalog.buildReasonTag('APP_PAUSED');
 
-      expect(reasonTag, 'E-2101 (APP_PAUSED)');
+      expect(reasonTag, 'W-2101 (APP_PAUSED)');
     });
 
     test('builds reason summary from fallback reason code when no regex match',
@@ -62,8 +62,27 @@ void main() {
         fallbackReasonCode: 'TCP_LINK_LOST',
       );
 
-      expect(summary, contains('E-2109 (TCP_LINK_LOST)'));
+      expect(summary, contains('W-2109 (TCP_LINK_LOST)'));
       expect(summary, contains('TCP link lost.'));
+    });
+
+    test('exposes severity and displayCode as presentation layer', () {
+      final warningEntry = OpsErrorCatalog.lookupByReasonCode('APP_PAUSED');
+      final infoEntry = OpsErrorCatalog.lookupByReasonCode('SESSION_ATTACH');
+      final errorEntry =
+          OpsErrorCatalog.lookupByReasonCode('APP_LICENSE_INACTIVE');
+
+      expect(warningEntry, isNotNull);
+      expect(warningEntry!.severity, OpsErrorSeverity.warning);
+      expect(warningEntry.displayCode, 'W-2101');
+
+      expect(infoEntry, isNotNull);
+      expect(infoEntry!.severity, OpsErrorSeverity.info);
+      expect(infoEntry.displayCode, 'I-2201');
+
+      expect(errorEntry, isNotNull);
+      expect(errorEntry!.severity, OpsErrorSeverity.error);
+      expect(errorEntry.displayCode, 'E-2002');
     });
 
     test('maps runtime attach internal failure identifier', () {
@@ -99,6 +118,24 @@ void main() {
       expect(entry, isNotNull);
       expect(entry!.errorId, 'E-2520');
       expect(entry.reasonCode, 'THERAPIST_START_NEW_DECISION');
+    });
+
+    test('maps recovery-window and corrupted closure reason codes', () {
+      final abortedEntry = OpsErrorCatalog.lookupByReasonCode(
+        'THERAPIST_ABORTED_AFTER_RECOVERY_WINDOW',
+      );
+      final endedEntry = OpsErrorCatalog.lookupByReasonCode(
+        'THERAPIST_CONFIRMED_END_AFTER_RECOVERY_WINDOW',
+      );
+      final corruptedEntry =
+          OpsErrorCatalog.lookupByReasonCode('CORRUPTED_DUAL_TERMINATION');
+
+      expect(abortedEntry, isNotNull);
+      expect(abortedEntry!.displayCode, 'W-2521');
+      expect(endedEntry, isNotNull);
+      expect(endedEntry!.displayCode, 'I-2522');
+      expect(corruptedEntry, isNotNull);
+      expect(corruptedEntry!.displayCode, 'E-2601');
     });
 
     test('maps trace pipeline reason code', () {

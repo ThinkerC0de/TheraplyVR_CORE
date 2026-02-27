@@ -1,11 +1,12 @@
 # Error Code Catalog
 
 ## Purpose
-Provide stable operator-facing error ids (`E-xxxx`) without changing command wire contracts.
+Provide stable operator-facing catalog ids (`E-xxxx`) and presentation display codes (`E/W/I-xxxx`) without changing command wire contracts.
 
 - wire protocol stays on existing `reasonCode` values,
 - UI/logs can show both:
-  - `errorId` for operator runbooks,
+  - canonical `errorId` for operator runbooks/catalog maintenance,
+  - presentation `displayCode` (`E/W/I-xxxx`) derived from severity,
   - `reasonCode` for engineering diagnostics.
 
 ## Source Of Truth
@@ -18,7 +19,7 @@ Provide stable operator-facing error ids (`E-xxxx`) without changing command wir
   - `E-0000 (UNMAPPED_REASON_CODE)`.
 
 ## Recommended Display Format
-- `E-1201 (SESSION_LOCK_CONFLICT) Active session lock conflict.`
+- `W-1201 (SESSION_LOCK_CONFLICT) Active session lock conflict.`
 
 ## Maintenance Flow
 1. Add/modify mapping in `contracts/error_catalog.json`.

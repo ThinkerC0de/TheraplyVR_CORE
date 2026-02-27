@@ -144,6 +144,15 @@ Execution details: `docs/39-Core-Gap-Closure-Execution-Plan.md`
 | SF-K-004 | Wire layout contract to Flutter dynamic renderer | DONE | Mobile controller renders and submits `START_GAME/UPDATE_CONFIG` from authored layout bindings | SF-J-003, SF-K-003 |
 | SF-K-005 | Preserve canonical telemetry + ML dataset compatibility | DONE | Scene-script games keep canonical event quality gates and export readiness | SF-E-007, SF-K-001 |
 
+## Phase L - Operator Message Localization Pipeline
+
+| ID | Task | Status | Acceptance Criteria | Depends On |
+| --- | --- | --- | --- | --- |
+| SF-L-001 | Add operator-message i18n keys | TODO | All operator popup/incident/status messages resolve by stable message key instead of inline literals | SF-K-005 |
+| SF-L-002 | Define CSV translation source contract | TODO | Source file contract fixed as `key,pl,en,...` with one row per message key and schema validation | SF-L-001 |
+| SF-L-003 | Generate runtime locale assets from CSV | TODO | Build step emits runtime JSON (or equivalent) per locale with deterministic fallback when key/locale missing | SF-L-002 |
+| SF-L-004 | Add fallback and drift quality gates | TODO | CI/validation fails on duplicate keys, missing baseline locale values, or stale generated assets | SF-L-003 |
+
 ## Global Definition Of Done
 
 1. New scene is authored using `GameDefinition` only.

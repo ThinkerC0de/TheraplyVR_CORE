@@ -730,6 +730,27 @@
       "severity": "info",
       "title": "Therapist decision: start new",
       "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2521",
+      "reasonCode": "THERAPIST_ABORTED_AFTER_RECOVERY_WINDOW",
+      "severity": "warning",
+      "title": "Therapist interrupted after recovery window",
+      "operatorAction": "Review timeline and confirm interrupted closure in records."
+    },
+    {
+      "errorId": "E-2522",
+      "reasonCode": "THERAPIST_CONFIRMED_END_AFTER_RECOVERY_WINDOW",
+      "severity": "info",
+      "title": "Therapist ended after recovery window",
+      "operatorAction": "No action needed."
+    },
+    {
+      "errorId": "E-2601",
+      "reasonCode": "CORRUPTED_DUAL_TERMINATION",
+      "severity": "error",
+      "title": "Session corrupted by dual termination",
+      "operatorAction": "Inspect crash/reconnect evidence and restart from student selection."
     }
   ]
 }
