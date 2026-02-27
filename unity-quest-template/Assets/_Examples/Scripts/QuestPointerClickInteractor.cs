@@ -63,9 +63,12 @@ namespace TheraplyExamples
 
         [Header("Laser Pointer")]
         [SerializeField] private bool _showLaser = true;
+        [SerializeField] private bool _showDualHandLasers = true;
         [SerializeField] private bool _showLaserWhenNoHit = true;
         [SerializeField] private float _laserWidth = 0.005f;
         [SerializeField] private Color _laserColor = new Color(0.2f, 0.9f, 1f, 0.9f);
+        [SerializeField] private Color _leftLaserFallbackColor = new Color(0.12f, 0.95f, 0.35f, 0.9f);
+        [SerializeField] private Color _rightLaserFallbackColor = new Color(0.15f, 0.55f, 1f, 0.9f);
 
         [Header("Wand Indicator")]
         [SerializeField] private bool _showWand = true;
@@ -102,13 +105,19 @@ namespace TheraplyExamples
         private bool _wasPressed;
         private float _nextControllerRefreshAtRealtime;
         private float _nextRayOriginScanAtRealtime;
-        private LineRenderer _laserLine;
-        private Material _laserMaterial;
+        private LaserVisual _leftLaser = new LaserVisual();
+        private LaserVisual _rightLaser = new LaserVisual();
         private WandVisual _leftWand = new WandVisual();
         private WandVisual _rightWand = new WandVisual();
         private string _lastActivationHand = "UNKNOWN";
         private string _lastActivationControl = "UNKNOWN";
         private float _lastActivationValue = 0f;
+
+        private sealed class LaserVisual
+        {
+            public LineRenderer line;
+            public Material material;
+        }
 
         private sealed class WandVisual
         {
@@ -146,7 +155,7 @@ namespace TheraplyExamples
             }
 
             ResolveToolTelemetryDependencies();
-            EnsureLaserRenderer();
+            EnsureLaserRenderers();
             EnsureWandVisuals();
         }
 
@@ -188,10 +197,8 @@ namespace TheraplyExamples
         {
             ReleaseToolGripIfNeeded();
 
-            if (_laserMaterial != null)
-            {
-                Destroy(_laserMaterial);
-            }
+            DestroyLaserVisual(_leftLaser);
+            DestroyLaserVisual(_rightLaser);
 
             DestroyWandVisual(_leftWand);
             DestroyWandVisual(_rightWand);
@@ -435,6 +442,11 @@ namespace TheraplyExamples
         private bool TryRaycastFromPointer(out Ray ray, out RaycastHit hit)
         {
             ray = BuildPointerRay();
+            return TryRaycastFromRay(ray, out hit);
+        }
+
+        private bool TryRaycastFromRay(Ray ray, out RaycastHit hit)
+        {
             hit = default;
 
             var triggerInteraction = _includeTriggerColliders
@@ -615,28 +627,70 @@ namespace TheraplyExamples
         {
             if (!_showLaser)
             {
-                if (_laserLine != null)
-                {
-                    _laserLine.enabled = false;
-                }
+                SetLaserActive(_leftLaser, false);
+                SetLaserActive(_rightLaser, false);
 
                 return;
             }
 
-            EnsureLaserRenderer();
-            if (_laserLine == null)
+            EnsureLaserRenderers();
+            var activeHand = ResolveActiveHandToken();
+            if (_showDualHandLasers)
+            {
+                UpdateSingleLaserVisual("LEFT", _leftLaser, _leftLaserFallbackColor, activeHand);
+                UpdateSingleLaserVisual("RIGHT", _rightLaser, _rightLaserFallbackColor, activeHand);
+                return;
+            }
+
+            if (string.Equals(activeHand, "LEFT", System.StringComparison.OrdinalIgnoreCase))
+            {
+                UpdateSingleLaserVisual("LEFT", _leftLaser, _leftLaserFallbackColor, activeHand);
+                SetLaserActive(_rightLaser, false);
+                return;
+            }
+
+            UpdateSingleLaserVisual("RIGHT", _rightLaser, _rightLaserFallbackColor, activeHand);
+            SetLaserActive(_leftLaser, false);
+        }
+
+        private void UpdateSingleLaserVisual(
+            string handToken,
+            LaserVisual laser,
+            Color idleColor,
+            string activeHandToken)
+        {
+            if (laser == null || laser.line == null)
             {
                 return;
             }
 
-            var hasHit = TryRaycastFromPointer(out var ray, out var hit);
-            var color = ResolveIndicatorColor(hasHit, hit);
-            ApplyLaserStyle(color);
+            var origin = ResolveRayOriginTransformForHand(handToken, allowFallbackToOtherHand: false);
+            if (origin == null)
+            {
+                SetLaserActive(laser, false);
+                return;
+            }
+
+            var ray = BuildRayFromTransform(origin);
+            var hasHit = TryRaycastFromRay(ray, out var hit);
             if (!hasHit && !_showLaserWhenNoHit)
             {
-                _laserLine.enabled = false;
+                SetLaserActive(laser, false);
                 return;
             }
+
+            var fallbackColor = idleColor;
+            var isActiveHand = string.Equals(
+                handToken,
+                activeHandToken,
+                System.StringComparison.OrdinalIgnoreCase);
+            if (isActiveHand)
+            {
+                fallbackColor = ResolveSessionIndicatorColor();
+            }
+
+            var color = ResolveIndicatorColorForRay(hasHit, hit, fallbackColor);
+            ApplyLaserStyle(laser.line, laser.material, color);
 
             var start = ray.origin;
             var maxDistance = Mathf.Max(0.1f, _maxDistance);
@@ -644,9 +698,19 @@ namespace TheraplyExamples
                 ? hit.point
                 : ray.origin + (ray.direction * maxDistance);
 
-            _laserLine.enabled = true;
-            _laserLine.SetPosition(0, start);
-            _laserLine.SetPosition(1, end);
+            laser.line.enabled = true;
+            laser.line.SetPosition(0, start);
+            laser.line.SetPosition(1, end);
+        }
+
+        private void SetLaserActive(LaserVisual laser, bool isActive)
+        {
+            if (laser?.line == null)
+            {
+                return;
+            }
+
+            laser.line.enabled = isActive;
         }
 
         private void UpdateWandVisual()
@@ -752,44 +816,50 @@ namespace TheraplyExamples
             }
         }
 
-        private void EnsureLaserRenderer()
+        private void EnsureLaserRenderers()
         {
-            if (_laserLine != null)
+            EnsureSingleLaserRenderer(_leftLaser, "Left", _leftLaserFallbackColor);
+            EnsureSingleLaserRenderer(_rightLaser, "Right", _rightLaserFallbackColor);
+        }
+
+        private void EnsureSingleLaserRenderer(LaserVisual laser, string handSuffix, Color fallbackColor)
+        {
+            if (laser == null || laser.line != null)
             {
                 return;
             }
 
-            _laserLine = GetComponent<LineRenderer>();
-            if (_laserLine == null)
+            var safeSuffix = string.IsNullOrWhiteSpace(handSuffix) ? "Unknown" : handSuffix.Trim();
+            var host = new GameObject("QuestPointerLaser" + safeSuffix);
+            host.transform.SetParent(transform, worldPositionStays: false);
+
+            var line = host.AddComponent<LineRenderer>();
+            line.useWorldSpace = true;
+            line.positionCount = 2;
+            line.numCornerVertices = 2;
+            line.numCapVertices = 2;
+            line.enabled = false;
+
+            Material material = null;
+            var shader = Shader.Find("Sprites/Default");
+            if (shader == null)
             {
-                _laserLine = gameObject.AddComponent<LineRenderer>();
+                shader = Shader.Find("Unlit/Color");
             }
 
-            _laserLine.useWorldSpace = true;
-            _laserLine.positionCount = 2;
-            _laserLine.numCornerVertices = 2;
-            _laserLine.numCapVertices = 2;
-            _laserLine.enabled = false;
-
-            if (_laserLine.sharedMaterial == null)
+            if (shader != null)
             {
-                var shader = Shader.Find("Sprites/Default");
-                if (shader == null)
+                material = new Material(shader)
                 {
-                    shader = Shader.Find("Unlit/Color");
-                }
-
-                if (shader != null)
-                {
-                    _laserMaterial = new Material(shader)
-                    {
-                        name = "QuestPointerLaserMaterial"
-                    };
-                    _laserLine.material = _laserMaterial;
-                }
+                    name = "QuestPointerLaserMaterial" + safeSuffix,
+                    color = fallbackColor
+                };
+                line.material = material;
             }
 
-            ApplyLaserStyle(ResolveSessionIndicatorColor());
+            laser.line = line;
+            laser.material = material;
+            ApplyLaserStyle(line, material, fallbackColor);
         }
 
         private void EnsureWandVisuals()
@@ -870,26 +940,40 @@ namespace TheraplyExamples
             }
         }
 
-        private void ApplyLaserStyle(Color color)
+        private void DestroyLaserVisual(LaserVisual laser)
         {
-            if (_laserLine == null)
+            if (laser == null)
+            {
+                return;
+            }
+
+            if (laser.material != null)
+            {
+                Destroy(laser.material);
+                laser.material = null;
+            }
+        }
+
+        private void ApplyLaserStyle(LineRenderer line, Material material, Color color)
+        {
+            if (line == null)
             {
                 return;
             }
 
             var width = Mathf.Max(0.0005f, _laserWidth);
-            _laserLine.startWidth = width;
-            _laserLine.endWidth = width;
-            _laserLine.startColor = color;
-            _laserLine.endColor = color;
+            line.startWidth = width;
+            line.endWidth = width;
+            line.startColor = color;
+            line.endColor = color;
 
-            if (_laserMaterial != null)
+            if (material != null)
             {
-                _laserMaterial.color = color;
+                material.color = color;
             }
-            else if (_laserLine.sharedMaterial != null)
+            else if (line.sharedMaterial != null)
             {
-                _laserLine.sharedMaterial.color = color;
+                line.sharedMaterial.color = color;
             }
         }
 
@@ -924,6 +1008,18 @@ namespace TheraplyExamples
             }
 
             return sessionColor;
+        }
+
+        private static Color ResolveIndicatorColorForRay(bool hasHit, RaycastHit hit, Color fallbackColor)
+        {
+            if (!hasHit || hit.collider == null)
+            {
+                return fallbackColor;
+            }
+
+            return TryResolveHoverFeedback(hit, out var feedback)
+                ? feedback.IndicatorColor
+                : fallbackColor;
         }
 
         private static bool TryResolveHoverFeedback(RaycastHit hit, out PointerHoverFeedback feedback)
@@ -1171,10 +1267,8 @@ namespace TheraplyExamples
 
         private void HidePointerVisuals()
         {
-            if (_laserLine != null)
-            {
-                _laserLine.enabled = false;
-            }
+            SetLaserActive(_leftLaser, false);
+            SetLaserActive(_rightLaser, false);
 
             SetWandActive(_leftWand, false);
             SetWandActive(_rightWand, false);
