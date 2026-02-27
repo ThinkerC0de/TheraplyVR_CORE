@@ -1,0 +1,360 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dd4ab197f931455d91c21fde36861234, type: 3}
+  m_Name: BilateralMarkersMobileControlLayout
+  m_EditorClassIdentifier: 
+  contract:
+    schema: 'THERAPLY_MOBILE_CONTROL_LAYOUT'
+    schemaVersion: '2026-02-26'
+    gameId: 'bilateral_markers'
+    title: 'Bilateral Markers Controls'
+    description: 'START_GAME setup for bilateral hand-path training on Quest controllers.'
+    layout:
+      mode: 'stack'
+      columns: 1
+    payload:
+      target: 'game_config'
+      gameConfigType: 'bilateral_markers_config'
+      gameConfigVersion: 1
+      includeVersionInGameConfig: 1
+    sections:
+    - sectionId: 'core'
+      label: 'Core'
+      order: 10
+    - sectionId: 'advanced'
+      label: 'Advanced'
+      order: 20
+    controls:
+    - controlId: 'level'
+      type: 'select'
+      label: 'Difficulty Level'
+      description: 'Therapeutic mode from 0 to 4.'
+      placeholder: 
+      sectionId: 'core'
+      order: 10
+      defaultValue: '0'
+      bindingKey: 'level'
+      bindingTarget: 'game_config'
+      valueType: 'int'
+      emitOnStartGame: 1
+      emitOnUpdateConfig: 0
+      buttonCommandId: 
+      required: 1
+      minValue: 
+      maxValue: 
+      step: 
+      minLength: 0
+      maxLength: 0
+      regex: 
+      visual:
+        x: -1
+        y: -1
+        width: 1
+        height: 1
+        scale: 1
+      options:
+      - value: '0'
+        label: '0 Symmetry'
+      - value: '1'
+        label: '1 Mirror'
+      - value: '2'
+        label: '2 Rotational'
+      - value: '3'
+        label: '3 Asymmetry'
+      - value: '4'
+        label: '4 Alternating'
+    - controlId: 'pattern'
+      type: 'select'
+      label: 'Primary Pattern'
+      description: 'Default pattern for levels 0-2 and 4.'
+      placeholder: 
+      sectionId: 'core'
+      order: 20
+      defaultValue: 'wave'
+      bindingKey: 'pattern'
+      bindingTarget: 'game_config'
+      valueType: 'string'
+      emitOnStartGame: 1
+      emitOnUpdateConfig: 0
+      buttonCommandId: 
+      required: 1
+      minValue: 
+      maxValue: 
+      step: 
+      minLength: 0
+      maxLength: 0
+      regex: 
+      visual:
+        x: -1
+        y: -1
+        width: 1
+        height: 1
+        scale: 1
+      options:
+      - value: 'wave'
+        label: 'Wave'
+      - value: 'spiral'
+        label: 'Spiral'
+      - value: 'figure_eight'
+        label: 'Figure Eight'
+      - value: 'zigzag'
+        label: 'Zigzag'
+      - value: 'arc'
+        label: 'Arc'
+    - controlId: 'tempo_bpm'
+      type: 'slider'
+      label: 'Tempo (BPM)'
+      description: 'Pacing cue tempo.'
+      placeholder: 
+      sectionId: 'core'
+      order: 30
+      defaultValue: '72'
+      bindingKey: 'tempoBpm'
+      bindingTarget: 'game_config'
+      valueType: 'int'
+      emitOnStartGame: 1
+      emitOnUpdateConfig: 0
+      buttonCommandId: 
+      required: 1
+      minValue: '40'
+      maxValue: '120'
+      step: '1'
+      minLength: 0
+      maxLength: 0
+      regex: 
+      visual:
+        x: -1
+        y: -1
+        width: 1
+        height: 1
+        scale: 1
+      options: []
+    - controlId: 'duration_sec'
+      type: 'slider'
+      label: 'Round Duration (s)'
+      description: 'Single round duration for one START_GAME.'
+      placeholder: 
+      sectionId: 'core'
+      order: 40
+      defaultValue: '45'
+      bindingKey: 'durationSec'
+      bindingTarget: 'game_config'
+      valueType: 'int'
+      emitOnStartGame: 1
+      emitOnUpdateConfig: 0
+      buttonCommandId: 
+      required: 1
+      minValue: '15'
+      maxValue: '90'
+      step: '1'
+      minLength: 0
+      maxLength: 0
+      regex: 
+      visual:
+        x: -1
+        y: -1
+        width: 1
+        height: 1
+        scale: 1
+      options: []
+    - controlId: 'dominant_hand'
+      type: 'select'
+      label: 'Dominant Hand'
+      description: 'Used for level 4 alternation phase order.'
+      placeholder: 
+      sectionId: 'advanced'
+      order: 50
+      defaultValue: 'right'
+      bindingKey: 'dominantHand'
+      bindingTarget: 'game_config'
+      valueType: 'string'
+      emitOnStartGame: 1
+      emitOnUpdateConfig: 0
+      buttonCommandId: 
+      required: 1
+      minValue: 
+      maxValue: 
+      step: 
+      minLength: 0
+      maxLength: 0
+      regex: 
+      visual:
+        x: -1
+        y: -1
+        width: 1
+        height: 1
+        scale: 1
+      options:
+      - value: 'right'
+        label: 'Right'
+      - value: 'left'
+        label: 'Left'
+    - controlId: 'left_pattern'
+      type: 'select'
+      label: 'Asymmetry Left Pattern'
+      description: 'Applied on level 3 for left hand.'
+      placeholder: 
+      sectionId: 'advanced'
+      order: 60
+      defaultValue: 'spiral'
+      bindingKey: 'leftPattern'
+      bindingTarget: 'game_config'
+      valueType: 'string'
+      emitOnStartGame: 1
+      emitOnUpdateConfig: 0
+      buttonCommandId: 
+      required: 1
+      minValue: 
+      maxValue: 
+      step: 
+      minLength: 0
+      maxLength: 0
+      regex: 
+      visual:
+        x: -1
+        y: -1
+        width: 1
+        height: 1
+        scale: 1
+      options:
+      - value: 'wave'
+        label: 'Wave'
+      - value: 'spiral'
+        label: 'Spiral'
+      - value: 'figure_eight'
+        label: 'Figure Eight'
+      - value: 'zigzag'
+        label: 'Zigzag'
+      - value: 'arc'
+        label: 'Arc'
+    - controlId: 'right_pattern'
+      type: 'select'
+      label: 'Asymmetry Right Pattern'
+      description: 'Applied on level 3 for right hand.'
+      placeholder: 
+      sectionId: 'advanced'
+      order: 70
+      defaultValue: 'wave'
+      bindingKey: 'rightPattern'
+      bindingTarget: 'game_config'
+      valueType: 'string'
+      emitOnStartGame: 1
+      emitOnUpdateConfig: 0
+      buttonCommandId: 
+      required: 1
+      minValue: 
+      maxValue: 
+      step: 
+      minLength: 0
+      maxLength: 0
+      regex: 
+      visual:
+        x: -1
+        y: -1
+        width: 1
+        height: 1
+        scale: 1
+      options:
+      - value: 'wave'
+        label: 'Wave'
+      - value: 'spiral'
+        label: 'Spiral'
+      - value: 'figure_eight'
+        label: 'Figure Eight'
+      - value: 'zigzag'
+        label: 'Zigzag'
+      - value: 'arc'
+        label: 'Arc'
+    - controlId: 'tunnel_width_m'
+      type: 'slider'
+      label: 'Tunnel Width (m)'
+      description: 'Allowed path deviation tolerance.'
+      placeholder: 
+      sectionId: 'advanced'
+      order: 80
+      defaultValue: '0.11'
+      bindingKey: 'tunnelWidthM'
+      bindingTarget: 'game_config'
+      valueType: 'double'
+      emitOnStartGame: 1
+      emitOnUpdateConfig: 0
+      buttonCommandId: 
+      required: 1
+      minValue: '0.05'
+      maxValue: '0.22'
+      step: '0.01'
+      minLength: 0
+      maxLength: 0
+      regex: 
+      visual:
+        x: -1
+        y: -1
+        width: 1
+        height: 1
+        scale: 1
+      options: []
+    - controlId: 'alternation_offset_sec'
+      type: 'slider'
+      label: 'Alternation Offset (s)'
+      description: 'Level 4 planned hand start offset.'
+      placeholder: 
+      sectionId: 'advanced'
+      order: 90
+      defaultValue: '0.7'
+      bindingKey: 'alternationOffsetSec'
+      bindingTarget: 'game_config'
+      valueType: 'double'
+      emitOnStartGame: 1
+      emitOnUpdateConfig: 0
+      buttonCommandId: 
+      required: 1
+      minValue: '0.15'
+      maxValue: '2.0'
+      step: '0.05'
+      minLength: 0
+      maxLength: 0
+      regex: 
+      visual:
+        x: -1
+        y: -1
+        width: 1
+        height: 1
+        scale: 1
+      options: []
+    - controlId: 'adaptive_assist_enabled'
+      type: 'toggle'
+      label: 'Adaptive Assist (TEMP)'
+      description: 'Simple temporary tunnel widening when invalid ratio is high.'
+      placeholder: 
+      sectionId: 'advanced'
+      order: 100
+      defaultValue: 'true'
+      bindingKey: 'adaptiveAssistEnabled'
+      bindingTarget: 'game_config'
+      valueType: 'bool'
+      emitOnStartGame: 1
+      emitOnUpdateConfig: 0
+      buttonCommandId: 
+      required: 0
+      minValue: 
+      maxValue: 
+      step: 
+      minLength: 0
+      maxLength: 0
+      regex: 
+      visual:
+        x: -1
+        y: -1
+        width: 1
+        height: 1
+        scale: 1
+      options: []
