@@ -47,6 +47,10 @@ void main() {
         TherapistSessionSettings.defaultKeepScreenAwakeWhenForeground,
       );
       expect(
+        settings.mobileDisconnectBehavior,
+        TherapistSessionSettings.defaultMobileDisconnectBehavior,
+      );
+      expect(
         settings.operatorUiLanguage,
         TherapistSessionSettings.defaultOperatorUiLanguage,
       );
@@ -73,6 +77,7 @@ void main() {
           'adaptiveDifficultySensitivity': 0.2,
           'labelPipelineEnabled': false,
           'keepScreenAwakeWhenForeground': true,
+          'mobileDisconnectBehavior': 'continue',
           'operatorUiLanguage': 'pl',
           'timelineQuickNoteTemplates': <String>[
             'Need pause',
@@ -106,6 +111,7 @@ void main() {
       expect(payload['adaptiveDifficultySensitivity'], 0.2);
       expect(payload['labelPipelineEnabled'], isFalse);
       expect(payload['keepScreenAwakeWhenForeground'], isTrue);
+      expect(payload['mobileDisconnectBehavior'], 'continue');
       expect(payload['operatorUiLanguage'], 'pl');
       expect(
         payload['timelineQuickNoteTemplates'],
@@ -129,6 +135,10 @@ void main() {
       expect(fetched.adaptiveDifficultySensitivity, 0.2);
       expect(fetched.labelPipelineEnabled, isFalse);
       expect(fetched.keepScreenAwakeWhenForeground, isTrue);
+      expect(
+        fetched.mobileDisconnectBehavior,
+        MobileDisconnectBehavior.continueGameplay,
+      );
       expect(fetched.operatorUiLanguage, TherapistUiLanguage.polish);
       expect(
         fetched.timelineQuickNoteTemplates,
@@ -148,7 +158,10 @@ void main() {
 
     test('fetches settings for explicit therapist id (parent guided read)',
         () async {
-      await firestore.collection('user_entitlements').doc('therapist-owner').set(
+      await firestore
+          .collection('user_entitlements')
+          .doc('therapist-owner')
+          .set(
         <String, dynamic>{
           'sessionRecoveryWindowMinutes': 88,
           'guidedSessionContinuationPolicy': 'resume_always',
@@ -163,8 +176,9 @@ void main() {
         },
       );
 
-      final settings = await TherapistSessionSettingsService
-          .fetchSettingsForTherapistId('therapist-owner');
+      final settings =
+          await TherapistSessionSettingsService.fetchSettingsForTherapistId(
+              'therapist-owner');
 
       expect(settings.sessionRecoveryWindowMinutes, 88);
       expect(

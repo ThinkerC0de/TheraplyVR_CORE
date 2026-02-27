@@ -101,6 +101,8 @@ namespace TheraplyCore.Games.Runtime
         [SerializeField] private string _defaultGameId = "";
         [SerializeField] private bool _subscribeToStandardCommands = true;
         [SerializeField] private float _syncStatusPollIntervalSeconds = 1f;
+        [SerializeField] private string _defaultMobileDisconnectBehavior =
+            MobileDisconnectBehaviorValues.Pause;
 
         [Header("Content Delivery (Dev Simulator)")]
         [SerializeField] private bool _enableContentDeliverySimulation = false;
@@ -180,6 +182,8 @@ namespace TheraplyCore.Games.Runtime
         private int _controllerConnectionEpoch;
         private string _lastControllerClientIp = string.Empty;
         private DateTime _lastControllerDisconnectedAtUtc = DateTime.MinValue;
+        private string _mobileDisconnectBehavior = MobileDisconnectBehaviorValues.Pause;
+        private bool _controllerDisconnectPausePendingResume;
         private string _lastPublishedDevicePresenceState = string.Empty;
         private string _lastPublishedDevicePresenceReasonCode = string.Empty;
         private DateTime _lastPublishedDevicePresenceAtUtc = DateTime.MinValue;
@@ -202,6 +206,7 @@ namespace TheraplyCore.Games.Runtime
             if (_tcpServerService == null) _tcpServerService = FindFirstObjectByType<TCPServerService>();
             if (_firebaseDataService == null) _firebaseDataService = FindFirstObjectByType<FirebaseDataService>();
             _sessionContext = ResolveSessionContext();
+            _mobileDisconnectBehavior = NormalizeMobileDisconnectBehavior(_defaultMobileDisconnectBehavior);
             EnsureContentDeliveryStatePathInitialized();
 
             if (!string.IsNullOrWhiteSpace(_defaultGameId))
@@ -479,19 +484,25 @@ namespace TheraplyCore.Games.Runtime
             return true;
         }
 
-        public bool PauseActiveGame()
+        public bool PauseActiveGame(string reasonCode = "PAUSE_GAME")
         {
             if (!EnsureActiveGame()) return false;
             _activeGame.PauseGame();
-            TryTransitionSessionState(GameContracts.SessionLifecycleState.PAUSED, "PAUSE_GAME");
+            var resolvedReasonCode = string.IsNullOrWhiteSpace(reasonCode)
+                ? "PAUSE_GAME"
+                : reasonCode.Trim();
+            TryTransitionSessionState(GameContracts.SessionLifecycleState.PAUSED, resolvedReasonCode);
             return true;
         }
 
-        public bool ResumeActiveGame()
+        public bool ResumeActiveGame(string reasonCode = "RESUME_GAME")
         {
             if (!EnsureActiveGame()) return false;
             _activeGame.ResumeGame();
-            TryTransitionSessionState(GameContracts.SessionLifecycleState.IN_PROGRESS, "RESUME_GAME");
+            var resolvedReasonCode = string.IsNullOrWhiteSpace(reasonCode)
+                ? "RESUME_GAME"
+                : reasonCode.Trim();
+            TryTransitionSessionState(GameContracts.SessionLifecycleState.IN_PROGRESS, resolvedReasonCode);
             return true;
         }
 
@@ -571,6 +582,7 @@ namespace TheraplyCore.Games.Runtime
                     { "patientId", patientId },
                     { "therapistId", therapistId },
                     { "reasonCode", reasonCode },
+                    { "mobileDisconnectBehavior", _mobileDisconnectBehavior },
                     { "mode", "active_game_conflict_reused_current" },
                 });
                 Logger.Warning(
@@ -601,6 +613,7 @@ namespace TheraplyCore.Games.Runtime
                 }
 
                 ApplyRuntimeEntitlementSnapshot(command);
+                ApplyMobileDisconnectBehavior(command);
 
                 TrackCriticalRuntimeEvent("session_attach", new Dictionary<string, object>
                 {
@@ -608,6 +621,7 @@ namespace TheraplyCore.Games.Runtime
                     { "patientId", patientId },
                     { "therapistId", therapistId },
                     { "reasonCode", reasonCode },
+                    { "mobileDisconnectBehavior", _mobileDisconnectBehavior },
                     { "mode", "same_session" },
                 });
                 return;
@@ -628,6 +642,7 @@ namespace TheraplyCore.Games.Runtime
             }
 
             ApplyRuntimeEntitlementSnapshot(command);
+            ApplyMobileDisconnectBehavior(command);
 
             TrackCriticalRuntimeEvent("session_attach", new Dictionary<string, object>
             {
@@ -635,6 +650,7 @@ namespace TheraplyCore.Games.Runtime
                 { "patientId", patientId },
                 { "therapistId", therapistId },
                 { "reasonCode", reasonCode },
+                { "mobileDisconnectBehavior", _mobileDisconnectBehavior },
                 { "mode", "restored_created" },
             });
         }
@@ -2218,6 +2234,12 @@ namespace TheraplyCore.Games.Runtime
                 _sessionContext.BeginSession(_sessionContext.PatientId, _sessionContext.TherapistId);
             }
 
+            if (_controllerDisconnectPausePendingResume &&
+                currentState != GameContracts.SessionLifecycleState.PAUSED)
+            {
+                _controllerDisconnectPausePendingResume = false;
+            }
+
             _watchdogHangReported = false;
         }
 
@@ -2262,6 +2284,9 @@ namespace TheraplyCore.Games.Runtime
                 DevicePresenceStateValues.Connected,
                 "TCP_CLIENT_CONNECTED",
                 force: true);
+            TryResumeAfterControlRecovered(
+                reasonCode: "TCP_CLIENT_CONNECTED",
+                trigger: "controller_reconnected");
             PublishRuntimeStatusIfChanged("TCP_CLIENT_CONNECTED");
             if (_publishContentCatalogOnClientConnect)
             {
@@ -2276,10 +2301,176 @@ namespace TheraplyCore.Games.Runtime
                 "controller_disconnected",
                 "TCP_CLIENT_DISCONNECTED",
                 _lastControllerClientIp);
+            ApplyControllerDisconnectBehavior();
             _lastPublishedDevicePresenceState = string.Empty;
             _lastPublishedDevicePresenceReasonCode = string.Empty;
             _lastPublishedDevicePresenceAtUtc = DateTime.MinValue;
             _lastRuntimeStatus = string.Empty;
+        }
+
+        private void ApplyMobileDisconnectBehavior(SessionAttachCommand command)
+        {
+            var requestedBehavior = command == null
+                ? string.Empty
+                : command.mobileDisconnectBehavior ?? string.Empty;
+            var fallbackBehavior = string.IsNullOrWhiteSpace(_defaultMobileDisconnectBehavior)
+                ? MobileDisconnectBehaviorValues.Pause
+                : _defaultMobileDisconnectBehavior;
+            var resolvedBehavior = NormalizeMobileDisconnectBehavior(
+                string.IsNullOrWhiteSpace(requestedBehavior)
+                    ? fallbackBehavior
+                    : requestedBehavior);
+            var previousBehavior = _mobileDisconnectBehavior;
+            _mobileDisconnectBehavior = resolvedBehavior;
+
+            TrackCriticalRuntimeEvent("mobile_disconnect_policy_updated", new Dictionary<string, object>
+            {
+                { "previousBehavior", previousBehavior ?? string.Empty },
+                { "behavior", _mobileDisconnectBehavior },
+                { "source", "SESSION_ATTACH" },
+                { "sessionId", _sessionContext == null ? string.Empty : _sessionContext.SessionId ?? string.Empty },
+            });
+
+            if (_controllerDisconnectPausePendingResume &&
+                string.Equals(
+                    _mobileDisconnectBehavior,
+                    MobileDisconnectBehaviorValues.Continue,
+                    StringComparison.Ordinal))
+            {
+                TryResumeAfterControlRecovered(
+                    reasonCode: "SESSION_ATTACH",
+                    trigger: "session_attach_policy_continue");
+            }
+        }
+
+        private void ApplyControllerDisconnectBehavior()
+        {
+            if (_sessionContext == null)
+            {
+                _sessionContext = ResolveSessionContext();
+            }
+
+            var sessionState = _sessionContext == null
+                ? GameContracts.SessionLifecycleState.CREATED
+                : _sessionContext.SessionState;
+            var activeGameState = _activeGame == null
+                ? GameContracts.GameState.NotInitialized
+                : _activeGame.State;
+            var behavior = NormalizeMobileDisconnectBehavior(_mobileDisconnectBehavior);
+            var appliedPause = false;
+            var skipReason = string.Empty;
+
+            if (string.Equals(behavior, MobileDisconnectBehaviorValues.Continue, StringComparison.Ordinal))
+            {
+                skipReason = "CONTINUE_POLICY";
+                _controllerDisconnectPausePendingResume = false;
+            }
+            else if (_activeGame == null)
+            {
+                skipReason = "NO_ACTIVE_GAME";
+                _controllerDisconnectPausePendingResume = false;
+            }
+            else if (activeGameState != GameContracts.GameState.Playing)
+            {
+                skipReason = $"ACTIVE_GAME_STATE_{activeGameState.ToString().ToUpperInvariant()}";
+                _controllerDisconnectPausePendingResume = false;
+            }
+            else if (sessionState != GameContracts.SessionLifecycleState.IN_PROGRESS)
+            {
+                skipReason = $"SESSION_STATE_{sessionState.ToString().ToUpperInvariant()}";
+                _controllerDisconnectPausePendingResume = false;
+            }
+            else
+            {
+                appliedPause = PauseActiveGame("TCP_CLIENT_DISCONNECTED");
+                _controllerDisconnectPausePendingResume = appliedPause;
+                if (!appliedPause)
+                {
+                    skipReason = "PAUSE_REJECTED";
+                }
+            }
+
+            TrackCriticalRuntimeEvent("mobile_disconnect_policy_applied", new Dictionary<string, object>
+            {
+                { "behavior", behavior },
+                { "appliedPause", appliedPause },
+                { "skipReason", skipReason },
+                { "sessionState", sessionState.ToString() },
+                { "activeGameId", _activeGameId ?? string.Empty },
+                { "activeGameState", activeGameState.ToString() },
+                { "pendingResume", _controllerDisconnectPausePendingResume },
+            });
+        }
+
+        private void TryResumeAfterControlRecovered(string reasonCode, string trigger)
+        {
+            if (!_controllerDisconnectPausePendingResume)
+            {
+                return;
+            }
+
+            if (_sessionContext == null)
+            {
+                _sessionContext = ResolveSessionContext();
+            }
+
+            var sessionState = _sessionContext == null
+                ? GameContracts.SessionLifecycleState.CREATED
+                : _sessionContext.SessionState;
+            var activeGameState = _activeGame == null
+                ? GameContracts.GameState.NotInitialized
+                : _activeGame.State;
+            var skipReason = string.Empty;
+
+            if (_activeGame == null)
+            {
+                skipReason = "NO_ACTIVE_GAME";
+                _controllerDisconnectPausePendingResume = false;
+            }
+            else if (sessionState != GameContracts.SessionLifecycleState.PAUSED)
+            {
+                skipReason = $"SESSION_STATE_{sessionState.ToString().ToUpperInvariant()}";
+                _controllerDisconnectPausePendingResume = false;
+            }
+            else if (activeGameState != GameContracts.GameState.Paused)
+            {
+                skipReason = $"ACTIVE_GAME_STATE_{activeGameState.ToString().ToUpperInvariant()}";
+                _controllerDisconnectPausePendingResume = false;
+            }
+
+            var resumed = false;
+            if (string.IsNullOrWhiteSpace(skipReason))
+            {
+                resumed = ResumeActiveGame(reasonCode);
+                if (resumed)
+                {
+                    _controllerDisconnectPausePendingResume = false;
+                }
+                else
+                {
+                    skipReason = "RESUME_REJECTED";
+                }
+            }
+
+            TrackCriticalRuntimeEvent("mobile_disconnect_policy_resume", new Dictionary<string, object>
+            {
+                { "trigger", trigger ?? string.Empty },
+                { "reasonCode", string.IsNullOrWhiteSpace(reasonCode) ? "TCP_CLIENT_CONNECTED" : reasonCode },
+                { "resumed", resumed },
+                { "skipReason", skipReason },
+                { "sessionState", sessionState.ToString() },
+                { "activeGameId", _activeGameId ?? string.Empty },
+                { "activeGameState", activeGameState.ToString() },
+                { "pendingResume", _controllerDisconnectPausePendingResume },
+            });
+        }
+
+        private static string NormalizeMobileDisconnectBehavior(string behavior)
+        {
+            var normalized = (behavior ?? string.Empty).Trim().ToLowerInvariant();
+            return string.Equals(normalized, MobileDisconnectBehaviorValues.Continue, StringComparison.Ordinal)
+                ? MobileDisconnectBehaviorValues.Continue
+                : MobileDisconnectBehaviorValues.Pause;
         }
 
         private void TrackControllerConnectionEvent(string eventName, string reasonCode, string clientIp)
@@ -2302,6 +2493,8 @@ namespace TheraplyCore.Games.Runtime
                 { "hasActiveGame", _activeGame != null },
                 { "sessionState", _sessionContext != null ? _sessionContext.SessionState.ToString() : string.Empty },
                 { "connectionEpoch", _controllerConnectionEpoch },
+                { "mobileDisconnectBehavior", _mobileDisconnectBehavior },
+                { "disconnectPausePendingResume", _controllerDisconnectPausePendingResume },
             };
 
             if ((string.Equals(eventName, "controller_connected", StringComparison.OrdinalIgnoreCase) ||

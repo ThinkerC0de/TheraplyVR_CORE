@@ -115,6 +115,71 @@ void main() {
       expect(timeline[1].eventType, 'GAME_RESUMED');
     });
 
+    test('fetchSessionTimeline deduplicates entries by timelineEventId',
+        () async {
+      final ownerKey = SessionOwnership.ownerKey(
+        therapistId: 'therapist-z',
+        studentId: 'student-z',
+      );
+      final sessionKey = SessionOwnership.sessionKey(
+        therapistId: 'therapist-z',
+        studentId: 'student-z',
+        sessionId: 'session-z',
+      );
+
+      final eventsRef = firestore
+          .collection('therapy_sessions')
+          .doc('session-z')
+          .collection('events');
+      await eventsRef.doc('evt-older').set(
+            _timelinePayload(
+              sessionId: 'session-z',
+              studentId: 'student-z',
+              therapistId: 'therapist-z',
+              ownerKey: ownerKey,
+              sessionKey: sessionKey,
+              eventType: 'RECONNECT_ATTEMPT',
+              eventAtUnixMs: 1000,
+              timelineEventId: 'tl-fixed-1',
+            ),
+          );
+      await eventsRef.doc('evt-newer').set(
+            _timelinePayload(
+              sessionId: 'session-z',
+              studentId: 'student-z',
+              therapistId: 'therapist-z',
+              ownerKey: ownerKey,
+              sessionKey: sessionKey,
+              eventType: 'RECONNECT_ATTEMPT',
+              eventAtUnixMs: 1500,
+              timelineEventId: 'tl-fixed-1',
+            ),
+          );
+      await eventsRef.doc('evt-unique').set(
+            _timelinePayload(
+              sessionId: 'session-z',
+              studentId: 'student-z',
+              therapistId: 'therapist-z',
+              ownerKey: ownerKey,
+              sessionKey: sessionKey,
+              eventType: 'SESSION_ATTACH_SUCCEEDED',
+              eventAtUnixMs: 2000,
+              timelineEventId: 'tl-fixed-2',
+            ),
+          );
+
+      final timeline = await SessionJournalService.fetchSessionTimeline(
+        sessionId: 'session-z',
+        limit: 10,
+      );
+
+      expect(timeline, hasLength(2));
+      expect(timeline[0].timelineEventId, 'tl-fixed-2');
+      expect(timeline[0].eventAtUnixMs, 2000);
+      expect(timeline[1].timelineEventId, 'tl-fixed-1');
+      expect(timeline[1].eventAtUnixMs, 1500);
+    });
+
     test('watchSessionTimeline emits empty list for blank session id',
         () async {
       final stream = SessionJournalService.watchSessionTimeline(sessionId: ' ');
@@ -199,13 +264,14 @@ Map<String, dynamic> _timelinePayload({
   required String sessionKey,
   required String eventType,
   required int eventAtUnixMs,
+  String timelineEventId = '',
 }) {
   final eventAtUtc = DateTime.fromMillisecondsSinceEpoch(
     eventAtUnixMs,
     isUtc: true,
   ).toIso8601String();
 
-  return <String, dynamic>{
+  final payload = <String, dynamic>{
     'sessionId': sessionId,
     'studentId': studentId,
     'therapistId': therapistId,
@@ -219,6 +285,10 @@ Map<String, dynamic> _timelinePayload({
     'eventAtUnixMs': eventAtUnixMs,
     'createdAtUtc': eventAtUtc,
   };
+  if (timelineEventId.trim().isNotEmpty) {
+    payload['timelineEventId'] = timelineEventId.trim();
+  }
+  return payload;
 }
 
 Map<String, dynamic> _sessionPayload({

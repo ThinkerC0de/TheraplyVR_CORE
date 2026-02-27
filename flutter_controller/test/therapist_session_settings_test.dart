@@ -36,6 +36,10 @@ void main() {
         TherapistSessionSettings.defaultKeepScreenAwakeWhenForeground,
       );
       expect(
+        settings.mobileDisconnectBehavior,
+        TherapistSessionSettings.defaultMobileDisconnectBehavior,
+      );
+      expect(
         settings.operatorUiLanguage,
         TherapistSessionSettings.defaultOperatorUiLanguage,
       );
@@ -82,6 +86,7 @@ void main() {
         'autoCloseInterruptedSessionsEnabled': false,
         'requireResumeConfirmationAfterRecoveryWindow': false,
         'keepScreenAwakeWhenForeground': true,
+        'mobileDisconnectBehavior': 'continue',
         'operatorUiLanguage': 'pl',
         'timelineQuickNoteTemplates': <dynamic>['A', ' ', 'B'],
         'guidedSessionContinuationPolicy': 'resume_always',
@@ -98,6 +103,10 @@ void main() {
       expect(settings.autoCloseInterruptedSessionsEnabled, isFalse);
       expect(settings.requireResumeConfirmationAfterRecoveryWindow, isFalse);
       expect(settings.keepScreenAwakeWhenForeground, isTrue);
+      expect(
+        settings.mobileDisconnectBehavior,
+        MobileDisconnectBehavior.continueGameplay,
+      );
       expect(settings.operatorUiLanguage, TherapistUiLanguage.polish);
       expect(settings.timelineQuickNoteTemplates, <String>['A', 'B']);
       expect(
@@ -120,6 +129,7 @@ void main() {
         'adaptiveDifficultySensitivity': 0.74,
         'labelPipelineEnabled': false,
         'keepScreenAwakeWhenForeground': true,
+        'mobileDisconnectBehavior': 'continue',
         'operatorUiLanguage': 'pl',
         'timelineQuickNoteTemplates': <String>['Template A', 'Template B'],
         'guidedSessionContinuationPolicy': 'manual',
@@ -151,6 +161,10 @@ void main() {
       expect(roundtrip.adaptiveDifficultySensitivity, 0.74);
       expect(roundtrip.labelPipelineEnabled, isFalse);
       expect(roundtrip.keepScreenAwakeWhenForeground, isTrue);
+      expect(
+        roundtrip.mobileDisconnectBehavior,
+        MobileDisconnectBehavior.continueGameplay,
+      );
       expect(roundtrip.operatorUiLanguage, TherapistUiLanguage.polish);
       expect(
         roundtrip.timelineQuickNoteTemplates,
@@ -158,7 +172,8 @@ void main() {
       );
       expect(roundtrip.guidedSessionContinuationPolicy.wireValue, 'manual');
       expect(roundtrip.guidedSessionPlanSteps.length, 2);
-      expect(roundtrip.guidedSessionPlanSteps.first.gameId, 'demo_cube_clicker');
+      expect(
+          roundtrip.guidedSessionPlanSteps.first.gameId, 'demo_cube_clicker');
     });
 
     test('copyWith overrides selected fields only', () {
@@ -171,6 +186,7 @@ void main() {
         adaptiveDifficultySensitivity: 0.25,
         labelPipelineEnabled: false,
         keepScreenAwakeWhenForeground: true,
+        mobileDisconnectBehavior: MobileDisconnectBehavior.continueGameplay,
         operatorUiLanguage: TherapistUiLanguage.polish,
         timelineQuickNoteTemplates: <String>['Custom quick note'],
         guidedSessionContinuationPolicy:
@@ -187,6 +203,10 @@ void main() {
       expect(updated.adaptiveDifficultySensitivity, 0.25);
       expect(updated.labelPipelineEnabled, isFalse);
       expect(updated.keepScreenAwakeWhenForeground, isTrue);
+      expect(
+        updated.mobileDisconnectBehavior,
+        MobileDisconnectBehavior.continueGameplay,
+      );
       expect(updated.operatorUiLanguage, TherapistUiLanguage.polish);
       expect(
         updated.timelineQuickNoteTemplates,

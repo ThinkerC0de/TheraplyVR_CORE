@@ -75,8 +75,15 @@ namespace TheraplyCore.Games.Contracts
         public string entitlementEvaluatedAtUtc;
         public string entitledGameIdsCsv;
         public int entitledGameIdsCount;
+        public string mobileDisconnectBehavior;
 
         public string CorrelationId => correlationId;
+    }
+
+    public static class MobileDisconnectBehaviorValues
+    {
+        public const string Pause = "pause";
+        public const string Continue = "continue";
     }
 
     public static class RuntimeEntitlementProfileIds

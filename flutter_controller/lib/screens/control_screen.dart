@@ -36,7 +36,13 @@ import 'package:flutter_controller/models/therapy_session_record.dart';
 import 'package:flutter_controller/widgets/media_stream_widget.dart';
 import 'package:flutter_controller/widgets/mobile_control_renderer.dart';
 
-enum _SessionGateAction { keepCurrent, resume, startNew }
+enum _SessionGateAction {
+  keepCurrent,
+  resume,
+  startNew,
+  interruptAndExit,
+  completeAndExit
+}
 
 enum _WorkflowStep { gameCatalog, gameSetup }
 
@@ -389,7 +395,7 @@ class _ControlScreenState extends State<ControlScreen>
   };
   static const String _updateConfigCommandId = 'UPDATE_CONFIG';
   static const String _interruptedAutoCloseReasonCode =
-      'INTERRUPTED_AUTO_CLOSED_TIMEOUT';
+      'CORRUPTED_DUAL_TERMINATION';
   static const Duration _recentlyEndedSessionTtl = Duration(seconds: 20);
   static const Duration _discoveryCandidateFreshTtl = Duration(seconds: 12);
   static const Duration _connectionLivenessPollInterval = Duration(seconds: 2);
@@ -468,6 +474,9 @@ class _ControlScreenState extends State<ControlScreen>
   String? _deferredHandoffSessionId;
   DateTime? _deferredHandoffMarkedAtUtc;
   String? _deferredHandoffReasonCode;
+  int _reconnectLoopEpoch = 0;
+  final Map<String, _AppliedGameConfigSnapshot> _appliedConfigBySessionGame =
+      <String, _AppliedGameConfigSnapshot>{};
 
   _WorkflowStep _workflowStep = _WorkflowStep.gameCatalog;
 
@@ -508,6 +517,7 @@ class _ControlScreenState extends State<ControlScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    unawaited(_recordMobileLifecycleEvent(state));
     if (state == AppLifecycleState.resumed) {
       unawaited(_recoverConnectionAfterResume());
     }
@@ -631,6 +641,7 @@ class _ControlScreenState extends State<ControlScreen>
           previousSignal: previousSignal,
           signal: devicePresenceUpdate,
         );
+        unawaited(_persistDevicePresenceSignal(devicePresenceUpdate));
       }
 
       if (mounted &&
@@ -958,10 +969,19 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   Future<void> _runAutoReconnectLoop({required String reason}) async {
+    final loopEpoch = ++_reconnectLoopEpoch;
+    var loopAttempt = 0;
     while (mounted &&
         _autoReconnectEnabled &&
         !_allowSystemPop &&
         !_connection.isConnected) {
+      loopAttempt++;
+      await _recordReconnectAttemptEvent(
+        loopEpoch: loopEpoch,
+        loopAttempt: loopAttempt,
+        reasonCode: reason.toUpperCase(),
+      );
+
       var ok = await _connection.reconnect(
         maxAttempts: 4,
         baseDelay: const Duration(milliseconds: 350),
@@ -976,6 +996,12 @@ class _ControlScreenState extends State<ControlScreen>
       }
 
       if (ok) {
+        await _recordReconnectResultEvent(
+          loopEpoch: loopEpoch,
+          loopAttempt: loopAttempt,
+          success: true,
+          reasonCode: 'AUTO_RECONNECT',
+        );
         if (mounted && _sessionAttachReady) {
           setState(() {
             _sessionAttachReady = false;
@@ -986,6 +1012,13 @@ class _ControlScreenState extends State<ControlScreen>
         // SESSION_ATTACH bootstrap may be skipped after reconnect.
         break;
       }
+
+      await _recordReconnectResultEvent(
+        loopEpoch: loopEpoch,
+        loopAttempt: loopAttempt,
+        success: false,
+        reasonCode: 'TCP_LINK_LOST',
+      );
 
       if (mounted) {
         setState(() {
@@ -1021,9 +1054,13 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     final persisted = _latestPersistedSession;
-    if (persisted != null && persisted.requiresHandoffDecision) {
+    if (persisted != null) {
       final persistedSessionId = persisted.sessionId.trim();
+      final persistedIsTerminal = persisted.state != null
+          ? SessionRecoveryPolicy.isTerminalState(persisted.state!)
+          : persisted.isTerminal;
       if (persistedSessionId.isNotEmpty &&
+          !persistedIsTerminal &&
           !_wasSessionRecentlyEnded(persistedSessionId)) {
         return persistedSessionId;
       }
@@ -1096,6 +1133,10 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     try {
+      await _recordSessionAttachAttemptEvent(
+        sessionId: targetSessionId,
+        reasonCode: reasonCode,
+      );
       _logAttachDecision(
         decision: 'SEND_SESSION_ATTACH',
         reasonCode: reasonCode,
@@ -1126,6 +1167,8 @@ class _ControlScreenState extends State<ControlScreen>
               entitlementEvaluatedAtUtc.toIso8601String(),
           'entitledGameIdsCsv': _serializeGameIdsCsv(entitledGameIds),
           'entitledGameIdsCount': entitledGameIds.length,
+          'mobileDisconnectBehavior':
+              _therapistSessionSettings.mobileDisconnectBehavior.wireValue,
         },
         expiresAtUtc: DateTime.now().toUtc().add(const Duration(seconds: 30)),
         ackTimeout:
@@ -1146,6 +1189,11 @@ class _ControlScreenState extends State<ControlScreen>
         reasonCode: reasonCode,
         commandId: CriticalCommandIds.sessionAttach,
         sessionId: targetSessionId,
+      );
+      await _recordSessionAttachResultEvent(
+        sessionId: targetSessionId,
+        reasonCode: reasonCode,
+        success: true,
       );
 
       await _recordConnectionLifecycleEvent(
@@ -1174,6 +1222,11 @@ class _ControlScreenState extends State<ControlScreen>
         reasonCode: reasonCode,
         commandId: CriticalCommandIds.sessionAttach,
         sessionId: targetSessionId,
+      );
+      await _recordSessionAttachResultEvent(
+        sessionId: targetSessionId,
+        reasonCode: failureReasonCode,
+        success: false,
       );
 
       if (failureReasonCode == 'SESSION_OWNERSHIP_CONFLICT' &&
@@ -1324,6 +1377,209 @@ class _ControlScreenState extends State<ControlScreen>
     }
   }
 
+  Future<void> _appendOperationalTimelineEvent({
+    required String eventType,
+    required String reasonCode,
+    required String source,
+    String? sessionIdOverride,
+    DateTime? eventAtUtc,
+    String discriminator = '',
+    Map<String, dynamic> details = const <String, dynamic>{},
+  }) async {
+    final sessionId = (sessionIdOverride ?? _resolveTimelineSessionId()).trim();
+    if (sessionId.isEmpty) {
+      return;
+    }
+
+    final eventTime = (eventAtUtc ?? DateTime.now().toUtc()).toUtc();
+    final payloadDetails = <String, dynamic>{
+      ...details,
+      if (reasonCode.trim().isNotEmpty) 'reasonCode': reasonCode.trim(),
+    };
+    final timelineEventId = SessionJournalService.buildTimelineEventId(
+      sessionId: sessionId,
+      eventType: eventType,
+      source: source,
+      eventAtUnixMs: eventTime.millisecondsSinceEpoch,
+      details: payloadDetails,
+      discriminator: discriminator,
+    );
+
+    try {
+      await SessionJournalService.appendSessionEvent(
+        sessionId: sessionId,
+        studentId: widget.student.id,
+        therapistId: _resolveActorTherapistId(),
+        eventType: eventType,
+        gameId: _selectedGameId,
+        source: source,
+        timelineEventId: timelineEventId,
+        eventAtUtc: eventTime,
+        details: payloadDetails,
+      );
+    } catch (e) {
+      debugPrint(
+        '[ControlScreen] Operational timeline event persist failed: '
+        'event=$eventType reason=$reasonCode error=$e',
+      );
+    }
+  }
+
+  Future<void> _recordReconnectAttemptEvent({
+    required int loopEpoch,
+    required int loopAttempt,
+    required String reasonCode,
+  }) {
+    return _appendOperationalTimelineEvent(
+      eventType: 'CONTROLLER_RECONNECT_ATTEMPT',
+      reasonCode: reasonCode,
+      source: 'mobile_controller',
+      discriminator: 'epoch_${loopEpoch}_attempt_$loopAttempt',
+      details: <String, dynamic>{
+        'loopEpoch': loopEpoch,
+        'loopAttempt': loopAttempt,
+        'connected': _isConnected,
+      },
+    );
+  }
+
+  Future<void> _recordReconnectResultEvent({
+    required int loopEpoch,
+    required int loopAttempt,
+    required bool success,
+    required String reasonCode,
+  }) {
+    return _appendOperationalTimelineEvent(
+      eventType: success
+          ? 'CONTROLLER_RECONNECT_SUCCESS'
+          : 'CONTROLLER_RECONNECT_FAILED',
+      reasonCode: reasonCode,
+      source: 'mobile_controller',
+      discriminator:
+          "epoch_${loopEpoch}_attempt_${loopAttempt}_${success ? 'ok' : 'fail'}",
+      details: <String, dynamic>{
+        'loopEpoch': loopEpoch,
+        'loopAttempt': loopAttempt,
+        'success': success,
+      },
+    );
+  }
+
+  Future<void> _recordSessionAttachAttemptEvent({
+    required String sessionId,
+    required String reasonCode,
+  }) {
+    final nowUtc = DateTime.now().toUtc();
+    return _appendOperationalTimelineEvent(
+      eventType: 'SESSION_ATTACH_ATTEMPT',
+      reasonCode: reasonCode,
+      source: 'mobile_controller',
+      sessionIdOverride: sessionId,
+      eventAtUtc: nowUtc,
+      discriminator: 'attempt_${nowUtc.microsecondsSinceEpoch}',
+      details: <String, dynamic>{
+        'attachReady': _sessionAttachReady,
+        'connected': _isConnected,
+      },
+    );
+  }
+
+  Future<void> _recordSessionAttachResultEvent({
+    required String sessionId,
+    required String reasonCode,
+    required bool success,
+  }) {
+    final nowUtc = DateTime.now().toUtc();
+    return _appendOperationalTimelineEvent(
+      eventType: success ? 'SESSION_ATTACH_SUCCEEDED' : 'SESSION_ATTACH_FAILED',
+      reasonCode: reasonCode,
+      source: 'mobile_controller',
+      sessionIdOverride: sessionId,
+      eventAtUtc: nowUtc,
+      discriminator: 'result_${nowUtc.microsecondsSinceEpoch}',
+      details: <String, dynamic>{
+        'success': success,
+      },
+    );
+  }
+
+  Future<void> _persistDevicePresenceSignal(
+    DevicePresenceUpdateSignal signal,
+  ) async {
+    final sessionId = signal.sessionId.trim();
+    if (sessionId.isEmpty) {
+      return;
+    }
+
+    final eventAtUtc = signal.changedAtUtc.toUtc();
+    final details = <String, dynamic>{
+      'presenceState': signal.presenceState.wireValue,
+      'reasonCode': signal.reasonCode,
+      'appPaused': signal.appPaused,
+      'appFocused': signal.appFocused,
+      'hasTcpClient': signal.hasTcpClient,
+      'activeGameId': signal.activeGameId,
+      'activeGameState': signal.activeGameState,
+    };
+    final timelineEventId = SessionJournalService.buildTimelineEventId(
+      sessionId: sessionId,
+      eventType: 'VR_DEVICE_PRESENCE_UPDATE',
+      source: 'vr_runtime',
+      eventAtUnixMs: eventAtUtc.millisecondsSinceEpoch,
+      details: details,
+      discriminator: signal.presenceState.wireValue,
+    );
+
+    try {
+      await SessionJournalService.appendSessionEvent(
+        sessionId: sessionId,
+        studentId: widget.student.id,
+        therapistId: _resolveActorTherapistId(),
+        eventType: 'VR_DEVICE_PRESENCE_UPDATE',
+        gameId: _selectedGameId,
+        source: 'vr_runtime',
+        timelineEventId: timelineEventId,
+        eventAtUtc: eventAtUtc,
+        details: details,
+      );
+    } catch (e) {
+      debugPrint(
+        '[ControlScreen] Device presence timeline persist failed: '
+        'session=$sessionId error=$e',
+      );
+    }
+  }
+
+  Future<void> _recordMobileLifecycleEvent(AppLifecycleState state) async {
+    final reasonCode = () {
+      if (state == AppLifecycleState.resumed) {
+        return 'APP_RESUMED';
+      }
+      if (state == AppLifecycleState.inactive) {
+        return 'APP_INACTIVE';
+      }
+      if (state == AppLifecycleState.paused) {
+        return 'APP_PAUSED';
+      }
+      if (state == AppLifecycleState.detached) {
+        return 'APP_DETACHED';
+      }
+      return 'APP_BACKGROUND';
+    }();
+
+    final nowUtc = DateTime.now().toUtc();
+    await _appendOperationalTimelineEvent(
+      eventType: 'MOBILE_LIFECYCLE_STATE',
+      reasonCode: reasonCode,
+      source: 'mobile_controller',
+      eventAtUtc: nowUtc,
+      discriminator: '${state.name}_${nowUtc.microsecondsSinceEpoch}',
+      details: <String, dynamic>{
+        'lifecycleState': state.name,
+      },
+    );
+  }
+
   void _pruneRecentlyEndedSessions() {
     final nowUtc = DateTime.now().toUtc();
     final staleIds = <String>[];
@@ -1345,6 +1601,9 @@ class _ControlScreenState extends State<ControlScreen>
 
     _pruneRecentlyEndedSessions();
     _recentlyEndedSessionIds[normalizedSessionId] = DateTime.now().toUtc();
+    _appliedConfigBySessionGame.removeWhere(
+      (key, _) => key.startsWith('$normalizedSessionId|'),
+    );
   }
 
   bool _wasSessionRecentlyEnded(String sessionId) {
@@ -1587,10 +1846,24 @@ class _ControlScreenState extends State<ControlScreen>
 
   SessionRecoveryEvaluation _evaluateRecoveryWindowState({
     required bool remoteSessionNeedsDecision,
+    String? remoteSessionId,
+    DateTime? interruptedAtUtc,
   }) {
+    DateTime? persistedInterruptedAtUtc = interruptedAtUtc;
+    final persisted = _latestPersistedSession;
+    if (persistedInterruptedAtUtc == null && persisted != null) {
+      final normalizedRemoteSessionId = remoteSessionId?.trim() ?? '';
+      final persistedSessionId = persisted.sessionId.trim();
+      if (normalizedRemoteSessionId.isEmpty ||
+          persistedSessionId == normalizedRemoteSessionId) {
+        persistedInterruptedAtUtc = persisted.interruptedAtUtc;
+      }
+    }
+
     return SessionRecoveryManager.evaluate(
       remoteSessionNeedsDecision: remoteSessionNeedsDecision,
       nowUtc: DateTime.now().toUtc(),
+      interruptedAtUtc: persistedInterruptedAtUtc,
       lastConnectionLostAtUtc: _lastConnectionLostAtUtc,
       sessionRecoveryWindowMinutes:
           _therapistSessionSettings.sessionRecoveryWindowMinutes,
@@ -2243,6 +2516,7 @@ class _ControlScreenState extends State<ControlScreen>
       setState(() {
         _latestPersistedSession = latest;
       });
+      _rehydrateWorkflowFromPersistedSession(latest);
       if (_isParentRole) {
         unawaited(_refreshParentInsights());
       }
@@ -2259,6 +2533,58 @@ class _ControlScreenState extends State<ControlScreen>
       );
     } finally {
       _persistedSessionRefreshInFlight = false;
+    }
+  }
+
+  void _rehydrateWorkflowFromPersistedSession(TherapySessionRecord? persisted) {
+    if (persisted == null) {
+      return;
+    }
+
+    final persistedSessionId = persisted.sessionId.trim();
+    if (persistedSessionId.isEmpty) {
+      return;
+    }
+
+    final persistedGameId = persisted.latestGameId.trim();
+    final activeSessionId = _activeSessionId.trim();
+    final canAdoptPersistedSession = activeSessionId.isEmpty ||
+        activeSessionId.startsWith('mobile-') ||
+        activeSessionId == persistedSessionId;
+
+    final shouldShowSetupScreen = !persisted.isTerminal &&
+        !SessionRecoveryPolicy.isTerminalState(
+          persisted.state ?? SessionLifecycleState.created,
+        );
+
+    var shouldSetState = false;
+
+    if (canAdoptPersistedSession && activeSessionId != persistedSessionId) {
+      _activeSessionId = persistedSessionId;
+      _sessionAttachReady = false;
+      shouldSetState = true;
+    }
+
+    if (persistedGameId.isNotEmpty &&
+        _isKnownGameId(persistedGameId) &&
+        _selectedGameId != persistedGameId) {
+      _selectedGameId = persistedGameId;
+      shouldSetState = true;
+    }
+
+    if (shouldShowSetupScreen && _workflowStep != _WorkflowStep.gameSetup) {
+      _workflowStep = _WorkflowStep.gameSetup;
+      _isVideoPreviewExpanded = true;
+      shouldSetState = true;
+    } else if (!shouldShowSetupScreen &&
+        _workflowStep != _WorkflowStep.gameCatalog) {
+      _workflowStep = _WorkflowStep.gameCatalog;
+      _isVideoPreviewExpanded = false;
+      shouldSetState = true;
+    }
+
+    if (shouldSetState && mounted) {
+      setState(() {});
     }
   }
 
@@ -2392,6 +2718,8 @@ class _ControlScreenState extends State<ControlScreen>
 
       final recoveryEvaluation = _evaluateRecoveryWindowState(
         remoteSessionNeedsDecision: true,
+        remoteSessionId: persistedSessionId,
+        interruptedAtUtc: persisted.interruptedAtUtc,
       );
       if (recoveryEvaluation.shouldAutoRecoverSilently) {
         _clearDeferredHandoff(
@@ -2642,6 +2970,20 @@ class _ControlScreenState extends State<ControlScreen>
         therapistId: _resolveActorTherapistId(),
         eventType: 'RUNTIME_SESSION_STATE_UPDATE',
         gameId: _selectedGameId,
+        source: 'vr_runtime',
+        eventAtUtc: sessionUpdate.changedAtUtc,
+        timelineEventId: SessionJournalService.buildTimelineEventId(
+          sessionId: sessionId,
+          eventType: 'RUNTIME_SESSION_STATE_UPDATE',
+          source: 'vr_runtime',
+          eventAtUnixMs: sessionUpdate.changedAtUtc.millisecondsSinceEpoch,
+          details: <String, dynamic>{
+            'state': sessionUpdate.state.wireValue,
+            'previousState': sessionUpdate.previousState?.wireValue ?? '',
+            'reasonCode': sessionUpdate.reasonCode,
+          },
+          discriminator: 'session_state',
+        ),
         details: <String, dynamic>{
           'state': sessionUpdate.state.wireValue,
           'previousState': sessionUpdate.previousState?.wireValue ?? '',
@@ -2736,29 +3078,51 @@ class _ControlScreenState extends State<ControlScreen>
           },
         );
       } else if (command == CriticalCommandIds.endSession) {
-        await SessionJournalService.markSessionCompletedByTherapist(
-          sessionId: sessionId,
-          studentId: widget.student.id,
-          therapistId: therapistId,
-          latestGameId: selectedGameId,
-          reasonCode: 'THERAPIST_CONFIRMED_END',
-          metadata: const <String, dynamic>{'origin': 'mobile_command'},
-        );
+        final endReasonCode = (extraPayload?['reasonCode'] as String? ??
+                'THERAPIST_CONFIRMED_END')
+            .trim();
+        final resolvedEndReasonCode =
+            endReasonCode.isEmpty ? 'THERAPIST_CONFIRMED_END' : endReasonCode;
+        final shouldAbortSession =
+            resolvedEndReasonCode == 'THERAPIST_ABORTED_AFTER_RECOVERY_WINDOW';
+
+        if (shouldAbortSession) {
+          await SessionJournalService.upsertSessionState(
+            sessionId: sessionId,
+            studentId: widget.student.id,
+            therapistId: therapistId,
+            state: SessionLifecycleState.abortedByTherapist,
+            latestGameId: selectedGameId,
+            reasonCode: resolvedEndReasonCode,
+            metadata: const <String, dynamic>{'origin': 'mobile_command'},
+          );
+        } else {
+          await SessionJournalService.markSessionCompletedByTherapist(
+            sessionId: sessionId,
+            studentId: widget.student.id,
+            therapistId: therapistId,
+            latestGameId: selectedGameId,
+            reasonCode: resolvedEndReasonCode,
+            metadata: const <String, dynamic>{'origin': 'mobile_command'},
+          );
+        }
         await SessionJournalService.appendSessionEvent(
           sessionId: sessionId,
           studentId: widget.student.id,
           therapistId: therapistId,
-          eventType: 'SESSION_ENDED',
+          eventType: shouldAbortSession ? 'SESSION_ABORTED' : 'SESSION_ENDED',
           gameId: selectedGameId,
-          details: const <String, dynamic>{
-            'reason': 'THERAPIST_CONFIRMED_END',
+          details: <String, dynamic>{
+            'reason': resolvedEndReasonCode,
           },
         );
-        await _unlockRewardForCompletedSession(
-          sessionId: sessionId,
-          gameId: selectedGameId,
-          reasonCode: 'THERAPIST_CONFIRMED_END',
-        );
+        if (!shouldAbortSession) {
+          await _unlockRewardForCompletedSession(
+            sessionId: sessionId,
+            gameId: selectedGameId,
+            reasonCode: resolvedEndReasonCode,
+          );
+        }
       }
     } catch (e) {
       debugPrint(
@@ -3052,7 +3416,9 @@ class _ControlScreenState extends State<ControlScreen>
     final reasonTag = OpsErrorCatalog.buildReasonTag(normalized);
     final detail = switch (normalized) {
       'APP_PAUSED' => 'app paused',
+      'APP_INACTIVE' => 'app inactive',
       'APP_RESUMED' => 'app resumed',
+      'APP_DETACHED' => 'app detached',
       'APP_FOCUS_LOST' => 'focus lost',
       'APP_FOCUS_GAINED' => 'focus regained',
       'APP_QUIT' => 'app quit',
@@ -3685,6 +4051,7 @@ class _ControlScreenState extends State<ControlScreen>
 
       final recoveryEvaluation = _evaluateRecoveryWindowState(
         remoteSessionNeedsDecision: true,
+        remoteSessionId: remoteSessionId,
       );
       if (recoveryEvaluation.shouldAutoRecoverSilently) {
         _clearDeferredHandoff(
@@ -3960,6 +4327,16 @@ class _ControlScreenState extends State<ControlScreen>
 
     final recoveryWindowMinutes =
         _therapistSessionSettings.sessionRecoveryWindowMinutes;
+    final recoveryEvaluation = _evaluateRecoveryWindowState(
+      remoteSessionNeedsDecision: true,
+      remoteSessionId: remoteSessionId,
+      interruptedAtUtc:
+          _latestPersistedSession?.sessionId.trim() == remoteSessionId
+              ? _latestPersistedSession?.interruptedAtUtc
+              : null,
+    );
+    final isRecoveryWindowExceeded = recoveryEvaluation.state ==
+        SessionRecoveryWindowState.interruptedOverWindowNeedsTherapistDecision;
     final action = await showDialog<_SessionGateAction>(
       context: context,
       barrierDismissible: false,
@@ -3967,30 +4344,51 @@ class _ControlScreenState extends State<ControlScreen>
         return PopScope(
           canPop: false,
           child: AlertDialog(
-            title: const Text('Session handoff needed'),
-            content: Text(
-              'The headset reports another unfinished session and the '
-              'recovery window ($recoveryWindowMinutes min) has passed.\n\n'
-              'Choose whether to continue it, start a new session, '
-              'or keep current context for now.',
+            title: Text(
+              isRecoveryWindowExceeded
+                  ? 'Recovery window exceeded'
+                  : 'Session handoff needed',
             ),
-            actions: [
-              TextButton(
-                onPressed: () =>
-                    Navigator.of(context).pop(_SessionGateAction.keepCurrent),
-                child: const Text('Keep current'),
-              ),
-              TextButton(
-                onPressed: () =>
-                    Navigator.of(context).pop(_SessionGateAction.resume),
-                child: const Text('Continue unfinished'),
-              ),
-              ElevatedButton(
-                onPressed: () =>
-                    Navigator.of(context).pop(_SessionGateAction.startNew),
-                child: const Text('Start new session'),
-              ),
-            ],
+            content: Text(
+              isRecoveryWindowExceeded
+                  ? 'Czas odzyskiwania sesji ($recoveryWindowMinutes min) '
+                      'zostal przekroczony.\n\nWybierz: Przerwij albo Zakoncz '
+                      'i wroc do wyboru ucznia.'
+                  : 'The headset reports another unfinished session and the '
+                      'recovery window ($recoveryWindowMinutes min) has passed.\n\n'
+                      'Choose whether to continue it, start a new session, '
+                      'or keep current context for now.',
+            ),
+            actions: isRecoveryWindowExceeded
+                ? [
+                    TextButton(
+                      onPressed: () => Navigator.of(context)
+                          .pop(_SessionGateAction.interruptAndExit),
+                      child: const Text('Przerwij'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => Navigator.of(context)
+                          .pop(_SessionGateAction.completeAndExit),
+                      child: const Text('Zakończ'),
+                    ),
+                  ]
+                : [
+                    TextButton(
+                      onPressed: () => Navigator.of(context)
+                          .pop(_SessionGateAction.keepCurrent),
+                      child: const Text('Keep current'),
+                    ),
+                    TextButton(
+                      onPressed: () =>
+                          Navigator.of(context).pop(_SessionGateAction.resume),
+                      child: const Text('Continue unfinished'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => Navigator.of(context)
+                          .pop(_SessionGateAction.startNew),
+                      child: const Text('Start new session'),
+                    ),
+                  ],
           ),
         );
       },
@@ -4010,6 +4408,12 @@ class _ControlScreenState extends State<ControlScreen>
         break;
       case _SessionGateAction.startNew:
         await _handleStartNewDecision(remoteSessionId);
+        break;
+      case _SessionGateAction.interruptAndExit:
+        await _handleInterruptAndExitDecision(remoteSessionId);
+        break;
+      case _SessionGateAction.completeAndExit:
+        await _handleCompleteAndExitDecision(remoteSessionId);
         break;
       case null:
         await _handleKeepCurrentDecision(remoteSessionId);
@@ -4106,6 +4510,50 @@ class _ControlScreenState extends State<ControlScreen>
         ),
       );
     }
+  }
+
+  Future<void> _handleInterruptAndExitDecision(String remoteSessionId) async {
+    _logSessionDecision(
+      source: 'dialog',
+      decision: 'INTERRUPT_AND_EXIT',
+      sessionId: remoteSessionId,
+      reason: 'THERAPIST_ABORTED_AFTER_RECOVERY_WINDOW',
+    );
+
+    final ended = await _sendEndSessionWithConfirmation(
+      reasonCode: 'THERAPIST_ABORTED_AFTER_RECOVERY_WINDOW',
+      extraPayload: const <String, dynamic>{
+        'reason': 'TherapistInterruptedAfterRecoveryWindow',
+        'reasonCode': 'THERAPIST_ABORTED_AFTER_RECOVERY_WINDOW',
+      },
+    );
+    if (!ended || !mounted) {
+      return;
+    }
+
+    await _disconnectAndPop(returnToStudentSelection: true);
+  }
+
+  Future<void> _handleCompleteAndExitDecision(String remoteSessionId) async {
+    _logSessionDecision(
+      source: 'dialog',
+      decision: 'COMPLETE_AND_EXIT',
+      sessionId: remoteSessionId,
+      reason: 'THERAPIST_CONFIRMED_END_AFTER_RECOVERY_WINDOW',
+    );
+
+    final ended = await _sendEndSessionWithConfirmation(
+      reasonCode: 'THERAPIST_CONFIRMED_END_AFTER_RECOVERY_WINDOW',
+      extraPayload: const <String, dynamic>{
+        'reason': 'TherapistEndedAfterRecoveryWindow',
+        'reasonCode': 'THERAPIST_CONFIRMED_END_AFTER_RECOVERY_WINDOW',
+      },
+    );
+    if (!ended || !mounted) {
+      return;
+    }
+
+    await _disconnectAndPop(returnToStudentSelection: true);
   }
 
   String? _resolveRemoteGameIdForResume() {
@@ -4426,16 +4874,20 @@ class _ControlScreenState extends State<ControlScreen>
       return false;
     }
 
+    final resolvedPayload = CriticalCommandIds.isCritical(command)
+        ? _buildCriticalPayload(
+            command,
+            sessionId: commandSessionId,
+            extraPayload: extraPayload,
+          )
+        : extraPayload;
+
     try {
       if (CriticalCommandIds.isCritical(command)) {
         await _connection.sendCriticalCommand(
           commandId: command,
           sessionId: commandSessionId,
-          payload: _buildCriticalPayload(
-            command,
-            sessionId: commandSessionId,
-            extraPayload: extraPayload,
-          ),
+          payload: resolvedPayload,
           expiresAtUtc: DateTime.now().toUtc().add(const Duration(seconds: 30)),
           ackTimeout: _resolveCriticalCommandAckTimeout(command),
           maxRetries: _resolveCriticalCommandMaxRetries(),
@@ -4471,8 +4923,15 @@ class _ControlScreenState extends State<ControlScreen>
           _persistCommandSideEffects(
             command,
             sessionIdOverride: commandSessionId,
-            extraPayload: extraPayload,
+            extraPayload: resolvedPayload,
           ),
+        );
+      }
+
+      if (command == CriticalCommandIds.startGame) {
+        _cacheAppliedGameConfigFromPayload(
+          sessionId: commandSessionId,
+          payload: resolvedPayload,
         );
       }
 
@@ -4537,43 +4996,13 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     if (command == CriticalCommandIds.startGame) {
-      final schema = _selectedGameEntry.mobileControlSchema;
-      if (schema != null) {
-        final schemaGameConfig = _buildSchemaDrivenGameConfigPayload(
-          schema,
-          emitForUpdateConfig: false,
-        );
-        payload['gameConfigType'] = _resolveSchemaGameConfigType(schema);
-        payload['gameConfigVersion'] = _resolveSchemaGameConfigVersion(schema);
-        payload['gameConfigJson'] = jsonEncode(schemaGameConfig);
-      } else if (_isDemoCubeGameSelected) {
-        payload['gameConfigType'] = 'demo_cube_config_v1';
-        payload['gameConfigVersion'] = 1;
-        payload['gameConfigJson'] = jsonEncode(<String, dynamic>{
-          'cubeCount': _demoCubeCount,
-          'cubeSpeed': double.parse(_demoCubeSpeed.toStringAsFixed(2)),
-          'levelMode': _demoLevelMode,
-          'version': 1,
-        });
-      } else if (_isPulseTargetGameSelected) {
-        final adaptiveDifficultySensitivity = double.parse(
-          _therapistSessionSettings.adaptiveDifficultySensitivity
-              .toStringAsFixed(2),
-        );
-        payload['gameConfigType'] = 'pulse_targets_config_v1';
-        payload['gameConfigVersion'] = 1;
-        payload['gameConfigJson'] = jsonEncode(<String, dynamic>{
-          'targetCount': _pulseTargetCount,
-          'targetSpeed': double.parse(_pulseTargetSpeed.toStringAsFixed(2)),
-          'targetScale': double.parse(_pulseTargetScale.toStringAsFixed(2)),
-          'adaptiveDifficultyEnabled':
-              _therapistSessionSettings.adaptiveDifficultyEnabled,
-          'adaptiveDifficultySensitivity': adaptiveDifficultySensitivity,
-          'adaptiveDifficultyLevel': _resolveAdaptiveDifficultyLevel(),
-          'labelPipelineEnabled':
-              _therapistSessionSettings.labelPipelineEnabled,
-          'version': 1,
-        });
+      final configSnapshot = _resolveStartGameConfigSnapshot(
+        sessionId: sessionId,
+      );
+      if (configSnapshot != null) {
+        payload['gameConfigType'] = configSnapshot.gameConfigType;
+        payload['gameConfigVersion'] = configSnapshot.gameConfigVersion;
+        payload['gameConfigJson'] = configSnapshot.gameConfigJson;
       }
     }
 
@@ -4588,6 +5017,121 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     return payload;
+  }
+
+  _AppliedGameConfigSnapshot? _resolveStartGameConfigSnapshot({
+    required String sessionId,
+  }) {
+    final normalizedSessionId = sessionId.trim();
+    if (normalizedSessionId.isEmpty) {
+      return _buildCurrentStartGameConfigSnapshot();
+    }
+
+    final cacheKey = _buildSessionGameCacheKey(
+      sessionId: normalizedSessionId,
+      gameId: _selectedGameId,
+    );
+    final cached = _appliedConfigBySessionGame[cacheKey];
+    if (cached != null) {
+      return cached;
+    }
+
+    return _buildCurrentStartGameConfigSnapshot();
+  }
+
+  _AppliedGameConfigSnapshot? _buildCurrentStartGameConfigSnapshot() {
+    final schema = _selectedGameEntry.mobileControlSchema;
+    if (schema != null) {
+      final schemaGameConfig = _buildSchemaDrivenGameConfigPayload(
+        schema,
+        emitForUpdateConfig: false,
+      );
+      return _AppliedGameConfigSnapshot(
+        gameConfigType: _resolveSchemaGameConfigType(schema),
+        gameConfigVersion: _resolveSchemaGameConfigVersion(schema),
+        gameConfigJson: jsonEncode(schemaGameConfig),
+      );
+    }
+
+    if (_isDemoCubeGameSelected) {
+      return _AppliedGameConfigSnapshot(
+        gameConfigType: 'demo_cube_config_v1',
+        gameConfigVersion: 1,
+        gameConfigJson: jsonEncode(<String, dynamic>{
+          'cubeCount': _demoCubeCount,
+          'cubeSpeed': double.parse(_demoCubeSpeed.toStringAsFixed(2)),
+          'levelMode': _demoLevelMode,
+          'version': 1,
+        }),
+      );
+    }
+
+    if (_isPulseTargetGameSelected) {
+      final adaptiveDifficultySensitivity = double.parse(
+        _therapistSessionSettings.adaptiveDifficultySensitivity
+            .toStringAsFixed(2),
+      );
+      return _AppliedGameConfigSnapshot(
+        gameConfigType: 'pulse_targets_config_v1',
+        gameConfigVersion: 1,
+        gameConfigJson: jsonEncode(<String, dynamic>{
+          'targetCount': _pulseTargetCount,
+          'targetSpeed': double.parse(_pulseTargetSpeed.toStringAsFixed(2)),
+          'targetScale': double.parse(_pulseTargetScale.toStringAsFixed(2)),
+          'adaptiveDifficultyEnabled':
+              _therapistSessionSettings.adaptiveDifficultyEnabled,
+          'adaptiveDifficultySensitivity': adaptiveDifficultySensitivity,
+          'adaptiveDifficultyLevel': _resolveAdaptiveDifficultyLevel(),
+          'labelPipelineEnabled':
+              _therapistSessionSettings.labelPipelineEnabled,
+          'version': 1,
+        }),
+      );
+    }
+
+    return null;
+  }
+
+  void _cacheAppliedGameConfigFromPayload({
+    required String sessionId,
+    Map<String, dynamic>? payload,
+  }) {
+    if (payload == null) {
+      return;
+    }
+
+    final normalizedSessionId = sessionId.trim();
+    final gameId = (payload['gameId'] as String? ?? _selectedGameId).trim();
+    final gameConfigType = (payload['gameConfigType'] as String? ?? '').trim();
+    final gameConfigJson = (payload['gameConfigJson'] as String? ?? '').trim();
+    final gameConfigVersionRaw = payload['gameConfigVersion'];
+    final gameConfigVersion = gameConfigVersionRaw is int
+        ? gameConfigVersionRaw
+        : (gameConfigVersionRaw is num ? gameConfigVersionRaw.toInt() : 0);
+    if (normalizedSessionId.isEmpty ||
+        gameId.isEmpty ||
+        gameConfigType.isEmpty ||
+        gameConfigJson.isEmpty ||
+        gameConfigVersion <= 0) {
+      return;
+    }
+
+    final cacheKey = _buildSessionGameCacheKey(
+      sessionId: normalizedSessionId,
+      gameId: gameId,
+    );
+    _appliedConfigBySessionGame[cacheKey] = _AppliedGameConfigSnapshot(
+      gameConfigType: gameConfigType,
+      gameConfigVersion: gameConfigVersion,
+      gameConfigJson: gameConfigJson,
+    );
+  }
+
+  String _buildSessionGameCacheKey({
+    required String sessionId,
+    required String gameId,
+  }) {
+    return '${sessionId.trim()}|${gameId.trim()}';
   }
 
   Future<void> _handleSchemaButtonControl(
@@ -4658,6 +5202,10 @@ class _ControlScreenState extends State<ControlScreen>
 
     try {
       await _connection.sendCommand(_updateConfigCommandId, payload);
+      _cacheAppliedGameConfigFromPayload(
+        sessionId: sessionId,
+        payload: payload,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -5204,9 +5752,13 @@ class _ControlScreenState extends State<ControlScreen>
       commandId: CriticalCommandIds.endSession,
       sessionId: sessionIdToEnd,
     );
+    final payload = <String, dynamic>{
+      'reasonCode': reasonCode,
+      ...?extraPayload,
+    };
     final ended = await _sendCommand(
       CriticalCommandIds.endSession,
-      extraPayload: extraPayload,
+      extraPayload: payload,
       showSuccessSnack: false,
     );
     if (!ended) {
@@ -5714,8 +6266,24 @@ class _ControlScreenState extends State<ControlScreen>
         return 'Controller reconnected';
       case 'CONTROLLER_DISCONNECTED':
         return 'Controller disconnected';
+      case 'CONTROLLER_RECONNECT_ATTEMPT':
+        return 'Controller reconnect attempt';
+      case 'CONTROLLER_RECONNECT_SUCCESS':
+        return 'Controller reconnect success';
+      case 'CONTROLLER_RECONNECT_FAILED':
+        return 'Controller reconnect failed';
+      case 'SESSION_ATTACH_ATTEMPT':
+        return 'Session attach attempt';
+      case 'SESSION_ATTACH_SUCCEEDED':
+        return 'Session attach succeeded';
+      case 'SESSION_ATTACH_FAILED':
+        return 'Session attach failed';
       case 'SESSION_ATTACH_ACK':
         return 'Session attached';
+      case 'VR_DEVICE_PRESENCE_UPDATE':
+        return 'Headset lifecycle update';
+      case 'MOBILE_LIFECYCLE_STATE':
+        return 'Mobile lifecycle update';
       case 'RUNTIME_SESSION_STATE_UPDATE':
         return 'Session state update';
       case 'GAME_STARTED':
@@ -5759,7 +6327,14 @@ class _ControlScreenState extends State<ControlScreen>
 
     final details = event.details;
     final fragments = <String>[];
-    for (final key in <String>['state', 'reasonCode', 'reason', 'decision']) {
+    for (final key in <String>[
+      'state',
+      'presenceState',
+      'lifecycleState',
+      'reasonCode',
+      'reason',
+      'decision',
+    ]) {
       final value = details[key];
       final text = value?.toString().trim() ?? '';
       if (text.isEmpty) {
@@ -5786,6 +6361,9 @@ class _ControlScreenState extends State<ControlScreen>
     final summary = _formatTimelineEventSummary(event);
     final timestamp = _formatTimelineTimestamp(event.eventAtUtc);
     final metaFragments = <String>[timestamp];
+    if (event.source.trim().isNotEmpty) {
+      metaFragments.add('source=${event.source.trim()}');
+    }
     if (event.gameId.trim().isNotEmpty) {
       metaFragments.add('game=${event.gameId.trim()}');
     }
@@ -7718,6 +8296,18 @@ class _ControlScreenState extends State<ControlScreen>
       ),
     );
   }
+}
+
+class _AppliedGameConfigSnapshot {
+  final String gameConfigType;
+  final int gameConfigVersion;
+  final String gameConfigJson;
+
+  const _AppliedGameConfigSnapshot({
+    required this.gameConfigType,
+    required this.gameConfigVersion,
+    required this.gameConfigJson,
+  });
 }
 
 class _GameCatalogEntry {

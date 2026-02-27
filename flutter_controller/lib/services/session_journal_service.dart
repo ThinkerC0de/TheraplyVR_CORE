@@ -7,6 +7,7 @@ import 'package:flutter_controller/services/firebase_service.dart';
 
 class SessionTimelineEvent {
   final String eventId;
+  final String timelineEventId;
   final String sessionId;
   final String studentId;
   final String therapistId;
@@ -21,6 +22,7 @@ class SessionTimelineEvent {
 
   const SessionTimelineEvent({
     required this.eventId,
+    required this.timelineEventId,
     required this.sessionId,
     required this.studentId,
     required this.therapistId,
@@ -55,6 +57,10 @@ class SessionTimelineEvent {
 
     return SessionTimelineEvent(
       eventId: eventId.trim(),
+      timelineEventId:
+          (json['timelineEventId'] as String? ?? '').trim().isNotEmpty
+              ? (json['timelineEventId'] as String).trim()
+              : eventId.trim(),
       sessionId: (json['sessionId'] as String? ?? '').trim(),
       studentId: (json['studentId'] as String? ?? '').trim(),
       therapistId: (json['therapistId'] as String? ?? '').trim(),
@@ -361,6 +367,9 @@ class SessionJournalService {
     required String therapistId,
     required String eventType,
     String gameId = '',
+    String source = _source,
+    String? timelineEventId,
+    DateTime? eventAtUtc,
     Map<String, dynamic>? details,
   }) async {
     final normalizedSessionId = sessionId.trim();
@@ -387,9 +396,22 @@ class SessionJournalService {
     }
 
     final nowUtc = DateTime.now().toUtc();
+    final resolvedEventAtUtc = (eventAtUtc ?? nowUtc).toUtc();
+    final normalizedSource = source.trim().isEmpty ? _source : source.trim();
     final payloadDetails = details == null
         ? <String, dynamic>{}
         : Map<String, dynamic>.from(details);
+    final providedTimelineEventId = timelineEventId?.trim() ?? '';
+    final resolvedTimelineEventId = providedTimelineEventId.isNotEmpty
+        ? providedTimelineEventId
+        : buildTimelineEventId(
+            sessionId: normalizedSessionId,
+            eventType: normalizedEventType,
+            source: normalizedSource,
+            eventAtUnixMs: resolvedEventAtUtc.millisecondsSinceEpoch,
+            details: payloadDetails,
+            discriminator: 'mobile',
+          );
 
     final sessionRef = _sessionsCollection.doc(normalizedSessionId);
     final existingSessionSnapshot = await sessionRef.get();
@@ -404,21 +426,30 @@ class SessionJournalService {
     }
 
     final eventsCollection = sessionRef.collection('events');
-
-    await eventsCollection.add(<String, dynamic>{
+    final payload = <String, dynamic>{
       'sessionId': normalizedSessionId,
       'studentId': normalizedStudentId,
       'therapistId': normalizedTherapistId,
       'ownerKey': normalizedOwnerKey,
       'sessionKey': normalizedSessionKey,
       'eventType': normalizedEventType,
+      'timelineEventId': resolvedTimelineEventId,
       'gameId': gameId.trim(),
       'details': payloadDetails,
-      'source': _source,
-      'eventAtUtc': nowUtc.toIso8601String(),
-      'eventAtUnixMs': nowUtc.millisecondsSinceEpoch,
+      'source': normalizedSource,
+      'eventAtUtc': resolvedEventAtUtc.toIso8601String(),
+      'eventAtUnixMs': resolvedEventAtUtc.millisecondsSinceEpoch,
       'createdAtUtc': nowUtc.toIso8601String(),
-    });
+    };
+
+    if (providedTimelineEventId.isNotEmpty) {
+      await eventsCollection
+          .doc(resolvedTimelineEventId)
+          .set(payload, SetOptions(merge: true));
+      return;
+    }
+
+    await eventsCollection.add(payload);
   }
 
   static Future<void> appendTherapistTimelineNote({
@@ -459,19 +490,21 @@ class SessionJournalService {
     }
 
     final resolvedLimit = limit <= 0 ? 1 : limit;
+    final resolvedFetchLimit = resolvedLimit * 4;
     return _sessionsCollection
         .doc(normalizedSessionId)
         .collection('events')
         .orderBy('eventAtUnixMs', descending: true)
-        .limit(resolvedLimit)
+        .limit(resolvedFetchLimit)
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs
+      final events = snapshot.docs
           .map(
             (doc) => SessionTimelineEvent.fromFirestore(
                 eventId: doc.id, json: doc.data()),
           )
           .toList(growable: false);
+      return _mergeAndSortTimeline(events, limit: resolvedLimit);
     });
   }
 
@@ -485,19 +518,144 @@ class SessionJournalService {
     }
 
     final resolvedLimit = limit <= 0 ? 1 : limit;
+    final resolvedFetchLimit = resolvedLimit * 4;
     final snapshot = await _sessionsCollection
         .doc(normalizedSessionId)
         .collection('events')
         .orderBy('eventAtUnixMs', descending: true)
-        .limit(resolvedLimit)
+        .limit(resolvedFetchLimit)
         .get();
 
-    return snapshot.docs
+    final events = snapshot.docs
         .map(
           (doc) => SessionTimelineEvent.fromFirestore(
               eventId: doc.id, json: doc.data()),
         )
         .toList(growable: false);
+    return _mergeAndSortTimeline(events, limit: resolvedLimit);
+  }
+
+  static String buildTimelineEventId({
+    required String sessionId,
+    required String eventType,
+    required String source,
+    required int eventAtUnixMs,
+    Map<String, dynamic>? details,
+    String discriminator = '',
+  }) {
+    final normalizedSessionId = sessionId.trim();
+    final normalizedEventType = eventType.trim().toUpperCase();
+    final normalizedSource = source.trim().toLowerCase();
+    final normalizedDiscriminator = discriminator.trim().toLowerCase();
+    final detailsSignature = _stableMapSignature(details);
+    final input = [
+      normalizedSessionId,
+      normalizedEventType,
+      normalizedSource,
+      eventAtUnixMs.toString(),
+      normalizedDiscriminator,
+      detailsSignature,
+    ].join('|');
+    final hash = _fnv1a64(input);
+    return 'tl-$hash';
+  }
+
+  static List<SessionTimelineEvent> _mergeAndSortTimeline(
+    List<SessionTimelineEvent> events, {
+    required int limit,
+  }) {
+    final dedupedByTimelineEventId = <String, SessionTimelineEvent>{};
+    for (final event in events) {
+      final key = event.timelineEventId.trim().isNotEmpty
+          ? event.timelineEventId.trim()
+          : event.eventId.trim();
+      if (key.isEmpty) {
+        continue;
+      }
+
+      final existing = dedupedByTimelineEventId[key];
+      if (existing == null) {
+        dedupedByTimelineEventId[key] = event;
+        continue;
+      }
+
+      final existingTimestamp =
+          existing.eventAtUnixMs > 0 ? existing.eventAtUnixMs : 0;
+      final candidateTimestamp =
+          event.eventAtUnixMs > 0 ? event.eventAtUnixMs : 0;
+      if (candidateTimestamp > existingTimestamp) {
+        dedupedByTimelineEventId[key] = event;
+        continue;
+      }
+
+      if (candidateTimestamp == existingTimestamp &&
+          event.eventId.compareTo(existing.eventId) > 0) {
+        dedupedByTimelineEventId[key] = event;
+      }
+    }
+
+    final merged = dedupedByTimelineEventId.values.toList(growable: false);
+    merged.sort((a, b) {
+      final timestampCompare = b.eventAtUnixMs.compareTo(a.eventAtUnixMs);
+      if (timestampCompare != 0) {
+        return timestampCompare;
+      }
+      return b.eventId.compareTo(a.eventId);
+    });
+
+    if (merged.length <= limit) {
+      return merged;
+    }
+    return merged.sublist(0, limit);
+  }
+
+  static String _stableMapSignature(Map<String, dynamic>? details) {
+    if (details == null || details.isEmpty) {
+      return '';
+    }
+
+    final keys = details.keys.toList(growable: false)..sort();
+    final parts = <String>[];
+    for (final key in keys) {
+      final normalizedKey = key.trim();
+      final value = details[key];
+      parts.add('$normalizedKey=${_stableValueSignature(value)}');
+    }
+    return parts.join(';');
+  }
+
+  static String _stableValueSignature(dynamic value) {
+    if (value == null) {
+      return 'null';
+    }
+
+    if (value is Map) {
+      final normalized = <String, dynamic>{};
+      for (final entry in value.entries) {
+        final key = entry.key?.toString() ?? '';
+        normalized[key] = entry.value;
+      }
+      return '{${_stableMapSignature(normalized)}}';
+    }
+
+    if (value is List) {
+      final parts = value.map((entry) => _stableValueSignature(entry));
+      return '[${parts.join(',')}]';
+    }
+
+    return value.toString().trim();
+  }
+
+  static String _fnv1a64(String input) {
+    const int fnvOffset = 0xcbf29ce484222325;
+    const int fnvPrime = 0x100000001b3;
+    var hash = fnvOffset;
+    final codeUnits = input.codeUnits;
+    for (final codeUnit in codeUnits) {
+      hash ^= codeUnit;
+      hash = (hash * fnvPrime) & 0xFFFFFFFFFFFFFFFF;
+    }
+    return hash.toRadixString(16).padLeft(16, '0');
   }
 
   static bool _isTerminalState(SessionLifecycleState state) {

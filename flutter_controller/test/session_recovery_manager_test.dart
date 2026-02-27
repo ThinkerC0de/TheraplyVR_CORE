@@ -10,6 +10,7 @@ void main() {
       final evaluation = SessionRecoveryManager.evaluate(
         remoteSessionNeedsDecision: false,
         nowUtc: nowUtc,
+        interruptedAtUtc: null,
         lastConnectionLostAtUtc: nowUtc.subtract(const Duration(minutes: 10)),
         sessionRecoveryWindowMinutes: 60,
         requireResumeConfirmationAfterRecoveryWindow: true,
@@ -27,6 +28,7 @@ void main() {
       final evaluation = SessionRecoveryManager.evaluate(
         remoteSessionNeedsDecision: true,
         nowUtc: nowUtc,
+        interruptedAtUtc: null,
         lastConnectionLostAtUtc: nowUtc.subtract(const Duration(minutes: 3)),
         sessionRecoveryWindowMinutes: 10,
         requireResumeConfirmationAfterRecoveryWindow: true,
@@ -45,6 +47,7 @@ void main() {
       final evaluation = SessionRecoveryManager.evaluate(
         remoteSessionNeedsDecision: true,
         nowUtc: nowUtc,
+        interruptedAtUtc: null,
         lastConnectionLostAtUtc: nowUtc.subtract(const Duration(minutes: 61)),
         sessionRecoveryWindowMinutes: 60,
         requireResumeConfirmationAfterRecoveryWindow: true,
@@ -65,6 +68,7 @@ void main() {
       final evaluation = SessionRecoveryManager.evaluate(
         remoteSessionNeedsDecision: true,
         nowUtc: nowUtc,
+        interruptedAtUtc: null,
         lastConnectionLostAtUtc: nowUtc.subtract(const Duration(minutes: 61)),
         sessionRecoveryWindowMinutes: 60,
         requireResumeConfirmationAfterRecoveryWindow: false,
@@ -83,6 +87,7 @@ void main() {
       final evaluation = SessionRecoveryManager.evaluate(
         remoteSessionNeedsDecision: true,
         nowUtc: nowUtc,
+        interruptedAtUtc: null,
         lastConnectionLostAtUtc: null,
         sessionRecoveryWindowMinutes: 60,
         requireResumeConfirmationAfterRecoveryWindow: true,
@@ -101,6 +106,7 @@ void main() {
       final evaluation = SessionRecoveryManager.evaluate(
         remoteSessionNeedsDecision: true,
         nowUtc: nowUtc,
+        interruptedAtUtc: null,
         lastConnectionLostAtUtc: nowUtc.subtract(const Duration(minutes: 6)),
         sessionRecoveryWindowMinutes: 0,
         requireResumeConfirmationAfterRecoveryWindow: true,
@@ -119,6 +125,7 @@ void main() {
       final evaluation = SessionRecoveryManager.evaluate(
         remoteSessionNeedsDecision: true,
         nowUtc: nowUtc,
+        interruptedAtUtc: null,
         lastConnectionLostAtUtc: nowUtc.subtract(const Duration(minutes: 241)),
         sessionRecoveryWindowMinutes: 9999,
         requireResumeConfirmationAfterRecoveryWindow: true,
@@ -137,6 +144,7 @@ void main() {
       final evaluation = SessionRecoveryManager.evaluate(
         remoteSessionNeedsDecision: true,
         nowUtc: nowUtc,
+        interruptedAtUtc: null,
         lastConnectionLostAtUtc: nowUtc.add(const Duration(minutes: 3)),
         sessionRecoveryWindowMinutes: 60,
         requireResumeConfirmationAfterRecoveryWindow: true,
@@ -149,6 +157,26 @@ void main() {
       expect(evaluation.shouldAutoRecoverSilently, isTrue);
       expect(evaluation.shouldPromptTherapistDecision, isFalse);
       expect(evaluation.connectionLossAge, Duration.zero);
+    });
+
+    test('uses interruptedAtUtc as primary recovery anchor when available', () {
+      final nowUtc = DateTime.utc(2026, 2, 21, 12, 0, 0);
+      final evaluation = SessionRecoveryManager.evaluate(
+        remoteSessionNeedsDecision: true,
+        nowUtc: nowUtc,
+        interruptedAtUtc: nowUtc.subtract(const Duration(minutes: 15)),
+        lastConnectionLostAtUtc: nowUtc.subtract(const Duration(minutes: 2)),
+        sessionRecoveryWindowMinutes: 10,
+        requireResumeConfirmationAfterRecoveryWindow: true,
+      );
+
+      expect(
+        evaluation.state,
+        SessionRecoveryWindowState.interruptedOverWindowNeedsTherapistDecision,
+      );
+      expect(evaluation.shouldAutoRecoverSilently, isFalse);
+      expect(evaluation.shouldPromptTherapistDecision, isTrue);
+      expect(evaluation.connectionLossAge, const Duration(minutes: 15));
     });
   });
 

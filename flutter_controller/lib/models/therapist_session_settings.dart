@@ -21,6 +21,26 @@ enum TherapistUiLanguage {
   }
 }
 
+enum MobileDisconnectBehavior {
+  pause('pause'),
+  continueGameplay('continue');
+
+  const MobileDisconnectBehavior(this.wireValue);
+
+  final String wireValue;
+
+  static MobileDisconnectBehavior fromWireValue(String? value) {
+    final normalized = value?.trim().toLowerCase() ?? '';
+    switch (normalized) {
+      case 'continue':
+        return MobileDisconnectBehavior.continueGameplay;
+      case 'pause':
+      default:
+        return MobileDisconnectBehavior.pause;
+    }
+  }
+}
+
 class TherapistSessionSettings {
   static const int defaultSessionRecoveryWindowMinutes = 60;
   static const int minSessionRecoveryWindowMinutes = 5;
@@ -48,6 +68,8 @@ class TherapistSessionSettings {
 
   static const bool defaultLabelPipelineEnabled = true;
   static const bool defaultKeepScreenAwakeWhenForeground = false;
+  static const MobileDisconnectBehavior defaultMobileDisconnectBehavior =
+      MobileDisconnectBehavior.pause;
   static const TherapistUiLanguage defaultOperatorUiLanguage =
       TherapistUiLanguage.polish;
 
@@ -61,6 +83,7 @@ class TherapistSessionSettings {
   final double adaptiveDifficultySensitivity;
   final bool labelPipelineEnabled;
   final bool keepScreenAwakeWhenForeground;
+  final MobileDisconnectBehavior mobileDisconnectBehavior;
   final TherapistUiLanguage operatorUiLanguage;
   final List<String> timelineQuickNoteTemplates;
   final String defaultGuidedSessionPlanId;
@@ -78,6 +101,7 @@ class TherapistSessionSettings {
     required this.adaptiveDifficultySensitivity,
     required this.labelPipelineEnabled,
     required this.keepScreenAwakeWhenForeground,
+    required this.mobileDisconnectBehavior,
     required this.operatorUiLanguage,
     required this.timelineQuickNoteTemplates,
     required this.defaultGuidedSessionPlanId,
@@ -99,6 +123,7 @@ class TherapistSessionSettings {
       adaptiveDifficultySensitivity: defaultAdaptiveDifficultySensitivity,
       labelPipelineEnabled: defaultLabelPipelineEnabled,
       keepScreenAwakeWhenForeground: defaultKeepScreenAwakeWhenForeground,
+      mobileDisconnectBehavior: defaultMobileDisconnectBehavior,
       operatorUiLanguage: defaultOperatorUiLanguage,
       timelineQuickNoteTemplates: <String>[
         'Need short break',
@@ -178,6 +203,10 @@ class TherapistSessionSettings {
         source['keepScreenAwakeWhenForeground'],
         fallback: defaults.keepScreenAwakeWhenForeground,
       ),
+      mobileDisconnectBehavior: _asMobileDisconnectBehavior(
+        source['mobileDisconnectBehavior'],
+        fallback: defaults.mobileDisconnectBehavior,
+      ),
       operatorUiLanguage: _asOperatorUiLanguage(
         source['operatorUiLanguage'],
         fallback: defaults.operatorUiLanguage,
@@ -190,12 +219,12 @@ class TherapistSessionSettings {
         source['defaultGuidedSessionPlanId'],
         fallback: defaults.defaultGuidedSessionPlanId,
       ),
-      guidedSessionContinuationPolicy: source
-              .containsKey('guidedSessionContinuationPolicy')
-          ? GuidedSessionContinuationPolicyCodec.fromWire(
-              source['guidedSessionContinuationPolicy'] as String?,
-            )
-          : defaults.guidedSessionContinuationPolicy,
+      guidedSessionContinuationPolicy:
+          source.containsKey('guidedSessionContinuationPolicy')
+              ? GuidedSessionContinuationPolicyCodec.fromWire(
+                  source['guidedSessionContinuationPolicy'] as String?,
+                )
+              : defaults.guidedSessionContinuationPolicy,
       guidedSessionPlanSteps: _asGuidedSessionPlanSteps(
         source['guidedSessionPlanSteps'],
         fallback: defaults.guidedSessionPlanSteps,
@@ -214,6 +243,7 @@ class TherapistSessionSettings {
     double? adaptiveDifficultySensitivity,
     bool? labelPipelineEnabled,
     bool? keepScreenAwakeWhenForeground,
+    MobileDisconnectBehavior? mobileDisconnectBehavior,
     TherapistUiLanguage? operatorUiLanguage,
     List<String>? timelineQuickNoteTemplates,
     String? defaultGuidedSessionPlanId,
@@ -242,6 +272,8 @@ class TherapistSessionSettings {
       labelPipelineEnabled: labelPipelineEnabled ?? this.labelPipelineEnabled,
       keepScreenAwakeWhenForeground:
           keepScreenAwakeWhenForeground ?? this.keepScreenAwakeWhenForeground,
+      mobileDisconnectBehavior:
+          mobileDisconnectBehavior ?? this.mobileDisconnectBehavior,
       operatorUiLanguage: operatorUiLanguage ?? this.operatorUiLanguage,
       timelineQuickNoteTemplates: List<String>.from(
         timelineQuickNoteTemplates ?? this.timelineQuickNoteTemplates,
@@ -270,6 +302,7 @@ class TherapistSessionSettings {
       'adaptiveDifficultySensitivity': adaptiveDifficultySensitivity,
       'labelPipelineEnabled': labelPipelineEnabled,
       'keepScreenAwakeWhenForeground': keepScreenAwakeWhenForeground,
+      'mobileDisconnectBehavior': mobileDisconnectBehavior.wireValue,
       'operatorUiLanguage': operatorUiLanguage.wireValue,
       'timelineQuickNoteTemplates':
           List<String>.from(timelineQuickNoteTemplates),
@@ -421,6 +454,19 @@ class TherapistSessionSettings {
       if (normalized == 'en') {
         return TherapistUiLanguage.english;
       }
+    }
+    return fallback;
+  }
+
+  static MobileDisconnectBehavior _asMobileDisconnectBehavior(
+    dynamic value, {
+    required MobileDisconnectBehavior fallback,
+  }) {
+    if (value is MobileDisconnectBehavior) {
+      return value;
+    }
+    if (value is String) {
+      return MobileDisconnectBehavior.fromWireValue(value);
     }
     return fallback;
   }

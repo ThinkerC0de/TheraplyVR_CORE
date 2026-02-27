@@ -1246,6 +1246,7 @@ class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
   late bool _autoCloseInterruptedSessionsEnabled;
   late bool _requireResumeConfirmationAfterRecoveryWindow;
   late bool _keepScreenAwakeWhenForeground;
+  late MobileDisconnectBehavior _mobileDisconnectBehavior;
   late TherapistUiLanguage _operatorUiLanguage;
   late GuidedSessionContinuationPolicy _guidedSessionContinuationPolicy;
 
@@ -1282,6 +1283,7 @@ class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
     _requireResumeConfirmationAfterRecoveryWindow =
         initial.requireResumeConfirmationAfterRecoveryWindow;
     _keepScreenAwakeWhenForeground = initial.keepScreenAwakeWhenForeground;
+    _mobileDisconnectBehavior = initial.mobileDisconnectBehavior;
     _operatorUiLanguage = initial.operatorUiLanguage;
     _guidedSessionContinuationPolicy = initial.guidedSessionContinuationPolicy;
   }
@@ -1341,14 +1343,16 @@ class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
     _criticalAckTimeoutController.text =
         defaults.criticalCommandAckTimeoutMs.toString();
     _quickNotesController.text = defaults.timelineQuickNoteTemplates.join('\n');
-    _guidedPlanStepsController.text = GuidedSessionPlanEditorCodec
-        .serializeStepLines(defaults.guidedSessionPlanSteps);
+    _guidedPlanStepsController.text =
+        GuidedSessionPlanEditorCodec.serializeStepLines(
+            defaults.guidedSessionPlanSteps);
     setState(() {
       _autoCloseInterruptedSessionsEnabled =
           defaults.autoCloseInterruptedSessionsEnabled;
       _requireResumeConfirmationAfterRecoveryWindow =
           defaults.requireResumeConfirmationAfterRecoveryWindow;
       _keepScreenAwakeWhenForeground = defaults.keepScreenAwakeWhenForeground;
+      _mobileDisconnectBehavior = defaults.mobileDisconnectBehavior;
       _operatorUiLanguage = defaults.operatorUiLanguage;
       _guidedSessionContinuationPolicy =
           defaults.guidedSessionContinuationPolicy;
@@ -1450,6 +1454,7 @@ class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
             widget.initialSettings.adaptiveDifficultySensitivity,
         'labelPipelineEnabled': widget.initialSettings.labelPipelineEnabled,
         'keepScreenAwakeWhenForeground': _keepScreenAwakeWhenForeground,
+        'mobileDisconnectBehavior': _mobileDisconnectBehavior.wireValue,
         'operatorUiLanguage': _operatorUiLanguage.wireValue,
         'timelineQuickNoteTemplates': timelineQuickNoteTemplates,
         'defaultGuidedSessionPlanId': 'default_parent_guided_plan',
@@ -1555,6 +1560,34 @@ class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
                       },
               ),
               const SizedBox(height: 4),
+              DropdownButtonFormField<MobileDisconnectBehavior>(
+                initialValue: _mobileDisconnectBehavior,
+                decoration: const InputDecoration(
+                  labelText: 'Mobile disconnect behavior',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem<MobileDisconnectBehavior>(
+                    value: MobileDisconnectBehavior.pause,
+                    child: Text('Pause game (default)'),
+                  ),
+                  DropdownMenuItem<MobileDisconnectBehavior>(
+                    value: MobileDisconnectBehavior.continueGameplay,
+                    child: Text('Continue game'),
+                  ),
+                ],
+                onChanged: _isSaving
+                    ? null
+                    : (value) {
+                        if (value == null) {
+                          return;
+                        }
+                        setState(() {
+                          _mobileDisconnectBehavior = value;
+                        });
+                      },
+              ),
+              const SizedBox(height: 4),
               DropdownButtonFormField<TherapistUiLanguage>(
                 initialValue: _operatorUiLanguage,
                 decoration: const InputDecoration(
@@ -1624,8 +1657,8 @@ class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
                     child: Text('Manual decision'),
                   ),
                   DropdownMenuItem<GuidedSessionContinuationPolicy>(
-                    value:
-                        GuidedSessionContinuationPolicy.resumeUnderRecoveryWindow,
+                    value: GuidedSessionContinuationPolicy
+                        .resumeUnderRecoveryWindow,
                     child: Text('Auto resume under window'),
                   ),
                   DropdownMenuItem<GuidedSessionContinuationPolicy>(
@@ -1651,8 +1684,7 @@ class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
                 maxLines: 8,
                 decoration: const InputDecoration(
                   labelText: 'Guided plan steps',
-                  hintText:
-                      'One step per line: gameId|{"presetKey":"value"}',
+                  hintText: 'One step per line: gameId|{"presetKey":"value"}',
                   helperText:
                       'Example: demo_cube_clicker|{"cubeCount":10,"cubeSpeed":0.7}',
                   border: OutlineInputBorder(),

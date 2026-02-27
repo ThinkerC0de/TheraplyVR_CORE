@@ -47,6 +47,7 @@ class SessionRecoveryManager {
   static SessionRecoveryEvaluation evaluate({
     required bool remoteSessionNeedsDecision,
     required DateTime nowUtc,
+    required DateTime? interruptedAtUtc,
     required DateTime? lastConnectionLostAtUtc,
     required int sessionRecoveryWindowMinutes,
     required bool requireResumeConfirmationAfterRecoveryWindow,
@@ -60,7 +61,8 @@ class SessionRecoveryManager {
       );
     }
 
-    if (lastConnectionLostAtUtc == null) {
+    final recoveryAnchorUtc = interruptedAtUtc ?? lastConnectionLostAtUtc;
+    if (recoveryAnchorUtc == null) {
       return const SessionRecoveryEvaluation(
         state: SessionRecoveryWindowState
             .interruptedOverWindowNeedsTherapistDecision,
@@ -74,7 +76,7 @@ class SessionRecoveryManager {
       TherapistSessionSettings.minSessionRecoveryWindowMinutes,
       TherapistSessionSettings.maxSessionRecoveryWindowMinutes,
     );
-    final rawAge = nowUtc.toUtc().difference(lastConnectionLostAtUtc.toUtc());
+    final rawAge = nowUtc.toUtc().difference(recoveryAnchorUtc.toUtc());
     final age = rawAge.isNegative ? Duration.zero : rawAge;
     final isUnderWindow = age <= Duration(minutes: windowMinutes);
 
