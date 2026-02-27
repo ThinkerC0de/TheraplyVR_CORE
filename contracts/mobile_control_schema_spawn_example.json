@@ -1,0 +1,61 @@
+{
+    "schema": "THERAPLY_MOBILE_CONTROL_SCHEMA",
+    "schemaVersion": "2026-02-25",
+    "gameId": "spawn_example",
+    "title": "Spawn Example Controls",
+    "description": "Minimal runtime update action for spawn example.",
+    "layout": {
+        "mode": "stack",
+        "columns": 1
+    },
+    "payload": {
+        "target": "game_config",
+        "gameConfigType": "spawn_example_config_v1",
+        "gameConfigVersion": 1,
+        "includeVersionInGameConfig": true
+    },
+    "sections": [
+        {
+            "sectionId": "runtime",
+            "label": "Runtime",
+            "order": 10
+        }
+    ],
+    "controls": [
+        {
+            "controlId": "apply_runtime_update",
+            "type": "button",
+            "label": "Apply Runtime Config",
+            "hint": "Send UPDATE_CONFIG with current values.",
+            "placeholder": "",
+            "sectionId": "runtime",
+            "order": 10,
+            "defaultValue": "",
+            "buttonCommandId": "UPDATE_CONFIG",
+            "binding": {
+                "target": "game_config",
+                "path": "",
+                "valueType": "string",
+                "emitOnStartGame": false,
+                "emitOnUpdateConfig": false
+            },
+            "validation": {
+                "required": false,
+                "minValue": "",
+                "maxValue": "",
+                "step": "",
+                "minLength": 0,
+                "maxLength": 0,
+                "regex": ""
+            },
+            "visual": {
+                "x": -1.0,
+                "y": -1.0,
+                "width": 1.0,
+                "height": 1.0,
+                "scale": 1.0
+            },
+            "options": []
+        }
+    ]
+}

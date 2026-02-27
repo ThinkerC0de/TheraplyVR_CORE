@@ -20,7 +20,7 @@ namespace TheraplyCore.Editor.Authoring
         {
             try
             {
-                var summary = ExecuteExport();
+                var summary = ExportAllToContracts();
                 Debug.Log("[SessionFlowAuthoringExport] PASS: " + summary);
                 EditorUtility.DisplayDialog("Session Flow Export", "Export completed.\n" + summary, "OK");
             }
@@ -36,7 +36,7 @@ namespace TheraplyCore.Editor.Authoring
         {
             try
             {
-                var summary = ExecuteExport();
+                var summary = ExportAllToContracts();
                 Debug.Log("[SessionFlowAuthoringExport] PASS: " + summary);
                 EditorApplication.Exit(0);
             }
@@ -45,6 +45,11 @@ namespace TheraplyCore.Editor.Authoring
                 Debug.LogError("[SessionFlowAuthoringExport] FAIL: " + exception);
                 EditorApplication.Exit(1);
             }
+        }
+
+        public static string ExportAllToContracts()
+        {
+            return ExecuteExport();
         }
 
         private static string ExecuteExport()

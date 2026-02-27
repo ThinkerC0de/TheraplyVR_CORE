@@ -1,0 +1,386 @@
+{
+    "gameId": "spawn_example",
+    "displayName": "Spawn Example",
+    "commentVersion": "2026-02-25 spawn example scene",
+    "controlMode": "local_only",
+    "config": {
+        "difficulty": "basic",
+        "timeLimitSec": 30,
+        "targetCount": 5,
+        "extras": [
+            {
+                "key": "sample",
+                "value": "spawn_example"
+            }
+        ]
+    },
+    "bindings": {
+        "objects": [],
+        "zones": [],
+        "audio": [],
+        "timeline": []
+    },
+    "channels": [
+        {
+            "channelId": "pointer",
+            "enabled": true
+        },
+        {
+            "channelId": "tool_impact",
+            "enabled": true
+        },
+        {
+            "channelId": "hand_contact",
+            "enabled": false
+        },
+        {
+            "channelId": "hand_grab",
+            "enabled": false
+        },
+        {
+            "channelId": "gaze",
+            "enabled": false
+        },
+        {
+            "channelId": "breath",
+            "enabled": false
+        },
+        {
+            "channelId": "audio_source",
+            "enabled": false
+        },
+        {
+            "channelId": "dual_hand",
+            "enabled": false
+        },
+        {
+            "channelId": "pose_path",
+            "enabled": false
+        },
+        {
+            "channelId": "sequence",
+            "enabled": false
+        },
+        {
+            "channelId": "timeline",
+            "enabled": false
+        }
+    ],
+    "policies": {
+        "wrongActionPolicy": "warn",
+        "retryPolicy": {
+            "maxRetries": 3,
+            "cooldownSec": 0.5
+        },
+        "timeoutPolicy": {
+            "defaultTimeoutSec": 15.0
+        },
+        "branchPolicy": {
+            "precedence": "first_match"
+        },
+        "scoringPolicy": {
+            "lives": 3,
+            "pointsPerCorrect": 1,
+            "pointsPerWrong": -1
+        },
+        "difficultyPolicy": {
+            "adaptiveEnabled": true
+        },
+        "safetyPolicy": {
+            "emergencyStopEnabled": true,
+            "rejectDisabledChannels": true
+        },
+        "controlPolicy": {
+            "mode": "local_only"
+        },
+        "telemetryPolicy": {
+            "requireDecisionForEveryAction": true
+        },
+        "localizationPolicy": {
+            "defaultLocale": "en-US",
+            "fallbackToLanguageCode": true,
+            "fallbackLocales": []
+        },
+        "calendarPolicy": {
+            "timezoneId": "UTC",
+            "fallbackToUtcWhenTimezoneInvalid": true,
+            "allowQaTimeOverride": true,
+            "defaultProfileDateKey": "profile_birthday",
+            "conflictPolicy": "highest_priority",
+            "rules": [],
+            "events": []
+        }
+    },
+    "taskGraph": {
+        "entryNodeId": "start",
+        "nodes": [
+            {
+                "nodeId": "start",
+                "nodeType": "Action",
+                "allowedActions": [],
+                "conditions": [],
+                "timeoutSec": 0.10000000149011612,
+                "onEnterEffects": [
+                    {
+                        "effectId": "emit_hint",
+                        "binding": "",
+                        "parameters": [
+                            {
+                                "key": "message",
+                                "value": "Starting SpawnExample..."
+                            }
+                        ]
+                    }
+                ],
+                "onExitEffects": [],
+                "onAcceptedEffects": [],
+                "onRejectedEffects": [],
+                "onTimeoutEffects": [],
+                "nextOnSuccess": "spawn_wave",
+                "nextOnFail": "fail",
+                "nextOnTimeout": "spawn_wave"
+            },
+            {
+                "nodeId": "spawn_wave",
+                "nodeType": "Timer",
+                "allowedActions": [],
+                "conditions": [],
+                "timeoutSec": 4.0,
+                "onEnterEffects": [
+                    {
+                        "effectId": "spawn_prefab_wave",
+                        "binding": "",
+                        "parameters": [
+                            {
+                                "key": "prefabKey",
+                                "value": "target_prefab"
+                            },
+                            {
+                                "key": "bindingKeyPrefix",
+                                "value": "targets"
+                            },
+                            {
+                                "key": "spawnPointKey",
+                                "value": "spawn_center"
+                            },
+                            {
+                                "key": "count",
+                                "value": "8"
+                            },
+                            {
+                                "key": "durationSec",
+                                "value": "3.0"
+                            },
+                            {
+                                "key": "areaSizeX",
+                                "value": "2.8"
+                            },
+                            {
+                                "key": "areaSizeY",
+                                "value": "1.2"
+                            },
+                            {
+                                "key": "areaSizeZ",
+                                "value": "2.8"
+                            },
+                            {
+                                "key": "randomYaw",
+                                "value": "true"
+                            },
+                            {
+                                "key": "randomColorOnSpawn",
+                                "value": "true"
+                            },
+                            {
+                                "key": "colorIncludeInactive",
+                                "value": "true"
+                            },
+                            {
+                                "key": "minHue",
+                                "value": "0.0"
+                            },
+                            {
+                                "key": "maxHue",
+                                "value": "1.0"
+                            },
+                            {
+                                "key": "minSaturation",
+                                "value": "0.55"
+                            },
+                            {
+                                "key": "maxSaturation",
+                                "value": "0.95"
+                            },
+                            {
+                                "key": "minValue",
+                                "value": "0.60"
+                            },
+                            {
+                                "key": "maxValue",
+                                "value": "1.00"
+                            },
+                            {
+                                "key": "alpha",
+                                "value": "1.00"
+                            },
+                            {
+                                "key": "rotationOnSpawn",
+                                "value": "true"
+                            },
+                            {
+                                "key": "rotationRandom",
+                                "value": "true"
+                            },
+                            {
+                                "key": "rotationSpeed",
+                                "value": "1.0"
+                            },
+                            {
+                                "key": "rotationAngleX",
+                                "value": "0.0"
+                            },
+                            {
+                                "key": "rotationAngleY",
+                                "value": "90.0"
+                            },
+                            {
+                                "key": "rotationAngleZ",
+                                "value": "0.0"
+                            },
+                            {
+                                "key": "rotationMinSpeed",
+                                "value": "0.6"
+                            },
+                            {
+                                "key": "rotationMaxSpeed",
+                                "value": "1.4"
+                            },
+                            {
+                                "key": "rotationMinAngleX",
+                                "value": "-120.0"
+                            },
+                            {
+                                "key": "rotationMaxAngleX",
+                                "value": "120.0"
+                            },
+                            {
+                                "key": "rotationMinAngleY",
+                                "value": "-120.0"
+                            },
+                            {
+                                "key": "rotationMaxAngleY",
+                                "value": "120.0"
+                            },
+                            {
+                                "key": "rotationMinAngleZ",
+                                "value": "-120.0"
+                            },
+                            {
+                                "key": "rotationMaxAngleZ",
+                                "value": "120.0"
+                            }
+                        ]
+                    }
+                ],
+                "onExitEffects": [],
+                "onAcceptedEffects": [],
+                "onRejectedEffects": [],
+                "onTimeoutEffects": [],
+                "nextOnSuccess": "complete",
+                "nextOnFail": "fail",
+                "nextOnTimeout": "complete"
+            },
+            {
+                "nodeId": "complete",
+                "nodeType": "Complete",
+                "allowedActions": [],
+                "conditions": [],
+                "timeoutSec": 0.0,
+                "onEnterEffects": [],
+                "onExitEffects": [],
+                "onAcceptedEffects": [],
+                "onRejectedEffects": [],
+                "onTimeoutEffects": [],
+                "nextOnSuccess": "",
+                "nextOnFail": "",
+                "nextOnTimeout": ""
+            },
+            {
+                "nodeId": "fail",
+                "nodeType": "Fail",
+                "allowedActions": [],
+                "conditions": [],
+                "timeoutSec": 0.0,
+                "onEnterEffects": [],
+                "onExitEffects": [],
+                "onAcceptedEffects": [],
+                "onRejectedEffects": [],
+                "onTimeoutEffects": [],
+                "nextOnSuccess": "",
+                "nextOnFail": "",
+                "nextOnTimeout": ""
+            }
+        ]
+    },
+    "mobileControlSchema": {
+        "schema": "THERAPLY_MOBILE_CONTROL_SCHEMA",
+        "schemaVersion": "2026-02-25",
+        "gameId": "spawn_example",
+        "title": "Spawn Example Controls",
+        "description": "Minimal runtime update action for spawn example.",
+        "layout": {
+            "mode": "stack",
+            "columns": 1
+        },
+        "payload": {
+            "target": "game_config",
+            "gameConfigType": "spawn_example_config_v1",
+            "gameConfigVersion": 1,
+            "includeVersionInGameConfig": true
+        },
+        "sections": [
+            {
+                "sectionId": "runtime",
+                "label": "Runtime",
+                "order": 10
+            }
+        ],
+        "controls": [
+            {
+                "controlId": "apply_runtime_update",
+                "type": "button",
+                "label": "Apply Runtime Config",
+                "hint": "Send UPDATE_CONFIG with current values.",
+                "placeholder": "",
+                "sectionId": "runtime",
+                "order": 10,
+                "defaultValue": "",
+                "buttonCommandId": "UPDATE_CONFIG",
+                "binding": {
+                    "target": "game_config",
+                    "path": "",
+                    "valueType": "string",
+                    "emitOnStartGame": false,
+                    "emitOnUpdateConfig": false
+                },
+                "validation": {
+                    "required": false,
+                    "minValue": "",
+                    "maxValue": "",
+                    "step": "",
+                    "minLength": 0,
+                    "maxLength": 0,
+                    "regex": ""
+                },
+                "visual": {
+                    "x": -1.0,
+                    "y": -1.0,
+                    "width": 1.0,
+                    "height": 1.0,
+                    "scale": 1.0
+                },
+                "options": []
+            }
+        ]
+    }
+}

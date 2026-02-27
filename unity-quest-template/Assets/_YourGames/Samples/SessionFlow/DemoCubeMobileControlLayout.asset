@@ -19,8 +19,8 @@ MonoBehaviour:
     title: Demo Cube Controls
     description: Schema-driven controls for Demo Cube START_GAME and UPDATE_CONFIG.
     layout:
-      mode: stack
-      columns: 1
+      mode: grid
+      columns: 2
     payload:
       target: game_config
       gameConfigType: demo_cube_config_v1
@@ -56,10 +56,10 @@ MonoBehaviour:
       maxLength: 0
       regex: 
       visual:
-        x: -1
-        y: -1
-        width: 1
-        height: 1
+        x: 0
+        y: 0
+        width: 0.475
+        height: 0.3
         scale: 1
       options: []
     - controlId: cube_speed
@@ -84,10 +84,10 @@ MonoBehaviour:
       maxLength: 0
       regex: 
       visual:
-        x: -1
-        y: -1
-        width: 1
-        height: 1
+        x: 0.5
+        y: 0
+        width: 0.475
+        height: 0.3
         scale: 1
       options: []
     - controlId: level_mode
@@ -112,10 +112,10 @@ MonoBehaviour:
       maxLength: 0
       regex: 
       visual:
-        x: -1
-        y: -1
-        width: 1
-        height: 1
+        x: 0
+        y: 0.33333334
+        width: 0.475
+        height: 0.3
         scale: 1
       options:
       - value: basic
@@ -146,10 +146,10 @@ MonoBehaviour:
       maxLength: 0
       regex: 
       visual:
-        x: -1
-        y: -1
-        width: 1
-        height: 1
+        x: 0.5
+        y: 0.33333334
+        width: 0.475
+        height: 0.3
         scale: 1
       options: []
     - controlId: apply_runtime_update
@@ -174,9 +174,9 @@ MonoBehaviour:
       maxLength: 0
       regex: 
       visual:
-        x: -1
-        y: -1
-        width: 1
-        height: 1
+        x: 0
+        y: 0.6666
+        width: 0.975
+        height: 0.3
         scale: 1
       options: []

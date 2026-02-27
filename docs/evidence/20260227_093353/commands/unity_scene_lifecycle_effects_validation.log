@@ -1,0 +1,517 @@
+[Licensing::Module] Trying to connect to existing licensing client channel...
+Built from '6000.3/staging' branch; Version is '6000.3.8f1 (1c7db571dde0) revision 1867189'; Using compiler version '194234433'; Build Type 'Release'
+OS: 'Windows 11  (10.0.26200) Professional' Language: 'pl' Physical Memory: 32672 MB
+[Licensing::IpcConnector] Channel LicenseClient-licen doesn't exist
+BatchMode: 1, IsHumanControllingUs: 0, StartBugReporterOnCrash: 0, Is64bit: 1
+System  architecture: x64
+Process architecture: x64
+Date: 2026-02-27T08:35:16Z
+[Licensing::Module] Successfully launched the LicensingClient (PId: 35072)
+
+COMMAND LINE ARGUMENTS:
+C:\Program Files\Unity\Hub\Editor\6000.3.8f1\Editor\Unity.exe
+-batchmode
+-nographics
+-quit
+-projectPath
+C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template
+-buildTarget
+Android
+-executeMethod
+TheraplyCore.Editor.Automation.SceneLifecycleEffectsValidation.RunSceneLifecycleEffectsValidation
+-logFile
+C:\Users\licen\Projects\theraply-vr-framework\docs\evidence\20260227_093353\commands\unity_scene_lifecycle_effects_validation.log
+Successfully changed project path to: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template
+C:/Users/licen/Projects/theraply-vr-framework/unity-quest-template
+[UnityMemory] Configuration Parameters - Can be set up in boot.config
+    "memorysetup-temp-allocator-size-nav-mesh-worker=65536"
+    "memorysetup-temp-allocator-size-audio-worker=65536"
+    "memorysetup-temp-allocator-size-gfx=262144"
+    "memorysetup-allocator-temp-initial-block-size-main=262144"
+    "memorysetup-allocator-temp-initial-block-size-worker=262144"
+    "memorysetup-temp-allocator-size-background-worker=32768"
+    "memorysetup-temp-allocator-size-job-worker=262144"
+    "memorysetup-temp-allocator-size-preload-manager=33554432"
+    "memorysetup-temp-allocator-size-gi-baking-worker=262144"
+    "memorysetup-temp-allocator-size-gi-baking-worker=262144"
+    "memorysetup-temp-allocator-size-gi-baking-worker=262144"
+    "memorysetup-temp-allocator-size-gi-baking-worker=262144"
+    "memorysetup-temp-allocator-size-gi-baking-worker=262144"
+    "memorysetup-bucket-allocator-granularity=16"
+    "memorysetup-bucket-allocator-bucket-count=8"
+    "memorysetup-bucket-allocator-block-size=33554432"
+    "memorysetup-bucket-allocator-block-count=8"
+    "memorysetup-main-allocator-block-size=16777216"
+    "memorysetup-thread-allocator-block-size=16777216"
+    "memorysetup-gfx-main-allocator-block-size=16777216"
+    "memorysetup-gfx-thread-allocator-block-size=16777216"
+    "memorysetup-cache-allocator-block-size=4194304"
+    "memorysetup-typetree-allocator-block-size=2097152"
+    "memorysetup-profiler-bucket-allocator-granularity=16"
+    "memorysetup-profiler-bucket-allocator-bucket-count=8"
+    "memorysetup-profiler-bucket-allocator-block-size=33554432"
+    "memorysetup-profiler-bucket-allocator-block-count=8"
+    "memorysetup-profiler-allocator-block-size=16777216"
+    "memorysetup-profiler-editor-allocator-block-size=1048576"
+    "memorysetup-temp-allocator-size-main=16777216"
+    "memorysetup-job-temp-allocator-block-size=2097152"
+    "memorysetup-job-temp-allocator-block-size-background=1048576"
+    "memorysetup-job-temp-allocator-reduction-small-platforms=262144"
+    "memorysetup-temp-allocator-size-cloud-worker=32768"
+Player connection [5460]  Target information:
+
+Player connection [5460]  * "[IP] 192.168.0.221 [Port] 55504 [Flags] 2 [Guid] 2987123756 [EditorId] 2987123756 [Version] 1048832 [Id] WindowsEditor(7,MARCIN_PC) [Debug] 1 [PackageName] WindowsEditor [ProjectName] Editor" 
+
+Player connection [5460]  * "[IP] 100.112.161.47 [Port] 55504 [Flags] 2 [Guid] 2987123756 [EditorId] 2987123756 [Version] 1048832 [Id] WindowsEditor(7,MARCIN_PC) [Debug] 1 [PackageName] WindowsEditor [ProjectName] Editor" 
+
+Player connection [5460] Host joined multi-casting on [225.0.0.222:54997]...
+Player connection [5460] Host joined alternative multi-casting on [225.0.0.222:34997]...
+Input System module state changed to: Initialized.
+[Physics::Module] Initialized fallback backend.
+[Physics::Module] Id: 0xdecafbad
+Starting IPC server.
+Waiting for clients to connect on \\.\pipe\Unity-LicenseClient-licen, press Ctrl-C to exit.
+[Licensing::IpcConnector] Successfully connected to: "LicenseClient-licen" at "2026-02-27T08:35:17.1392717Z"
+[Package Manager] Connected to IPC stream "Upm-2156" after 0.3 seconds.
+[Licensing::Module] Licensing is not yet initialized.
+[Licensing::Client] Handshaking with LicensingClient:
+  Version:                 1.17.4+4293ba1
+  Session Id:              bfe6e21c21a24ebc948fefc54bc3bc85
+  Correlation Id:          fbf4246f34aff1e4981b88a06efb10bb
+  External correlation Id: 5513001389267275600
+  Machine Id:              vMwHPvfi1alxp1sT2fMsT3AqMw0=
+[Licensing::Module] Successfully connected to LicensingClient on channel: "LicenseClient-licen" (connect: 0.24s, validation: 0.04s, handshake: 0.70s)
+[Licensing::IpcConnector] Successfully connected to: "LicenseClient-licen-notifications" at "2026-02-27T08:35:17.879385Z"
+[Licensing::Module] Connected to LicensingClient (PId: 35072, launch time: 0.00, total connection time: 0.98s)
+[Licensing::Module] Error: Access token is unavailable; failed to update
+[Licensing::Client] Successfully resolved entitlement details
+[Licensing::Module] License group:
+  Id: 1374621094362-UnityPersXXXX
+  Product: Unity Personal
+  Type: Assigned
+  Expiration: Unlimited
+[Licensing::Client] Successfully updated license, isAsync: True, time: 0.01
+[Licensing::Client] Successfully resolved entitlement details
+[Licensing::Module] Licensing Background thread has ended after 1.01s
+[Licensing::Module] Licensing is initialized (took 0.62s).
+[Licensing::Client] Successfully resolved entitlement details
+Library Redirect Path: Library/
+[Physics::Module] Selected backend.
+[Physics::Module] Name: PhysX
+[Physics::Module] Id: 0xf2b8ea05
+[Physics::Module] SDK Version: 4.1.2
+[Physics::Module] Integration Version: 1.0.0
+[Physics::Module] Threading Mode: Multi-Threaded
+[Licensing::Client] Successfully resolved entitlement details
+Targeting platform: Android
+Refreshing native plugins compatible for Editor in 1.97 ms, found 0 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Initialize engine version: 6000.3.8f1 (1c7db571dde0)
+[Subsystems] Discovering subsystems at path C:/Program Files/Unity/Hub/Editor/6000.3.8f1/Editor/Data/Resources/UnitySubsystems
+[Subsystems] Discovering subsystems at path C:/Users/licen/Projects/theraply-vr-framework/unity-quest-template/Assets
+Forcing GfxDevice: Null
+GfxDevice: creating device client; kGfxThreadingModeNonThreaded
+NullGfxDevice:
+    Version:  NULL 1.0 [1.0]
+    Renderer: Null Device
+    Vendor:   Unity Technologies
+Shader 'Oculus/OVRMRCameraFrameLit': fallback shader 'Alpha-Diffuse' not found
+Initialize mono
+Mono path[0] = 'C:/Program Files/Unity/Hub/Editor/6000.3.8f1/Editor/Data/Managed'
+Mono path[1] = 'C:/Program Files/Unity/Hub/Editor/6000.3.8f1/Editor/Data/MonoBleedingEdge/lib/mono/unityjit-win32'
+Mono config path = 'C:/Program Files/Unity/Hub/Editor/6000.3.8f1/Editor/Data/MonoBleedingEdge/etc'
+Using monoOptions --debugger-agent=transport=dt_socket,embedding=1,server=y,suspend=n,address=127.0.0.1:56156
+Using cacheserver namespaces - metadata:defaultmetadata, artifacts:defaultartifacts
+Using cacheserver namespaces - metadata:defaultmetadata, artifacts:defaultartifacts
+ImportWorker Server TCP listen port: 0
+AcceleratorClientConnectionCallback - disconnected - :0
+Begin MonoManager ReloadAssembly
+Registering precompiled unity dll's ...
+Register platform support module: C:/Program Files/Unity/Hub/Editor/6000.3.8f1/Editor/Data/PlaybackEngines/WindowsStandaloneSupport/UnityEditor.WindowsStandalone.Extensions.dll
+Register platform support module: C:/Program Files/Unity/Hub/Editor/6000.3.8f1/Editor/Data/PlaybackEngines/AndroidPlayer/UnityEditor.Android.Extensions.dll
+Registered in 0.002187 seconds.
+- Loaded All Assemblies, in  0.339 seconds
+Native extension for Android target not found
+Process already exited: 'C:\Users\licen\AppData\Local\Android\sdk\platform-tools\adb.exe'
+Multiple ADB server instances found, the following ADB server instance have been terminated due to being run from another SDK. Process paths: 
+C:\Users\licen\AppData\Local\Android\sdk\platform-tools\adb.exe
+C:\Users\licen\AppData\Local\Android\sdk\platform-tools\adb.exe
+Reconnecting Device: 
+2G0YC5ZF8P009T        
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+UnityEditor.Android.AndroidDeploymentTargetsExtension:GetKnownTargets (UnityEditor.DeploymentTargets.IDeploymentTargetsMainThreadContext,UnityEditor.ProgressHandler) (at /home/bokken/build/output/unity/unity/PlatformDependent/AndroidPlayer/Editor/Managed/DeploymentTargets/AndroidDeploymentTargetsExtension.cs:384)
+UnityEditor.Android.TargetScanWorker:ScanSync () (at /home/bokken/build/output/unity/unity/PlatformDependent/AndroidPlayer/Editor/Managed/TargetScanWorker.cs:164)
+UnityEditor.Android.TargetExtension:OnUsbDevicesChanged (UnityEditor.Hardware.UsbDevice[]) (at /home/bokken/build/output/unity/unity/PlatformDependent/AndroidPlayer/Editor/Managed/ExtensionModule.cs:114)
+UnityEditor.Android.TargetExtension:OnLoad () (at /home/bokken/build/output/unity/unity/PlatformDependent/AndroidPlayer/Editor/Managed/ExtensionModule.cs:75)
+UnityEditor.Modules.ModuleManager:InitializePlatformSupportModules ()
+
+(Filename: /home/bokken/build/output/unity/unity/PlatformDependent/AndroidPlayer/Editor/Managed/DeploymentTargets/AndroidDeploymentTargetsExtension.cs Line: 384)
+
+Android Extension - Scanning For ADB Devices 10834 ms
+Native extension for WindowsStandalone target not found
+ScheduleIndexationOnStartup MainProcess:False IndexOnStartup:True
+Mono: successfully reloaded assembly
+- Finished resetting the current domain, in 11.216 seconds
+Domain Reload Profiling: 11553ms
+	BeginReloadAssembly (102ms)
+		ExecutionOrderSort (0ms)
+		DisableScriptedObjects (0ms)
+		BackupInstance (0ms)
+		ReleaseScriptingObjects (0ms)
+		CreateAndSetChildDomain (17ms)
+	RebuildCommonClasses (33ms)
+	RebuildNativeTypeToScriptingClass (10ms)
+	initialDomainReloadingComplete (41ms)
+	LoadAllAssembliesAndSetupDomain (151ms)
+		LoadAssemblies (83ms)
+		RebuildTransferFunctionScriptingTraits (0ms)
+		AnalyzeDomain (148ms)
+			TypeCache.Refresh (147ms)
+				TypeCache.ScanAssembly (133ms)
+			BuildScriptInfoCaches (0ms)
+			ResolveRequiredComponents (0ms)
+	FinalizeReload (11216ms)
+		ReleaseScriptCaches (0ms)
+		RebuildScriptCaches (0ms)
+		SetupLoadedEditorAssemblies (11183ms)
+			LogAssemblyErrors (0ms)
+			InitializePlatformSupportModulesInManaged (10931ms)
+			SetLoadedEditorAssemblies (4ms)
+			BeforeProcessingInitializeOnLoad (67ms)
+			ProcessInitializeOnLoadAttributes (123ms)
+			ProcessInitializeOnLoadMethodAttributes (58ms)
+			AfterProcessingInitializeOnLoad (0ms)
+			EditorAssembliesLoaded (0ms)
+		ExecutionOrderSort2 (0ms)
+		AwakeInstancesAfterBackupRestoration (0ms)
+[Licensing::Client] Successfully resolved entitlement details
+[Licensing::Client] Successfully resolved entitlement details
+Application.AssetDatabase Initial Refresh Start
+Package Manager log level set to [2]
+[Package Manager] Restoring resolved packages state from cache
+[Licensing::Client] Successfully resolved entitlement details
+[Package Manager] Registered 51 packages:
+  Packages from [https://packages.unity.com]:
+    com.meta.xr.sdk.interaction.ovr@85.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.meta.xr.sdk.interaction.ovr@964224d78bc9)
+    com.unity.webrtc@3.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.webrtc@9605a106619b)
+    com.unity.xr.management@4.5.4 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.xr.management@e3a3882b360a)
+    com.unity.xr.openxr@1.16.1 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.xr.openxr@ef0033a586bf)
+    com.unity.inputsystem@1.18.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.inputsystem@57d0e36f6123)
+    com.unity.xr.core-utils@2.5.3 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.xr.core-utils@f0450cbac8d6)
+    com.unity.xr.legacyinputhelpers@2.1.13 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.xr.legacyinputhelpers@9535ff2c27ac)
+    com.unity.editorcoroutines@1.0.1 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.editorcoroutines@54394ed3283c)
+    com.meta.xr.sdk.core@85.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.meta.xr.sdk.core@f8b4cfb2789f)
+    com.meta.xr.sdk.interaction@85.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.meta.xr.sdk.interaction@0a0b3efbe99d)
+  Built-in packages:
+    com.unity.multiplayer.center@1.0.1 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.multiplayer.center@f01f4ba8d00a)
+    com.unity.modules.accessibility@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.accessibility)
+    com.unity.modules.adaptiveperformance@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.adaptiveperformance)
+    com.unity.modules.ai@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.ai)
+    com.unity.modules.androidjni@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.androidjni)
+    com.unity.modules.animation@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.animation)
+    com.unity.modules.assetbundle@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.assetbundle)
+    com.unity.modules.audio@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.audio)
+    com.unity.modules.cloth@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.cloth)
+    com.unity.modules.director@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.director)
+    com.unity.modules.imageconversion@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.imageconversion)
+    com.unity.modules.imgui@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.imgui)
+    com.unity.modules.jsonserialize@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.jsonserialize)
+    com.unity.modules.particlesystem@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.particlesystem)
+    com.unity.modules.physics@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.physics)
+    com.unity.modules.physics2d@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.physics2d)
+    com.unity.modules.screencapture@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.screencapture)
+    com.unity.modules.terrain@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.terrain)
+    com.unity.modules.terrainphysics@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.terrainphysics)
+    com.unity.modules.tilemap@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.tilemap)
+    com.unity.modules.ui@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.ui)
+    com.unity.modules.uielements@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.uielements)
+    com.unity.modules.umbra@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.umbra)
+    com.unity.modules.unityanalytics@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.unityanalytics)
+    com.unity.modules.unitywebrequest@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.unitywebrequest)
+    com.unity.modules.unitywebrequestassetbundle@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.unitywebrequestassetbundle)
+    com.unity.modules.unitywebrequestaudio@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.unitywebrequestaudio)
+    com.unity.modules.unitywebrequesttexture@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.unitywebrequesttexture)
+    com.unity.modules.unitywebrequestwww@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.unitywebrequestwww)
+    com.unity.modules.vectorgraphics@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.vectorgraphics)
+    com.unity.modules.vehicles@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.vehicles)
+    com.unity.modules.video@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.video)
+    com.unity.modules.vr@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.vr)
+    com.unity.modules.wind@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.wind)
+    com.unity.modules.xr@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.xr)
+    com.unity.modules.subsystems@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.subsystems)
+    com.unity.modules.hierarchycore@1.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.modules.hierarchycore)
+    com.unity.ugui@2.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.ugui@bb329a87fcdc)
+    com.unity.textmeshpro@5.0.0 (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.textmeshpro@53f43edfd2e0)
+  Git packages:
+    com.github-glitchenzo.nugetforunity@https://github.com/GlitchEnzo/NuGetForUnity.git?path=/src/NuGetForUnity (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.github-glitchenzo.nugetforunity@1c1553136be4)
+    jp.hadashikick.vcontainer@https://github.com/hadashiA/VContainer.git?path=VContainer/Assets/VContainer (location: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\jp.hadashikick.vcontainer@314ad69e1539)
+[Subsystems] Looking for new subsystems at path C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.xr.openxr@ef0033a586bf
+[Subsystems] Novel subsystem found at Library/PackageCache/com.unity.xr.openxr@ef0033a586bf/Runtime/UnitySubsystemsManifest.json
+[Subsystems] Discovering subsystems at path C:/Program Files/Unity/Hub/Editor/6000.3.8f1/Editor/Data/Resources/UnitySubsystems
+[Subsystems] Discovering subsystems at path C:/Users/licen/Projects/theraply-vr-framework/unity-quest-template/Assets
+[Subsystems] Discovering subsystems at path C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Library\PackageCache\com.unity.xr.openxr@ef0033a586bf
+[Subsystems] No descriptors matched for  examples in Library/PackageCache/com.unity.xr.openxr@ef0033a586bf/Runtime/UnitySubsystemsManifest.json.
+[Subsystems] 1 'inputs' descriptors matched in Library/PackageCache/com.unity.xr.openxr@ef0033a586bf/Runtime/UnitySubsystemsManifest.json
+[Subsystems] 1 'displays' descriptors matched in Library/PackageCache/com.unity.xr.openxr@ef0033a586bf/Runtime/UnitySubsystemsManifest.json
+[Subsystems] No descriptors matched for  meshings in Library/PackageCache/com.unity.xr.openxr@ef0033a586bf/Runtime/UnitySubsystemsManifest.json.
+[Package Manager] Done registering packages in 0.02 seconds
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://localhost:80
+info: Microsoft.Hosting.Lifetime[0]
+      Application started. Press Ctrl+C to shut down.
+info: Microsoft.Hosting.Lifetime[0]
+      Hosting environment: Production
+info: Microsoft.Hosting.Lifetime[0]
+      Content root path: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\
+info: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/2 POST http://ilpp/UnityILPP.PostProcessing/Ping application/grpc -
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]
+      Executing endpoint 'gRPC - /UnityILPP.PostProcessing/Ping'
+info: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]
+      Executed endpoint 'gRPC - /UnityILPP.PostProcessing/Ping'
+info: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/2 POST http://ilpp/UnityILPP.PostProcessing/Ping application/grpc - - 200 - application/grpc 30.4235ms
+Starting: C:\Program Files\Unity\Hub\Editor\6000.3.8f1\Editor\Data\Tools\BuildPipeline\bee_backend.exe --ipc --defer-dag-verification --dagfile="Library/Bee/1300b0aE.dag" --continue-on-failure --profile="Library/Bee/backend1.traceevents" ScriptAssemblies
+WorkingDir: C:/Users/licen/Projects/theraply-vr-framework/unity-quest-template
+DisplayProgressbar: Compiling Scripts
+ExitCode: 0 Duration: 0s149ms
+*** Tundra build success (0.13 seconds), 0 items updated, 862 evaluated
+AssetDatabase: script compilation time: 0.487577s
+Begin MonoManager ReloadAssembly
+- Loaded All Assemblies, in  0.617 seconds
+Script 'CharacterController' has the same name as built-in Unity component.
+AddComponent and GetComponent will not work with this script.
+'Packages/com.meta.xr.sdk.core/Editor/BuildingBlocks/BlocksWindowDetailsExtension.cs' contains partial class of Unity.Object, exactly 1 of the partial classes needs to be in a file with the same filename. This is to know the one that can be referenced from ie. GameObjects
+'Packages/com.meta.xr.sdk.core/Editor/BuildingBlocks/BlocksWindow.cs' contains partial class of Unity.Object, exactly 1 of the partial classes needs to be in a file with the same filename. This is to know the one that can be referenced from ie. GameObjects
+'Packages/com.meta.xr.sdk.core/Editor/BuildingBlocks/BlocksWindowCollectionsPageExtension.cs' contains partial class of Unity.Object, exactly 1 of the partial classes needs to be in a file with the same filename. This is to know the one that can be referenced from ie. GameObjects
+Refreshing native plugins compatible for Editor in 9.02 ms, found 9 plugins.
+Native extension for Android target not found
+Native extension for WindowsStandalone target not found
+Refreshing native plugins compatible for Editor in 8.50 ms, found 9 plugins.
+ScheduleIndexationOnStartup MainProcess:True IndexOnStartup:True
+Mono: successfully reloaded assembly
+- Finished resetting the current domain, in  1.081 seconds
+Domain Reload Profiling: 1695ms
+	BeginReloadAssembly (266ms)
+		ExecutionOrderSort (0ms)
+		DisableScriptedObjects (10ms)
+		BackupInstance (0ms)
+		ReleaseScriptingObjects (0ms)
+		CreateAndSetChildDomain (167ms)
+	RebuildCommonClasses (30ms)
+	RebuildNativeTypeToScriptingClass (10ms)
+	initialDomainReloadingComplete (23ms)
+	LoadAllAssembliesAndSetupDomain (283ms)
+		LoadAssemblies (225ms)
+		RebuildTransferFunctionScriptingTraits (0ms)
+		AnalyzeDomain (118ms)
+			TypeCache.Refresh (79ms)
+				TypeCache.ScanAssembly (69ms)
+			BuildScriptInfoCaches (28ms)
+			ResolveRequiredComponents (8ms)
+	FinalizeReload (1082ms)
+		ReleaseScriptCaches (0ms)
+		RebuildScriptCaches (0ms)
+		SetupLoadedEditorAssemblies (950ms)
+			LogAssemblyErrors (0ms)
+			InitializePlatformSupportModulesInManaged (31ms)
+			SetLoadedEditorAssemblies (4ms)
+			BeforeProcessingInitializeOnLoad (141ms)
+			ProcessInitializeOnLoadAttributes (706ms)
+			ProcessInitializeOnLoadMethodAttributes (63ms)
+			AfterProcessingInitializeOnLoad (5ms)
+			EditorAssembliesLoaded (0ms)
+		ExecutionOrderSort2 (0ms)
+		AwakeInstancesAfterBackupRestoration (6ms)
+Asset Pipeline Refresh (id=eca9ea8b6094d2041916fb2acc255ecd): Total: 3.052 seconds - Initiated by InitialRefreshV2(ForceSynchronousImport)
+	Summary:
+		Imports: total=0 (actual=0, local cache=0, cache server=0)
+		Asset DB Process Time: managed=0 ms, native=1377 ms
+		Asset DB Callback time: managed=511 ms, native=19 ms
+		Scripting: domain reloads=1, domain reload time=617 ms, compile time=489 ms, other=36 ms
+		Project Asset Count: scripts=1427, non-scripts=2172
+		Asset File Changes: new=0, changed=0, moved=0, deleted=0
+		Scan Filter Count: 0
+	InvokeCustomDependenciesCallbacks: 0.001ms
+	InvokePackagesCallback: 21.174ms
+	ApplyChangesToAssetFolders: 0.497ms
+	Scan: 64.956ms
+	OnSourceAssetsModified: 0.004ms
+	CategorizeAssetsWithTransientArtifact: 22.850ms
+	ProcessAssetsWithTransientArtifactChanges: 48.339ms
+	CategorizeAssets: 31.045ms
+	ImportOutOfDateAssets: 1107.830ms (617.370ms without children)
+		CompileScripts: 489.388ms
+		ReloadNativeAssets: 0.004ms
+		UnloadImportedAssets: 0.159ms
+		EnsureUptoDateAssetsAreRegisteredWithGuidPM: 0.445ms
+		InitializingProgressBar: 0.000ms
+		PostProcessAllAssetNotificationsAddChangedAssets: 0.001ms
+		OnDemandSchedulerStart: 0.464ms
+	PostProcessAllAssets: 511.234ms
+	GatherAllCurrentPrimaryArtifactRevisions: 0.002ms
+	UnloadStreamsBegin: 2.052ms
+	PersistCurrentRevisions: 0.085ms
+	UnloadStreamsEnd: 0.001ms
+	GenerateScriptTypeHashes: 7.288ms
+	Untracked: 1241.998ms
+
+Application.AssetDatabase Initial Refresh End
+Scanning for USB devices : 6.005ms
+Initializing Unity extensions:
+[MODES] ModeService[none].Initialize
+[MODES] ModeService[none].LoadModes
+[MODES] Loading mode Default (0) for mode-current-id-unity-quest-template
+Unloading 172 Unused Serialized files (Serialized files now loaded: 0)
+Unloading 3323 unused Assets / (494.3 KB). Loaded Objects now: 5202.
+Memory consumption went from 198.9 MB to 198.4 MB.
+Total: 12.186800 ms (FindLiveObjects: 0.448200 ms CreateObjectMapping: 0.155800 ms MarkObjects: 10.072600 ms  DeleteObjects: 1.509500 ms)
+
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+Unloading 0 unused Assets / (48.0 KB). Loaded Objects now: 5217.
+Memory consumption went from 182.5 MB to 182.4 MB.
+Total: 9.657200 ms (FindLiveObjects: 0.222700 ms CreateObjectMapping: 0.087600 ms MarkObjects: 9.337000 ms  DeleteObjects: 0.009100 ms)
+
+<color=gray>09:35:34.636</color> <color=white>[INFO]</color> [SessionContext] Session created: scene_fx_validation_session (patient=p, therapist=t, state=CREATED)
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Games.Runtime.GameSessionContext:BeginSession (string,string,string) (at Assets/_TheraplyCore/Games/Runtime/GameSessionContext.cs:72)
+TheraplyCore.Games.Runtime.SessionRuntimeBridge:TryStartSession (string,string,string,string&) (at Assets/_TheraplyCore/Games/Runtime/SessionRuntimeBridge.cs:64)
+TheraplyCore.Editor.Automation.SceneLifecycleEffectsValidation:ExecuteValidation () (at Assets/_TheraplyCore/Editor/Automation/SceneLifecycleEffectsValidation.cs:61)
+TheraplyCore.Editor.Automation.SceneLifecycleEffectsValidation:RunSceneLifecycleEffectsValidation () (at Assets/_TheraplyCore/Editor/Automation/SceneLifecycleEffectsValidation.cs:20)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+<color=gray>09:35:34.645</color> <color=white>[INFO]</color> [SessionContext] State transition: CREATED -> IN_PROGRESS (session=scene_fx_validation_session, reason=SESSION_RUNTIME_START)
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Games.Runtime.GameSessionContext:TryTransitionTo (TheraplyCore.Games.Contracts.SessionLifecycleState,string) (at Assets/_TheraplyCore/Games/Runtime/GameSessionContext.cs:219)
+TheraplyCore.Games.Runtime.SessionRuntimeBridge:TryStartSession (string,string,string,string&) (at Assets/_TheraplyCore/Games/Runtime/SessionRuntimeBridge.cs:69)
+TheraplyCore.Editor.Automation.SceneLifecycleEffectsValidation:ExecuteValidation () (at Assets/_TheraplyCore/Editor/Automation/SceneLifecycleEffectsValidation.cs:61)
+TheraplyCore.Editor.Automation.SceneLifecycleEffectsValidation:RunSceneLifecycleEffectsValidation () (at Assets/_TheraplyCore/Editor/Automation/SceneLifecycleEffectsValidation.cs:20)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+<color=gray>09:35:34.647</color> <color=white>[INFO]</color> [SessionContext] State transition: IN_PROGRESS -> COMPLETED (session=scene_fx_validation_session, reason=SESSION_RUNTIME_COMPLETE)
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Games.Runtime.GameSessionContext:TryTransitionTo (TheraplyCore.Games.Contracts.SessionLifecycleState,string) (at Assets/_TheraplyCore/Games/Runtime/GameSessionContext.cs:219)
+TheraplyCore.Games.Runtime.SessionRuntimeBridge:TryTransition (TheraplyCore.Games.Contracts.SessionLifecycleState,string,string&) (at Assets/_TheraplyCore/Games/Runtime/SessionRuntimeBridge.cs:123)
+TheraplyCore.Games.Runtime.SessionRuntimeBridge:TryCompleteSession (string&) (at Assets/_TheraplyCore/Games/Runtime/SessionRuntimeBridge.cs:96)
+TheraplyCore.Editor.Automation.SceneLifecycleEffectsValidation:ValidateInvalidOperationRejection (TheraplyCore.Games.Runtime.EffectRunner,TheraplyCore.Games.Runtime.SessionRuntimeBridge) (at Assets/_TheraplyCore/Editor/Automation/SceneLifecycleEffectsValidation.cs:127)
+TheraplyCore.Editor.Automation.SceneLifecycleEffectsValidation:ExecuteValidation () (at Assets/_TheraplyCore/Editor/Automation/SceneLifecycleEffectsValidation.cs:66)
+TheraplyCore.Editor.Automation.SceneLifecycleEffectsValidation:RunSceneLifecycleEffectsValidation () (at Assets/_TheraplyCore/Editor/Automation/SceneLifecycleEffectsValidation.cs:20)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+<color=gray>09:35:34.649</color> <color=white>[INFO]</color> [SessionContext] Session created: scene_fx_validation_session_2 (patient=p2, therapist=t2, state=CREATED)
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Games.Runtime.GameSessionContext:BeginSession (string,string,string) (at Assets/_TheraplyCore/Games/Runtime/GameSessionContext.cs:72)
+TheraplyCore.Games.Runtime.SessionRuntimeBridge:TryStartSession (string,string,string,string&) (at Assets/_TheraplyCore/Games/Runtime/SessionRuntimeBridge.cs:64)
+TheraplyCore.Editor.Automation.SceneLifecycleEffectsValidation:ValidateRepeatedIdempotency (TheraplyCore.Games.Runtime.EffectRunner,TheraplyCore.Games.Runtime.SessionRuntimeBridge) (at Assets/_TheraplyCore/Editor/Automation/SceneLifecycleEffectsValidation.cs:167)
+TheraplyCore.Editor.Automation.SceneLifecycleEffectsValidation:ExecuteValidation () (at Assets/_TheraplyCore/Editor/Automation/SceneLifecycleEffectsValidation.cs:67)
+TheraplyCore.Editor.Automation.SceneLifecycleEffectsValidation:RunSceneLifecycleEffectsValidation () (at Assets/_TheraplyCore/Editor/Automation/SceneLifecycleEffectsValidation.cs:20)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+<color=gray>09:35:34.649</color> <color=white>[INFO]</color> [SessionContext] State transition: CREATED -> IN_PROGRESS (session=scene_fx_validation_session_2, reason=SESSION_RUNTIME_START)
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Logging.Logger:OutputToConsole (string,string,System.Exception,TheraplyCore.Logging.LogLevel) (at Assets/_TheraplyCore/Logging/Logger.cs:178)
+TheraplyCore.Logging.Logger:Log (TheraplyCore.Logging.LogLevel,string,string,System.Exception) (at Assets/_TheraplyCore/Logging/Logger.cs:142)
+TheraplyCore.Logging.Logger:Info (string) (at Assets/_TheraplyCore/Logging/Logger.cs:110)
+TheraplyCore.Games.Runtime.GameSessionContext:TryTransitionTo (TheraplyCore.Games.Contracts.SessionLifecycleState,string) (at Assets/_TheraplyCore/Games/Runtime/GameSessionContext.cs:219)
+TheraplyCore.Games.Runtime.SessionRuntimeBridge:TryStartSession (string,string,string,string&) (at Assets/_TheraplyCore/Games/Runtime/SessionRuntimeBridge.cs:69)
+TheraplyCore.Editor.Automation.SceneLifecycleEffectsValidation:ValidateRepeatedIdempotency (TheraplyCore.Games.Runtime.EffectRunner,TheraplyCore.Games.Runtime.SessionRuntimeBridge) (at Assets/_TheraplyCore/Editor/Automation/SceneLifecycleEffectsValidation.cs:167)
+TheraplyCore.Editor.Automation.SceneLifecycleEffectsValidation:ExecuteValidation () (at Assets/_TheraplyCore/Editor/Automation/SceneLifecycleEffectsValidation.cs:67)
+TheraplyCore.Editor.Automation.SceneLifecycleEffectsValidation:RunSceneLifecycleEffectsValidation () (at Assets/_TheraplyCore/Editor/Automation/SceneLifecycleEffectsValidation.cs:20)
+
+(Filename: Assets/_TheraplyCore/Logging/Logger.cs Line: 110)
+
+[SceneLifecycleEffectsValidation] PASS: effectWiring=OK; invalidStateRejection=OK; repeatedIdempotency=OK
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Editor.Automation.SceneLifecycleEffectsValidation:RunSceneLifecycleEffectsValidation () (at Assets/_TheraplyCore/Editor/Automation/SceneLifecycleEffectsValidation.cs:21)
+
+(Filename: Assets/_TheraplyCore/Editor/Automation/SceneLifecycleEffectsValidation.cs Line: 21)
+
+[SceneLifecycleEffectsValidation] Result file: C:\Users\licen\Projects\theraply-vr-framework\unity-quest-template\Temp\CliValidation\scene_lifecycle_effects_validation_result.txt
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace ()
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[])
+UnityEngine.Logger:Log (UnityEngine.LogType,object)
+UnityEngine.Debug:Log (object)
+TheraplyCore.Editor.Automation.SceneLifecycleEffectsValidation:PersistValidationResult (string,string) (at Assets/_TheraplyCore/Editor/Automation/SceneLifecycleEffectsValidation.cs:239)
+TheraplyCore.Editor.Automation.SceneLifecycleEffectsValidation:RunSceneLifecycleEffectsValidation () (at Assets/_TheraplyCore/Editor/Automation/SceneLifecycleEffectsValidation.cs:22)
+
+(Filename: Assets/_TheraplyCore/Editor/Automation/SceneLifecycleEffectsValidation.cs Line: 239)
+
+Killing ADB server in 0,059416 seconds.
+[Physics::Module] Cleanup current backend.
+[Physics::Module] Id: 0xf2b8ea05
+Input System module state changed to: ShutdownInProgress.
+Input System polling thread exited.
+Input System module state changed to: Shutdown.
+[Licensing::IpcConnector] LicenseClient-licen-notifications channel disconnected successfully.
+[Licensing::IpcConnector] LicenseClient-licen channel disconnected successfully.
+AcceleratorClientConnectionCallback - disconnected - :0
+Cleanup mono
+Shut down.
+abort_threads: Failed aborting id: 0000000000006C1C, mono_thread_manage will ignore it
+
+abort_threads: Failed aborting id: 0000000000002E14, mono_thread_manage will ignore it
+
+abort_threads: Failed aborting id: 0000000000006C1C, mono_thread_manage will ignore it
+
+abort_threads: Failed aborting id: 0000000000002E14, mono_thread_manage will ignore it
+
+debugger-agent: Unable to listen on 2332
+Checking for leaked weakptr:
+  Found no leaked weakptrs.
+[Package Manager] Server process was shutdown
+##utp:{"type":"MemoryLeaks","version":2,"phase":"Immediate","time":1772181335363,"processId":2156,"allocatedMemory":14625253,"memoryLabels":[{"Default":29313},{"Permanent":15236},{"NewDelete":67475},{"Thread":4230384},{"Manager":32157},{"VertexData":8},{"Geometry":816},{"Texture":160},{"Shader":79379},{"Material":24},{"GfxDevice":55257},{"Animation":392},{"Audio":2664},{"FreeType":8},{"FontEngine":736},{"Physics":2090},{"Physics2D":16},{"Serialization":592},{"Input":14984},{"JobScheduler":33024},{"TextLib":216},{"Mono":32},{"ScriptingNativeRuntime":155060},{"BaseObject":1620336},{"Resource":1336},{"Renderer":3000},{"Transform":4685},{"File":1016},{"WebCam":616},{"Culling":32},{"Terrain":11394},{"Wind":24},{"STL":40},{"String":17684},{"DynamicArray":161518},{"HashMap":77144},{"Utility":2660134},{"Curl":2559},{"PoolAlloc":2056},{"AI":80},{"TypeTree":5341},{"ScriptManager":512},{"RuntimeInitializeOnLoadManager":64},{"SpriteAtlas":112},{"GI":7792},{"Director":8240},{"CloudService":8208},{"WebRequest":6148},{"VR":48138},{"SceneManager":504},{"Video":64},{"LazyScriptCache":32},{"Camera":17},{"Secure":2377},{"SerializationCache":1576},{"APIUpdating":10320},{"Subsystems":192},{"VirtualTexturing":57888},{"StaticSafetyDebugInfo":278528},{"Analytics":384},{"Hierarchy":608},{"CoreStats":13032},{"Identifiers":12960},{"Gui":96},{"EditorUtility":132817},{"VersionControl":4},{"Undo":947},{"AssetDatabase":4695649},{"EditorGi":328},{"UnityConnect":29208},{"Upm":1896},{"AssetCompliance":64},{"DrivenProperties":72},{"LocalIPC":211},{"ProfilerEditor":9746},{"CoreBusinessMetrics":2876},{"TLS":3433},{"Licensing":1232},{"AssetReference":32},{"IPCStream":32}]}
+~StackAllocator(ALLOC_TEMP_MAIN) m_LastAlloc not NULL. Did you forget to call FreeAllStackAllocations()? To get more information, run app with -diag-temp-memory-leak-validation cmd line argument
+[OVRPlugin][INFO] UnityPluginLoad called

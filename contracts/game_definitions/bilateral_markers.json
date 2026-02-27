@@ -253,6 +253,7 @@
                 "sectionId": "core",
                 "order": 10,
                 "defaultValue": "0",
+                "buttonCommandId": "",
                 "binding": {
                     "target": "game_config",
                     "path": "level",
@@ -268,6 +269,13 @@
                     "minLength": 0,
                     "maxLength": 0,
                     "regex": ""
+                },
+                "visual": {
+                    "x": -1.0,
+                    "y": -1.0,
+                    "width": 1.0,
+                    "height": 1.0,
+                    "scale": 1.0
                 },
                 "options": [
                     {
@@ -301,6 +309,7 @@
                 "sectionId": "core",
                 "order": 20,
                 "defaultValue": "wave",
+                "buttonCommandId": "",
                 "binding": {
                     "target": "game_config",
                     "path": "pattern",
@@ -316,6 +325,13 @@
                     "minLength": 0,
                     "maxLength": 0,
                     "regex": ""
+                },
+                "visual": {
+                    "x": -1.0,
+                    "y": -1.0,
+                    "width": 1.0,
+                    "height": 1.0,
+                    "scale": 1.0
                 },
                 "options": [
                     {
@@ -349,6 +365,7 @@
                 "sectionId": "core",
                 "order": 30,
                 "defaultValue": "72",
+                "buttonCommandId": "",
                 "binding": {
                     "target": "game_config",
                     "path": "tempoBpm",
@@ -365,6 +382,13 @@
                     "maxLength": 0,
                     "regex": ""
                 },
+                "visual": {
+                    "x": -1.0,
+                    "y": -1.0,
+                    "width": 1.0,
+                    "height": 1.0,
+                    "scale": 1.0
+                },
                 "options": []
             },
             {
@@ -376,6 +400,7 @@
                 "sectionId": "core",
                 "order": 40,
                 "defaultValue": "45",
+                "buttonCommandId": "",
                 "binding": {
                     "target": "game_config",
                     "path": "durationSec",
@@ -392,6 +417,13 @@
                     "maxLength": 0,
                     "regex": ""
                 },
+                "visual": {
+                    "x": -1.0,
+                    "y": -1.0,
+                    "width": 1.0,
+                    "height": 1.0,
+                    "scale": 1.0
+                },
                 "options": []
             },
             {
@@ -403,6 +435,7 @@
                 "sectionId": "advanced",
                 "order": 50,
                 "defaultValue": "right",
+                "buttonCommandId": "",
                 "binding": {
                     "target": "game_config",
                     "path": "dominantHand",
@@ -418,6 +451,13 @@
                     "minLength": 0,
                     "maxLength": 0,
                     "regex": ""
+                },
+                "visual": {
+                    "x": -1.0,
+                    "y": -1.0,
+                    "width": 1.0,
+                    "height": 1.0,
+                    "scale": 1.0
                 },
                 "options": [
                     {
@@ -439,6 +479,7 @@
                 "sectionId": "advanced",
                 "order": 60,
                 "defaultValue": "spiral",
+                "buttonCommandId": "",
                 "binding": {
                     "target": "game_config",
                     "path": "leftPattern",
@@ -454,6 +495,13 @@
                     "minLength": 0,
                     "maxLength": 0,
                     "regex": ""
+                },
+                "visual": {
+                    "x": -1.0,
+                    "y": -1.0,
+                    "width": 1.0,
+                    "height": 1.0,
+                    "scale": 1.0
                 },
                 "options": [
                     {
@@ -487,6 +535,7 @@
                 "sectionId": "advanced",
                 "order": 70,
                 "defaultValue": "wave",
+                "buttonCommandId": "",
                 "binding": {
                     "target": "game_config",
                     "path": "rightPattern",
@@ -502,6 +551,13 @@
                     "minLength": 0,
                     "maxLength": 0,
                     "regex": ""
+                },
+                "visual": {
+                    "x": -1.0,
+                    "y": -1.0,
+                    "width": 1.0,
+                    "height": 1.0,
+                    "scale": 1.0
                 },
                 "options": [
                     {
@@ -535,6 +591,7 @@
                 "sectionId": "advanced",
                 "order": 80,
                 "defaultValue": "0.11",
+                "buttonCommandId": "",
                 "binding": {
                     "target": "game_config",
                     "path": "tunnelWidthM",
@@ -551,6 +608,13 @@
                     "maxLength": 0,
                     "regex": ""
                 },
+                "visual": {
+                    "x": -1.0,
+                    "y": -1.0,
+                    "width": 1.0,
+                    "height": 1.0,
+                    "scale": 1.0
+                },
                 "options": []
             },
             {
@@ -562,6 +626,7 @@
                 "sectionId": "advanced",
                 "order": 90,
                 "defaultValue": "0.7",
+                "buttonCommandId": "",
                 "binding": {
                     "target": "game_config",
                     "path": "alternationOffsetSec",
@@ -578,6 +643,13 @@
                     "maxLength": 0,
                     "regex": ""
                 },
+                "visual": {
+                    "x": -1.0,
+                    "y": -1.0,
+                    "width": 1.0,
+                    "height": 1.0,
+                    "scale": 1.0
+                },
                 "options": []
             },
             {
@@ -589,6 +661,7 @@
                 "sectionId": "advanced",
                 "order": 100,
                 "defaultValue": "true",
+                "buttonCommandId": "",
                 "binding": {
                     "target": "game_config",
                     "path": "adaptiveAssistEnabled",
@@ -604,6 +677,13 @@
                     "minLength": 0,
                     "maxLength": 0,
                     "regex": ""
+                },
+                "visual": {
+                    "x": -1.0,
+                    "y": -1.0,
+                    "width": 1.0,
+                    "height": 1.0,
+                    "scale": 1.0
                 },
                 "options": []
             }

@@ -527,6 +527,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 11400000, guid: 126d619cf4daa52469682f85c1378b4a, type: 3}
+      propertyPath: _enableDynamicResolution
+      value: 1
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects:
@@ -656,6 +660,10 @@ MonoBehaviour:
   _firebaseRequestTimeoutSeconds: 20
   _logFirebaseBackendPayloads: 1
   _logFirebaseBackendDiagnostics: 1
+  _rewriteLoopbackBackendHostOutsideEditor: 1
+  _useConnectedControllerIpForLoopbackRewrite: 1
+  _nonEditorLoopbackHostOverride: 
+  _tcpServerService: {fileID: 0}
   _persistCriticalSessionEventsLocally: 1
   _persistAllEventsToDurableStore: 1
   _preferSqliteWalStore: 1
@@ -721,8 +729,18 @@ MonoBehaviour:
   _syncStatusPollIntervalSeconds: 1
   _enableContentDeliverySimulation: 1
   _publishContentCatalogOnClientConnect: 1
-  _simulatedInstallDurationSeconds: 1.2
+  _simulatedManifestSyncDurationSeconds: 0.35
+  _simulatedDownloadDurationSeconds: 1.2
+  _simulatedVerifyDurationSeconds: 0.45
+  _simulatedActivationDurationSeconds: 0.25
+  _simulatedRollbackDurationSeconds: 0.3
+  _simulateVerifyFailureWhenTargetVersionContainsToken: 1
+  _simulatedVerifyFailureToken: verify_fail
+  _simulateRollbackAfterVerifyFailure: 1
   _defaultSimulatedContentVersion: 1.0.0
+  _persistContentDeliverySimulationState: 1
+  _contentDeliveryStateFolder: session_resilience
+  _contentDeliveryStateFileName: content_delivery_state.json
   _simulatedContentCatalog:
   - gameId: smoke_test_game
     owned: 1
@@ -860,6 +878,12 @@ MonoBehaviour:
   _logInbound: 1
   _logOutbound: 1
   _logUnmappedIncoming: 0
+  _enableCommandJournal: 1
+  _commandJournalFolder: TheraplyRuntime
+  _commandJournalFileName: critical_commands.ndjson
+  _commandJournalMaxEntriesInMemory: 4096
+  _commandJournalMaxPendingWrites: 1024
+  _logCommandJournalVerbose: 0
 --- !u!114 &1784697675
 MonoBehaviour:
   m_ObjectHideFlags: 0

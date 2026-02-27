@@ -6928,15 +6928,21 @@ class _ControlScreenState extends State<ControlScreen>
                             _contentActionsInFlight.contains(entry.gameId);
                         final installManaged =
                             _requiresQuestInstallState(entry.gameId);
-                        final shouldInstallOrUpdate = installManaged &&
-                            contentState.owned &&
-                            (contentState.runtimeStatus ==
-                                    ContentRuntimeStatus.notInstalled ||
+                        final shouldInstallOrUpdate = contentState.owned &&
+                            ((installManaged &&
+                                    (contentState.runtimeStatus ==
+                                            ContentRuntimeStatus.notInstalled ||
+                                        contentState.runtimeStatus ==
+                                            ContentRuntimeStatus
+                                                .updateRequired ||
+                                        contentState.runtimeStatus ==
+                                            ContentRuntimeStatus.failed ||
+                                        contentState.updateRequired)) ||
                                 contentState.runtimeStatus ==
                                     ContentRuntimeStatus.updateRequired ||
+                                contentState.updateRequired ||
                                 contentState.runtimeStatus ==
-                                    ContentRuntimeStatus.failed ||
-                                contentState.updateRequired);
+                                    ContentRuntimeStatus.failed);
                         final primaryStoreActionEnabled =
                             !contentState.owned && entry.availableForPurchase;
 
@@ -7087,7 +7093,7 @@ class _ControlScreenState extends State<ControlScreen>
                                           ),
                                         )
                                       : (_contentDeliveryEnabled &&
-                                              installManaged
+                                              shouldInstallOrUpdate
                                           ? Row(
                                               children: [
                                                 Expanded(
@@ -7118,8 +7124,9 @@ class _ControlScreenState extends State<ControlScreen>
                                                     ),
                                                   ),
                                                 ),
-                                                if (contentState
-                                                    .isInstalled) ...[
+                                                if (installManaged &&
+                                                    contentState
+                                                        .isInstalled) ...[
                                                   const SizedBox(width: 8),
                                                   Expanded(
                                                     child: OutlinedButton.icon(
