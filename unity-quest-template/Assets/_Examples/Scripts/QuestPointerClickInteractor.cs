@@ -76,7 +76,7 @@ namespace TheraplyExamples
         [SerializeField] private float _wandLength = 0.24f;
         [SerializeField] private float _wandRadius = 0.008f;
         [SerializeField] private float _wandTipRadius = 0.016f;
-        [SerializeField] private bool _hidePointerVisualsInBilateralMarkers = true;
+        [SerializeField] private bool _hidePointerVisualsInBilateralMarkers = false;
         [SerializeField] private string _bilateralMarkersGameId = "bilateral_markers";
         [SerializeField] private bool _colorFromSessionIndicator = true;
         [SerializeField] private Color _wandFallbackColor = new Color(0.2f, 0.9f, 1f, 0.95f);
