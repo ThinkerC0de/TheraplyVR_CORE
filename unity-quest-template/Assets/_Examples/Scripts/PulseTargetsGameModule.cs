@@ -811,9 +811,19 @@ namespace TheraplyExamples
             var nextTargetCount = settings != null && settings.targetCount > 0
                 ? settings.targetCount
                 : baseline.TargetCount;
-            var nextTargetSpeed = settings != null && settings.targetSpeed > 0f
-                ? settings.targetSpeed
-                : baseline.TargetSpeed;
+            var nextTargetSpeed = baseline.TargetSpeed;
+            if (settings != null)
+            {
+                if (settings.targetSpeed > 0f)
+                {
+                    nextTargetSpeed = settings.targetSpeed;
+                }
+                else if (settings.spawnSpeed > 0f)
+                {
+                    // Backward-compatible alias used by early mobile control schemas.
+                    nextTargetSpeed = settings.spawnSpeed;
+                }
+            }
             var nextTargetScale = settings != null && settings.targetScale > 0f
                 ? settings.targetScale
                 : baseline.TargetScale;
@@ -892,6 +902,7 @@ namespace TheraplyExamples
         {
             public int targetCount;
             public float targetSpeed;
+            public float spawnSpeed;
             public float targetScale;
             public int version;
             public bool adaptiveDifficultyEnabled = true;

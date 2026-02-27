@@ -1,0 +1,199 @@
+﻿{
+    "schema": "THERAPLY_MOBILE_CONTROL_LAYOUT",
+    "schemaVersion": "2026-02-27",
+    "gameId": "demo_cube_clicker",
+    "title": "Demo Cube Controls",
+    "description": "Schema-driven controls for Demo Cube START_GAME and UPDATE_CONFIG.",
+    "layout": {
+        "mode": "stack",
+        "columns": 1
+    },
+    "payload": {
+        "target": "game_config",
+        "gameConfigType": "demo_cube_config_v1",
+        "gameConfigVersion": 1,
+        "includeVersionInGameConfig": true
+    },
+    "sections": [
+        {
+            "sectionId": "setup",
+            "label": "Setup",
+            "order": 10
+        },
+        {
+            "sectionId": "runtime",
+            "label": "Runtime",
+            "order": 20
+        }
+    ],
+    "controls": [
+        {
+            "controlId": "cube_count",
+            "type": "slider",
+            "label": "Cube Count",
+            "description": "Number of spawned cubes.",
+            "placeholder": "",
+            "sectionId": "setup",
+            "order": 10,
+            "defaultValue": "12",
+            "bindingKey": "cubeCount",
+            "bindingTarget": "game_config",
+            "valueType": "int",
+            "emitOnStartGame": true,
+            "emitOnUpdateConfig": true,
+            "buttonCommandId": "",
+            "required": true,
+            "minValue": "4",
+            "maxValue": "40",
+            "step": "1",
+            "minLength": 0,
+            "maxLength": 0,
+            "regex": "",
+            "visual": {
+                "x": 0.0,
+                "y": 0.0,
+                "width": 0.95,
+                "height": 0.09,
+                "scale": 1.0
+            },
+            "options": []
+        },
+        {
+            "controlId": "cube_speed",
+            "type": "slider",
+            "label": "Cube Speed",
+            "description": "Cube movement speed.",
+            "placeholder": "",
+            "sectionId": "setup",
+            "order": 20,
+            "defaultValue": "0.7",
+            "bindingKey": "cubeSpeed",
+            "bindingTarget": "game_config",
+            "valueType": "double",
+            "emitOnStartGame": true,
+            "emitOnUpdateConfig": true,
+            "buttonCommandId": "",
+            "required": true,
+            "minValue": "0.2",
+            "maxValue": "2.2",
+            "step": "0.1",
+            "minLength": 0,
+            "maxLength": 0,
+            "regex": "",
+            "visual": {
+                "x": 0.0,
+                "y": 0.1,
+                "width": 0.95,
+                "height": 0.09,
+                "scale": 1.0
+            },
+            "options": []
+        },
+        {
+            "controlId": "level_mode",
+            "type": "select",
+            "label": "Level Mode",
+            "description": "Target color rule set.",
+            "placeholder": "",
+            "sectionId": "setup",
+            "order": 30,
+            "defaultValue": "basic",
+            "bindingKey": "levelMode",
+            "bindingTarget": "game_config",
+            "valueType": "string",
+            "emitOnStartGame": true,
+            "emitOnUpdateConfig": true,
+            "buttonCommandId": "",
+            "required": true,
+            "minValue": "",
+            "maxValue": "",
+            "step": "",
+            "minLength": 0,
+            "maxLength": 0,
+            "regex": "",
+            "visual": {
+                "x": 0.0,
+                "y": 0.2,
+                "width": 0.95,
+                "height": 0.09,
+                "scale": 1.0
+            },
+            "options": [
+                {
+                    "value": "basic",
+                    "label": "Basic"
+                },
+                {
+                    "value": "alternate_colors",
+                    "label": "Alternate Colors"
+                },
+                {
+                    "value": "random_target_color",
+                    "label": "Random Target"
+                }
+            ]
+        },
+        {
+            "controlId": "resume_from_saved",
+            "type": "toggle",
+            "label": "Resume From Saved",
+            "description": "Start from persisted state when available.",
+            "placeholder": "",
+            "sectionId": "runtime",
+            "order": 40,
+            "defaultValue": "false",
+            "bindingKey": "resumeFromSaved",
+            "bindingTarget": "game_config",
+            "valueType": "bool",
+            "emitOnStartGame": true,
+            "emitOnUpdateConfig": true,
+            "buttonCommandId": "",
+            "required": false,
+            "minValue": "",
+            "maxValue": "",
+            "step": "",
+            "minLength": 0,
+            "maxLength": 0,
+            "regex": "",
+            "visual": {
+                "x": 0.0,
+                "y": 0.3,
+                "width": 0.95,
+                "height": 0.09,
+                "scale": 1.0
+            },
+            "options": []
+        },
+        {
+            "controlId": "apply_runtime_update",
+            "type": "button",
+            "label": "Apply Runtime Config",
+            "description": "Send UPDATE_CONFIG with current values.",
+            "placeholder": "",
+            "sectionId": "runtime",
+            "order": 50,
+            "defaultValue": "",
+            "bindingKey": "",
+            "bindingTarget": "game_config",
+            "valueType": "string",
+            "emitOnStartGame": false,
+            "emitOnUpdateConfig": false,
+            "buttonCommandId": "UPDATE_CONFIG",
+            "required": false,
+            "minValue": "",
+            "maxValue": "",
+            "step": "",
+            "minLength": 0,
+            "maxLength": 0,
+            "regex": "",
+            "visual": {
+                "x": 0.0,
+                "y": 0.4,
+                "width": 0.95,
+                "height": 0.09,
+                "scale": 1.0
+            },
+            "options": []
+        }
+    ]
+}

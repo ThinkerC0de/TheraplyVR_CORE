@@ -1,0 +1,263 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dd4ab197f931455d91c21fde36861234, type: 3}
+  m_Name: PulseTargetsMobileControlLayout
+  m_EditorClassIdentifier: 
+  contract:
+    schema: THERAPLY_MOBILE_CONTROL_LAYOUT
+    schemaVersion: 2026-02-27
+    gameId: pulse_target_tap
+    title: Pulse Targets Controls
+    description: Schema-driven controls for Pulse Targets START_GAME and UPDATE_CONFIG.
+    layout:
+      mode: stack
+      columns: 1
+    payload:
+      target: game_config
+      gameConfigType: pulse_target_config_v1
+      gameConfigVersion: 1
+      includeVersionInGameConfig: 1
+    sections:
+    - sectionId: core
+      label: Core
+      order: 10
+    - sectionId: adaptive
+      label: Adaptive
+      order: 20
+    - sectionId: runtime
+      label: Runtime
+      order: 30
+    controls:
+    - controlId: target_count
+      type: slider
+      label: Target Count
+      description: Number of active pulse targets.
+      placeholder: 
+      sectionId: core
+      order: 10
+      defaultValue: 8
+      bindingKey: targetCount
+      bindingTarget: game_config
+      valueType: int
+      emitOnStartGame: 1
+      emitOnUpdateConfig: 1
+      buttonCommandId: 
+      required: 1
+      minValue: 3
+      maxValue: 40
+      step: 1
+      minLength: 0
+      maxLength: 0
+      regex: 
+      visual:
+        x: -1
+        y: -1
+        width: 1
+        height: 1
+        scale: 1
+      options: []
+    - controlId: target_speed
+      type: slider
+      label: Target Speed
+      description: Pulse target movement speed.
+      placeholder: 
+      sectionId: core
+      order: 20
+      defaultValue: 0.7
+      bindingKey: targetSpeed
+      bindingTarget: game_config
+      valueType: double
+      emitOnStartGame: 1
+      emitOnUpdateConfig: 1
+      buttonCommandId: 
+      required: 1
+      minValue: 0.1
+      maxValue: 3.0
+      step: 0.1
+      minLength: 0
+      maxLength: 0
+      regex: 
+      visual:
+        x: -1
+        y: -1
+        width: 1
+        height: 1
+        scale: 1
+      options: []
+    - controlId: target_scale
+      type: slider
+      label: Target Scale
+      description: Pulse target world scale.
+      placeholder: 
+      sectionId: core
+      order: 30
+      defaultValue: 0.3
+      bindingKey: targetScale
+      bindingTarget: game_config
+      valueType: double
+      emitOnStartGame: 1
+      emitOnUpdateConfig: 1
+      buttonCommandId: 
+      required: 1
+      minValue: 0.12
+      maxValue: 1.2
+      step: 0.02
+      minLength: 0
+      maxLength: 0
+      regex: 
+      visual:
+        x: -1
+        y: -1
+        width: 1
+        height: 1
+        scale: 1
+      options: []
+    - controlId: adaptive_difficulty_enabled
+      type: toggle
+      label: Adaptive Difficulty
+      description: Enable adaptive speed/scale policy.
+      placeholder: 
+      sectionId: adaptive
+      order: 40
+      defaultValue: true
+      bindingKey: adaptiveDifficultyEnabled
+      bindingTarget: game_config
+      valueType: bool
+      emitOnStartGame: 1
+      emitOnUpdateConfig: 1
+      buttonCommandId: 
+      required: 0
+      minValue: 
+      maxValue: 
+      step: 
+      minLength: 0
+      maxLength: 0
+      regex: 
+      visual:
+        x: -1
+        y: -1
+        width: 1
+        height: 1
+        scale: 1
+      options: []
+    - controlId: adaptive_difficulty_sensitivity
+      type: slider
+      label: Adaptive Sensitivity
+      description: How quickly adaptive logic reacts.
+      placeholder: 
+      sectionId: adaptive
+      order: 50
+      defaultValue: 0.55
+      bindingKey: adaptiveDifficultySensitivity
+      bindingTarget: game_config
+      valueType: double
+      emitOnStartGame: 1
+      emitOnUpdateConfig: 1
+      buttonCommandId: 
+      required: 1
+      minValue: 0.0
+      maxValue: 1.0
+      step: 0.05
+      minLength: 0
+      maxLength: 0
+      regex: 
+      visual:
+        x: -1
+        y: -1
+        width: 1
+        height: 1
+        scale: 1
+      options: []
+    - controlId: adaptive_difficulty_level
+      type: slider
+      label: Adaptive Level
+      description: Initial adaptive difficulty bucket (1-5).
+      placeholder: 
+      sectionId: adaptive
+      order: 60
+      defaultValue: 3
+      bindingKey: adaptiveDifficultyLevel
+      bindingTarget: game_config
+      valueType: int
+      emitOnStartGame: 1
+      emitOnUpdateConfig: 1
+      buttonCommandId: 
+      required: 1
+      minValue: 1
+      maxValue: 5
+      step: 1
+      minLength: 0
+      maxLength: 0
+      regex: 
+      visual:
+        x: -1
+        y: -1
+        width: 1
+        height: 1
+        scale: 1
+      options: []
+    - controlId: label_pipeline_enabled
+      type: toggle
+      label: Label Pipeline
+      description: Enable task label generation pipeline.
+      placeholder: 
+      sectionId: adaptive
+      order: 70
+      defaultValue: true
+      bindingKey: labelPipelineEnabled
+      bindingTarget: game_config
+      valueType: bool
+      emitOnStartGame: 1
+      emitOnUpdateConfig: 1
+      buttonCommandId: 
+      required: 0
+      minValue: 
+      maxValue: 
+      step: 
+      minLength: 0
+      maxLength: 0
+      regex: 
+      visual:
+        x: -1
+        y: -1
+        width: 1
+        height: 1
+        scale: 1
+      options: []
+    - controlId: apply_runtime_update
+      type: button
+      label: Apply Runtime Config
+      description: Send UPDATE_CONFIG with current values.
+      placeholder: 
+      sectionId: runtime
+      order: 80
+      defaultValue: 
+      bindingKey: 
+      bindingTarget: game_config
+      valueType: string
+      emitOnStartGame: 0
+      emitOnUpdateConfig: 0
+      buttonCommandId: UPDATE_CONFIG
+      required: 0
+      minValue: 
+      maxValue: 
+      step: 
+      minLength: 0
+      maxLength: 0
+      regex: 
+      visual:
+        x: -1
+        y: -1
+        width: 1
+        height: 1
+        scale: 1
+      options: []
