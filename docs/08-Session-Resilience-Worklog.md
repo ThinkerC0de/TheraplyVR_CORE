@@ -2639,3 +2639,22 @@ Go/No-Go decision:
 - `TODO` Next:
   - bez zmian strategicznych:
     - nadal wymagany osobny real-trace run do `readyForTraining=true` (quality gate progi datasetowe).
+## 82) Session resilience final validation pass (2026-02-27)
+
+- `OK` Scope:
+  - final pass po domknieciu blokady Unity (zamknieta instancja edytora),
+  - utrzymany tylko finalny pakiet evidence (`finalny pass, reszta out`).
+- `OK` Validation evidence (`docs/evidence/20260227_195736`):
+  - `scripts/unity_session_flow_validation_pack.ps1 -SkipCompile`: PASS,
+  - `flutter_controller`: `flutter analyze` PASS,
+  - `flutter_controller`: `flutter test` PASS,
+  - `scripts/unity_ops_dataset_trace_export_validate.ps1`: PASS.
+- `OK` Artifacts:
+  - summary: `docs/evidence/20260227_195736/SUMMARY.md`,
+  - Unity session-flow logs: `docs/evidence/20260227_195736/commands/*.log`,
+  - Flutter logs: `docs/evidence/20260227_195736/commands/flutter_controller_flutter_analyze.log`, `docs/evidence/20260227_195736/commands/flutter_controller_flutter_test.log`,
+  - trace export log + artifacts: `docs/evidence/20260227_195736/commands/unity_ops_dataset_trace_export_validate.log`, `docs/evidence/20260227_195736/artifacts/ops_dataset_trace_export`.
+- `OK` Cleanup:
+  - usunieto tymczasowy pakiet `docs/evidence/20260227_185119`.
+- `OK` Status:
+  - final validation pass: `DONE`.
