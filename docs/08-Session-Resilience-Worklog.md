@@ -2691,3 +2691,32 @@ Go/No-Go decision:
   - `scripts/unity_ops_dataset_trace_export_validate.ps1`: PASS.
 - `OK` Status:
   - blocker UX/exit-path fix: `DONE`.
+
+## 84) Setup visibility under degraded preview link (2026-03-02)
+
+- `OK` Scope:
+  - usuniecie blokady UX, przez ktora operator nie mogl wejsc do ekranu setup gry przy stanie `No Preview`,
+  - utrzymanie bezpiecznej blokady komend runtime do czasu pelnego odzyskania linku kontrolnego.
+- `OK` Root cause verified:
+  - mobilka renderuje panel gry z Firestore `game_catalog` (`mobileControlLayout` / `mobileControlSchema`), nie bezposrednio z runtime Unity,
+  - dla `bilateral_markers` dokument katalogowy ma poprawnie zapisane oba kontrakty (`schema=true`, `layout=true`),
+  - rzeczywista blokada byla nawigacyjna (`Open game session` wymagalo streamingu), nie brak danych schema.
+- `OK` Implementation (`flutter_controller/lib/screens/control_screen.dart`):
+  - dodano wspolny gate `isControlLinkReadyForCommands` (`connected + streaming + sessionAttachReady + brak headset presence block`),
+  - przycisk `Open game session`:
+    - pozwala wejsc do setupu przy laczu zdegradowanym (`No Preview`),
+    - zachowuje blokade dla `session sync`, plan gate i launch readiness,
+    - etykieta rozroznia: `Open game session` vs `Open game setup (commands blocked)`,
+  - panel `Game controls`:
+    - nadal blokuje `Start/Pause/Resume/Restart/End Game` gdy link niegotowy,
+    - pokazuje jawny hint `Commands blocked: <powod>`,
+  - schema button flow (`UPDATE_CONFIG`):
+    - teraz tez respektuje gate gotowosci linku,
+    - przy blokadzie zwraca jasny komunikat operatora z powodem.
+- `OK` Validation evidence (`docs/evidence/20260302_093720`):
+  - `scripts/unity_session_flow_validation_pack.ps1 -SkipCompile`: PASS,
+  - `flutter_controller`: `flutter analyze` PASS (`commands/flutter_controller_flutter_analyze.log`),
+  - `flutter_controller`: `flutter test` PASS (`commands/flutter_controller_flutter_test.log`),
+  - `scripts/unity_ops_dataset_trace_export_validate.ps1`: PASS (`commands/unity_ops_dataset_trace_export_validate.log`).
+- `OK` Status:
+  - setup visibility + safe command gating fix: `DONE`.

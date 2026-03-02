@@ -3564,6 +3564,29 @@ class _ControlScreenState extends State<ControlScreen>
         _isLaunchableContentState(_selectedContentState);
   }
 
+  bool get _isControlLinkReadyForCommands {
+    return _isConnected &&
+        _mediaPreviewState == MediaPreviewState.streaming &&
+        _sessionAttachReady &&
+        !_isHeadsetPresenceBlocking;
+  }
+
+  String get _controlLinkBlockedHint {
+    if (!_isConnected) {
+      return 'Headset is offline.';
+    }
+    if (_mediaPreviewState != MediaPreviewState.streaming) {
+      return 'VR preview is unavailable.';
+    }
+    if (!_sessionAttachReady) {
+      return 'Session context is still syncing.';
+    }
+    if (_isHeadsetPresenceBlocking) {
+      return 'Headset is not in active VR app yet.';
+    }
+    return 'Control link is not ready.';
+  }
+
   void _bootstrapLocalContentStates() {
     final nowUtc = DateTime.now().toUtc();
     final catalog = _effectiveGameCatalog;
@@ -5241,11 +5264,13 @@ class _ControlScreenState extends State<ControlScreen>
       return false;
     }
 
-    if (!_isConnected) {
+    if (!_isControlLinkReadyForCommands) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Headset is offline. Cannot send UPDATE_CONFIG.'),
+          SnackBar(
+            content: Text(
+              'Cannot send UPDATE_CONFIG. $_controlLinkBlockedHint',
+            ),
             backgroundColor: Colors.orange,
           ),
         );
@@ -7350,10 +7375,7 @@ class _ControlScreenState extends State<ControlScreen>
     required _GameCatalogEntry entry,
     required PurchasedContentState contentState,
   }) {
-    final controlsReady = _isConnected &&
-        _mediaPreviewState == MediaPreviewState.streaming &&
-        _sessionAttachReady &&
-        !_isHeadsetPresenceBlocking;
+    final controlsReady = _isControlLinkReadyForCommands;
     final planLaunchBlocked = _isPlanBlockingLaunch;
     final canStart = controlsReady &&
         !_isPrimaryActionInFlight &&
@@ -7473,6 +7495,17 @@ class _ControlScreenState extends State<ControlScreen>
             const SizedBox(height: 8),
             Text(
               'Runtime launch for this game is disabled in current build.',
+              style: TextStyle(
+                color: Colors.orange.shade900,
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+          ],
+          if (!controlsReady) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Commands blocked: $_controlLinkBlockedHint',
               style: TextStyle(
                 color: Colors.orange.shade900,
                 fontWeight: FontWeight.w600,
@@ -7602,7 +7635,7 @@ class _ControlScreenState extends State<ControlScreen>
             icon: Icons.wifi_tethering_error_rounded,
             color: Colors.orange.shade800,
             text:
-                'Control transport is up, but VR preview is unavailable. Treat this as degraded connection until stream returns.',
+                'Control transport is up, but VR preview is unavailable. You can open setup, but commands stay blocked until preview returns.',
           ),
           const SizedBox(height: 6),
         ] else if (_headsetPresenceBannerText != null) ...[
@@ -7949,9 +7982,7 @@ class _ControlScreenState extends State<ControlScreen>
         ],
         ElevatedButton.icon(
           onPressed: _isConnected &&
-                  _mediaPreviewState == MediaPreviewState.streaming &&
                   _sessionAttachReady &&
-                  !_isHeadsetPresenceBlocking &&
                   !_isPlanBlockingLaunch &&
                   _isSelectedGameLaunchable
               ? () {
@@ -7965,19 +7996,17 @@ class _ControlScreenState extends State<ControlScreen>
           label: Text(
             !_sessionAttachReady
                 ? 'Wait for session sync first'
-                : _mediaPreviewState != MediaPreviewState.streaming
-                    ? 'Wait for VR preview to recover'
-                    : _isHeadsetPresenceBlocking
-                        ? 'Headset not in active VR app yet'
-                        : _isPlanBlockingLaunch
-                            ? 'Current plan blocks launching this session'
-                            : !selectedEntry.runtimeLaunchEnabled
-                                ? 'Selected game is catalog-only for now'
-                                : _isSelectedGameLaunchable
-                                    ? 'Open game session'
-                                    : _contentDeliveryEnabled
-                                        ? 'Install or update selected game first'
-                                        : 'Select available game first',
+                : _isPlanBlockingLaunch
+                    ? 'Current plan blocks launching this session'
+                    : !selectedEntry.runtimeLaunchEnabled
+                        ? 'Selected game is catalog-only for now'
+                        : _isSelectedGameLaunchable
+                            ? (_isControlLinkReadyForCommands
+                                ? 'Open game session'
+                                : 'Open game setup (commands blocked)')
+                            : _contentDeliveryEnabled
+                                ? 'Install or update selected game first'
+                                : 'Select available game first',
           ),
           style: ElevatedButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -8050,7 +8079,7 @@ class _ControlScreenState extends State<ControlScreen>
                   icon: Icons.wifi_tethering_error_rounded,
                   color: Colors.orange.shade800,
                   text:
-                      'VR preview is unavailable. Control link is degraded and commands can timeout until preview recovers.',
+                      'VR preview is unavailable. Commands are blocked until preview recovers.',
                 ),
                 const SizedBox(height: 8),
               ] else if (_headsetPresenceBannerText != null) ...[
