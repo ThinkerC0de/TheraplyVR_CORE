@@ -145,6 +145,11 @@ Do not show:
    - `scripts/unity_ops_dataset_trace_export_validate.ps1`
 2. Run board script end-to-end on target devices.
 3. Save evidence in timestamped folder and update summary.
+4. Current evidence pack:
+   - evidence root: `docs/evidence/20260302_140652`,
+   - validation summary: `docs/evidence/20260302_140652/SUMMARY.md`,
+   - rehearsal summary: `docs/evidence/20260302_140652/notes/BD-006-SUMMARY.md`,
+   - HTTP rehearsal probes: `bd006_cms_domain_probe.log`, `bd006_package_probe_http.log`.
 
 ### BD-007 RC and Rollback
 1. Tag validated commit (`board-demo-rc-YYYYMMDD`).
