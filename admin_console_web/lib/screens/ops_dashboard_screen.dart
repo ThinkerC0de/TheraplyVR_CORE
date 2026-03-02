@@ -67,7 +67,6 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
   String _sessionTherapistFilter = '';
   String _sessionStudentFilter = '';
   String _selectedSessionDocumentId = '';
-  String _selectedSessionLabel = '';
 
   String get _targetUserId => _targetUserIdController.text.trim();
 
@@ -1934,7 +1933,6 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
       _sessionIdFilterController.clear();
       _sessionStateFilter = _SessionStateFilter.all;
       _selectedSessionDocumentId = '';
-      _selectedSessionLabel = '';
     });
   }
 
@@ -1945,7 +1943,6 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
     }
     setState(() {
       _selectedSessionDocumentId = normalizedDocumentId;
-      _selectedSessionLabel = session.sessionId;
     });
   }
 
@@ -2502,7 +2499,6 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                             onPressed: () {
                               setState(() {
                                 _selectedSessionDocumentId = '';
-                                _selectedSessionLabel = '';
                               });
                             },
                             icon: const Icon(Icons.visibility_off_outlined),
@@ -2629,17 +2625,32 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                                     child: const Text('Filter student'),
                                   ),
                                   FilledButton.tonal(
-                                    onPressed: () =>
-                                        _selectSessionForEvents(session),
+                                    onPressed: () {
+                                      final isSelected =
+                                          _selectedSessionDocumentId ==
+                                              session.documentId;
+                                      if (isSelected) {
+                                        setState(() {
+                                          _selectedSessionDocumentId = '';
+                                        });
+                                        return;
+                                      }
+                                      _selectSessionForEvents(session);
+                                    },
                                     child: Text(
                                       _selectedSessionDocumentId ==
                                               session.documentId
-                                          ? 'Events selected'
+                                          ? 'Hide events'
                                           : 'Show events',
                                     ),
                                   ),
                                 ],
                               ),
+                              if (_selectedSessionDocumentId ==
+                                  session.documentId) ...[
+                                const SizedBox(height: 8),
+                                _buildSessionEventsInline(session),
+                              ],
                             ],
                           ),
                         ),
@@ -2647,124 +2658,94 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
-            _buildSessionEventsCard(),
           ],
         );
       },
     );
   }
 
-  Widget _buildSessionEventsCard() {
-    final normalizedSessionDocumentId = _selectedSessionDocumentId.trim();
-    if (normalizedSessionDocumentId.isEmpty) {
-      return const Card(
-        child: Padding(
-          padding: EdgeInsets.all(12),
-          child: Text('Wybierz sesje z listy, aby zobaczyc event timeline.'),
+  Widget _buildSessionEventsInline(AdminTherapySessionRow session) {
+    final normalizedSessionDocumentId = session.documentId.trim();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blueGrey.shade100),
+      ),
+      child: StreamBuilder<List<AdminSessionEventRow>>(
+        stream: EntitlementAdminService.watchSessionEvents(
+          sessionId: normalizedSessionDocumentId,
+          limit: 120,
         ),
-      );
-    }
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Text(
+              'Blad odczytu events: ${snapshot.error}',
+              style: TextStyle(color: Colors.red.shade700),
+            );
+          }
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Session events: ${_selectedSessionLabel.trim().isEmpty ? normalizedSessionDocumentId : _selectedSessionLabel}',
-                    style: const TextStyle(fontWeight: FontWeight.w700),
+          if (!snapshot.hasData) {
+            return const Padding(
+              padding: EdgeInsets.all(8),
+              child: Center(
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+
+          final events = snapshot.data!;
+          if (events.isEmpty) {
+            return Text(
+              'Brak eventow dla docId=$normalizedSessionDocumentId.',
+            );
+          }
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Events for ${session.sessionId} (${events.length})',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              for (final event in events)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${event.eventType.isEmpty ? 'UNKNOWN_EVENT' : event.eventType} @ ${_formatUtc(event.eventAtUtc)}',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Source=${event.source.isEmpty ? '-' : event.source} | '
+                        'Game=${event.gameId.isEmpty ? '-' : event.gameId}',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      Text(
+                        'TimelineId=${event.timelineEventId.isEmpty ? '-' : event.timelineEventId}',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      Text(
+                        'Details=${event.detailsPreview()}',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ],
                   ),
                 ),
-                OutlinedButton(
-                  onPressed: () {
-                    setState(() {
-                      _selectedSessionDocumentId = '';
-                      _selectedSessionLabel = '';
-                    });
-                  },
-                  child: const Text('Close'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            StreamBuilder<List<AdminSessionEventRow>>(
-              stream: EntitlementAdminService.watchSessionEvents(
-                sessionId: normalizedSessionDocumentId,
-                limit: 120,
-              ),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Text(
-                    'Blad odczytu events: ${snapshot.error}',
-                    style: TextStyle(color: Colors.red.shade700),
-                  );
-                }
-
-                if (!snapshot.hasData) {
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(12),
-                      child: CircularProgressIndicator(),
-                    ),
-                  );
-                }
-
-                final events = snapshot.data!;
-                if (events.isEmpty) {
-                  return Text(
-                    'Brak eventow dla docId=$normalizedSessionDocumentId.',
-                  );
-                }
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Events count: ${events.length}'),
-                    const SizedBox(height: 8),
-                    for (final event in events)
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${event.eventType.isEmpty ? 'UNKNOWN_EVENT' : event.eventType} @ ${_formatUtc(event.eventAtUtc)}',
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Source=${event.source.isEmpty ? '-' : event.source} | '
-                              'Game=${event.gameId.isEmpty ? '-' : event.gameId}',
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            Text(
-                              'TimelineId=${event.timelineEventId.isEmpty ? '-' : event.timelineEventId}',
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            Text(
-                              'Details=${event.detailsPreview()}',
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                );
-              },
-            ),
-          ],
-        ),
+            ],
+          );
+        },
       ),
     );
   }
