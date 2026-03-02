@@ -112,7 +112,7 @@ Do not show:
 3. Verify no command dead-end in control screen back navigation.
 
 ### BD-003 Settings and Access Rules
-1. Align therapist settings persistence target with Firestore write permissions.
+1. Persist therapist settings in `therapist_session_settings/{therapistId}` (not `user_entitlements/{therapistId}`) to match active Firestore write rules.
 2. Keep deterministic fallback defaults when settings read/write fails.
 3. Capture negative test evidence for unauthorized write attempts.
 

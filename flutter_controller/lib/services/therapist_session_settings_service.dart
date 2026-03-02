@@ -15,8 +15,11 @@ class TherapistSessionSettingsService {
 
   static FirebaseFirestore get _firestore =>
       _firestoreOverride ?? FirebaseService.firestore;
+  static CollectionReference<Map<String, dynamic>> get _settingsCollection =>
+      _firestore.collection('therapist_session_settings');
   static CollectionReference<Map<String, dynamic>>
-      get _entitlementsCollection => _firestore.collection('user_entitlements');
+      get _legacyEntitlementsCollection =>
+          _firestore.collection('user_entitlements');
 
   @visibleForTesting
   static void setFirestoreInstanceForTesting(FirebaseFirestore firestore) {
@@ -65,21 +68,33 @@ class TherapistSessionSettingsService {
     }
 
     try {
-      final snapshot =
-          await _entitlementsCollection.doc(normalizedTherapistId).get();
-      if (!snapshot.exists) {
-        final defaults = TherapistSessionSettings.defaults();
+      final settingsSnapshot =
+          await _settingsCollection.doc(normalizedTherapistId).get();
+      if (settingsSnapshot.exists) {
+        final settings =
+            TherapistSessionSettings.fromMap(settingsSnapshot.data());
         if (publishResult) {
-          _publishSettings(defaults);
+          _publishSettings(settings);
         }
-        return defaults;
+        return settings;
       }
 
-      final settings = TherapistSessionSettings.fromMap(snapshot.data());
-      if (publishResult) {
-        _publishSettings(settings);
+      final legacySnapshot =
+          await _legacyEntitlementsCollection.doc(normalizedTherapistId).get();
+      if (legacySnapshot.exists) {
+        final settings =
+            TherapistSessionSettings.fromMap(legacySnapshot.data());
+        if (publishResult) {
+          _publishSettings(settings);
+        }
+        return settings;
       }
-      return settings;
+
+      final defaults = TherapistSessionSettings.defaults();
+      if (publishResult) {
+        _publishSettings(defaults);
+      }
+      return defaults;
     } catch (e) {
       debugPrint(
         '[TherapistSessionSettingsService] Failed to load therapist settings: $e',
@@ -102,8 +117,9 @@ class TherapistSessionSettingsService {
 
     try {
       final nowUtc = DateTime.now().toUtc().toIso8601String();
-      await _entitlementsCollection.doc(therapistId).set(
+      await _settingsCollection.doc(therapistId).set(
         <String, dynamic>{
+          'therapistId': therapistId,
           ...settings.toMap(),
           'updatedAtUtc': nowUtc,
           'updatedBy': therapistId,

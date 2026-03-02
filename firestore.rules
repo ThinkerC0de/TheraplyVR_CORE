@@ -53,6 +53,15 @@ service cloud.firestore {
       allow create, update, delete: if isAdminOperator();
     }
 
+    match /therapist_session_settings/{therapistId} {
+      allow read: if isSignedIn() && (
+        isAdminOperator() || request.auth.uid == therapistId
+      );
+      allow create, update, delete: if isSignedIn() && (
+        isAdminOperator() || request.auth.uid == therapistId
+      );
+    }
+
     // Keep existing mobile student flow stable while allowing admin directory views.
     match /students/{studentId} {
       allow read: if isSignedIn();
