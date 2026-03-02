@@ -153,6 +153,20 @@ Execution details: `docs/39-Core-Gap-Closure-Execution-Plan.md`
 | SF-L-003 | Generate runtime locale assets from CSV | TODO | Build step emits runtime JSON (or equivalent) per locale with deterministic fallback when key/locale missing | SF-L-002 |
 | SF-L-004 | Add fallback and drift quality gates | TODO | CI/validation fails on duplicate keys, missing baseline locale values, or stale generated assets | SF-L-003 |
 
+## Phase M - Board Demo Delivery Guardrails
+
+Execution details: `docs/47-Board-Demo-Execution-Checklist.md`
+
+| ID | Task | Status | Acceptance Criteria | Depends On |
+| --- | --- | --- | --- | --- |
+| SF-M-001 | Freeze board-demo scope and script | DONE | One approved demo script defines exact user path and excludes unfinished production OTA paths | SF-K-005 |
+| SF-M-002 | Stabilize runtime UX blockers before demo | TODO | `Connected` status reflects effective control/streaming readiness; `End Session` always closes and returns to student selection | SF-M-001 |
+| SF-M-003 | Align therapist settings persistence with access rules | TODO | Therapist session settings write path is compatible with Firestore rules (no silent save failure) | SF-M-002 |
+| SF-M-004 | Publish CMS on domain and wire catalog package URLs | TODO | Admin console hosted on target domain, `game_catalog` entries expose valid `packageUri`/`deliveryMode`, and grant flow is demo-usable | SF-M-001 |
+| SF-M-005 | Add board-safe package download proof path | TODO | Optional runtime probe verifies `packageUri` reachability (HTTP status + payload metadata) without introducing risky dynamic content loading | SF-M-004 |
+| SF-M-006 | Execute board validation matrix and evidence pack | TODO | Manual runbook scenarios + Unity/Flutter/trace validations pass and evidence bundle is complete | SF-M-002, SF-M-003, SF-M-004 |
+| SF-M-007 | Cut and tag board demo candidate with rollback plan | TODO | `board-demo-rc` tag points to validated commit and rollback instruction is documented | SF-M-006 |
+
 ## Global Definition Of Done
 
 1. New scene is authored using `GameDefinition` only.
