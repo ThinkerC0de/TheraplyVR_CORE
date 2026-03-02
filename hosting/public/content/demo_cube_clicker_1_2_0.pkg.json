@@ -1,0 +1,30 @@
+{
+    "schema":  "THERAPLY_BOARD_SAFE_GAME_PACKAGE",
+    "schemaVersion":  "2026-03-02",
+    "packageId":  "demo_cube_clicker",
+    "contentVersion":  "1.2.0",
+    "artifactType":  "game_contract_bundle",
+    "deliveryMode":  "on_demand",
+    "generatedAtUtc":  "2026-03-02T18:03:41.2006307Z",
+    "packageUri":  "https://theraply-vr-demo.web.app/content/demo_cube_clicker_1_2_0.pkg.json",
+    "sourceContracts":  [
+                            {
+                                "path":  "contracts/game_definitions/demo_cube_clicker.json",
+                                "sha256":  "babd36f1b6bf0f2d1592b6ac70588522c4855aebafaadccf5bd9ee84ca00b98a",
+                                "bytes":  14096
+                            },
+                            {
+                                "path":  "contracts/mobile_control_schema_demo_cube_clicker.json",
+                                "sha256":  "51025d078a1f4ae1569026931805201a718257b1b23e79e3daa05a5226a44023",
+                                "bytes":  6532
+                            },
+                            {
+                                "path":  "contracts/mobile_control_layout_demo_cube_clicker.json",
+                                "sha256":  "48ed0fec13478a0f3f4e6907675e0a1c0aef899e3795b4223853077412ee997b",
+                                "bytes":  6109
+                            }
+                        ],
+    "checksumSha256":  "2b7b8d6d1e9ab01cae908bbce20313335776dcd1f9a11630a406943134e59574",
+    "probeOnly":  true,
+    "notes":  "Board-safe package manifest for packageUri download proof without runtime executable module loading."
+}

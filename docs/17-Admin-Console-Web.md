@@ -54,6 +54,7 @@ Status: minimal operator console with role gate + audit writes.
   - `Games` from known catalog + GAME grant stats (`entitlement_grants`).
 - Games tab can seed Firestore `game_catalog` in one action (`Seed game_catalog`).
 - Games tab includes delivery guide for package upload/update workflow (`hosting/public/content` + hosting deploy + `packageUri` update in `game_catalog`).
+- Repo has board-safe package manifest generator: `scripts/build_board_safe_game_packages.ps1` (currently prepares `demo_cube_clicker` and `pulse_target_tap` artifacts under `hosting/public/content`).
 
 ## Minimal Firestore Rules
 
@@ -150,6 +151,17 @@ If local execution policy blocks script launch, use:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\deploy_admin_console_hosting.ps1 -ProjectId <FIREBASE_PROJECT_ID>
 ```
+
+Generate board-safe game package manifests from contracts (for packageUri/probe/download proof path):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\build_board_safe_game_packages.ps1
+```
+
+Generated files:
+- `hosting/public/content/demo_cube_clicker_1_2_0.pkg.json`
+- `hosting/public/content/pulse_target_tap_1_0_0.pkg.json`
+- `hosting/public/content/board_safe_game_packages_index.json`
 
 ## Notes
 

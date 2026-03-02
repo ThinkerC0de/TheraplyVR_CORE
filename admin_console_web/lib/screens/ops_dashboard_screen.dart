@@ -3096,6 +3096,10 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
               style: TextStyle(fontSize: 12),
             ),
             Text(
+              '1a. Generate board-safe manifests for runtime games: scripts/build_board_safe_game_packages.ps1 (creates demo_cube_clicker_1_2_0.pkg.json and pulse_target_tap_1_0_0.pkg.json).',
+              style: TextStyle(fontSize: 12),
+            ),
+            Text(
               '2. Deploy hosting from repo root: scripts/deploy_admin_console_hosting.ps1 -ProjectId theraply-vr-demo -CleanBuild',
               style: TextStyle(fontSize: 12),
             ),

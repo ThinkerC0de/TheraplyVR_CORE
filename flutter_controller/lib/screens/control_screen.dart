@@ -386,7 +386,8 @@ class _ControlScreenState extends State<ControlScreen>
       description:
           'Wersja pogladowa: klikaj poruszajace sie cubey, mierz czas i best score.',
       targetContentVersion: '1.2.0',
-      packageUri: '',
+      packageUri:
+          'https://theraply-vr-demo.web.app/content/demo_cube_clicker_1_2_0.pkg.json',
       thumbnailUrl: '',
       supportsSaveResume: true,
       availableForPurchase: false,
@@ -407,7 +408,8 @@ class _ControlScreenState extends State<ControlScreen>
       description:
           'Sekwencja celow z adaptacja trudnosci i etykietowaniem task run.',
       targetContentVersion: '1.0.0',
-      packageUri: '',
+      packageUri:
+          'https://theraply-vr-demo.web.app/content/pulse_target_tap_1_0_0.pkg.json',
       thumbnailUrl: '',
       supportsSaveResume: false,
       availableForPurchase: false,
