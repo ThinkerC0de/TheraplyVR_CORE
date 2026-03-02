@@ -3714,6 +3714,38 @@ class _ControlScreenState extends State<ControlScreen>
     return 'Control link is not ready.';
   }
 
+  String get _connectionBadgeLabel {
+    if (_isControlLinkReadyForCommands) {
+      return 'Connected';
+    }
+    if (!_isConnected) {
+      return 'Reconnecting';
+    }
+    if (_mediaPreviewState != MediaPreviewState.streaming) {
+      return 'No Preview';
+    }
+    if (!_sessionAttachReady) {
+      return 'Syncing';
+    }
+    if (_isHeadsetPresenceBlocking) {
+      return 'Headset Busy';
+    }
+    return 'Not Ready';
+  }
+
+  IconData get _connectionBadgeIcon {
+    if (_isControlLinkReadyForCommands) {
+      return Icons.wifi;
+    }
+    if (!_isConnected) {
+      return Icons.wifi_off;
+    }
+    if (_mediaPreviewState != MediaPreviewState.streaming) {
+      return Icons.wifi_tethering_error_rounded;
+    }
+    return Icons.sync_problem;
+  }
+
   void _bootstrapLocalContentStates() {
     final nowUtc = DateTime.now().toUtc();
     final catalog = _effectiveGameCatalog;
@@ -6167,9 +6199,13 @@ class _ControlScreenState extends State<ControlScreen>
   @override
   Widget build(BuildContext context) {
     final isCatalogScreen = _workflowStep == _WorkflowStep.gameCatalog;
-    final previewStreaming = _mediaPreviewState == MediaPreviewState.streaming;
-    final connectedReady = _isConnected && previewStreaming;
-    final connectedDegraded = _isConnected && !previewStreaming;
+    final connectedReady = _isControlLinkReadyForCommands;
+    final connectedDegraded = _isConnected && !connectedReady;
+    final connectionBadgeLabel = _connectionBadgeLabel;
+    final connectionBadgeIcon = _connectionBadgeIcon;
+    final connectionBadgeTooltip = connectedReady
+        ? 'Control link is ready for commands.'
+        : _controlLinkBlockedHint;
 
     return PopScope(
       canPop: false,
@@ -6187,7 +6223,9 @@ class _ControlScreenState extends State<ControlScreen>
               ? IconButton(
                   onPressed: _isPrimaryActionInFlight
                       ? null
-                      : () => unawaited(_disconnectAndPop()),
+                      : () => unawaited(
+                            _disconnectAndPop(returnToStudentSelection: true),
+                          ),
                   tooltip: 'Back to student selection',
                   icon: const Icon(Icons.arrow_back),
                 )
@@ -6207,59 +6245,54 @@ class _ControlScreenState extends State<ControlScreen>
             if (_hasDeferredHandoff) _buildDeferredHandoffBadgeAction(),
             Padding(
               padding: const EdgeInsets.only(right: 12),
-              child: Center(
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: connectedReady
-                        ? Colors.green.shade50
-                        : (connectedDegraded
-                            ? Colors.orange.shade50
-                            : Colors.red.shade50),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
+              child: Tooltip(
+                message: connectionBadgeTooltip,
+                child: Center(
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
                       color: connectedReady
-                          ? Colors.green.shade200
+                          ? Colors.green.shade50
                           : (connectedDegraded
-                              ? Colors.orange.shade200
-                              : Colors.red.shade200),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        connectedReady
-                            ? Icons.wifi
-                            : (connectedDegraded
-                                ? Icons.wifi_tethering_error_rounded
-                                : Icons.wifi_off),
+                              ? Colors.orange.shade50
+                              : Colors.red.shade50),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
                         color: connectedReady
-                            ? Colors.green.shade700
+                            ? Colors.green.shade200
                             : (connectedDegraded
-                                ? Colors.orange.shade800
-                                : Colors.red.shade700),
-                        size: 16,
+                                ? Colors.orange.shade200
+                                : Colors.red.shade200),
                       ),
-                      const SizedBox(width: 6),
-                      Text(
-                        connectedReady
-                            ? 'Connected'
-                            : (connectedDegraded
-                                ? 'No Preview'
-                                : 'Reconnecting'),
-                        style: TextStyle(
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          connectionBadgeIcon,
                           color: connectedReady
-                              ? Colors.green.shade800
+                              ? Colors.green.shade700
                               : (connectedDegraded
-                                  ? Colors.orange.shade900
-                                  : Colors.red.shade800),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
+                                  ? Colors.orange.shade800
+                                  : Colors.red.shade700),
+                          size: 16,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 6),
+                        Text(
+                          connectionBadgeLabel,
+                          style: TextStyle(
+                            color: connectedReady
+                                ? Colors.green.shade800
+                                : (connectedDegraded
+                                    ? Colors.orange.shade900
+                                    : Colors.red.shade800),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -8288,7 +8321,7 @@ class _ControlScreenState extends State<ControlScreen>
         ),
         const SizedBox(height: 8),
         ElevatedButton.icon(
-          onPressed: _isPrimaryActionInFlight || !_isConnected
+          onPressed: _isPrimaryActionInFlight
               ? null
               : () => unawaited(_endSessionFromGameScreen()),
           icon: const Icon(Icons.flag),
