@@ -6,7 +6,7 @@ Browser-based entitlement operator console for Theraply.
 
 - Firebase email/password login
 - Role gate (`role=admin_operator` or `admin_operator=true` claim required)
-- Upsert `user_entitlements/{uid}`
+- Create therapist/parent Firebase Auth account (`email + password`) + upsert `user_entitlements/{generatedUid}`
 - Create/revoke `entitlement_grants`
 - Mandatory audit context on writes (`reason`, `correlationId`)
 - Immutable audit event write (`admin_audit_trail`)

@@ -34,10 +34,6 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
   final TextEditingController _grantExpiresDaysController =
       TextEditingController(text: '30');
   final TextEditingController _grantNoteController = TextEditingController();
-  final TextEditingController _sessionTherapistFilterController =
-      TextEditingController();
-  final TextEditingController _sessionStudentFilterController =
-      TextEditingController();
   final TextEditingController _sessionIdFilterController =
       TextEditingController();
 
@@ -68,7 +64,10 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
   _GamesAuthoringFilter _gamesAuthoringFilter = _GamesAuthoringFilter.all;
   _GamesSortMode _gamesSortMode = _GamesSortMode.authoringSeverity;
   _SessionStateFilter _sessionStateFilter = _SessionStateFilter.all;
-  String _selectedSessionId = '';
+  String _sessionTherapistFilter = '';
+  String _sessionStudentFilter = '';
+  String _selectedSessionDocumentId = '';
+  String _selectedSessionLabel = '';
 
   String get _targetUserId => _targetUserIdController.text.trim();
 
@@ -76,8 +75,6 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
   void initState() {
     super.initState();
     _targetUserIdController.addListener(_refresh);
-    _sessionTherapistFilterController.addListener(_refresh);
-    _sessionStudentFilterController.addListener(_refresh);
     _sessionIdFilterController.addListener(_refresh);
     _loadCatalogAuthoringAssets();
   }
@@ -85,8 +82,6 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
   @override
   void dispose() {
     _targetUserIdController.removeListener(_refresh);
-    _sessionTherapistFilterController.removeListener(_refresh);
-    _sessionStudentFilterController.removeListener(_refresh);
     _sessionIdFilterController.removeListener(_refresh);
     _targetUserIdController.dispose();
     _operationReasonController.dispose();
@@ -98,8 +93,6 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
     _grantGameIdController.dispose();
     _grantExpiresDaysController.dispose();
     _grantNoteController.dispose();
-    _sessionTherapistFilterController.dispose();
-    _sessionStudentFilterController.dispose();
     _sessionIdFilterController.dispose();
     super.dispose();
   }
@@ -542,6 +535,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
     var deliveryMode =
         existing?.deliveryMode ?? AdminGameCatalogSeedEntry.deliveryModeBundled;
     var validationError = '';
+    var showAdvanced = !isCreate;
 
     final result = await showDialog<AdminGameCatalogSeedEntry>(
       context: context,
@@ -596,25 +590,18 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                       ),
                       const SizedBox(height: 8),
                       TextField(
-                        controller: contentVersionController,
+                        controller: packageUriController,
                         decoration: const InputDecoration(
-                          labelText: 'contentVersion (optional)',
+                          labelText: 'packageUri',
                           border: OutlineInputBorder(),
                         ),
                       ),
                       const SizedBox(height: 8),
                       TextField(
-                        controller: sceneKeyController,
+                        controller: sortOrderController,
+                        keyboardType: TextInputType.number,
                         decoration: const InputDecoration(
-                          labelText: 'sceneKey (optional)',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: entitlementKeyController,
-                        decoration: const InputDecoration(
-                          labelText: 'entitlementKey (optional)',
+                          labelText: 'sortOrder',
                           border: OutlineInputBorder(),
                         ),
                       ),
@@ -647,41 +634,6 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                         },
                       ),
                       const SizedBox(height: 8),
-                      TextField(
-                        controller: packageUriController,
-                        decoration: const InputDecoration(
-                          labelText: 'packageUri',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: thumbnailUrlController,
-                        decoration: const InputDecoration(
-                          labelText: 'thumbnailUrl',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: sortOrderController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'sortOrder',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: previewLinesController,
-                        minLines: 2,
-                        maxLines: 4,
-                        decoration: const InputDecoration(
-                          labelText: 'previewLines (one per line)',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
                       SwitchListTile(
                         value: active,
                         onChanged: (value) {
@@ -712,26 +664,91 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                         contentPadding: EdgeInsets.zero,
                         title: const Text('availableForPurchase'),
                       ),
-                      SwitchListTile(
-                        value: requiresExplicitLicense,
-                        onChanged: (value) {
-                          setDialogState(() {
-                            requiresExplicitLicense = value;
-                          });
-                        },
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('requiresExplicitLicense'),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            setDialogState(() {
+                              showAdvanced = !showAdvanced;
+                            });
+                          },
+                          icon: Icon(
+                            showAdvanced
+                                ? Icons.unfold_less_outlined
+                                : Icons.unfold_more_outlined,
+                          ),
+                          label: Text(
+                            showAdvanced
+                                ? 'Hide advanced fields'
+                                : 'Show advanced fields',
+                          ),
+                        ),
                       ),
-                      SwitchListTile(
-                        value: supportsSaveResume,
-                        onChanged: (value) {
-                          setDialogState(() {
-                            supportsSaveResume = value;
-                          });
-                        },
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('supportsSaveResume'),
-                      ),
+                      if (showAdvanced) ...[
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: contentVersionController,
+                          decoration: const InputDecoration(
+                            labelText: 'contentVersion (optional)',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: sceneKeyController,
+                          decoration: const InputDecoration(
+                            labelText: 'sceneKey (optional)',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: entitlementKeyController,
+                          decoration: const InputDecoration(
+                            labelText: 'entitlementKey (optional)',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: thumbnailUrlController,
+                          decoration: const InputDecoration(
+                            labelText: 'thumbnailUrl',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: previewLinesController,
+                          minLines: 2,
+                          maxLines: 4,
+                          decoration: const InputDecoration(
+                            labelText: 'previewLines (one per line)',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SwitchListTile(
+                          value: requiresExplicitLicense,
+                          onChanged: (value) {
+                            setDialogState(() {
+                              requiresExplicitLicense = value;
+                            });
+                          },
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('requiresExplicitLicense'),
+                        ),
+                        SwitchListTile(
+                          value: supportsSaveResume,
+                          onChanged: (value) {
+                            setDialogState(() {
+                              supportsSaveResume = value;
+                            });
+                          },
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('supportsSaveResume'),
+                        ),
+                      ],
                       if (validationError.trim().isNotEmpty) ...[
                         const SizedBox(height: 6),
                         Text(
@@ -1225,7 +1242,9 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
   }
 
   Future<_AccountCreateRequest?> _openAccountCreateDialog() async {
-    final uidController = TextEditingController();
+    final emailController = TextEditingController();
+    final passwordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
     final expiresDaysController = TextEditingController(text: '365');
     var role = EntitlementRole.therapist;
     var planTier = SubscriptionPlanTier.basic;
@@ -1239,7 +1258,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text('Create entitlement account'),
+              title: const Text('Create therapist/parent account'),
               content: SizedBox(
                 width: 520,
                 child: SingleChildScrollView(
@@ -1247,10 +1266,35 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      const Text(
+                        'Creates Firebase Auth account (email + password) and writes user_entitlements for generated UID.',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      const SizedBox(height: 8),
                       TextField(
-                        controller: uidController,
+                        controller: emailController,
+                        keyboardType: TextInputType.emailAddress,
                         decoration: const InputDecoration(
-                          labelText: 'User UID',
+                          labelText: 'Email',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: passwordController,
+                        obscureText: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Password',
+                          helperText: 'Minimum 6 characters.',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: confirmPasswordController,
+                        obscureText: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Confirm password',
                           border: OutlineInputBorder(),
                         ),
                       ),
@@ -1393,12 +1437,35 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                 ),
                 FilledButton.icon(
                   onPressed: () {
-                    final userId = uidController.text.trim();
+                    final email = emailController.text.trim().toLowerCase();
+                    final password = passwordController.text.trim();
+                    final confirmPassword =
+                        confirmPasswordController.text.trim();
                     final expiresInDays =
                         int.tryParse(expiresDaysController.text.trim()) ?? 365;
-                    if (userId.isEmpty) {
+                    if (email.isEmpty) {
                       setDialogState(() {
-                        validationError = 'User UID is required.';
+                        validationError = 'Email is required.';
+                      });
+                      return;
+                    }
+                    if (!email.contains('@') || email.startsWith('@')) {
+                      setDialogState(() {
+                        validationError = 'Provide a valid email address.';
+                      });
+                      return;
+                    }
+                    if (password.length < 6) {
+                      setDialogState(() {
+                        validationError =
+                            'Password must have at least 6 characters.';
+                      });
+                      return;
+                    }
+                    if (password != confirmPassword) {
+                      setDialogState(() {
+                        validationError =
+                            'Password and confirmation must match.';
                       });
                       return;
                     }
@@ -1410,7 +1477,8 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                     }
                     Navigator.of(dialogContext).pop(
                       _AccountCreateRequest(
-                        userId: userId,
+                        email: email,
+                        password: password,
                         role: role,
                         planTier: planTier,
                         appStatus: appStatus,
@@ -1429,7 +1497,9 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
       },
     );
 
-    uidController.dispose();
+    emailController.dispose();
+    passwordController.dispose();
+    confirmPasswordController.dispose();
     expiresDaysController.dispose();
     return result;
   }
@@ -1445,9 +1515,16 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
     setState(() {
       _savingAccountDirectory = true;
     });
+    String createdUserId = '';
     try {
+      createdUserId = await EntitlementAdminService.createAuthUserAccount(
+        email: request.email,
+        password: request.password,
+        reason: reason,
+        correlationId: correlationId,
+      );
       await EntitlementAdminService.upsertUserEntitlement(
-        userId: request.userId,
+        userId: createdUserId,
         role: request.role,
         appLicense: _buildGrant(
           status: request.appStatus,
@@ -1462,10 +1539,20 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
         reason: reason,
         correlationId: correlationId,
       );
-      _snack('Created entitlement for ${request.userId} ($correlationId)');
+      _useTargetUid(createdUserId);
+      _snack(
+        'Created ${request.email} (uid=$createdUserId) + entitlement ($correlationId)',
+      );
       _rotateCorrelationId();
     } catch (e) {
-      _snack('Create account failed: $e', error: true);
+      if (createdUserId.isNotEmpty) {
+        _snack(
+          'Auth user uid=$createdUserId created, but entitlement write failed: $e',
+          error: true,
+        );
+      } else {
+        _snack('Create account failed: $e', error: true);
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -1522,18 +1609,40 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
     }
   }
 
+  Future<List<AdminDirectoryUserRow>> _loadTherapistDirectory() async {
+    final therapists = await EntitlementAdminService.watchUsersByRole(
+      EntitlementRole.therapist,
+    ).first;
+    final sorted = List<AdminDirectoryUserRow>.from(therapists, growable: false)
+      ..sort((left, right) => left.userId.compareTo(right.userId));
+    return sorted;
+  }
+
   Future<_StudentEditorResult?> _openStudentEditorDialog({
+    required List<AdminDirectoryUserRow> therapists,
     AdminStudentDirectoryRow? existing,
   }) async {
     final isCreate = existing == null;
     final studentIdController =
         TextEditingController(text: existing?.studentId ?? '');
-    final therapistIdController =
-        TextEditingController(text: existing?.therapistId ?? '');
     final firstNameController =
         TextEditingController(text: existing?.firstName ?? '');
     final lastNameController =
         TextEditingController(text: existing?.lastName ?? '');
+    final therapistIds = therapists
+        .map((row) => row.userId.trim())
+        .where((uid) => uid.isNotEmpty)
+        .toSet()
+        .toList(growable: true)
+      ..sort();
+    final existingTherapistId = existing?.therapistId.trim() ?? '';
+    if (existingTherapistId.isNotEmpty &&
+        !therapistIds.contains(existingTherapistId)) {
+      therapistIds.insert(0, existingTherapistId);
+    }
+    var selectedTherapistId = existingTherapistId.isNotEmpty
+        ? existingTherapistId
+        : (therapistIds.isNotEmpty ? therapistIds.first : '');
     var validationError = '';
 
     final result = await showDialog<_StudentEditorResult>(
@@ -1559,13 +1668,33 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      TextField(
-                        controller: therapistIdController,
-                        decoration: const InputDecoration(
-                          labelText: 'therapistId',
-                          border: OutlineInputBorder(),
+                      if (therapistIds.isEmpty)
+                        Text(
+                          'No therapists found. Create therapist account first.',
+                          style: TextStyle(color: Colors.red.shade700),
+                        )
+                      else
+                        DropdownButtonFormField<String>(
+                          initialValue: selectedTherapistId.isEmpty
+                              ? null
+                              : selectedTherapistId,
+                          decoration: const InputDecoration(
+                            labelText: 'Owner therapist UID',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: [
+                            for (final therapistId in therapistIds)
+                              DropdownMenuItem<String>(
+                                value: therapistId,
+                                child: Text(therapistId),
+                              ),
+                          ],
+                          onChanged: (value) {
+                            setDialogState(() {
+                              selectedTherapistId = value?.trim() ?? '';
+                            });
+                          },
                         ),
-                      ),
                       const SizedBox(height: 8),
                       TextField(
                         controller: firstNameController,
@@ -1600,7 +1729,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                 ),
                 FilledButton.icon(
                   onPressed: () {
-                    final therapistId = therapistIdController.text.trim();
+                    final therapistId = selectedTherapistId.trim();
                     if (therapistId.isEmpty) {
                       setDialogState(() {
                         validationError = 'therapistId is required.';
@@ -1627,14 +1756,20 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
     );
 
     studentIdController.dispose();
-    therapistIdController.dispose();
     firstNameController.dispose();
     lastNameController.dispose();
     return result;
   }
 
   Future<void> _createStudentRecord() async {
-    final request = await _openStudentEditorDialog();
+    List<AdminDirectoryUserRow> therapists;
+    try {
+      therapists = await _loadTherapistDirectory();
+    } catch (e) {
+      _snack('Load therapist list failed: $e', error: true);
+      return;
+    }
+    final request = await _openStudentEditorDialog(therapists: therapists);
     if (request == null) {
       return;
     }
@@ -1668,7 +1803,17 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
   }
 
   Future<void> _editStudentRecord(AdminStudentDirectoryRow student) async {
-    final request = await _openStudentEditorDialog(existing: student);
+    List<AdminDirectoryUserRow> therapists;
+    try {
+      therapists = await _loadTherapistDirectory();
+    } catch (e) {
+      _snack('Load therapist list failed: $e', error: true);
+      return;
+    }
+    final request = await _openStudentEditorDialog(
+      therapists: therapists,
+      existing: student,
+    );
     if (request == null) {
       return;
     }
@@ -1769,27 +1914,6 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
     }
   }
 
-  bool _matchesSessionFilters(AdminTherapySessionRow session) {
-    final therapistFilter =
-        _normalizedLower(_sessionTherapistFilterController.text);
-    final studentFilter =
-        _normalizedLower(_sessionStudentFilterController.text);
-    final sessionFilter = _normalizedLower(_sessionIdFilterController.text);
-    if (therapistFilter.isNotEmpty &&
-        !_normalizedLower(session.therapistId).contains(therapistFilter)) {
-      return false;
-    }
-    if (studentFilter.isNotEmpty &&
-        !_normalizedLower(session.studentId).contains(studentFilter)) {
-      return false;
-    }
-    if (sessionFilter.isNotEmpty &&
-        !_normalizedLower(session.sessionId).contains(sessionFilter)) {
-      return false;
-    }
-    return _matchesSessionStateFilter(session);
-  }
-
   String _sessionStateFilterLabel(_SessionStateFilter filter) {
     switch (filter) {
       case _SessionStateFilter.all:
@@ -1805,21 +1929,23 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
 
   void _clearSessionFilters() {
     setState(() {
-      _sessionTherapistFilterController.clear();
-      _sessionStudentFilterController.clear();
+      _sessionTherapistFilter = '';
+      _sessionStudentFilter = '';
       _sessionIdFilterController.clear();
       _sessionStateFilter = _SessionStateFilter.all;
-      _selectedSessionId = '';
+      _selectedSessionDocumentId = '';
+      _selectedSessionLabel = '';
     });
   }
 
-  void _selectSessionForEvents(String sessionId) {
-    final normalized = sessionId.trim();
-    if (normalized.isEmpty) {
+  void _selectSessionForEvents(AdminTherapySessionRow session) {
+    final normalizedDocumentId = session.documentId.trim();
+    if (normalizedDocumentId.isEmpty) {
       return;
     }
     setState(() {
-      _selectedSessionId = normalized;
+      _selectedSessionDocumentId = normalizedDocumentId;
+      _selectedSessionLabel = session.sessionId;
     });
   }
 
@@ -1884,7 +2010,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Create/delete therapist or parent entitlement records.',
+              'Create Firebase Auth login (email/password) and entitlement profile. Delete removes entitlement record.',
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -1901,7 +2027,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.person_add),
-                  label: const Text('Create account'),
+                  label: const Text('Create account (Auth + entitlement)'),
                 ),
                 OutlinedButton.icon(
                   onPressed: _useCurrentUserUidAsTarget,
@@ -2011,7 +2137,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                                 TextButton(
                                   onPressed: () =>
                                       _openDirectoryUserInOperations(user),
-                                  child: const Text('Edit'),
+                                  child: const Text('Open in Operations'),
                                 ),
                                 TextButton(
                                   onPressed: _savingAccountDirectory
@@ -2057,7 +2183,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Manage students collection records (create/edit/delete).',
+                  'Manage students collection records. Therapist owner is selected from therapist directory list.',
                 ),
                 const SizedBox(height: 8),
                 Wrap(
@@ -2196,121 +2322,203 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
   }
 
   Widget _buildSessionsTab() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Session Results',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Read-only view of therapy_sessions and timeline events.',
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _sessionTherapistFilterController,
-                  decoration: const InputDecoration(
-                    labelText: 'Filter therapist UID',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _sessionStudentFilterController,
-                  decoration: const InputDecoration(
-                    labelText: 'Filter student ID',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _sessionIdFilterController,
-                  decoration: const InputDecoration(
-                    labelText: 'Filter session ID',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final filter in _SessionStateFilter.values)
-                      ChoiceChip(
-                        selected: _sessionStateFilter == filter,
-                        label: Text(_sessionStateFilterLabel(filter)),
-                        onSelected: (_) {
-                          setState(() {
-                            _sessionStateFilter = filter;
-                          });
-                        },
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: _clearSessionFilters,
-                      icon: const Icon(Icons.filter_alt_off_outlined),
-                      label: const Text('Clear filters'),
-                    ),
-                    if (_selectedSessionId.isNotEmpty)
-                      OutlinedButton.icon(
-                        onPressed: () {
-                          setState(() {
-                            _selectedSessionId = '';
-                          });
-                        },
-                        icon: const Icon(Icons.visibility_off_outlined),
-                        label: const Text('Hide events'),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: StreamBuilder<List<AdminTherapySessionRow>>(
-              stream: EntitlementAdminService.watchRecentTherapySessions(
-                limit: 300,
-              ),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Text(
+    return StreamBuilder<List<AdminTherapySessionRow>>(
+      stream: EntitlementAdminService.watchRecentTherapySessions(
+        limit: 300,
+      ),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text(
                     'Blad odczytu therapy_sessions: ${snapshot.error}',
                     style: TextStyle(color: Colors.red.shade700),
-                  );
-                }
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
 
-                if (!snapshot.hasData) {
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(12),
-                      child: CircularProgressIndicator(),
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final sessions = snapshot.data!;
+        final therapistValues = <String>{
+          for (final session in sessions)
+            if (session.therapistId.trim().isNotEmpty)
+              session.therapistId.trim(),
+        }.toList(growable: false)
+          ..sort();
+        final studentValues = <String>{
+          for (final session in sessions)
+            if (session.studentId.trim().isNotEmpty) session.studentId.trim(),
+        }.toList(growable: false)
+          ..sort();
+
+        final effectiveTherapistFilter =
+            therapistValues.contains(_sessionTherapistFilter)
+                ? _sessionTherapistFilter
+                : '';
+        final effectiveStudentFilter = studentValues.contains(
+          _sessionStudentFilter,
+        )
+            ? _sessionStudentFilter
+            : '';
+        final filteredSessions = sessions.where((session) {
+          final therapistFilter = _normalizedLower(effectiveTherapistFilter);
+          final studentFilter = _normalizedLower(effectiveStudentFilter);
+          final sessionFilter =
+              _normalizedLower(_sessionIdFilterController.text);
+          if (therapistFilter.isNotEmpty &&
+              !_normalizedLower(session.therapistId)
+                  .contains(therapistFilter)) {
+            return false;
+          }
+          if (studentFilter.isNotEmpty &&
+              !_normalizedLower(session.studentId).contains(studentFilter)) {
+            return false;
+          }
+          if (sessionFilter.isNotEmpty &&
+              !_normalizedLower(session.sessionId).contains(sessionFilter)) {
+            return false;
+          }
+          return _matchesSessionStateFilter(session);
+        }).toList(growable: false);
+
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Session Results',
+                      style: TextStyle(fontWeight: FontWeight.w700),
                     ),
-                  );
-                }
-
-                final sessions = snapshot.data!;
-                final filteredSessions = sessions
-                    .where(_matchesSessionFilters)
-                    .toList(growable: false);
-
-                return Column(
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Read-only view of therapy_sessions and timeline events.',
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      key: ValueKey<String>(
+                        'session-therapist-$effectiveTherapistFilter',
+                      ),
+                      initialValue: effectiveTherapistFilter,
+                      decoration: const InputDecoration(
+                        labelText: 'Therapist filter',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: [
+                        const DropdownMenuItem<String>(
+                          value: '',
+                          child: Text('All therapists'),
+                        ),
+                        for (final value in therapistValues)
+                          DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(value),
+                          ),
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          _sessionTherapistFilter = value?.trim() ?? '';
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      key: ValueKey<String>(
+                        'session-student-$effectiveStudentFilter',
+                      ),
+                      initialValue: effectiveStudentFilter,
+                      decoration: const InputDecoration(
+                        labelText: 'Student filter',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: [
+                        const DropdownMenuItem<String>(
+                          value: '',
+                          child: Text('All students'),
+                        ),
+                        for (final value in studentValues)
+                          DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(value),
+                          ),
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          _sessionStudentFilter = value?.trim() ?? '';
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _sessionIdFilterController,
+                      decoration: const InputDecoration(
+                        labelText: 'Session ID contains',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final filter in _SessionStateFilter.values)
+                          ChoiceChip(
+                            selected: _sessionStateFilter == filter,
+                            label: Text(_sessionStateFilterLabel(filter)),
+                            onSelected: (_) {
+                              setState(() {
+                                _sessionStateFilter = filter;
+                              });
+                            },
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: _clearSessionFilters,
+                          icon: const Icon(Icons.filter_alt_off_outlined),
+                          label: const Text('Clear filters'),
+                        ),
+                        if (_selectedSessionDocumentId.isNotEmpty)
+                          OutlinedButton.icon(
+                            onPressed: () {
+                              setState(() {
+                                _selectedSessionDocumentId = '';
+                                _selectedSessionLabel = '';
+                              });
+                            },
+                            icon: const Icon(Icons.visibility_off_outlined),
+                            label: const Text('Hide events'),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
@@ -2318,9 +2526,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                     ),
                     const SizedBox(height: 8),
                     if (filteredSessions.isEmpty)
-                      const Text(
-                        'Brak sesji pasujacych do filtrów.',
-                      )
+                      const Text('Brak sesji pasujacych do filtrow.')
                     else
                       for (final session in filteredSessions)
                         Container(
@@ -2388,6 +2594,12 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                                   'Interrupted=${_formatUtc(session.interruptedAtUtc)}',
                                   style: const TextStyle(fontSize: 12),
                                 ),
+                              if (session.sessionId.trim() !=
+                                  session.documentId.trim())
+                                Text(
+                                  'docId=${session.documentId}',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
                               const SizedBox(height: 6),
                               Wrap(
                                 spacing: 8,
@@ -2400,23 +2612,28 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                                   ),
                                   OutlinedButton(
                                     onPressed: () {
-                                      _sessionTherapistFilterController.text =
-                                          session.therapistId;
+                                      setState(() {
+                                        _sessionTherapistFilter =
+                                            session.therapistId;
+                                      });
                                     },
                                     child: const Text('Filter therapist'),
                                   ),
                                   OutlinedButton(
                                     onPressed: () {
-                                      _sessionStudentFilterController.text =
-                                          session.studentId;
+                                      setState(() {
+                                        _sessionStudentFilter =
+                                            session.studentId;
+                                      });
                                     },
                                     child: const Text('Filter student'),
                                   ),
                                   FilledButton.tonal(
-                                    onPressed: () => _selectSessionForEvents(
-                                        session.sessionId),
+                                    onPressed: () =>
+                                        _selectSessionForEvents(session),
                                     child: Text(
-                                      _selectedSessionId == session.sessionId
+                                      _selectedSessionDocumentId ==
+                                              session.documentId
                                           ? 'Events selected'
                                           : 'Show events',
                                     ),
@@ -2427,20 +2644,20 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                           ),
                         ),
                   ],
-                );
-              },
+                ),
+              ),
             ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        _buildSessionEventsCard(),
-      ],
+            const SizedBox(height: 12),
+            _buildSessionEventsCard(),
+          ],
+        );
+      },
     );
   }
 
   Widget _buildSessionEventsCard() {
-    final normalizedSessionId = _selectedSessionId.trim();
-    if (normalizedSessionId.isEmpty) {
+    final normalizedSessionDocumentId = _selectedSessionDocumentId.trim();
+    if (normalizedSessionDocumentId.isEmpty) {
       return const Card(
         child: Padding(
           padding: EdgeInsets.all(12),
@@ -2459,14 +2676,15 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    'Session events: $normalizedSessionId',
+                    'Session events: ${_selectedSessionLabel.trim().isEmpty ? normalizedSessionDocumentId : _selectedSessionLabel}',
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),
                 OutlinedButton(
                   onPressed: () {
                     setState(() {
-                      _selectedSessionId = '';
+                      _selectedSessionDocumentId = '';
+                      _selectedSessionLabel = '';
                     });
                   },
                   child: const Text('Close'),
@@ -2476,7 +2694,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
             const SizedBox(height: 8),
             StreamBuilder<List<AdminSessionEventRow>>(
               stream: EntitlementAdminService.watchSessionEvents(
-                sessionId: normalizedSessionId,
+                sessionId: normalizedSessionDocumentId,
                 limit: 120,
               ),
               builder: (context, snapshot) {
@@ -2498,8 +2716,8 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
 
                 final events = snapshot.data!;
                 if (events.isEmpty) {
-                  return const Text(
-                    'Brak eventów dla wybranej sesji.',
+                  return Text(
+                    'Brak eventow dla docId=$normalizedSessionDocumentId.',
                   );
                 }
 
@@ -2564,7 +2782,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Live Firestore editor for create/update/deactivate/delete.',
+              'Live Firestore editor for create/update/deactivate/delete. Create dialog starts in quick mode, advanced fields are optional.',
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -2581,7 +2799,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.add),
-                  label: const Text('Create entry'),
+                  label: const Text('Create entry (quick)'),
                 ),
                 OutlinedButton.icon(
                   onPressed: _loadCatalogAuthoringAssets,
@@ -3924,7 +4142,8 @@ class _GrantOnlyGameCardData {
 }
 
 class _AccountCreateRequest {
-  final String userId;
+  final String email;
+  final String password;
   final EntitlementRole role;
   final SubscriptionPlanTier planTier;
   final LicenseStatus appStatus;
@@ -3932,7 +4151,8 @@ class _AccountCreateRequest {
   final int expiresInDays;
 
   const _AccountCreateRequest({
-    required this.userId,
+    required this.email,
+    required this.password,
     required this.role,
     required this.planTier,
     required this.appStatus,

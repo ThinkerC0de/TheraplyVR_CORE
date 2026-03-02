@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:admin_console_web/models/admin_directory_models.dart';
 import 'package:admin_console_web/models/entitlement_access.dart';
@@ -10,6 +11,7 @@ import 'package:admin_console_web/models/entitlement_grant_contract.dart';
 import 'package:admin_console_web/services/firebase_service.dart';
 
 class EntitlementAdminService {
+  static const String _authProvisioningAppName = 'admin-console-auth-helper';
   static FirebaseFirestore? _firestoreOverride;
   static _AdminActor? _actorOverride;
 
@@ -151,6 +153,67 @@ class EntitlementAdminService {
     await batch.commit();
   }
 
+  static Future<String> createAuthUserAccount({
+    required String email,
+    required String password,
+    required String reason,
+    required String correlationId,
+  }) async {
+    final normalizedEmail = _requireTrimmed(email, 'email').toLowerCase();
+    final normalizedPassword = password.trim();
+    final normalizedReason = _requireTrimmed(reason, 'reason');
+    final normalizedCorrelationId =
+        _requireTrimmed(correlationId, 'correlationId');
+    if (normalizedPassword.length < 6) {
+      throw ArgumentError('password must have at least 6 characters');
+    }
+
+    final actor = await _resolveActor();
+    final nowUtc = DateTime.now().toUtc();
+    final provisioningApp = await _resolveAuthProvisioningApp();
+    final provisioningAuth = FirebaseAuth.instanceFor(app: provisioningApp);
+    UserCredential credential;
+
+    try {
+      credential = await provisioningAuth.createUserWithEmailAndPassword(
+        email: normalizedEmail,
+        password: normalizedPassword,
+      );
+    } finally {
+      try {
+        await provisioningAuth.signOut();
+      } catch (_) {
+        // Keep account-create flow resilient; sign-out failure does not
+        // invalidate successful Auth provisioning.
+      }
+    }
+
+    final createdUser = credential.user;
+    final createdUid = createdUser?.uid.trim() ?? '';
+    if (createdUid.isEmpty) {
+      throw StateError('createUserWithEmailAndPassword returned empty uid');
+    }
+
+    final auditEvent = AdminAuditEvent(
+      actorUid: actor.uid,
+      actorEmail: actor.email,
+      actorRole: actor.role,
+      action: 'CREATE_AUTH_USER_ACCOUNT',
+      targetCollection: 'firebase_auth_users',
+      targetDocumentId: createdUid,
+      targetUserId: createdUid,
+      occurredAtUtc: nowUtc,
+      reason: normalizedReason,
+      correlationId: normalizedCorrelationId,
+      payloadSummary: <String, dynamic>{
+        'email': normalizedEmail,
+      },
+    );
+
+    await _auditCollection.doc().set(auditEvent.toFirestore());
+    return createdUid;
+  }
+
   static Future<_AdminActor> _resolveActor() async {
     if (_actorOverride != null) {
       return _actorOverride!;
@@ -168,6 +231,18 @@ class EntitlementAdminService {
       email: currentUser?.email,
       role: isAdminOperator ? 'admin_operator' : 'unknown',
     );
+  }
+
+  static Future<FirebaseApp> _resolveAuthProvisioningApp() async {
+    try {
+      return Firebase.app(_authProvisioningAppName);
+    } catch (_) {
+      final defaultApp = Firebase.app();
+      return Firebase.initializeApp(
+        name: _authProvisioningAppName,
+        options: defaultApp.options,
+      );
+    }
   }
 
   static Stream<EntitlementAccess?> watchEntitlementProfile(String userId) {

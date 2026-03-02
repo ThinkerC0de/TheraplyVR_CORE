@@ -109,6 +109,7 @@ class AdminGameGrantStats {
 }
 
 class AdminTherapySessionRow {
+  final String documentId;
   final String sessionId;
   final String studentId;
   final String therapistId;
@@ -127,6 +128,7 @@ class AdminTherapySessionRow {
   final Map<String, dynamic> metadata;
 
   const AdminTherapySessionRow({
+    required this.documentId,
     required this.sessionId,
     required this.studentId,
     required this.therapistId,
@@ -165,6 +167,7 @@ class AdminTherapySessionRow {
     final endedAtUnixMs = _asInt(data['endedAtUnixMs']);
 
     return AdminTherapySessionRow(
+      documentId: doc.id.trim(),
       sessionId: sessionId,
       studentId: (data['studentId'] as String? ?? '').trim(),
       therapistId: (data['therapistId'] as String? ?? '').trim(),

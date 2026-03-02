@@ -16,6 +16,7 @@ Status: minimal operator console with role gate + audit writes.
 ## Implemented scope
 
 - Email/password login for operator account.
+- Account create flow in CMS creates Firebase Auth user (`email + password`) and writes entitlement profile for generated UID.
 - Role gate in app for Firebase Auth claim:
   - `role=admin_operator` or
   - `admin_operator=true`.
@@ -48,7 +49,8 @@ Status: minimal operator console with role gate + audit writes.
   - automatic fallback `reason` for quick/manual actions if empty.
 - Tabbed directory views:
   - `Therapists/Parents` from `user_entitlements`,
-  - `Children` from `students`,
+  - `Children` from `students` (therapist picked from directory list),
+  - `Sessions` from `therapy_sessions` + event timeline (selection uses Firestore doc id to avoid legacy id mismatch),
   - `Games` from known catalog + GAME grant stats (`entitlement_grants`).
 - Games tab can seed Firestore `game_catalog` in one action (`Seed game_catalog`).
 

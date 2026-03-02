@@ -587,4 +587,45 @@ void main() {
     expect(streamed.first.details['reasonCode'], 'THERAPIST_STOP');
     expect(streamed.last.eventId, 'event-old');
   });
+
+  test('session documentId can differ from sessionId and still map events',
+      () async {
+    await firestore.collection('therapy_sessions').doc('session-doc-1').set(
+      <String, dynamic>{
+        'sessionId': 'session-logical-1',
+        'studentId': 'student-legacy',
+        'therapistId': 'therapist-legacy',
+        'state': 'IN_PROGRESS',
+        'updatedAtUnixMs': 7000,
+      },
+    );
+    await firestore
+        .collection('therapy_sessions')
+        .doc('session-doc-1')
+        .collection('events')
+        .doc('event-legacy')
+        .set(
+      <String, dynamic>{
+        'sessionId': 'session-logical-1',
+        'studentId': 'student-legacy',
+        'therapistId': 'therapist-legacy',
+        'eventType': 'SESSION_HEARTBEAT',
+        'eventAtUnixMs': 7100,
+      },
+    );
+
+    final sessions =
+        await EntitlementAdminService.watchRecentTherapySessions(limit: 5)
+            .first;
+    expect(sessions, hasLength(1));
+    expect(sessions.first.documentId, 'session-doc-1');
+    expect(sessions.first.sessionId, 'session-logical-1');
+
+    final events = await EntitlementAdminService.watchSessionEvents(
+      sessionId: sessions.first.documentId,
+      limit: 10,
+    ).first;
+    expect(events, hasLength(1));
+    expect(events.first.eventId, 'event-legacy');
+  });
 }
