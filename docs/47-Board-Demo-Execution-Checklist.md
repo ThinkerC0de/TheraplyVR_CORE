@@ -152,12 +152,20 @@ Do not show:
    - HTTP rehearsal probes: `bd006_cms_domain_probe.log`, `bd006_package_probe_http.log`.
 
 ### BD-007 RC and Rollback
-1. Tag validated commit (`board-demo-rc-YYYYMMDD`).
-2. Prepare rollback steps:
-   - previous stable tag,
-   - config rollback points,
-   - known-safe CMS seed snapshot.
-3. Re-run smoke after tagging.
+1. Tag validated commit: `board-demo-rc-20260302`.
+2. Rollback baseline:
+   - previous stable tag: `session-resilience-final-20260227`,
+   - previous board-hardening commit before package probe lane: `1369674`.
+3. Config rollback points:
+   - mobile kill-switch: set catalog toggle to `Probe OFF`,
+   - Unity runtime hard kill-switch: `_enableBoardSafePackageProbe=false` in `GameRuntimeService` serialized config.
+4. CMS/catalog rollback snapshot:
+   - seed snapshots: `contracts/game_catalog_seed.json` and `admin_console_web/assets/contracts/game_catalog_seed.json`,
+   - known-safe package URL: `https://theraply-vr-demo.web.app/content/board_demo_probe_1_0_0.pkg.json`,
+   - rollback deploy commands:
+     - `powershell -ExecutionPolicy Bypass -File scripts/deploy_admin_console_hosting.ps1 -ProjectId theraply-vr-demo -CleanBuild`
+     - `node scripts/sync_game_catalog_to_firebase.js --project-id theraply-vr-demo`
+5. Re-run smoke after tagging.
 
 ## Board Demo Ready Definition
 
