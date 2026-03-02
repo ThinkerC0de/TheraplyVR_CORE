@@ -34,6 +34,12 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
   final TextEditingController _grantExpiresDaysController =
       TextEditingController(text: '30');
   final TextEditingController _grantNoteController = TextEditingController();
+  final TextEditingController _sessionTherapistFilterController =
+      TextEditingController();
+  final TextEditingController _sessionStudentFilterController =
+      TextEditingController();
+  final TextEditingController _sessionIdFilterController =
+      TextEditingController();
 
   EntitlementRole _selectedRole = EntitlementRole.therapist;
   SubscriptionPlanTier _selectedPlanTier = SubscriptionPlanTier.basic;
@@ -58,6 +64,8 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
   GameDefinitionExportManifest? _exportManifest;
   _GamesAuthoringFilter _gamesAuthoringFilter = _GamesAuthoringFilter.all;
   _GamesSortMode _gamesSortMode = _GamesSortMode.authoringSeverity;
+  _SessionStateFilter _sessionStateFilter = _SessionStateFilter.all;
+  String _selectedSessionId = '';
 
   String get _targetUserId => _targetUserIdController.text.trim();
 
@@ -65,12 +73,18 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
   void initState() {
     super.initState();
     _targetUserIdController.addListener(_refresh);
+    _sessionTherapistFilterController.addListener(_refresh);
+    _sessionStudentFilterController.addListener(_refresh);
+    _sessionIdFilterController.addListener(_refresh);
     _loadCatalogAuthoringAssets();
   }
 
   @override
   void dispose() {
     _targetUserIdController.removeListener(_refresh);
+    _sessionTherapistFilterController.removeListener(_refresh);
+    _sessionStudentFilterController.removeListener(_refresh);
+    _sessionIdFilterController.removeListener(_refresh);
     _targetUserIdController.dispose();
     _operationReasonController.dispose();
     _correlationIdController.dispose();
@@ -81,6 +95,9 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
     _grantGameIdController.dispose();
     _grantExpiresDaysController.dispose();
     _grantNoteController.dispose();
+    _sessionTherapistFilterController.dispose();
+    _sessionStudentFilterController.dispose();
+    _sessionIdFilterController.dispose();
     super.dispose();
   }
 
@@ -733,6 +750,77 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
     _snack('Ustawiono grant GAME dla gameId=$normalizedGameId');
   }
 
+  String _normalizedLower(String value) {
+    return value.trim().toLowerCase();
+  }
+
+  bool _matchesSessionStateFilter(AdminTherapySessionRow session) {
+    switch (_sessionStateFilter) {
+      case _SessionStateFilter.all:
+        return true;
+      case _SessionStateFilter.active:
+        return !session.isTerminal;
+      case _SessionStateFilter.terminal:
+        return session.isTerminal;
+      case _SessionStateFilter.interrupted:
+        return session.stateLabel == 'INTERRUPTED';
+    }
+  }
+
+  bool _matchesSessionFilters(AdminTherapySessionRow session) {
+    final therapistFilter =
+        _normalizedLower(_sessionTherapistFilterController.text);
+    final studentFilter =
+        _normalizedLower(_sessionStudentFilterController.text);
+    final sessionFilter = _normalizedLower(_sessionIdFilterController.text);
+    if (therapistFilter.isNotEmpty &&
+        !_normalizedLower(session.therapistId).contains(therapistFilter)) {
+      return false;
+    }
+    if (studentFilter.isNotEmpty &&
+        !_normalizedLower(session.studentId).contains(studentFilter)) {
+      return false;
+    }
+    if (sessionFilter.isNotEmpty &&
+        !_normalizedLower(session.sessionId).contains(sessionFilter)) {
+      return false;
+    }
+    return _matchesSessionStateFilter(session);
+  }
+
+  String _sessionStateFilterLabel(_SessionStateFilter filter) {
+    switch (filter) {
+      case _SessionStateFilter.all:
+        return 'All';
+      case _SessionStateFilter.active:
+        return 'Active';
+      case _SessionStateFilter.terminal:
+        return 'Terminal';
+      case _SessionStateFilter.interrupted:
+        return 'Interrupted';
+    }
+  }
+
+  void _clearSessionFilters() {
+    setState(() {
+      _sessionTherapistFilterController.clear();
+      _sessionStudentFilterController.clear();
+      _sessionIdFilterController.clear();
+      _sessionStateFilter = _SessionStateFilter.all;
+      _selectedSessionId = '';
+    });
+  }
+
+  void _selectSessionForEvents(String sessionId) {
+    final normalized = sessionId.trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+    setState(() {
+      _selectedSessionId = normalized;
+    });
+  }
+
   Widget _buildOperationsTab() {
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -980,6 +1068,362 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildSessionsTab() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Session Results',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Read-only view of therapy_sessions and timeline events.',
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _sessionTherapistFilterController,
+                  decoration: const InputDecoration(
+                    labelText: 'Filter therapist UID',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _sessionStudentFilterController,
+                  decoration: const InputDecoration(
+                    labelText: 'Filter student ID',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _sessionIdFilterController,
+                  decoration: const InputDecoration(
+                    labelText: 'Filter session ID',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final filter in _SessionStateFilter.values)
+                      ChoiceChip(
+                        selected: _sessionStateFilter == filter,
+                        label: Text(_sessionStateFilterLabel(filter)),
+                        onSelected: (_) {
+                          setState(() {
+                            _sessionStateFilter = filter;
+                          });
+                        },
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: _clearSessionFilters,
+                      icon: const Icon(Icons.filter_alt_off_outlined),
+                      label: const Text('Clear filters'),
+                    ),
+                    if (_selectedSessionId.isNotEmpty)
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            _selectedSessionId = '';
+                          });
+                        },
+                        icon: const Icon(Icons.visibility_off_outlined),
+                        label: const Text('Hide events'),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: StreamBuilder<List<AdminTherapySessionRow>>(
+              stream: EntitlementAdminService.watchRecentTherapySessions(
+                limit: 300,
+              ),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Text(
+                    'Blad odczytu therapy_sessions: ${snapshot.error}',
+                    style: TextStyle(color: Colors.red.shade700),
+                  );
+                }
+
+                if (!snapshot.hasData) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(12),
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
+                }
+
+                final sessions = snapshot.data!;
+                final filteredSessions = sessions
+                    .where(_matchesSessionFilters)
+                    .toList(growable: false);
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Visible sessions: ${filteredSessions.length}/${sessions.length}',
+                    ),
+                    const SizedBox(height: 8),
+                    if (filteredSessions.isEmpty)
+                      const Text(
+                        'Brak sesji pasujacych do filtrów.',
+                      )
+                    else
+                      for (final session in filteredSessions)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      session.sessionId,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: session.isTerminal
+                                          ? Colors.red.shade100
+                                          : Colors.green.shade100,
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      session.stateLabel,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: session.isTerminal
+                                            ? Colors.red.shade800
+                                            : Colors.green.shade800,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Therapist=${session.therapistId} | Student=${session.studentId}',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                              Text(
+                                'Reason=${session.reasonCode.isEmpty ? '-' : session.reasonCode} | '
+                                'Game=${session.latestGameId.isEmpty ? '-' : session.latestGameId}',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                              Text(
+                                'Updated=${_formatUtc(session.updatedAtUtc)} | '
+                                'Started=${_formatUtc(session.startedAtUtc)} | '
+                                'Ended=${_formatUtc(session.endedAtUtc)}',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                              if (session.interruptedAtUtc != null)
+                                Text(
+                                  'Interrupted=${_formatUtc(session.interruptedAtUtc)}',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              const SizedBox(height: 6),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  OutlinedButton(
+                                    onPressed: () =>
+                                        _useTargetUid(session.therapistId),
+                                    child: const Text('Use therapist UID'),
+                                  ),
+                                  OutlinedButton(
+                                    onPressed: () {
+                                      _sessionTherapistFilterController.text =
+                                          session.therapistId;
+                                    },
+                                    child: const Text('Filter therapist'),
+                                  ),
+                                  OutlinedButton(
+                                    onPressed: () {
+                                      _sessionStudentFilterController.text =
+                                          session.studentId;
+                                    },
+                                    child: const Text('Filter student'),
+                                  ),
+                                  FilledButton.tonal(
+                                    onPressed: () => _selectSessionForEvents(
+                                        session.sessionId),
+                                    child: Text(
+                                      _selectedSessionId == session.sessionId
+                                          ? 'Events selected'
+                                          : 'Show events',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _buildSessionEventsCard(),
+      ],
+    );
+  }
+
+  Widget _buildSessionEventsCard() {
+    final normalizedSessionId = _selectedSessionId.trim();
+    if (normalizedSessionId.isEmpty) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(12),
+          child: Text('Wybierz sesje z listy, aby zobaczyc event timeline.'),
+        ),
+      );
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Session events: $normalizedSessionId',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                OutlinedButton(
+                  onPressed: () {
+                    setState(() {
+                      _selectedSessionId = '';
+                    });
+                  },
+                  child: const Text('Close'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            StreamBuilder<List<AdminSessionEventRow>>(
+              stream: EntitlementAdminService.watchSessionEvents(
+                sessionId: normalizedSessionId,
+                limit: 120,
+              ),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Text(
+                    'Blad odczytu events: ${snapshot.error}',
+                    style: TextStyle(color: Colors.red.shade700),
+                  );
+                }
+
+                if (!snapshot.hasData) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(12),
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
+                }
+
+                final events = snapshot.data!;
+                if (events.isEmpty) {
+                  return const Text(
+                    'Brak eventów dla wybranej sesji.',
+                  );
+                }
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Events count: ${events.length}'),
+                    const SizedBox(height: 8),
+                    for (final event in events)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${event.eventType.isEmpty ? 'UNKNOWN_EVENT' : event.eventType} @ ${_formatUtc(event.eventAtUtc)}',
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Source=${event.source.isEmpty ? '-' : event.source} | '
+                              'Game=${event.gameId.isEmpty ? '-' : event.gameId}',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            Text(
+                              'TimelineId=${event.timelineEventId.isEmpty ? '-' : event.timelineEventId}',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            Text(
+                              'Details=${event.detailsPreview()}',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1526,7 +1970,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 4,
+      length: 5,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Theraply Entitlement Admin'),
@@ -1554,6 +1998,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
               Tab(text: 'Operations'),
               Tab(text: 'Therapists/Parents'),
               Tab(text: 'Children'),
+              Tab(text: 'Sessions'),
               Tab(text: 'Games'),
             ],
           ),
@@ -1563,6 +2008,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
             _buildOperationsTab(),
             _buildAccountsTab(),
             _buildChildrenTab(),
+            _buildSessionsTab(),
             _buildGamesTab(),
           ],
         ),
@@ -2115,6 +2561,13 @@ enum _GamesAuthoringFilter {
 enum _GamesSortMode {
   authoringSeverity,
   catalogOrder,
+}
+
+enum _SessionStateFilter {
+  all,
+  active,
+  terminal,
+  interrupted,
 }
 
 class _CatalogGameCardData {

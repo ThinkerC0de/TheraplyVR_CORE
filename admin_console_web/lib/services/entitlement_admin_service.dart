@@ -25,6 +25,8 @@ class EntitlementAdminService {
       _firestore.collection('students');
   static CollectionReference<Map<String, dynamic>> get _gameCatalogCollection =>
       _firestore.collection('game_catalog');
+  static CollectionReference<Map<String, dynamic>> get _sessionsCollection =>
+      _firestore.collection('therapy_sessions');
 
   @visibleForTesting
   static void setFirestoreInstanceForTesting(FirebaseFirestore firestore) {
@@ -256,6 +258,63 @@ class EntitlementAdminService {
       list.sort((a, b) =>
           a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
       return list;
+    });
+  }
+
+  static Stream<List<AdminTherapySessionRow>> watchRecentTherapySessions({
+    int limit = 250,
+  }) {
+    final resolvedLimit = limit <= 0 ? 1 : limit;
+    return _sessionsCollection
+        .orderBy('updatedAtUnixMs', descending: true)
+        .limit(resolvedLimit)
+        .snapshots()
+        .map((snapshot) {
+      final sessions = snapshot.docs
+          .map(AdminTherapySessionRow.fromSessionDocument)
+          .where((session) => session.sessionId.isNotEmpty)
+          .toList();
+      sessions.sort((a, b) {
+        final byUpdated = b.updatedAtUnixMs.compareTo(a.updatedAtUnixMs);
+        if (byUpdated != 0) {
+          return byUpdated;
+        }
+        return b.sessionId.compareTo(a.sessionId);
+      });
+      return sessions;
+    });
+  }
+
+  static Stream<List<AdminSessionEventRow>> watchSessionEvents({
+    required String sessionId,
+    int limit = 80,
+  }) {
+    final normalizedSessionId = sessionId.trim();
+    if (normalizedSessionId.isEmpty) {
+      return Stream<List<AdminSessionEventRow>>.value(
+        const <AdminSessionEventRow>[],
+      );
+    }
+
+    final resolvedLimit = limit <= 0 ? 1 : limit;
+    return _sessionsCollection
+        .doc(normalizedSessionId)
+        .collection('events')
+        .orderBy('eventAtUnixMs', descending: true)
+        .limit(resolvedLimit)
+        .snapshots()
+        .map((snapshot) {
+      final events = snapshot.docs
+          .map(AdminSessionEventRow.fromSessionEventDocument)
+          .toList();
+      events.sort((a, b) {
+        final byTimestamp = b.eventAtUnixMs.compareTo(a.eventAtUnixMs);
+        if (byTimestamp != 0) {
+          return byTimestamp;
+        }
+        return b.eventId.compareTo(a.eventId);
+      });
+      return events;
     });
   }
 

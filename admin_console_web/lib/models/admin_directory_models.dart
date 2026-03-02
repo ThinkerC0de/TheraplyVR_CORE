@@ -107,3 +107,255 @@ class AdminGameGrantStats {
     required this.revokedAssignments,
   });
 }
+
+class AdminTherapySessionRow {
+  final String sessionId;
+  final String studentId;
+  final String therapistId;
+  final String ownerKey;
+  final String sessionKey;
+  final String stateWire;
+  final bool unfinished;
+  final bool isTerminal;
+  final String latestGameId;
+  final String reasonCode;
+  final DateTime? startedAtUtc;
+  final DateTime? interruptedAtUtc;
+  final DateTime? endedAtUtc;
+  final DateTime? updatedAtUtc;
+  final int updatedAtUnixMs;
+  final Map<String, dynamic> metadata;
+
+  const AdminTherapySessionRow({
+    required this.sessionId,
+    required this.studentId,
+    required this.therapistId,
+    required this.ownerKey,
+    required this.sessionKey,
+    required this.stateWire,
+    required this.unfinished,
+    required this.isTerminal,
+    required this.latestGameId,
+    required this.reasonCode,
+    required this.startedAtUtc,
+    required this.interruptedAtUtc,
+    required this.endedAtUtc,
+    required this.updatedAtUtc,
+    required this.updatedAtUnixMs,
+    required this.metadata,
+  });
+
+  String get stateLabel {
+    final normalized = stateWire.trim();
+    return normalized.isEmpty ? 'UNKNOWN' : normalized;
+  }
+
+  factory AdminTherapySessionRow.fromSessionDocument(
+    DocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data() ?? const <String, dynamic>{};
+    final metadata = data['metadata'] is Map<String, dynamic>
+        ? Map<String, dynamic>.from(data['metadata'] as Map<String, dynamic>)
+        : <String, dynamic>{};
+    final sessionIdRaw = (data['sessionId'] as String? ?? '').trim();
+    final sessionId = sessionIdRaw.isNotEmpty ? sessionIdRaw : doc.id.trim();
+    final updatedAtUnixMs = _asInt(data['updatedAtUnixMs']);
+    final startedAtUnixMs = _asInt(data['startedAtUnixMs']);
+    final interruptedAtUnixMs = _asInt(data['interruptedAtUnixMs']);
+    final endedAtUnixMs = _asInt(data['endedAtUnixMs']);
+
+    return AdminTherapySessionRow(
+      sessionId: sessionId,
+      studentId: (data['studentId'] as String? ?? '').trim(),
+      therapistId: (data['therapistId'] as String? ?? '').trim(),
+      ownerKey: (data['ownerKey'] as String? ?? '').trim(),
+      sessionKey: (data['sessionKey'] as String? ?? '').trim(),
+      stateWire: (data['state'] as String? ?? '').trim(),
+      unfinished: _asBool(data['unfinished']),
+      isTerminal: _asBool(data['isTerminal']),
+      latestGameId: (data['latestGameId'] as String? ?? '').trim(),
+      reasonCode: (data['reasonCode'] as String? ?? '').trim(),
+      startedAtUtc: _toUtcDateTime(data['startedAtUtc']) ??
+          _toUtcDateTimeFromUnixMs(startedAtUnixMs),
+      interruptedAtUtc: _toUtcDateTime(data['interruptedAtUtc']) ??
+          _toUtcDateTimeFromUnixMs(interruptedAtUnixMs),
+      endedAtUtc: _toUtcDateTime(data['endedAtUtc']) ??
+          _toUtcDateTimeFromUnixMs(endedAtUnixMs),
+      updatedAtUtc: _toUtcDateTime(data['updatedAtUtc']) ??
+          _toUtcDateTimeFromUnixMs(updatedAtUnixMs),
+      updatedAtUnixMs: updatedAtUnixMs,
+      metadata: metadata,
+    );
+  }
+
+  static DateTime? _toUtcDateTime(dynamic value) {
+    if (value is Timestamp) {
+      return value.toDate().toUtc();
+    }
+    if (value is DateTime) {
+      return value.toUtc();
+    }
+    if (value is String) {
+      return DateTime.tryParse(value)?.toUtc();
+    }
+    return null;
+  }
+
+  static DateTime? _toUtcDateTimeFromUnixMs(int unixMs) {
+    if (unixMs <= 0) {
+      return null;
+    }
+    return DateTime.fromMillisecondsSinceEpoch(unixMs, isUtc: true);
+  }
+
+  static bool _asBool(dynamic value) {
+    if (value is bool) {
+      return value;
+    }
+    if (value is num) {
+      return value != 0;
+    }
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      return normalized == 'true' || normalized == '1' || normalized == 'yes';
+    }
+    return false;
+  }
+
+  static int _asInt(dynamic value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is String) {
+      return int.tryParse(value) ?? 0;
+    }
+    return 0;
+  }
+}
+
+class AdminSessionEventRow {
+  final String eventId;
+  final String timelineEventId;
+  final String sessionId;
+  final String studentId;
+  final String therapistId;
+  final String eventType;
+  final String gameId;
+  final String source;
+  final DateTime? eventAtUtc;
+  final int eventAtUnixMs;
+  final Map<String, dynamic> details;
+
+  const AdminSessionEventRow({
+    required this.eventId,
+    required this.timelineEventId,
+    required this.sessionId,
+    required this.studentId,
+    required this.therapistId,
+    required this.eventType,
+    required this.gameId,
+    required this.source,
+    required this.eventAtUtc,
+    required this.eventAtUnixMs,
+    required this.details,
+  });
+
+  String detailsPreview({int maxEntries = 3}) {
+    if (details.isEmpty) {
+      return '-';
+    }
+
+    final keys = details.keys.toList(growable: false)..sort();
+    final parts = <String>[];
+    for (var i = 0; i < keys.length; i += 1) {
+      if (parts.length >= maxEntries) {
+        break;
+      }
+      final key = keys[i];
+      parts.add('$key=${_valuePreview(details[key])}');
+    }
+
+    if (keys.length > maxEntries) {
+      parts.add('...');
+    }
+    return parts.join(', ');
+  }
+
+  factory AdminSessionEventRow.fromSessionEventDocument(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data();
+    final details = data['details'] is Map<String, dynamic>
+        ? Map<String, dynamic>.from(data['details'] as Map<String, dynamic>)
+        : <String, dynamic>{};
+    final eventAtUnixMs = _asInt(data['eventAtUnixMs']);
+
+    return AdminSessionEventRow(
+      eventId: doc.id.trim(),
+      timelineEventId: (data['timelineEventId'] as String? ?? '').trim(),
+      sessionId: (data['sessionId'] as String? ?? '').trim(),
+      studentId: (data['studentId'] as String? ?? '').trim(),
+      therapistId: (data['therapistId'] as String? ?? '').trim(),
+      eventType: (data['eventType'] as String? ?? '').trim(),
+      gameId: (data['gameId'] as String? ?? '').trim(),
+      source: (data['source'] as String? ?? '').trim(),
+      eventAtUtc: _toUtcDateTime(data['eventAtUtc']) ??
+          _toUtcDateTimeFromUnixMs(eventAtUnixMs),
+      eventAtUnixMs: eventAtUnixMs,
+      details: details,
+    );
+  }
+
+  static String _valuePreview(dynamic value) {
+    if (value == null) {
+      return 'null';
+    }
+    if (value is Map) {
+      return '{${value.length}}';
+    }
+    if (value is List) {
+      return '[${value.length}]';
+    }
+    final raw = value.toString().trim();
+    if (raw.length > 48) {
+      return '${raw.substring(0, 45)}...';
+    }
+    return raw;
+  }
+
+  static DateTime? _toUtcDateTime(dynamic value) {
+    if (value is Timestamp) {
+      return value.toDate().toUtc();
+    }
+    if (value is DateTime) {
+      return value.toUtc();
+    }
+    if (value is String) {
+      return DateTime.tryParse(value)?.toUtc();
+    }
+    return null;
+  }
+
+  static DateTime? _toUtcDateTimeFromUnixMs(int unixMs) {
+    if (unixMs <= 0) {
+      return null;
+    }
+    return DateTime.fromMillisecondsSinceEpoch(unixMs, isUtc: true);
+  }
+
+  static int _asInt(dynamic value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is String) {
+      return int.tryParse(value) ?? 0;
+    }
+    return 0;
+  }
+}

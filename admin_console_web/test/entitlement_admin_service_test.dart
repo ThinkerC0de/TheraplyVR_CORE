@@ -299,4 +299,91 @@ void main() {
     expect(entry.deliveryMode, 'on_demand');
     expect(entry.parameterSchema?['schema'], 'demo_parameter_schema');
   });
+
+  test('watchRecentTherapySessions returns sorted session rows', () async {
+    await firestore.collection('therapy_sessions').doc('session-a').set(
+      <String, dynamic>{
+        'sessionId': 'session-a',
+        'studentId': 'student-1',
+        'therapistId': 'therapist-1',
+        'state': 'IN_PROGRESS',
+        'updatedAtUnixMs': 1000,
+        'updatedAtUtc': '2026-03-02T12:00:00Z',
+      },
+    );
+    await firestore.collection('therapy_sessions').doc('session-b').set(
+      <String, dynamic>{
+        'sessionId': 'session-b',
+        'studentId': 'student-2',
+        'therapistId': 'therapist-2',
+        'state': 'COMPLETED',
+        'isTerminal': true,
+        'reasonCode': 'THERAPIST_CONFIRMED_END',
+        'updatedAtUnixMs': 3000,
+        'updatedAtUtc': '2026-03-02T12:05:00Z',
+      },
+    );
+
+    final sessions =
+        await EntitlementAdminService.watchRecentTherapySessions().first;
+    expect(sessions, hasLength(2));
+    expect(sessions.first.sessionId, 'session-b');
+    expect(sessions.first.isTerminal, isTrue);
+    expect(sessions.first.reasonCode, 'THERAPIST_CONFIRMED_END');
+    expect(sessions.last.sessionId, 'session-a');
+  });
+
+  test('watchSessionEvents streams ordered events for selected session',
+      () async {
+    await firestore.collection('therapy_sessions').doc('session-x').set(
+      <String, dynamic>{
+        'sessionId': 'session-x',
+        'studentId': 'student-x',
+        'therapistId': 'therapist-x',
+        'state': 'IN_PROGRESS',
+        'updatedAtUnixMs': 5000,
+      },
+    );
+
+    final events = firestore
+        .collection('therapy_sessions')
+        .doc('session-x')
+        .collection('events');
+
+    await events.doc('event-old').set(
+      <String, dynamic>{
+        'sessionId': 'session-x',
+        'studentId': 'student-x',
+        'therapistId': 'therapist-x',
+        'eventType': 'GAME_START',
+        'source': 'mobile_controller',
+        'eventAtUnixMs': 1000,
+        'eventAtUtc': '2026-03-02T11:00:00Z',
+        'details': <String, dynamic>{'reasonCode': 'MANUAL_START'},
+      },
+    );
+    await events.doc('event-new').set(
+      <String, dynamic>{
+        'sessionId': 'session-x',
+        'studentId': 'student-x',
+        'therapistId': 'therapist-x',
+        'eventType': 'GAME_STOP',
+        'source': 'mobile_controller',
+        'eventAtUnixMs': 2000,
+        'eventAtUtc': '2026-03-02T11:01:00Z',
+        'details': <String, dynamic>{'reasonCode': 'THERAPIST_STOP'},
+      },
+    );
+
+    final streamed = await EntitlementAdminService.watchSessionEvents(
+      sessionId: 'session-x',
+      limit: 20,
+    ).first;
+
+    expect(streamed, hasLength(2));
+    expect(streamed.first.eventId, 'event-new');
+    expect(streamed.first.eventType, 'GAME_STOP');
+    expect(streamed.first.details['reasonCode'], 'THERAPIST_STOP');
+    expect(streamed.last.eventId, 'event-old');
+  });
 }
