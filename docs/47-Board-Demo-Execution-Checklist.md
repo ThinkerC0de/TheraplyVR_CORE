@@ -150,6 +150,9 @@ Do not show:
    - validation summary: `docs/evidence/20260302_140652/SUMMARY.md`,
    - rehearsal summary: `docs/evidence/20260302_140652/notes/BD-006-SUMMARY.md`,
    - HTTP rehearsal probes: `bd006_cms_domain_probe.log`, `bd006_package_probe_http.log`.
+5. Optional one-command preflight wrapper:
+   - `powershell -ExecutionPolicy Bypass -File scripts/board_demo_preflight.ps1`
+   - for final board GO: add `-ManualBoardRunConfirmed` after device run.
 
 ### BD-007 RC and Rollback
 1. Tag validated commit: `board-demo-rc-20260302`.
