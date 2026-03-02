@@ -2720,3 +2720,25 @@ Go/No-Go decision:
   - `scripts/unity_ops_dataset_trace_export_validate.ps1`: PASS (`commands/unity_ops_dataset_trace_export_validate.log`).
 - `OK` Status:
   - setup visibility + safe command gating fix: `DONE`.
+
+## 85) Demo Cube fallback parity with Unity layout schema (2026-03-02)
+
+- `OK` Scope:
+  - usuniecie rozjazdu, w ktorym mobilka pokazywala statyczny panel `Ustawienia gry` zamiast ustawien z Unity Mobile Layout Editor dla `demo_cube_clicker`.
+- `OK` Root cause verified:
+  - Firestore `game_catalog/demo_cube_clicker` zawiera aktualny layout (`schemaVersion=2026-02-27`) z kontrolkami:
+    - `cube_count`, `cube_speed`, `level_mode`, `resume_from_saved`, `apply_runtime_update`,
+  - obserwowany widok mobilki pochodził ze sciezki fallback katalogu lokalnego (bez schema dla `demo_cube_clicker`), nie z aktualnego kontraktu zdalnego.
+- `OK` Implementation (`flutter_controller/lib/screens/control_screen.dart`):
+  - dodano lokalny fallback `MobileControlSchema` dla `demo_cube_clicker` (schema-driven) zamiast statycznego fallbacku:
+    - layout `grid`, `columns=2`,
+    - kontrolki: `Cube Count`, `Cube Speed`, `Level Mode`, `Resume From Saved`, `Apply Runtime Config`,
+    - `buttonCommandId=UPDATE_CONFIG` dla akcji runtime update.
+  - rezultat: nawet przy chwilowym braku remote catalog sync operator widzi panel zgodny z layoutem Unity.
+- `OK` Validation evidence (`docs/evidence/20260302_103849`):
+  - `scripts/unity_session_flow_validation_pack.ps1 -SkipCompile`: PASS,
+  - `flutter_controller`: `flutter analyze` PASS (`commands/flutter_controller_flutter_analyze.log`),
+  - `flutter_controller`: `flutter test` PASS (`commands/flutter_controller_flutter_test.log`),
+  - `scripts/unity_ops_dataset_trace_export_validate.ps1`: PASS (`commands/unity_ops_dataset_trace_export_validate.log`).
+- `OK` Status:
+  - demo cube schema parity fallback: `DONE`.

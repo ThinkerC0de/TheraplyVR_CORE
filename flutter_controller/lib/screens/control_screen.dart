@@ -248,10 +248,135 @@ class _ControlScreenState extends State<ControlScreen>
     },
     expectedGameId: 'bilateral_markers',
   );
+  static final MobileControlSchemaParseResult _fallbackDemoCubeSchemaParse =
+      MobileControlSchema.tryParse(
+    const <String, dynamic>{
+      'schema': 'THERAPLY_MOBILE_CONTROL_SCHEMA',
+      'schemaVersion': '2026-02-27',
+      'gameId': 'demo_cube_clicker',
+      'title': 'Demo Cube Controls',
+      'description':
+          'Offline fallback schema for Demo Cube START_GAME and UPDATE_CONFIG.',
+      'layout': <String, dynamic>{
+        'mode': 'grid',
+        'columns': 2,
+      },
+      'payload': <String, dynamic>{
+        'target': 'game_config',
+        'gameConfigType': 'demo_cube_config_v1',
+        'gameConfigVersion': 1,
+        'includeVersionInGameConfig': true,
+      },
+      'sections': <Map<String, dynamic>>[
+        <String, dynamic>{'sectionId': 'setup', 'label': 'Setup', 'order': 10},
+        <String, dynamic>{
+          'sectionId': 'runtime',
+          'label': 'Runtime',
+          'order': 20,
+        },
+      ],
+      'controls': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'controlId': 'cube_count',
+          'type': 'slider',
+          'label': 'Cube Count',
+          'sectionId': 'setup',
+          'order': 10,
+          'defaultValue': '12',
+          'binding': <String, dynamic>{
+            'target': 'game_config',
+            'path': 'cubeCount',
+            'valueType': 'int',
+            'emitOnStartGame': true,
+            'emitOnUpdateConfig': true,
+          },
+          'validation': <String, dynamic>{
+            'required': true,
+            'minValue': '4',
+            'maxValue': '40',
+            'step': '1',
+          },
+        },
+        <String, dynamic>{
+          'controlId': 'cube_speed',
+          'type': 'slider',
+          'label': 'Cube Speed',
+          'sectionId': 'setup',
+          'order': 20,
+          'defaultValue': '0.7',
+          'binding': <String, dynamic>{
+            'target': 'game_config',
+            'path': 'cubeSpeed',
+            'valueType': 'double',
+            'emitOnStartGame': true,
+            'emitOnUpdateConfig': true,
+          },
+          'validation': <String, dynamic>{
+            'required': true,
+            'minValue': '0.2',
+            'maxValue': '2.2',
+            'step': '0.1',
+          },
+        },
+        <String, dynamic>{
+          'controlId': 'level_mode',
+          'type': 'select',
+          'label': 'Level Mode',
+          'sectionId': 'setup',
+          'order': 30,
+          'defaultValue': 'basic',
+          'binding': <String, dynamic>{
+            'target': 'game_config',
+            'path': 'levelMode',
+            'valueType': 'string',
+            'emitOnStartGame': true,
+            'emitOnUpdateConfig': true,
+          },
+          'validation': <String, dynamic>{'required': true},
+          'options': <Map<String, dynamic>>[
+            <String, dynamic>{'value': 'basic', 'label': 'Basic'},
+            <String, dynamic>{
+              'value': 'alternate_colors',
+              'label': 'Alternate Colors',
+            },
+            <String, dynamic>{
+              'value': 'random_target_color',
+              'label': 'Random Target',
+            },
+          ],
+        },
+        <String, dynamic>{
+          'controlId': 'resume_from_saved',
+          'type': 'toggle',
+          'label': 'Resume From Saved',
+          'sectionId': 'setup',
+          'order': 40,
+          'defaultValue': 'false',
+          'binding': <String, dynamic>{
+            'target': 'game_config',
+            'path': 'resumeFromSaved',
+            'valueType': 'bool',
+            'emitOnStartGame': true,
+            'emitOnUpdateConfig': true,
+          },
+          'validation': <String, dynamic>{'required': false},
+        },
+        <String, dynamic>{
+          'controlId': 'apply_runtime_update',
+          'type': 'button',
+          'label': 'Apply Runtime Config',
+          'sectionId': 'runtime',
+          'order': 50,
+          'buttonCommandId': 'UPDATE_CONFIG',
+        },
+      ],
+    },
+    expectedGameId: 'demo_cube_clicker',
+  );
 
   static final List<_GameCatalogEntry> _fallbackGameCatalog =
       <_GameCatalogEntry>[
-    const _GameCatalogEntry(
+    _GameCatalogEntry(
       gameId: 'demo_cube_clicker',
       title: 'Demo Cube Clicker',
       description:
@@ -269,6 +394,8 @@ class _ControlScreenState extends State<ControlScreen>
         'Poziom alternation: kolory na zmiane.',
         'Poziom random target: aktywny kolor celu zmienia sie dynamicznie.',
       ],
+      mobileControlSchema: _fallbackDemoCubeSchemaParse.schema,
+      mobileControlSchemaReasonCode: _fallbackDemoCubeSchemaParse.reasonCode,
     ),
     const _GameCatalogEntry(
       gameId: 'pulse_target_tap',
