@@ -55,6 +55,8 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
   bool _savingEntitlement = false;
   bool _savingGrant = false;
   bool _savingCatalogEntry = false;
+  bool _savingAccountDirectory = false;
+  bool _savingStudentDirectory = false;
   bool _seedingGameCatalog = false;
   bool _loadingCatalogSeed = true;
   bool _loadingExportManifest = true;
@@ -888,7 +890,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
     }
   }
 
-  Future<bool> _confirmCatalogAction({
+  Future<bool> _confirmAction({
     required String title,
     required String message,
     required String confirmLabel,
@@ -922,7 +924,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
   }
 
   Future<void> _deactivateGameCatalogEntry(String gameId) async {
-    final confirmed = await _confirmCatalogAction(
+    final confirmed = await _confirmAction(
       title: 'Deactivate game',
       message: 'Set active=false and runtimeLaunchEnabled=false for "$gameId"?',
       confirmLabel: 'Deactivate',
@@ -956,7 +958,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
   }
 
   Future<void> _deleteGameCatalogEntry(String gameId) async {
-    final confirmed = await _confirmCatalogAction(
+    final confirmed = await _confirmAction(
       title: 'Delete game',
       message:
           'Permanently delete game_catalog/$gameId?\nUse deactivate if you only need to hide the game.',
@@ -1222,6 +1224,518 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
     _snack('Ustawiono Target UID: $normalizedUid');
   }
 
+  Future<_AccountCreateRequest?> _openAccountCreateDialog() async {
+    final uidController = TextEditingController();
+    final expiresDaysController = TextEditingController(text: '365');
+    var role = EntitlementRole.therapist;
+    var planTier = SubscriptionPlanTier.basic;
+    var appStatus = LicenseStatus.active;
+    var perpetual = true;
+    var validationError = '';
+
+    final result = await showDialog<_AccountCreateRequest>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Create entitlement account'),
+              content: SizedBox(
+                width: 520,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: uidController,
+                        decoration: const InputDecoration(
+                          labelText: 'User UID',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<EntitlementRole>(
+                        initialValue: role,
+                        decoration: const InputDecoration(
+                          labelText: 'Role',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: EntitlementRole.therapist,
+                            child: Text('THERAPIST'),
+                          ),
+                          DropdownMenuItem(
+                            value: EntitlementRole.parent,
+                            child: Text('PARENT'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) {
+                            return;
+                          }
+                          setDialogState(() {
+                            role = value;
+                            if (role == EntitlementRole.parent &&
+                                planTier == SubscriptionPlanTier.basic) {
+                              planTier = SubscriptionPlanTier.free;
+                            } else if (role == EntitlementRole.therapist &&
+                                planTier == SubscriptionPlanTier.free) {
+                              planTier = SubscriptionPlanTier.basic;
+                            }
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<SubscriptionPlanTier>(
+                        initialValue: planTier,
+                        decoration: const InputDecoration(
+                          labelText: 'Plan tier',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: SubscriptionPlanTier.free,
+                            child: Text('FREE'),
+                          ),
+                          DropdownMenuItem(
+                            value: SubscriptionPlanTier.basic,
+                            child: Text('BASIC'),
+                          ),
+                          DropdownMenuItem(
+                            value: SubscriptionPlanTier.premium,
+                            child: Text('PREMIUM'),
+                          ),
+                          DropdownMenuItem(
+                            value: SubscriptionPlanTier.live,
+                            child: Text('LIVE'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) {
+                            return;
+                          }
+                          setDialogState(() {
+                            planTier = value;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<LicenseStatus>(
+                        initialValue: appStatus,
+                        decoration: const InputDecoration(
+                          labelText: 'App license status',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: LicenseStatus.active,
+                            child: Text('ACTIVE'),
+                          ),
+                          DropdownMenuItem(
+                            value: LicenseStatus.expired,
+                            child: Text('EXPIRED'),
+                          ),
+                          DropdownMenuItem(
+                            value: LicenseStatus.revoked,
+                            child: Text('REVOKED'),
+                          ),
+                          DropdownMenuItem(
+                            value: LicenseStatus.none,
+                            child: Text('NONE'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) {
+                            return;
+                          }
+                          setDialogState(() {
+                            appStatus = value;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      SwitchListTile(
+                        value: perpetual,
+                        onChanged: (value) {
+                          setDialogState(() {
+                            perpetual = value;
+                          });
+                        },
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Perpetual app license'),
+                      ),
+                      if (!perpetual)
+                        TextField(
+                          controller: expiresDaysController,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Expires in days',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      if (validationError.trim().isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          validationError,
+                          style: TextStyle(color: Colors.red.shade700),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton.icon(
+                  onPressed: () {
+                    final userId = uidController.text.trim();
+                    final expiresInDays =
+                        int.tryParse(expiresDaysController.text.trim()) ?? 365;
+                    if (userId.isEmpty) {
+                      setDialogState(() {
+                        validationError = 'User UID is required.';
+                      });
+                      return;
+                    }
+                    if (!perpetual && expiresInDays <= 0) {
+                      setDialogState(() {
+                        validationError = 'Expires in days must be > 0.';
+                      });
+                      return;
+                    }
+                    Navigator.of(dialogContext).pop(
+                      _AccountCreateRequest(
+                        userId: userId,
+                        role: role,
+                        planTier: planTier,
+                        appStatus: appStatus,
+                        perpetual: perpetual,
+                        expiresInDays: expiresInDays,
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.person_add),
+                  label: const Text('Create'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    uidController.dispose();
+    expiresDaysController.dispose();
+    return result;
+  }
+
+  Future<void> _createDirectoryAccount() async {
+    final request = await _openAccountCreateDialog();
+    if (request == null) {
+      return;
+    }
+
+    final reason = _resolveReason('manual-account-create');
+    final correlationId = _resolveCorrelationId();
+    setState(() {
+      _savingAccountDirectory = true;
+    });
+    try {
+      await EntitlementAdminService.upsertUserEntitlement(
+        userId: request.userId,
+        role: request.role,
+        appLicense: _buildGrant(
+          status: request.appStatus,
+          perpetual: request.perpetual,
+          days: request.expiresInDays,
+        ),
+        planProfile: EntitlementPlanProfile.fromMap(
+          <String, dynamic>{
+            'tier': request.planTier.wireValue,
+          },
+        ),
+        reason: reason,
+        correlationId: correlationId,
+      );
+      _snack('Created entitlement for ${request.userId} ($correlationId)');
+      _rotateCorrelationId();
+    } catch (e) {
+      _snack('Create account failed: $e', error: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _savingAccountDirectory = false;
+        });
+      }
+    }
+  }
+
+  void _openDirectoryUserInOperations(AdminDirectoryUserRow user) {
+    setState(() {
+      _targetUserIdController.text = user.userId;
+      _selectedRole = user.role;
+      _selectedPlanTier = user.planTier;
+      _selectedAppLicenseStatus = user.appLicenseStatus;
+      _entitlementPerpetual = true;
+    });
+    DefaultTabController.of(context).animateTo(0);
+    _snack('Loaded ${user.userId} into Operations editor');
+  }
+
+  Future<void> _deleteDirectoryAccount(String userId) async {
+    final confirmed = await _confirmAction(
+      title: 'Delete entitlement',
+      message: 'Delete user_entitlements/$userId?',
+      confirmLabel: 'Delete',
+      danger: true,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    final reason = _resolveReason('manual-account-delete');
+    final correlationId = _resolveCorrelationId();
+    setState(() {
+      _savingAccountDirectory = true;
+    });
+    try {
+      await EntitlementAdminService.deleteUserEntitlement(
+        userId: userId,
+        reason: reason,
+        correlationId: correlationId,
+      );
+      _snack('Deleted user_entitlements/$userId ($correlationId)');
+      _rotateCorrelationId();
+    } catch (e) {
+      _snack('Delete account failed: $e', error: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _savingAccountDirectory = false;
+        });
+      }
+    }
+  }
+
+  Future<_StudentEditorResult?> _openStudentEditorDialog({
+    AdminStudentDirectoryRow? existing,
+  }) async {
+    final isCreate = existing == null;
+    final studentIdController =
+        TextEditingController(text: existing?.studentId ?? '');
+    final therapistIdController =
+        TextEditingController(text: existing?.therapistId ?? '');
+    final firstNameController =
+        TextEditingController(text: existing?.firstName ?? '');
+    final lastNameController =
+        TextEditingController(text: existing?.lastName ?? '');
+    var validationError = '';
+
+    final result = await showDialog<_StudentEditorResult>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text(isCreate ? 'Create student' : 'Edit student'),
+              content: SizedBox(
+                width: 480,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: studentIdController,
+                        enabled: isCreate,
+                        decoration: const InputDecoration(
+                          labelText: 'studentId (optional when creating)',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: therapistIdController,
+                        decoration: const InputDecoration(
+                          labelText: 'therapistId',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: firstNameController,
+                        decoration: const InputDecoration(
+                          labelText: 'firstName',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: lastNameController,
+                        decoration: const InputDecoration(
+                          labelText: 'lastName',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      if (validationError.trim().isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          validationError,
+                          style: TextStyle(color: Colors.red.shade700),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton.icon(
+                  onPressed: () {
+                    final therapistId = therapistIdController.text.trim();
+                    if (therapistId.isEmpty) {
+                      setDialogState(() {
+                        validationError = 'therapistId is required.';
+                      });
+                      return;
+                    }
+                    Navigator.of(dialogContext).pop(
+                      _StudentEditorResult(
+                        studentId: studentIdController.text.trim(),
+                        therapistId: therapistId,
+                        firstName: firstNameController.text.trim(),
+                        lastName: lastNameController.text.trim(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.save),
+                  label: Text(isCreate ? 'Create' : 'Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    studentIdController.dispose();
+    therapistIdController.dispose();
+    firstNameController.dispose();
+    lastNameController.dispose();
+    return result;
+  }
+
+  Future<void> _createStudentRecord() async {
+    final request = await _openStudentEditorDialog();
+    if (request == null) {
+      return;
+    }
+
+    final reason = _resolveReason('manual-student-create');
+    final correlationId = _resolveCorrelationId();
+    setState(() {
+      _savingStudentDirectory = true;
+    });
+    try {
+      final studentId = await EntitlementAdminService.upsertStudentRecord(
+        studentId: request.studentId,
+        therapistId: request.therapistId,
+        firstName: request.firstName,
+        lastName: request.lastName,
+        reason: reason,
+        correlationId: correlationId,
+        action: 'CREATE_STUDENT_DIRECTORY_ENTRY',
+      );
+      _snack('Created students/$studentId ($correlationId)');
+      _rotateCorrelationId();
+    } catch (e) {
+      _snack('Create student failed: $e', error: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _savingStudentDirectory = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _editStudentRecord(AdminStudentDirectoryRow student) async {
+    final request = await _openStudentEditorDialog(existing: student);
+    if (request == null) {
+      return;
+    }
+
+    final reason = _resolveReason('manual-student-edit');
+    final correlationId = _resolveCorrelationId();
+    setState(() {
+      _savingStudentDirectory = true;
+    });
+    try {
+      final studentId = await EntitlementAdminService.upsertStudentRecord(
+        studentId: student.studentId,
+        therapistId: request.therapistId,
+        firstName: request.firstName,
+        lastName: request.lastName,
+        reason: reason,
+        correlationId: correlationId,
+        action: 'UPDATE_STUDENT_DIRECTORY_ENTRY',
+      );
+      _snack('Updated students/$studentId ($correlationId)');
+      _rotateCorrelationId();
+    } catch (e) {
+      _snack('Update student failed: $e', error: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _savingStudentDirectory = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteStudentRecord(String studentId) async {
+    final confirmed = await _confirmAction(
+      title: 'Delete student',
+      message: 'Delete students/$studentId?',
+      confirmLabel: 'Delete',
+      danger: true,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    final reason = _resolveReason('manual-student-delete');
+    final correlationId = _resolveCorrelationId();
+    setState(() {
+      _savingStudentDirectory = true;
+    });
+    try {
+      await EntitlementAdminService.deleteStudentRecord(
+        studentId: studentId,
+        reason: reason,
+        correlationId: correlationId,
+      );
+      _snack('Deleted students/$studentId ($correlationId)');
+      _rotateCorrelationId();
+    } catch (e) {
+      _snack('Delete student failed: $e', error: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _savingStudentDirectory = false;
+        });
+      }
+    }
+  }
+
   void _useGameIdForGrant(String gameId) {
     final normalizedGameId = gameId.trim();
     if (normalizedGameId.isEmpty) {
@@ -1340,6 +1854,8 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        _buildAccountsCrudCard(),
+        const SizedBox(height: 12),
         _buildRoleDirectoryCard(
           title: 'Therapists',
           role: EntitlementRole.therapist,
@@ -1352,6 +1868,51 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
           emptyLabel: 'Brak rodzicow w user_entitlements.',
         ),
       ],
+    );
+  }
+
+  Widget _buildAccountsCrudCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Account CRUD',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Create/delete therapist or parent entitlement records.',
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed:
+                      _savingAccountDirectory ? null : _createDirectoryAccount,
+                  icon: _savingAccountDirectory
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.person_add),
+                  label: const Text('Create account'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _useCurrentUserUidAsTarget,
+                  icon: const Icon(Icons.person_pin),
+                  label: const Text('Use my UID'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1440,9 +2001,32 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                                 ],
                               ),
                             ),
-                            TextButton(
-                              onPressed: () => _useTargetUid(user.userId),
-                              child: const Text('Use UID'),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                TextButton(
+                                  onPressed: () => _useTargetUid(user.userId),
+                                  child: const Text('Use UID'),
+                                ),
+                                TextButton(
+                                  onPressed: () =>
+                                      _openDirectoryUserInOperations(user),
+                                  child: const Text('Edit'),
+                                ),
+                                TextButton(
+                                  onPressed: _savingAccountDirectory
+                                      ? null
+                                      : () => _deleteDirectoryAccount(
+                                            user.userId,
+                                          ),
+                                  child: Text(
+                                    'Delete',
+                                    style: TextStyle(
+                                      color: Colors.red.shade700,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -1470,6 +2054,34 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                 const Text(
                   'Children / Patients',
                   style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Manage students collection records (create/edit/delete).',
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton.icon(
+                      onPressed:
+                          _savingStudentDirectory ? null : _createStudentRecord,
+                      icon: _savingStudentDirectory
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.person_add_alt_1),
+                      label: const Text('Create student'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _useCurrentUserUidAsTarget,
+                      icon: const Icon(Icons.person_pin),
+                      label: const Text('Use my UID'),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 StreamBuilder<List<AdminStudentDirectoryRow>>(
@@ -1539,10 +2151,34 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                                     ],
                                   ),
                                 ),
-                                TextButton(
-                                  onPressed: () =>
-                                      _useTargetUid(student.therapistId),
-                                  child: const Text('Use owner UID'),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          _useTargetUid(student.therapistId),
+                                      child: const Text('Use owner UID'),
+                                    ),
+                                    TextButton(
+                                      onPressed: _savingStudentDirectory
+                                          ? null
+                                          : () => _editStudentRecord(student),
+                                      child: const Text('Edit'),
+                                    ),
+                                    TextButton(
+                                      onPressed: _savingStudentDirectory
+                                          ? null
+                                          : () => _deleteStudentRecord(
+                                                student.studentId,
+                                              ),
+                                      child: Text(
+                                        'Delete',
+                                        style: TextStyle(
+                                          color: Colors.red.shade700,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -3284,5 +3920,37 @@ class _GrantOnlyGameCardData {
   const _GrantOnlyGameCardData({
     required this.gameId,
     required this.authoringStatus,
+  });
+}
+
+class _AccountCreateRequest {
+  final String userId;
+  final EntitlementRole role;
+  final SubscriptionPlanTier planTier;
+  final LicenseStatus appStatus;
+  final bool perpetual;
+  final int expiresInDays;
+
+  const _AccountCreateRequest({
+    required this.userId,
+    required this.role,
+    required this.planTier,
+    required this.appStatus,
+    required this.perpetual,
+    required this.expiresInDays,
+  });
+}
+
+class _StudentEditorResult {
+  final String studentId;
+  final String therapistId;
+  final String firstName;
+  final String lastName;
+
+  const _StudentEditorResult({
+    required this.studentId,
+    required this.therapistId,
+    required this.firstName,
+    required this.lastName,
   });
 }

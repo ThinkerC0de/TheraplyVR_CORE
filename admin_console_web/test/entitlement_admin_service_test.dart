@@ -90,6 +90,35 @@ void main() {
     expect(planProfile['tier'], 'FREE');
   });
 
+  test('deleteUserEntitlement removes document and writes audit', () async {
+    const userId = 'delete-me-user';
+    await firestore.collection('user_entitlements').doc(userId).set(
+      <String, dynamic>{
+        'role': 'THERAPIST',
+        'appLicense': <String, dynamic>{'status': 'ACTIVE', 'perpetual': true},
+      },
+    );
+
+    await EntitlementAdminService.deleteUserEntitlement(
+      userId: userId,
+      reason: 'manual-delete',
+      correlationId: 'corr-delete-entitlement-1',
+    );
+
+    final entitlement =
+        await firestore.collection('user_entitlements').doc(userId).get();
+    expect(entitlement.exists, isFalse);
+
+    final auditSnapshot = await firestore
+        .collection('admin_audit_trail')
+        .where('targetCollection', isEqualTo: 'user_entitlements')
+        .where('targetDocumentId', isEqualTo: userId)
+        .get();
+    expect(auditSnapshot.docs, hasLength(1));
+    expect(
+        auditSnapshot.docs.single.data()['action'], 'DELETE_USER_ENTITLEMENT');
+  });
+
   test('upsertGrantAssignment writes grant and audit event', () async {
     const correlationId = 'corr-grant-1';
     const reason = 'temporary-access';
@@ -365,6 +394,64 @@ void main() {
     expect(rows, hasLength(2));
     expect(rows.first.gameId, 'game-a');
     expect(rows.last.gameId, 'game-z');
+  });
+
+  test('upsert and delete student record write students collection and audit',
+      () async {
+    final createdStudentId = await EntitlementAdminService.upsertStudentRecord(
+      studentId: '',
+      therapistId: 'therapist-1',
+      firstName: 'Jan',
+      lastName: 'Kowalski',
+      reason: 'student-create',
+      correlationId: 'corr-student-create-1',
+      action: 'CREATE_STUDENT_DIRECTORY_ENTRY',
+    );
+
+    final created =
+        await firestore.collection('students').doc(createdStudentId).get();
+    expect(created.exists, isTrue);
+    final createdData = created.data()!;
+    expect(createdData['therapistId'], 'therapist-1');
+    expect(createdData['firstName'], 'Jan');
+
+    await EntitlementAdminService.upsertStudentRecord(
+      studentId: createdStudentId,
+      therapistId: 'therapist-2',
+      firstName: 'Janina',
+      lastName: 'Kowalska',
+      reason: 'student-update',
+      correlationId: 'corr-student-update-1',
+      action: 'UPDATE_STUDENT_DIRECTORY_ENTRY',
+    );
+
+    final updated =
+        await firestore.collection('students').doc(createdStudentId).get();
+    final updatedData = updated.data()!;
+    expect(updatedData['therapistId'], 'therapist-2');
+    expect(updatedData['firstName'], 'Janina');
+
+    await EntitlementAdminService.deleteStudentRecord(
+      studentId: createdStudentId,
+      reason: 'student-delete',
+      correlationId: 'corr-student-delete-1',
+    );
+
+    final deleted =
+        await firestore.collection('students').doc(createdStudentId).get();
+    expect(deleted.exists, isFalse);
+
+    final auditSnapshot = await firestore
+        .collection('admin_audit_trail')
+        .where('targetCollection', isEqualTo: 'students')
+        .where('targetDocumentId', isEqualTo: createdStudentId)
+        .get();
+    final actions = auditSnapshot.docs
+        .map((doc) => doc.data()['action'] as String? ?? '')
+        .toSet();
+    expect(actions.contains('CREATE_STUDENT_DIRECTORY_ENTRY'), isTrue);
+    expect(actions.contains('UPDATE_STUDENT_DIRECTORY_ENTRY'), isTrue);
+    expect(actions.contains('DELETE_STUDENT_DIRECTORY_ENTRY'), isTrue);
   });
 
   test('deactivate and delete game catalog entry update data and audit',

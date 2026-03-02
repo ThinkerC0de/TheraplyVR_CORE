@@ -117,6 +117,40 @@ class EntitlementAdminService {
     await batch.commit();
   }
 
+  static Future<void> deleteUserEntitlement({
+    required String userId,
+    required String reason,
+    required String correlationId,
+  }) async {
+    final normalizedUserId = _requireTrimmed(userId, 'userId');
+    final normalizedReason = _requireTrimmed(reason, 'reason');
+    final normalizedCorrelationId =
+        _requireTrimmed(correlationId, 'correlationId');
+    final nowUtc = DateTime.now().toUtc();
+    final actor = await _resolveActor();
+
+    final auditEvent = AdminAuditEvent(
+      actorUid: actor.uid,
+      actorEmail: actor.email,
+      actorRole: actor.role,
+      action: 'DELETE_USER_ENTITLEMENT',
+      targetCollection: 'user_entitlements',
+      targetDocumentId: normalizedUserId,
+      targetUserId: normalizedUserId,
+      occurredAtUtc: nowUtc,
+      reason: normalizedReason,
+      correlationId: normalizedCorrelationId,
+      payloadSummary: <String, dynamic>{
+        'userId': normalizedUserId,
+      },
+    );
+
+    final batch = _firestore.batch();
+    batch.delete(_entitlementsCollection.doc(normalizedUserId));
+    batch.set(_auditCollection.doc(), auditEvent.toFirestore());
+    await batch.commit();
+  }
+
   static Future<_AdminActor> _resolveActor() async {
     if (_actorOverride != null) {
       return _actorOverride!;
@@ -259,6 +293,101 @@ class EntitlementAdminService {
           a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
       return list;
     });
+  }
+
+  static Future<String> upsertStudentRecord({
+    required String studentId,
+    required String therapistId,
+    required String firstName,
+    required String lastName,
+    required String reason,
+    required String correlationId,
+    String action = 'UPSERT_STUDENT_DIRECTORY_ENTRY',
+  }) async {
+    final normalizedTherapistId = _requireTrimmed(therapistId, 'therapistId');
+    final normalizedReason = _requireTrimmed(reason, 'reason');
+    final normalizedCorrelationId =
+        _requireTrimmed(correlationId, 'correlationId');
+    final normalizedFirstName = firstName.trim();
+    final normalizedLastName = lastName.trim();
+    final nowUtc = DateTime.now().toUtc();
+    final actor = await _resolveActor();
+    final resolvedStudentId = studentId.trim().isNotEmpty
+        ? studentId.trim()
+        : _studentsCollection.doc().id;
+
+    final payload = <String, dynamic>{
+      'studentId': resolvedStudentId,
+      'firstName': normalizedFirstName,
+      'lastName': normalizedLastName,
+      'therapistId': normalizedTherapistId,
+      'updatedAt': nowUtc.toIso8601String(),
+      'updatedAtUnixMs': nowUtc.millisecondsSinceEpoch,
+      'updatedBy': actor.uid,
+      'updateReason': normalizedReason,
+      'correlationId': normalizedCorrelationId,
+    };
+
+    final auditEvent = AdminAuditEvent(
+      actorUid: actor.uid,
+      actorEmail: actor.email,
+      actorRole: actor.role,
+      action: action,
+      targetCollection: 'students',
+      targetDocumentId: resolvedStudentId,
+      targetUserId: normalizedTherapistId,
+      occurredAtUtc: nowUtc,
+      reason: normalizedReason,
+      correlationId: normalizedCorrelationId,
+      payloadSummary: <String, dynamic>{
+        'studentId': resolvedStudentId,
+        'therapistId': normalizedTherapistId,
+      },
+    );
+
+    final batch = _firestore.batch();
+    batch.set(
+      _studentsCollection.doc(resolvedStudentId),
+      payload,
+      SetOptions(merge: true),
+    );
+    batch.set(_auditCollection.doc(), auditEvent.toFirestore());
+    await batch.commit();
+    return resolvedStudentId;
+  }
+
+  static Future<void> deleteStudentRecord({
+    required String studentId,
+    required String reason,
+    required String correlationId,
+  }) async {
+    final normalizedStudentId = _requireTrimmed(studentId, 'studentId');
+    final normalizedReason = _requireTrimmed(reason, 'reason');
+    final normalizedCorrelationId =
+        _requireTrimmed(correlationId, 'correlationId');
+    final nowUtc = DateTime.now().toUtc();
+    final actor = await _resolveActor();
+
+    final auditEvent = AdminAuditEvent(
+      actorUid: actor.uid,
+      actorEmail: actor.email,
+      actorRole: actor.role,
+      action: 'DELETE_STUDENT_DIRECTORY_ENTRY',
+      targetCollection: 'students',
+      targetDocumentId: normalizedStudentId,
+      targetUserId: null,
+      occurredAtUtc: nowUtc,
+      reason: normalizedReason,
+      correlationId: normalizedCorrelationId,
+      payloadSummary: <String, dynamic>{
+        'studentId': normalizedStudentId,
+      },
+    );
+
+    final batch = _firestore.batch();
+    batch.delete(_studentsCollection.doc(normalizedStudentId));
+    batch.set(_auditCollection.doc(), auditEvent.toFirestore());
+    await batch.commit();
   }
 
   static Stream<List<AdminTherapySessionRow>> watchRecentTherapySessions({
