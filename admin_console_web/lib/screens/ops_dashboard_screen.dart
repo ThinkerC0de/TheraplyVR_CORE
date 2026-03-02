@@ -3104,6 +3104,10 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
               style: TextStyle(fontSize: 12),
             ),
             Text(
+              '2a. Alternative (external hosting, e.g. Home.pl): scripts/upload_board_safe_game_packages.ps1 -Protocol ftps -FtpHost <ftp-host> -Username <user> -RemoteDirectory /public_html/content',
+              style: TextStyle(fontSize: 12),
+            ),
+            Text(
               '3. In game_catalog set/update packageUri (for example https://theraply-vr-demo.web.app/content/your_file.pkg.json).',
               style: TextStyle(fontSize: 12),
             ),

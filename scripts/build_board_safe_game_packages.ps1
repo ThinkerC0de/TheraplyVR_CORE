@@ -5,7 +5,9 @@ param(
     [string]$CatalogPath = "contracts/game_catalog_seed.json",
     [string]$ExportManifestPath = "contracts/game_definition_export_manifest.json",
     [string]$OutputDirectory = "hosting/public/content",
-    [string]$BasePackageUrl = "https://theraply-vr-demo.web.app/content"
+    [string]$BasePackageUrl = "https://theraply-vr-demo.web.app/content",
+    [switch]$UpdateCatalogPackageUris,
+    [switch]$SyncAdminConsoleSeedAssets
 )
 
 Set-StrictMode -Version Latest
@@ -56,6 +58,41 @@ function Write-Utf8NoBom {
         $Path,
         $Content + [Environment]::NewLine,
         (New-Object System.Text.UTF8Encoding($false)))
+}
+
+function Update-CatalogPackageUris {
+    param(
+        [Parameter(Mandatory = $true)][string]$CatalogFilePath,
+        [Parameter(Mandatory = $true)][object[]]$Packages
+    )
+
+    $raw = Get-Content -Path $CatalogFilePath -Raw -Encoding UTF8
+    foreach ($package in $Packages) {
+        $gameId = [string]$package.gameId
+        $packageUri = [string]$package.packageUri
+        if ([string]::IsNullOrWhiteSpace($gameId) -or [string]::IsNullOrWhiteSpace($packageUri)) {
+            continue
+        }
+
+        $escapedGameId = [System.Text.RegularExpressions.Regex]::Escape($gameId.Trim())
+        $pattern = '(?ms)(^\s{{24}}"gameId"\s*:\s*"{0}",[\s\S]*?^\s{{24}}"packageUri"\s*:\s*")([^"]*)(")' -f $escapedGameId
+        if (-not [System.Text.RegularExpressions.Regex]::IsMatch($raw, $pattern)) {
+            throw "Could not locate packageUri field for gameId='$gameId' in $CatalogFilePath"
+        }
+
+        $nextUri = $packageUri.Trim()
+        $raw = [System.Text.RegularExpressions.Regex]::Replace(
+            $raw,
+            $pattern,
+            [System.Text.RegularExpressions.MatchEvaluator]{
+                param($match)
+                return $match.Groups[1].Value + $nextUri + $match.Groups[3].Value
+            },
+            1)
+    }
+
+    Write-Utf8NoBom -Path $CatalogFilePath -Content ($raw.TrimEnd())
+    Write-Host ("[DONE] Updated catalog packageUri values: {0}" -f $CatalogFilePath)
 }
 
 $scriptRoot = Split-Path -Parent $PSCommandPath
@@ -197,3 +234,16 @@ $summary = [ordered]@{
 $summaryPath = Join-Path $outputDirectoryFullPath "board_safe_game_packages_index.json"
 Write-Utf8NoBom -Path $summaryPath -Content (($summary | ConvertTo-Json -Depth 8))
 Write-Host ("[DONE] Package index: {0}" -f $summaryPath)
+
+if ($UpdateCatalogPackageUris) {
+    Update-CatalogPackageUris -CatalogFilePath $catalogFullPath -Packages $packageResults.ToArray()
+
+    if ($SyncAdminConsoleSeedAssets) {
+        $syncScriptPath = Resolve-AbsolutePath -BasePath $RepoRoot -PathValue "scripts/sync_admin_console_seed_assets.ps1"
+        if (-not (Test-Path -Path $syncScriptPath -PathType Leaf)) {
+            throw "Missing sync script: $syncScriptPath"
+        }
+
+        & $syncScriptPath -RepoRoot $RepoRoot
+    }
+}

@@ -158,6 +158,29 @@ Generate board-safe game package manifests from contracts (for packageUri/probe/
 powershell -ExecutionPolicy Bypass -File .\scripts\build_board_safe_game_packages.ps1
 ```
 
+Generate with custom public base URL and auto-update `game_catalog` packageUri fields:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\build_board_safe_game_packages.ps1 `
+  -BasePackageUrl "https://<YOUR_DOMAIN>/content" `
+  -UpdateCatalogPackageUris `
+  -SyncAdminConsoleSeedAssets
+```
+
+Upload generated board-safe package files to external hosting (FTP/FTPS/SFTP, e.g. Home.pl):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\upload_board_safe_game_packages.ps1 `
+  -Protocol ftps `
+  -FtpHost <FTP_HOST> `
+  -Username <FTP_USER> `
+  -RemoteDirectory /public_html/content
+```
+
+Password handling:
+- pass `-Password "<secret>"`, or
+- set env var `THERAPLY_HOSTING_PASSWORD` before running script.
+
 Generated files:
 - `hosting/public/content/demo_cube_clicker_1_2_0.pkg.json`
 - `hosting/public/content/pulse_target_tap_1_0_0.pkg.json`

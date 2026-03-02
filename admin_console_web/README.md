@@ -17,6 +17,7 @@ Browser-based entitlement operator console for Theraply.
   - sessions with inline events, multi-select, and bulk delete
   - known games + GAME grant stats + package delivery guide
 - Board-safe package manifests for runtime games can be generated from repo root with `scripts/build_board_safe_game_packages.ps1`
+- External hosting upload (Home.pl etc.) is supported via `scripts/upload_board_safe_game_packages.ps1` (`ftp`/`ftps`/`sftp` through `curl.exe`)
 
 ## Run (Chrome)
 
