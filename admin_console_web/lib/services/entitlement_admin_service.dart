@@ -489,6 +489,60 @@ class EntitlementAdminService {
     });
   }
 
+  static Future<int> deleteTherapySessions({
+    required List<String> sessionDocumentIds,
+    required String reason,
+    required String correlationId,
+  }) async {
+    final normalizedReason = _requireTrimmed(reason, 'reason');
+    final normalizedCorrelationId =
+        _requireTrimmed(correlationId, 'correlationId');
+    final normalizedSessionIds = sessionDocumentIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (normalizedSessionIds.isEmpty) {
+      return 0;
+    }
+
+    final actor = await _resolveActor();
+    final nowUtc = DateTime.now().toUtc();
+    const maxBatchDeletes = 450;
+    for (var offset = 0;
+        offset < normalizedSessionIds.length;
+        offset += maxBatchDeletes) {
+      final chunk = normalizedSessionIds.skip(offset).take(maxBatchDeletes);
+      final batch = _firestore.batch();
+      for (final sessionId in chunk) {
+        batch.delete(_sessionsCollection.doc(sessionId));
+      }
+      await batch.commit();
+    }
+
+    final auditEvent = AdminAuditEvent(
+      actorUid: actor.uid,
+      actorEmail: actor.email,
+      actorRole: actor.role,
+      action: 'DELETE_THERAPY_SESSION_BATCH',
+      targetCollection: 'therapy_sessions',
+      targetDocumentId: normalizedSessionIds.length == 1
+          ? normalizedSessionIds.first
+          : '(batch)',
+      targetUserId: null,
+      occurredAtUtc: nowUtc,
+      reason: normalizedReason,
+      correlationId: normalizedCorrelationId,
+      payloadSummary: <String, dynamic>{
+        'deletedSessionCount': normalizedSessionIds.length,
+        'sessionDocumentIdsPreview': normalizedSessionIds.take(25).toList(),
+      },
+    );
+    await _auditCollection.doc().set(auditEvent.toFirestore());
+
+    return normalizedSessionIds.length;
+  }
+
   static Stream<List<AdminSessionEventRow>> watchSessionEvents({
     required String sessionId,
     int limit = 80,

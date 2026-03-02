@@ -588,6 +588,56 @@ void main() {
     expect(streamed.last.eventId, 'event-old');
   });
 
+  test('deleteTherapySessions removes selected docs and writes audit',
+      () async {
+    await firestore.collection('therapy_sessions').doc('session-del-a').set(
+      <String, dynamic>{
+        'sessionId': 'session-del-a',
+        'therapistId': 'therapist-a',
+        'studentId': 'student-a',
+        'updatedAtUnixMs': 100,
+      },
+    );
+    await firestore.collection('therapy_sessions').doc('session-del-b').set(
+      <String, dynamic>{
+        'sessionId': 'session-del-b',
+        'therapistId': 'therapist-b',
+        'studentId': 'student-b',
+        'updatedAtUnixMs': 200,
+      },
+    );
+
+    final deletedCount = await EntitlementAdminService.deleteTherapySessions(
+      sessionDocumentIds: const <String>[
+        'session-del-a',
+        'session-del-b',
+      ],
+      reason: 'ops-session-cleanup',
+      correlationId: 'corr-session-delete-1',
+    );
+    expect(deletedCount, 2);
+
+    final deletedA = await firestore
+        .collection('therapy_sessions')
+        .doc('session-del-a')
+        .get();
+    final deletedB = await firestore
+        .collection('therapy_sessions')
+        .doc('session-del-b')
+        .get();
+    expect(deletedA.exists, isFalse);
+    expect(deletedB.exists, isFalse);
+
+    final auditSnapshot = await firestore
+        .collection('admin_audit_trail')
+        .where('correlationId', isEqualTo: 'corr-session-delete-1')
+        .get();
+    expect(auditSnapshot.docs, hasLength(1));
+    final auditData = auditSnapshot.docs.single.data();
+    expect(auditData['action'], 'DELETE_THERAPY_SESSION_BATCH');
+    expect(auditData['targetCollection'], 'therapy_sessions');
+  });
+
   test('session documentId can differ from sessionId and still map events',
       () async {
     await firestore.collection('therapy_sessions').doc('session-doc-1').set(

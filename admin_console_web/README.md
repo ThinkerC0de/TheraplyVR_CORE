@@ -14,7 +14,8 @@ Browser-based entitlement operator console for Theraply.
 - Directory tabs for:
   - therapists/parents (`user_entitlements`)
   - children/patients (`students`)
-  - known games + GAME grant stats
+  - sessions with inline events, multi-select, and bulk delete
+  - known games + GAME grant stats + package delivery guide
 
 ## Run (Chrome)
 

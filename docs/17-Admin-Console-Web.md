@@ -50,9 +50,10 @@ Status: minimal operator console with role gate + audit writes.
 - Tabbed directory views:
   - `Therapists/Parents` from `user_entitlements`,
   - `Children` from `students` (therapist picked from directory list),
-  - `Sessions` from `therapy_sessions` + event timeline (selection uses Firestore doc id to avoid legacy id mismatch),
+  - `Sessions` from `therapy_sessions` + event timeline (selection uses Firestore doc id to avoid legacy id mismatch), with multi-select + bulk delete and optional anonymized labels (hash-style),
   - `Games` from known catalog + GAME grant stats (`entitlement_grants`).
 - Games tab can seed Firestore `game_catalog` in one action (`Seed game_catalog`).
+- Games tab includes delivery guide for package upload/update workflow (`hosting/public/content` + hosting deploy + `packageUri` update in `game_catalog`).
 
 ## Minimal Firestore Rules
 

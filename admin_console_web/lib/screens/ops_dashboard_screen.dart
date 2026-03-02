@@ -53,6 +53,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
   bool _savingCatalogEntry = false;
   bool _savingAccountDirectory = false;
   bool _savingStudentDirectory = false;
+  bool _deletingSessions = false;
   bool _seedingGameCatalog = false;
   bool _loadingCatalogSeed = true;
   bool _loadingExportManifest = true;
@@ -64,9 +65,11 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
   _GamesAuthoringFilter _gamesAuthoringFilter = _GamesAuthoringFilter.all;
   _GamesSortMode _gamesSortMode = _GamesSortMode.authoringSeverity;
   _SessionStateFilter _sessionStateFilter = _SessionStateFilter.all;
+  bool _anonymizeSessionData = false;
   String _sessionTherapistFilter = '';
   String _sessionStudentFilter = '';
   String _selectedSessionDocumentId = '';
+  final Set<String> _selectedSessionDocumentIds = <String>{};
 
   String get _targetUserId => _targetUserIdController.text.trim();
 
@@ -1900,6 +1903,59 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
     return value.trim().toLowerCase();
   }
 
+  String _anonymizedToken(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) {
+      return '(empty)';
+    }
+    var hash = 0x811c9dc5;
+    for (final codeUnit in value.codeUnits) {
+      hash ^= codeUnit;
+      hash = (hash * 0x01000193) & 0xffffffff;
+    }
+    final suffix = hash.toUnsigned(32).toRadixString(16).padLeft(8, '0');
+    return 'anon_$suffix';
+  }
+
+  String _personDisplayLabel({
+    required String id,
+    required Map<String, String> namesById,
+    required String unknownLabel,
+  }) {
+    final normalizedId = id.trim();
+    if (normalizedId.isEmpty) {
+      return unknownLabel;
+    }
+    if (_anonymizeSessionData) {
+      return _anonymizedToken(normalizedId);
+    }
+
+    final name = namesById[normalizedId]?.trim() ?? '';
+    if (name.isNotEmpty && name != normalizedId) {
+      return name;
+    }
+    return normalizedId;
+  }
+
+  String _personDropdownLabel({
+    required String id,
+    required Map<String, String> namesById,
+  }) {
+    final normalizedId = id.trim();
+    if (normalizedId.isEmpty) {
+      return '(empty)';
+    }
+    if (_anonymizeSessionData) {
+      return _anonymizedToken(normalizedId);
+    }
+
+    final name = namesById[normalizedId]?.trim() ?? '';
+    if (name.isNotEmpty && name != normalizedId) {
+      return '$name · $normalizedId';
+    }
+    return normalizedId;
+  }
+
   bool _matchesSessionStateFilter(AdminTherapySessionRow session) {
     switch (_sessionStateFilter) {
       case _SessionStateFilter.all:
@@ -1933,6 +1989,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
       _sessionIdFilterController.clear();
       _sessionStateFilter = _SessionStateFilter.all;
       _selectedSessionDocumentId = '';
+      _selectedSessionDocumentIds.clear();
     });
   }
 
@@ -1944,6 +2001,89 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
     setState(() {
       _selectedSessionDocumentId = normalizedDocumentId;
     });
+  }
+
+  void _toggleSessionSelection(String sessionDocumentId) {
+    final normalized = sessionDocumentId.trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+    setState(() {
+      if (_selectedSessionDocumentIds.contains(normalized)) {
+        _selectedSessionDocumentIds.remove(normalized);
+      } else {
+        _selectedSessionDocumentIds.add(normalized);
+      }
+    });
+  }
+
+  void _selectVisibleSessions(List<AdminTherapySessionRow> sessions) {
+    final ids = sessions
+        .map((session) => session.documentId.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    if (ids.isEmpty) {
+      return;
+    }
+    setState(() {
+      _selectedSessionDocumentIds.addAll(ids);
+    });
+  }
+
+  void _clearSelectedSessions() {
+    setState(() {
+      _selectedSessionDocumentIds.clear();
+    });
+  }
+
+  Future<void> _deleteSelectedSessions() async {
+    if (_selectedSessionDocumentIds.isEmpty) {
+      return;
+    }
+
+    final selectedIds = _selectedSessionDocumentIds.toList(growable: false)
+      ..sort();
+    final confirmed = await _confirmAction(
+      title: 'Delete selected sessions',
+      message:
+          'Delete ${selectedIds.length} selected therapy_sessions documents?\n\n'
+          'Note: nested events subcollection documents are retained by current Firestore policy and become inaccessible after session delete.',
+      confirmLabel: 'Delete selected',
+      danger: true,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    final reason = _resolveReason('manual-session-delete');
+    final correlationId = _resolveCorrelationId();
+    setState(() {
+      _deletingSessions = true;
+    });
+    try {
+      final deletedCount = await EntitlementAdminService.deleteTherapySessions(
+        sessionDocumentIds: selectedIds,
+        reason: reason,
+        correlationId: correlationId,
+      );
+
+      setState(() {
+        _selectedSessionDocumentIds.clear();
+        if (selectedIds.contains(_selectedSessionDocumentId)) {
+          _selectedSessionDocumentId = '';
+        }
+      });
+      _snack('Deleted $deletedCount therapy_sessions docs ($correlationId)');
+      _rotateCorrelationId();
+    } catch (e) {
+      _snack('Delete selected sessions failed: $e', error: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _deletingSessions = false;
+        });
+      }
+    }
   }
 
   Widget _buildOperationsTab() {
@@ -2346,326 +2486,511 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
         }
 
         final sessions = snapshot.data!;
-        final therapistValues = <String>{
-          for (final session in sessions)
-            if (session.therapistId.trim().isNotEmpty)
-              session.therapistId.trim(),
-        }.toList(growable: false)
-          ..sort();
-        final studentValues = <String>{
-          for (final session in sessions)
-            if (session.studentId.trim().isNotEmpty) session.studentId.trim(),
-        }.toList(growable: false)
-          ..sort();
+        return StreamBuilder<List<AdminDirectoryUserRow>>(
+          stream: EntitlementAdminService.watchUsersByRole(
+            EntitlementRole.therapist,
+          ),
+          builder: (context, therapistSnapshot) {
+            final therapists =
+                therapistSnapshot.data ?? const <AdminDirectoryUserRow>[];
+            final therapistNamesById = <String, String>{
+              for (final therapist in therapists)
+                therapist.userId.trim(): therapist.displayName,
+            };
 
-        final effectiveTherapistFilter =
-            therapistValues.contains(_sessionTherapistFilter)
-                ? _sessionTherapistFilter
-                : '';
-        final effectiveStudentFilter = studentValues.contains(
-          _sessionStudentFilter,
-        )
-            ? _sessionStudentFilter
-            : '';
-        final filteredSessions = sessions.where((session) {
-          final therapistFilter = _normalizedLower(effectiveTherapistFilter);
-          final studentFilter = _normalizedLower(effectiveStudentFilter);
-          final sessionFilter =
-              _normalizedLower(_sessionIdFilterController.text);
-          if (therapistFilter.isNotEmpty &&
-              !_normalizedLower(session.therapistId)
-                  .contains(therapistFilter)) {
-            return false;
-          }
-          if (studentFilter.isNotEmpty &&
-              !_normalizedLower(session.studentId).contains(studentFilter)) {
-            return false;
-          }
-          if (sessionFilter.isNotEmpty &&
-              !_normalizedLower(session.sessionId).contains(sessionFilter)) {
-            return false;
-          }
-          return _matchesSessionStateFilter(session);
-        }).toList(growable: false);
+            return StreamBuilder<List<AdminStudentDirectoryRow>>(
+              stream: EntitlementAdminService.watchStudents(limit: 600),
+              builder: (context, studentSnapshot) {
+                final students =
+                    studentSnapshot.data ?? const <AdminStudentDirectoryRow>[];
+                final studentNamesById = <String, String>{
+                  for (final student in students)
+                    student.studentId.trim(): student.fullName,
+                };
 
-        return ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                final therapistValues = <String>{
+                  for (final session in sessions)
+                    if (session.therapistId.trim().isNotEmpty)
+                      session.therapistId.trim(),
+                }.toList(growable: false)
+                  ..sort((left, right) => _personDropdownLabel(
+                        id: left,
+                        namesById: therapistNamesById,
+                      ).toLowerCase().compareTo(
+                            _personDropdownLabel(
+                              id: right,
+                              namesById: therapistNamesById,
+                            ).toLowerCase(),
+                          ));
+                final studentValues = <String>{
+                  for (final session in sessions)
+                    if (session.studentId.trim().isNotEmpty)
+                      session.studentId.trim(),
+                }.toList(growable: false)
+                  ..sort((left, right) => _personDropdownLabel(
+                        id: left,
+                        namesById: studentNamesById,
+                      ).toLowerCase().compareTo(
+                            _personDropdownLabel(
+                              id: right,
+                              namesById: studentNamesById,
+                            ).toLowerCase(),
+                          ));
+
+                final effectiveTherapistFilter =
+                    therapistValues.contains(_sessionTherapistFilter)
+                        ? _sessionTherapistFilter
+                        : '';
+                final effectiveStudentFilter =
+                    studentValues.contains(_sessionStudentFilter)
+                        ? _sessionStudentFilter
+                        : '';
+
+                final filteredSessions = sessions.where((session) {
+                  final therapistFilter =
+                      _normalizedLower(effectiveTherapistFilter);
+                  final studentFilter =
+                      _normalizedLower(effectiveStudentFilter);
+                  final sessionFilter =
+                      _normalizedLower(_sessionIdFilterController.text);
+                  if (therapistFilter.isNotEmpty &&
+                      !_normalizedLower(session.therapistId)
+                          .contains(therapistFilter)) {
+                    return false;
+                  }
+                  if (studentFilter.isNotEmpty &&
+                      !_normalizedLower(session.studentId)
+                          .contains(studentFilter)) {
+                    return false;
+                  }
+                  if (sessionFilter.isNotEmpty &&
+                      !_normalizedLower(session.sessionId)
+                          .contains(sessionFilter)) {
+                    return false;
+                  }
+                  return _matchesSessionStateFilter(session);
+                }).toList(growable: false);
+
+                final allSessionIds = sessions
+                    .map((session) => session.documentId.trim())
+                    .where((id) => id.isNotEmpty)
+                    .toSet();
+                final staleSelectedIds = _selectedSessionDocumentIds
+                    .where((id) => !allSessionIds.contains(id))
+                    .toList(growable: false);
+                if (staleSelectedIds.isNotEmpty ||
+                    (_selectedSessionDocumentId.isNotEmpty &&
+                        !allSessionIds.contains(_selectedSessionDocumentId))) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted) {
+                      return;
+                    }
+                    setState(() {
+                      _selectedSessionDocumentIds.removeAll(staleSelectedIds);
+                      if (!allSessionIds.contains(_selectedSessionDocumentId)) {
+                        _selectedSessionDocumentId = '';
+                      }
+                    });
+                  });
+                }
+
+                final selectedVisibleCount = filteredSessions
+                    .where(
+                      (session) => _selectedSessionDocumentIds
+                          .contains(session.documentId.trim()),
+                    )
+                    .length;
+
+                return ListView(
+                  padding: const EdgeInsets.all(16),
                   children: [
-                    const Text(
-                      'Session Results',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Read-only view of therapy_sessions and timeline events.',
-                    ),
-                    const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      key: ValueKey<String>(
-                        'session-therapist-$effectiveTherapistFilter',
-                      ),
-                      initialValue: effectiveTherapistFilter,
-                      decoration: const InputDecoration(
-                        labelText: 'Therapist filter',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: [
-                        const DropdownMenuItem<String>(
-                          value: '',
-                          child: Text('All therapists'),
-                        ),
-                        for (final value in therapistValues)
-                          DropdownMenuItem<String>(
-                            value: value,
-                            child: Text(value),
-                          ),
-                      ],
-                      onChanged: (value) {
-                        setState(() {
-                          _sessionTherapistFilter = value?.trim() ?? '';
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      key: ValueKey<String>(
-                        'session-student-$effectiveStudentFilter',
-                      ),
-                      initialValue: effectiveStudentFilter,
-                      decoration: const InputDecoration(
-                        labelText: 'Student filter',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: [
-                        const DropdownMenuItem<String>(
-                          value: '',
-                          child: Text('All students'),
-                        ),
-                        for (final value in studentValues)
-                          DropdownMenuItem<String>(
-                            value: value,
-                            child: Text(value),
-                          ),
-                      ],
-                      onChanged: (value) {
-                        setState(() {
-                          _sessionStudentFilter = value?.trim() ?? '';
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _sessionIdFilterController,
-                      decoration: const InputDecoration(
-                        labelText: 'Session ID contains',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final filter in _SessionStateFilter.values)
-                          ChoiceChip(
-                            selected: _sessionStateFilter == filter,
-                            label: Text(_sessionStateFilterLabel(filter)),
-                            onSelected: (_) {
-                              setState(() {
-                                _sessionStateFilter = filter;
-                              });
-                            },
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        OutlinedButton.icon(
-                          onPressed: _clearSessionFilters,
-                          icon: const Icon(Icons.filter_alt_off_outlined),
-                          label: const Text('Clear filters'),
-                        ),
-                        if (_selectedSessionDocumentId.isNotEmpty)
-                          OutlinedButton.icon(
-                            onPressed: () {
-                              setState(() {
-                                _selectedSessionDocumentId = '';
-                              });
-                            },
-                            icon: const Icon(Icons.visibility_off_outlined),
-                            label: const Text('Hide events'),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Visible sessions: ${filteredSessions.length}/${sessions.length}',
-                    ),
-                    const SizedBox(height: 8),
-                    if (filteredSessions.isEmpty)
-                      const Text('Brak sesji pasujacych do filtrow.')
-                    else
-                      for (final session in filteredSessions)
-                        Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      session.sessionId,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: session.isTerminal
-                                          ? Colors.red.shade100
-                                          : Colors.green.shade100,
-                                      borderRadius: BorderRadius.circular(999),
-                                    ),
-                                    child: Text(
-                                      session.stateLabel,
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700,
-                                        color: session.isTerminal
-                                            ? Colors.red.shade800
-                                            : Colors.green.shade800,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Session Results',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Read-only view of therapy_sessions and timeline events.',
+                            ),
+                            if (therapistSnapshot.hasError ||
+                                studentSnapshot.hasError) ...[
+                              const SizedBox(height: 8),
                               Text(
-                                'Therapist=${session.therapistId} | Student=${session.studentId}',
-                                style: const TextStyle(fontSize: 12),
+                                'Directory names partially unavailable. Fallback to IDs.',
+                                style: TextStyle(color: Colors.red.shade700),
                               ),
-                              Text(
-                                'Reason=${session.reasonCode.isEmpty ? '-' : session.reasonCode} | '
-                                'Game=${session.latestGameId.isEmpty ? '-' : session.latestGameId}',
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                              Text(
-                                'Updated=${_formatUtc(session.updatedAtUtc)} | '
-                                'Started=${_formatUtc(session.startedAtUtc)} | '
-                                'Ended=${_formatUtc(session.endedAtUtc)}',
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                              if (session.interruptedAtUtc != null)
-                                Text(
-                                  'Interrupted=${_formatUtc(session.interruptedAtUtc)}',
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                              if (session.sessionId.trim() !=
-                                  session.documentId.trim())
-                                Text(
-                                  'docId=${session.documentId}',
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                              const SizedBox(height: 6),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: [
-                                  OutlinedButton(
-                                    onPressed: () =>
-                                        _useTargetUid(session.therapistId),
-                                    child: const Text('Use therapist UID'),
-                                  ),
-                                  OutlinedButton(
-                                    onPressed: () {
-                                      setState(() {
-                                        _sessionTherapistFilter =
-                                            session.therapistId;
-                                      });
-                                    },
-                                    child: const Text('Filter therapist'),
-                                  ),
-                                  OutlinedButton(
-                                    onPressed: () {
-                                      setState(() {
-                                        _sessionStudentFilter =
-                                            session.studentId;
-                                      });
-                                    },
-                                    child: const Text('Filter student'),
-                                  ),
-                                  FilledButton.tonal(
-                                    onPressed: () {
-                                      final isSelected =
-                                          _selectedSessionDocumentId ==
-                                              session.documentId;
-                                      if (isSelected) {
-                                        setState(() {
-                                          _selectedSessionDocumentId = '';
-                                        });
-                                        return;
-                                      }
-                                      _selectSessionForEvents(session);
-                                    },
-                                    child: Text(
-                                      _selectedSessionDocumentId ==
-                                              session.documentId
-                                          ? 'Hide events'
-                                          : 'Show events',
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              if (_selectedSessionDocumentId ==
-                                  session.documentId) ...[
-                                const SizedBox(height: 8),
-                                _buildSessionEventsInline(session),
-                              ],
                             ],
-                          ),
+                            const SizedBox(height: 10),
+                            SwitchListTile(
+                              value: _anonymizeSessionData,
+                              onChanged: (value) {
+                                setState(() {
+                                  _anonymizeSessionData = value;
+                                });
+                              },
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text('Anonymize identifiers'),
+                              subtitle: Text(
+                                _anonymizeSessionData
+                                    ? 'Showing hashed labels only.'
+                                    : 'Showing therapist/student names when available.',
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            DropdownButtonFormField<String>(
+                              key: ValueKey<String>(
+                                'session-therapist-$effectiveTherapistFilter-$_anonymizeSessionData',
+                              ),
+                              initialValue: effectiveTherapistFilter,
+                              decoration: const InputDecoration(
+                                labelText: 'Therapist filter',
+                                border: OutlineInputBorder(),
+                              ),
+                              items: [
+                                const DropdownMenuItem<String>(
+                                  value: '',
+                                  child: Text('All therapists'),
+                                ),
+                                for (final value in therapistValues)
+                                  DropdownMenuItem<String>(
+                                    value: value,
+                                    child: Text(
+                                      _personDropdownLabel(
+                                        id: value,
+                                        namesById: therapistNamesById,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                              onChanged: (value) {
+                                setState(() {
+                                  _sessionTherapistFilter = value?.trim() ?? '';
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 8),
+                            DropdownButtonFormField<String>(
+                              key: ValueKey<String>(
+                                'session-student-$effectiveStudentFilter-$_anonymizeSessionData',
+                              ),
+                              initialValue: effectiveStudentFilter,
+                              decoration: const InputDecoration(
+                                labelText: 'Student filter',
+                                border: OutlineInputBorder(),
+                              ),
+                              items: [
+                                const DropdownMenuItem<String>(
+                                  value: '',
+                                  child: Text('All students'),
+                                ),
+                                for (final value in studentValues)
+                                  DropdownMenuItem<String>(
+                                    value: value,
+                                    child: Text(
+                                      _personDropdownLabel(
+                                        id: value,
+                                        namesById: studentNamesById,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                              onChanged: (value) {
+                                setState(() {
+                                  _sessionStudentFilter = value?.trim() ?? '';
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: _sessionIdFilterController,
+                              decoration: const InputDecoration(
+                                labelText: 'Session ID contains',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                for (final filter in _SessionStateFilter.values)
+                                  ChoiceChip(
+                                    selected: _sessionStateFilter == filter,
+                                    label:
+                                        Text(_sessionStateFilterLabel(filter)),
+                                    onSelected: (_) {
+                                      setState(() {
+                                        _sessionStateFilter = filter;
+                                      });
+                                    },
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                OutlinedButton.icon(
+                                  onPressed: _clearSessionFilters,
+                                  icon: const Icon(
+                                    Icons.filter_alt_off_outlined,
+                                  ),
+                                  label: const Text('Clear filters'),
+                                ),
+                                if (_selectedSessionDocumentId.isNotEmpty)
+                                  OutlinedButton.icon(
+                                    onPressed: () {
+                                      setState(() {
+                                        _selectedSessionDocumentId = '';
+                                      });
+                                    },
+                                    icon: const Icon(
+                                        Icons.visibility_off_outlined),
+                                    label: const Text('Hide events'),
+                                  ),
+                                OutlinedButton.icon(
+                                  onPressed: filteredSessions.isEmpty
+                                      ? null
+                                      : () => _selectVisibleSessions(
+                                          filteredSessions),
+                                  icon: const Icon(Icons.select_all),
+                                  label: const Text('Select visible'),
+                                ),
+                                OutlinedButton.icon(
+                                  onPressed: _selectedSessionDocumentIds.isEmpty
+                                      ? null
+                                      : _clearSelectedSessions,
+                                  icon: const Icon(Icons.remove_done_outlined),
+                                  label: const Text('Clear selected'),
+                                ),
+                                FilledButton.icon(
+                                  onPressed: _deletingSessions ||
+                                          _selectedSessionDocumentIds.isEmpty
+                                      ? null
+                                      : _deleteSelectedSessions,
+                                  icon: _deletingSessions
+                                      ? const SizedBox(
+                                          width: 14,
+                                          height: 14,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Icon(Icons.delete_outline),
+                                  label: Text(
+                                    'Delete selected (${_selectedSessionDocumentIds.length})',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Visible sessions: ${filteredSessions.length}/${sessions.length}',
+                            ),
+                            Text(
+                              'Selected: ${_selectedSessionDocumentIds.length} total ($selectedVisibleCount visible)',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            const SizedBox(height: 8),
+                            if (filteredSessions.isEmpty)
+                              const Text('Brak sesji pasujacych do filtrow.')
+                            else
+                              for (final session in filteredSessions)
+                                _buildSessionRow(
+                                  session: session,
+                                  therapistNamesById: therapistNamesById,
+                                  studentNamesById: studentNamesById,
+                                ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
-                ),
-              ),
-            ),
-          ],
+                );
+              },
+            );
+          },
         );
       },
     );
   }
 
+  Widget _buildSessionRow({
+    required AdminTherapySessionRow session,
+    required Map<String, String> therapistNamesById,
+    required Map<String, String> studentNamesById,
+  }) {
+    final normalizedSessionDocumentId = session.documentId.trim();
+    final isChecked =
+        _selectedSessionDocumentIds.contains(normalizedSessionDocumentId);
+    final sessionTitle = _anonymizeSessionData
+        ? _anonymizedToken(session.sessionId)
+        : session.sessionId;
+    final therapistLabel = _personDisplayLabel(
+      id: session.therapistId,
+      namesById: therapistNamesById,
+      unknownLabel: '(unknown therapist)',
+    );
+    final studentLabel = _personDisplayLabel(
+      id: session.studentId,
+      namesById: studentNamesById,
+      unknownLabel: '(unknown student)',
+    );
+    final docIdLabel = _anonymizeSessionData
+        ? _anonymizedToken(normalizedSessionDocumentId)
+        : normalizedSessionDocumentId;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Checkbox(
+                value: isChecked,
+                onChanged: _deletingSessions
+                    ? null
+                    : (_) =>
+                        _toggleSessionSelection(normalizedSessionDocumentId),
+              ),
+              Expanded(
+                child: Text(
+                  sessionTitle,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: session.isTerminal
+                      ? Colors.red.shade100
+                      : Colors.green.shade100,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  session.stateLabel,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: session.isTerminal
+                        ? Colors.red.shade800
+                        : Colors.green.shade800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Therapist=$therapistLabel | Student=$studentLabel',
+            style: const TextStyle(fontSize: 12),
+          ),
+          Text(
+            'Reason=${session.reasonCode.isEmpty ? '-' : session.reasonCode} | '
+            'Game=${session.latestGameId.isEmpty ? '-' : session.latestGameId}',
+            style: const TextStyle(fontSize: 12),
+          ),
+          Text(
+            'Updated=${_formatUtc(session.updatedAtUtc)} | '
+            'Started=${_formatUtc(session.startedAtUtc)} | '
+            'Ended=${_formatUtc(session.endedAtUtc)}',
+            style: const TextStyle(fontSize: 12),
+          ),
+          if (session.interruptedAtUtc != null)
+            Text(
+              'Interrupted=${_formatUtc(session.interruptedAtUtc)}',
+              style: const TextStyle(fontSize: 12),
+            ),
+          if (session.sessionId.trim() != normalizedSessionDocumentId)
+            Text(
+              'docId=$docIdLabel',
+              style: const TextStyle(fontSize: 12),
+            ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton(
+                onPressed: () => _useTargetUid(session.therapistId),
+                child: const Text('Use therapist UID'),
+              ),
+              OutlinedButton(
+                onPressed: () {
+                  setState(() {
+                    _sessionTherapistFilter = session.therapistId;
+                  });
+                },
+                child: const Text('Filter therapist'),
+              ),
+              OutlinedButton(
+                onPressed: () {
+                  setState(() {
+                    _sessionStudentFilter = session.studentId;
+                  });
+                },
+                child: const Text('Filter student'),
+              ),
+              FilledButton.tonal(
+                onPressed: () {
+                  final isExpanded =
+                      _selectedSessionDocumentId == normalizedSessionDocumentId;
+                  if (isExpanded) {
+                    setState(() {
+                      _selectedSessionDocumentId = '';
+                    });
+                    return;
+                  }
+                  _selectSessionForEvents(session);
+                },
+                child: Text(
+                  _selectedSessionDocumentId == normalizedSessionDocumentId
+                      ? 'Hide events'
+                      : 'Show events',
+                ),
+              ),
+            ],
+          ),
+          if (_selectedSessionDocumentId == normalizedSessionDocumentId) ...[
+            const SizedBox(height: 8),
+            _buildSessionEventsInline(session),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildSessionEventsInline(AdminTherapySessionRow session) {
     final normalizedSessionDocumentId = session.documentId.trim();
+    final sessionLabel = _anonymizeSessionData
+        ? _anonymizedToken(session.sessionId)
+        : session.sessionId;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(10),
@@ -2707,7 +3032,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Events for ${session.sessionId} (${events.length})',
+                'Events for $sessionLabel (${events.length})',
                 style: const TextStyle(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 8),
@@ -2750,6 +3075,49 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
     );
   }
 
+  Widget _buildGamePackageOpsGuideCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text(
+              'Game Package Delivery Guide',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Where to upload game package files and how to roll out updates:',
+            ),
+            SizedBox(height: 6),
+            Text(
+              '1. Put package manifest/content file under hosting/public/content/ (for example board_demo_probe_1_0_0.pkg.json).',
+              style: TextStyle(fontSize: 12),
+            ),
+            Text(
+              '2. Deploy hosting from repo root: scripts/deploy_admin_console_hosting.ps1 -ProjectId theraply-vr-demo -CleanBuild',
+              style: TextStyle(fontSize: 12),
+            ),
+            Text(
+              '3. In game_catalog set/update packageUri (for example https://theraply-vr-demo.web.app/content/your_file.pkg.json).',
+              style: TextStyle(fontSize: 12),
+            ),
+            Text(
+              '4. For update: upload new file, change targetContentVersion + packageUri, then save game_catalog entry.',
+              style: TextStyle(fontSize: 12),
+            ),
+            SizedBox(height: 6),
+            Text(
+              'Current CMS edits metadata only; binary package upload is done via repo + Firebase Hosting deploy.',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildGameCatalogCrudCard() {
     return Card(
       child: Padding(
@@ -2763,7 +3131,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Live Firestore editor for create/update/deactivate/delete. Create dialog starts in quick mode, advanced fields are optional.',
+              'Live Firestore metadata editor for create/update/deactivate/delete. Create dialog starts in quick mode, advanced fields are optional.',
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -3010,6 +3378,8 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        _buildGamePackageOpsGuideCard(),
+        const SizedBox(height: 12),
         _buildGameCatalogCrudCard(),
         const SizedBox(height: 12),
         Card(

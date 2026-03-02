@@ -6,6 +6,9 @@ class AdminDirectoryUserRow {
   final EntitlementRole role;
   final SubscriptionPlanTier planTier;
   final LicenseStatus appLicenseStatus;
+  final String? firstName;
+  final String? lastName;
+  final String? preferredDisplayName;
   final DateTime? updatedAtUtc;
   final String? updatedBy;
 
@@ -14,9 +17,24 @@ class AdminDirectoryUserRow {
     required this.role,
     required this.planTier,
     required this.appLicenseStatus,
+    this.firstName,
+    this.lastName,
+    this.preferredDisplayName,
     required this.updatedAtUtc,
     required this.updatedBy,
   });
+
+  String get displayName {
+    if (preferredDisplayName != null &&
+        preferredDisplayName!.trim().isNotEmpty) {
+      return preferredDisplayName!.trim();
+    }
+    final fullName = '${firstName ?? ''} ${lastName ?? ''}'.trim();
+    if (fullName.isNotEmpty) {
+      return fullName;
+    }
+    return userId;
+  }
 
   factory AdminDirectoryUserRow.fromEntitlementDocument(
     DocumentSnapshot<Map<String, dynamic>> doc,
@@ -32,9 +50,34 @@ class AdminDirectoryUserRow {
       role: EntitlementRoleCodec.fromWire(data['role'] as String?),
       planTier: planProfile.tier,
       appLicenseStatus: appLicense.status,
+      firstName: _readPreferredString(
+        data,
+        const <String>['firstName', 'profileFirstName', 'givenName'],
+      ),
+      lastName: _readPreferredString(
+        data,
+        const <String>['lastName', 'profileLastName', 'familyName'],
+      ),
+      preferredDisplayName: _readPreferredString(
+        data,
+        const <String>['displayName', 'fullName', 'name'],
+      ),
       updatedAtUtc: _toUtcDateTime(data['updatedAtUtc']),
       updatedBy: data['updatedBy'] as String?,
     );
+  }
+
+  static String? _readPreferredString(
+    Map<String, dynamic> data,
+    List<String> keys,
+  ) {
+    for (final key in keys) {
+      final value = data[key];
+      if (value is String && value.trim().isNotEmpty) {
+        return value.trim();
+      }
+    }
+    return null;
   }
 
   static DateTime? _toUtcDateTime(dynamic value) {
