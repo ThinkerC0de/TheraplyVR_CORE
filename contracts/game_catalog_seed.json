@@ -1,7 +1,7 @@
 {
     "schema": "THERAPLY_GAME_CATALOG",
     "schemaVersion": "2026-02-25",
-    "version": "2026-02-26",
+    "version": "2026-03-02",
     "collection": "game_catalog",
     "entries": [
                     {
@@ -999,6 +999,25 @@
                                                                      }
                                                                  ]
                                                 }
+                    },
+                    {
+                        "gameId": "board_demo_probe",
+                        "title": "Board Demo Download Probe",
+                        "description": "Board-safe catalog item for packageUri reachability proof without runtime module loading.",
+                        "targetContentVersion": "1.0.0",
+                        "packageUri": "https://theraply-vr-demo.web.app/content/board_demo_probe_1_0_0.pkg.json",
+                        "thumbnailUrl": "https://theraply-vr-demo.web.app/admin/icons/Icon-192.png",
+                        "supportsSaveResume": false,
+                        "availableForPurchase": true,
+                        "requiresExplicitLicense": true,
+                        "runtimeLaunchEnabled": false,
+                        "deliveryMode": "on_demand",
+                        "sortOrder": 25,
+                        "active": true,
+                        "previewLines": [
+                                             "Dedicated board-demo catalog row with stable URL.",
+                                             "Used for HTTP package probe evidence path."
+                                         ]
                     },
                     {
                         "gameId": "puzzle_paths",

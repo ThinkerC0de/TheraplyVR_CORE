@@ -120,7 +120,10 @@ Do not show:
 1. Build and deploy admin hosting bundle (`/admin`) to target domain.
 2. Seed/update `game_catalog` with valid `deliveryMode`, `targetContentVersion`, `packageUri`, `thumbnailUrl`.
 3. Validate grant flow in CMS and visibility in mobile game list.
-4. Add one prepared "board demo game" catalog row with stable URL.
+4. Add one prepared "board demo game" catalog row (`board_demo_probe`) with stable URL.
+5. Reference URLs used in board run:
+   - CMS: `https://theraply-vr-demo.web.app/admin/`
+   - Board demo package URL: `https://theraply-vr-demo.web.app/content/board_demo_probe_1_0_0.pkg.json`
 
 ### BD-005 Package Download Proof (Board-Safe)
 1. Implement optional install probe command path:

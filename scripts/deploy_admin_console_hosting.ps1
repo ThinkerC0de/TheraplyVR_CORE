@@ -9,8 +9,17 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $bundleScript = Join-Path $repoRoot "scripts\build_admin_console_hosting_bundle.ps1"
+$firebaseCli = if (Get-Command firebase.cmd -ErrorAction SilentlyContinue) {
+    "firebase.cmd"
+}
+elseif (Get-Command firebase -ErrorAction SilentlyContinue) {
+    "firebase"
+}
+else {
+    $null
+}
 
-if (!(Get-Command firebase -ErrorAction SilentlyContinue)) {
+if ([string]::IsNullOrWhiteSpace($firebaseCli)) {
     throw "Firebase CLI is not available in PATH."
 }
 
@@ -24,8 +33,8 @@ if (-not $SkipBundleBuild) {
 
 Push-Location $repoRoot
 try {
-    Write-Host "[hosting] firebase deploy --only hosting --project $ProjectId"
-    firebase deploy --only hosting --project $ProjectId | Out-Host
+    Write-Host "[hosting] $firebaseCli deploy --only hosting --project $ProjectId"
+    & $firebaseCli deploy --only hosting --project $ProjectId | Out-Host
 }
 finally {
     Pop-Location
