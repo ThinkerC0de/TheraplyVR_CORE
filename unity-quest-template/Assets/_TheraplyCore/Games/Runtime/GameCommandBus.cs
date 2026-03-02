@@ -1029,6 +1029,7 @@ namespace TheraplyCore.Games.Runtime
             SetCommandIdMapping(typeof(InstallGameCommand), GameCommandIds.InstallGame);
             SetCommandIdMapping(typeof(UninstallGameCommand), GameCommandIds.UninstallGame);
             SetCommandIdMapping(typeof(GameInstallStatusCommand), GameCommandIds.GameInstallStatus);
+            SetCommandIdMapping(typeof(PackageProbeResultCommand), GameCommandIds.PackageProbeResult);
         }
 
         [Serializable]

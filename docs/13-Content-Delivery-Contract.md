@@ -77,6 +77,9 @@ Fields:
 - `actorId`
 - `gameId`
 - `targetVersion`
+- `packageUri` (optional)
+- `requestPackageProbe` (optional bool; when `true`, runtime performs board-safe HTTP probe)
+- `probeOnly` (optional bool; when `true`, runtime does probe and skips install lifecycle)
 - `issuedAtUtc`
 
 ### `UNINSTALL_GAME`
@@ -111,7 +114,16 @@ Fields:
 - Quest simulator responds to:
   - `SYNC_CATALOG` (state `SYNCING_MANIFEST` -> stable catalog snapshot),
   - `INSTALL_GAME` (state `SYNCING_MANIFEST` -> `DOWNLOADING` -> `VERIFYING` -> `ACTIVATING` -> `READY`, with optional verify-failure rollback path `ROLLING_BACK`),
+  - optional board-safe package probe in `INSTALL_GAME` path (`requestPackageProbe=true`) emitting `PACKAGE_PROBE_RESULT`,
   - `UNINSTALL_GAME` (state -> `NOT_INSTALLED`).
+- `PACKAGE_PROBE_RESULT` payload fields:
+  - `gameId`, `packageUri`, `success`, `method`,
+  - `statusCode`, `contentLength`, `eTag`, `contentType`,
+  - `reasonCode`, `probedAtUtc`, `probeOnly`.
+- Package probe is strictly reachability evidence (HEAD/GET with short timeout), not dynamic runtime module loading.
+- Kill-switch path:
+  - mobile catalog toggle (`Probe ON/OFF`) disables probe request instantly,
+  - Unity runtime flag `_enableBoardSafePackageProbe` can hard-disable probe handling.
 - Simulator state persistence:
   - runtime writes lifecycle snapshot to `Application.persistentDataPath/session_resilience/content_delivery_state.json`,
   - startup reloads the snapshot so status is deterministic after reconnect/restart.

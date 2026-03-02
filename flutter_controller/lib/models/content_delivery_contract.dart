@@ -18,6 +18,7 @@ class ContentDeliveryCommandIds {
   static const String installGame = 'INSTALL_GAME';
   static const String uninstallGame = 'UNINSTALL_GAME';
   static const String gameInstallStatus = 'GAME_INSTALL_STATUS';
+  static const String packageProbeResult = 'PACKAGE_PROBE_RESULT';
 }
 
 extension ContentRuntimeStatusCodec on ContentRuntimeStatus {
@@ -250,6 +251,80 @@ class ContentInstallStatusSignal {
   }
 }
 
+class PackageProbeResultSignal {
+  final String correlationId;
+  final String gameId;
+  final String packageUri;
+  final bool success;
+  final String method;
+  final int statusCode;
+  final int contentLength;
+  final String eTag;
+  final String contentType;
+  final String reasonCode;
+  final DateTime probedAtUtc;
+  final bool probeOnly;
+
+  const PackageProbeResultSignal({
+    required this.correlationId,
+    required this.gameId,
+    required this.packageUri,
+    required this.success,
+    required this.method,
+    required this.statusCode,
+    required this.contentLength,
+    required this.eTag,
+    required this.contentType,
+    required this.reasonCode,
+    required this.probedAtUtc,
+    required this.probeOnly,
+  });
+
+  static PackageProbeResultSignal? tryFromNetworkMessage(
+    Map<String, dynamic> message,
+  ) {
+    final commandId = message['commandId'] as String?;
+    if (commandId != ContentDeliveryCommandIds.packageProbeResult) {
+      return null;
+    }
+
+    final payload = ContentInstallStatusSignal._decodePayloadMap(
+      message['payload'],
+    );
+    if (payload == null) {
+      return null;
+    }
+
+    int readInt(String key) {
+      final value = payload[key];
+      if (value is int) {
+        return value;
+      }
+      if (value is num) {
+        return value.toInt();
+      }
+      return int.tryParse(value?.toString() ?? '') ?? 0;
+    }
+
+    return PackageProbeResultSignal(
+      correlationId: payload['correlationId'] as String? ?? '',
+      gameId: payload['gameId'] as String? ?? '',
+      packageUri: payload['packageUri'] as String? ?? '',
+      success: payload['success'] as bool? ?? false,
+      method: payload['method'] as String? ?? '',
+      statusCode: readInt('statusCode'),
+      contentLength: readInt('contentLength'),
+      eTag: payload['eTag'] as String? ?? '',
+      contentType: payload['contentType'] as String? ?? '',
+      reasonCode: payload['reasonCode'] as String? ?? '',
+      probedAtUtc:
+          DateTime.tryParse(payload['probedAtUtc'] as String? ?? '')?.toUtc() ??
+              DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      probeOnly: payload['probeOnly'] as bool? ?? false,
+    );
+  }
+}
+
 class ContentDeliveryRequests {
   static Map<String, dynamic> buildSyncCatalogRequest({
     required String actorId,
@@ -269,6 +344,8 @@ class ContentDeliveryRequests {
     required String gameId,
     required String targetVersion,
     String? packageUri,
+    bool requestPackageProbe = false,
+    bool probeOnly = false,
     DateTime? issuedAtUtc,
   }) {
     final payload = <String, dynamic>{
@@ -280,6 +357,10 @@ class ContentDeliveryRequests {
     };
     if (packageUri != null && packageUri.trim().isNotEmpty) {
       payload['packageUri'] = packageUri.trim();
+    }
+    if (requestPackageProbe) {
+      payload['requestPackageProbe'] = true;
+      payload['probeOnly'] = probeOnly;
     }
     return payload;
   }

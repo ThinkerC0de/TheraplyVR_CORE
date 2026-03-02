@@ -27,6 +27,7 @@ namespace TheraplyCore.Games.Contracts
         public const string InstallGame = "INSTALL_GAME";
         public const string UninstallGame = "UNINSTALL_GAME";
         public const string GameInstallStatus = "GAME_INSTALL_STATUS";
+        public const string PackageProbeResult = "PACKAGE_PROBE_RESULT";
     }
 
     public static class CriticalCommandIds
@@ -337,6 +338,21 @@ namespace TheraplyCore.Games.Contracts
         public const string Failed = "FAILED";
     }
 
+    public static class PackageProbeReasonCodes
+    {
+        public const string Ok = "PACKAGE_PROBE_OK";
+        public const string Disabled = "PACKAGE_PROBE_DISABLED";
+        public const string RequestNotEnabled = "PACKAGE_PROBE_REQUEST_NOT_ENABLED";
+        public const string PackageUriMissing = "PACKAGE_PROBE_URI_MISSING";
+        public const string PackageUriInvalid = "PACKAGE_PROBE_URI_INVALID";
+        public const string Timeout = "PACKAGE_PROBE_TIMEOUT";
+        public const string ConnectionError = "PACKAGE_PROBE_CONNECTION_ERROR";
+        public const string ProtocolError = "PACKAGE_PROBE_HTTP_ERROR";
+        public const string DataProcessingError = "PACKAGE_PROBE_DATA_ERROR";
+        public const string RequestFailed = "PACKAGE_PROBE_REQUEST_FAILED";
+        public const string Exception = "PACKAGE_PROBE_EXCEPTION";
+    }
+
     [Serializable]
     public sealed class SyncCatalogCommand : IGameCommand
     {
@@ -355,6 +371,9 @@ namespace TheraplyCore.Games.Contracts
         public string actorId;
         public string gameId;
         public string targetVersion;
+        public string packageUri;
+        public bool requestPackageProbe;
+        public bool probeOnly;
         public string issuedAtUtc;
 
         public string CorrelationId => correlationId;
@@ -384,6 +403,25 @@ namespace TheraplyCore.Games.Contracts
         public string runtimeStatus;
         public string lastError;
         public string updatedAtUtc;
+
+        public string CorrelationId => correlationId;
+    }
+
+    [Serializable]
+    public sealed class PackageProbeResultCommand : IGameCommand
+    {
+        public string correlationId;
+        public string gameId;
+        public string packageUri;
+        public bool success;
+        public string method;
+        public long statusCode;
+        public long contentLength;
+        public string eTag;
+        public string contentType;
+        public string reasonCode;
+        public string probedAtUtc;
+        public bool probeOnly;
 
         public string CorrelationId => correlationId;
     }

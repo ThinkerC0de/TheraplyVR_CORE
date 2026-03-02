@@ -6,6 +6,7 @@ using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.Networking;
 using TheraplyCore.Firebase;
 using GameContracts = TheraplyCore.Games.Contracts;
 using TheraplyCore.Games.Contracts;
@@ -64,6 +65,17 @@ namespace TheraplyCore.Games.Runtime
             public string schemaVersion;
             public string generatedAtUtc;
             public List<SimulatedContentStateRecord> states = new List<SimulatedContentStateRecord>();
+        }
+
+        private sealed class PackageProbeOutcome
+        {
+            public bool success;
+            public string method = string.Empty;
+            public long statusCode;
+            public long contentLength;
+            public string eTag = string.Empty;
+            public string contentType = string.Empty;
+            public string reasonCode = PackageProbeReasonCodes.RequestFailed;
         }
 
         private static class RuntimeEntitlementReasonCodes
@@ -132,6 +144,12 @@ namespace TheraplyCore.Games.Runtime
                 },
             };
 
+        [Header("Content Package Probe (Board-Safe)")]
+        [SerializeField] private bool _enableBoardSafePackageProbe = true;
+        [SerializeField] private int _packageProbeTimeoutSeconds = 3;
+        [SerializeField] private bool _packageProbePreferHeadRequest = true;
+        [SerializeField] private bool _packageProbeFallbackToGet = true;
+
         [Header("Watchdog")]
         [SerializeField] private bool _enableSessionWatchdog = true;
         [SerializeField] private float _watchdogHeartbeatIntervalSeconds = 2f;
@@ -158,6 +176,8 @@ namespace TheraplyCore.Games.Runtime
         private readonly Dictionary<string, SimulatedContentState> _simulatedContentStateByGameId =
             new Dictionary<string, SimulatedContentState>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Coroutine> _simulatedInstallRoutineByGameId =
+            new Dictionary<string, Coroutine>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Coroutine> _packageProbeRoutineByGameId =
             new Dictionary<string, Coroutine>(StringComparer.OrdinalIgnoreCase);
         private Coroutine _simulatedCatalogSyncRoutine;
         private readonly Queue<PendingCrashSignal> _pendingCrashSignals = new Queue<PendingCrashSignal>();
@@ -287,6 +307,7 @@ namespace TheraplyCore.Games.Runtime
             DrainPendingCrashSignals(_maxPendingCrashSignals);
             StopSimulatedCatalogSyncRoutine();
             StopAllSimulatedInstallRoutines();
+            StopAllPackageProbeRoutines();
             StopSyncStatusPolling();
             StopSessionWatchdog();
         }
@@ -940,6 +961,7 @@ namespace TheraplyCore.Games.Runtime
             }
 
             EnsureSimulatedContentStatesInitialized();
+            var correlationId = command == null ? string.Empty : command.correlationId;
 
             var requestedGameId = command == null ? string.Empty : command.gameId;
             if (string.IsNullOrWhiteSpace(requestedGameId))
@@ -965,7 +987,7 @@ namespace TheraplyCore.Games.Runtime
                     PersistSimulatedContentStates(entitlementReasonCode);
                     _ = PublishGameInstallStatusAsync(
                         deniedState,
-                        command == null ? string.Empty : command.correlationId,
+                        correlationId,
                         entitlementReasonCode);
                 }
 
@@ -990,8 +1012,15 @@ namespace TheraplyCore.Games.Runtime
                 PersistSimulatedContentStates("INSTALL_NOT_OWNED");
                 _ = PublishGameInstallStatusAsync(
                     state,
-                    command == null ? string.Empty : command.correlationId,
+                    correlationId,
                     "INSTALL_NOT_OWNED");
+                return;
+            }
+
+            TryStartPackageProbeFromInstallCommand(state.gameId, correlationId, command);
+            if (command != null && command.probeOnly)
+            {
+                Logger.Info($"[GameRuntime] INSTALL_GAME probe-only completed for game={state.gameId}.");
                 return;
             }
 
@@ -1006,13 +1035,13 @@ namespace TheraplyCore.Games.Runtime
             PersistSimulatedContentStates("INSTALL_MANIFEST_SYNC_STARTED");
             _ = PublishGameInstallStatusAsync(
                 state,
-                command == null ? string.Empty : command.correlationId,
+                correlationId,
                 "INSTALL_MANIFEST_SYNC_STARTED");
 
             var shouldSimulateVerifyFailure = ShouldSimulateVerifyFailure(state.targetVersion);
             StartSimulatedInstallRoutine(
                 state,
-                command == null ? string.Empty : command.correlationId,
+                correlationId,
                 previousInstalledVersion,
                 shouldSimulateVerifyFailure);
         }
@@ -1697,6 +1726,413 @@ namespace TheraplyCore.Games.Runtime
             }
 
             _simulatedInstallRoutineByGameId.Remove(gameId);
+        }
+
+        private void TryStartPackageProbeFromInstallCommand(
+            string gameId,
+            string correlationId,
+            InstallGameCommand command)
+        {
+            var normalizedGameId = string.IsNullOrWhiteSpace(gameId)
+                ? string.Empty
+                : gameId.Trim();
+            if (string.IsNullOrWhiteSpace(normalizedGameId))
+            {
+                return;
+            }
+
+            var requestPackageProbe = command != null && command.requestPackageProbe;
+            var probeOnly = command != null && command.probeOnly;
+            var packageUri = command == null ? string.Empty : command.packageUri;
+
+            if (!requestPackageProbe)
+            {
+                if (probeOnly)
+                {
+                    EmitPackageProbeResult(
+                        normalizedGameId,
+                        correlationId,
+                        packageUri,
+                        success: false,
+                        method: string.Empty,
+                        statusCode: 0,
+                        contentLength: 0,
+                        eTag: string.Empty,
+                        contentType: string.Empty,
+                        reasonCode: PackageProbeReasonCodes.RequestNotEnabled,
+                        probeOnly: true);
+                }
+
+                return;
+            }
+
+            if (!_enableBoardSafePackageProbe)
+            {
+                EmitPackageProbeResult(
+                    normalizedGameId,
+                    correlationId,
+                    packageUri,
+                    success: false,
+                    method: string.Empty,
+                    statusCode: 0,
+                    contentLength: 0,
+                    eTag: string.Empty,
+                    contentType: string.Empty,
+                    reasonCode: PackageProbeReasonCodes.Disabled,
+                    probeOnly: probeOnly);
+                return;
+            }
+
+            StartPackageProbeRoutine(normalizedGameId, correlationId, packageUri, probeOnly);
+        }
+
+        private void StartPackageProbeRoutine(
+            string gameId,
+            string correlationId,
+            string packageUri,
+            bool probeOnly)
+        {
+            if (string.IsNullOrWhiteSpace(gameId))
+            {
+                return;
+            }
+
+            StopPackageProbeRoutine(gameId);
+            var routine = StartCoroutine(
+                RunPackageProbeRoutine(
+                    gameId.Trim(),
+                    correlationId,
+                    packageUri,
+                    probeOnly));
+            _packageProbeRoutineByGameId[gameId.Trim()] = routine;
+        }
+
+        private IEnumerator RunPackageProbeRoutine(
+            string gameId,
+            string correlationId,
+            string packageUri,
+            bool probeOnly)
+        {
+            var normalizedUri = string.IsNullOrWhiteSpace(packageUri)
+                ? string.Empty
+                : packageUri.Trim();
+            if (string.IsNullOrWhiteSpace(normalizedUri))
+            {
+                EmitPackageProbeResult(
+                    gameId,
+                    correlationId,
+                    normalizedUri,
+                    success: false,
+                    method: string.Empty,
+                    statusCode: 0,
+                    contentLength: 0,
+                    eTag: string.Empty,
+                    contentType: string.Empty,
+                    reasonCode: PackageProbeReasonCodes.PackageUriMissing,
+                    probeOnly: probeOnly);
+                CompletePackageProbeRoutine(gameId);
+                yield break;
+            }
+
+            if (!Uri.TryCreate(normalizedUri, UriKind.Absolute, out var parsedUri) ||
+                (parsedUri.Scheme != Uri.UriSchemeHttp && parsedUri.Scheme != Uri.UriSchemeHttps))
+            {
+                EmitPackageProbeResult(
+                    gameId,
+                    correlationId,
+                    normalizedUri,
+                    success: false,
+                    method: string.Empty,
+                    statusCode: 0,
+                    contentLength: 0,
+                    eTag: string.Empty,
+                    contentType: string.Empty,
+                    reasonCode: PackageProbeReasonCodes.PackageUriInvalid,
+                    probeOnly: probeOnly);
+                CompletePackageProbeRoutine(gameId);
+                yield break;
+            }
+
+            normalizedUri = parsedUri.AbsoluteUri;
+            var timeoutSeconds = Mathf.Clamp(_packageProbeTimeoutSeconds, 1, 20);
+            var preferredMethod = _packageProbePreferHeadRequest
+                ? UnityWebRequest.kHttpVerbHEAD
+                : UnityWebRequest.kHttpVerbGET;
+            var outcome = new PackageProbeOutcome();
+            yield return ExecutePackageProbeRequest(
+                parsedUri,
+                preferredMethod,
+                timeoutSeconds,
+                outcome);
+
+            if (ShouldFallbackPackageProbeToGet(outcome))
+            {
+                yield return ExecutePackageProbeRequest(
+                    parsedUri,
+                    UnityWebRequest.kHttpVerbGET,
+                    timeoutSeconds,
+                    outcome);
+            }
+
+            EmitPackageProbeResult(
+                gameId,
+                correlationId,
+                normalizedUri,
+                outcome.success,
+                outcome.method,
+                outcome.statusCode,
+                outcome.contentLength,
+                outcome.eTag,
+                outcome.contentType,
+                outcome.reasonCode,
+                probeOnly);
+            CompletePackageProbeRoutine(gameId);
+        }
+
+        private IEnumerator ExecutePackageProbeRequest(
+            Uri packageUri,
+            string method,
+            int timeoutSeconds,
+            PackageProbeOutcome outcome)
+        {
+            if (packageUri == null || outcome == null)
+            {
+                yield break;
+            }
+
+            if (string.Equals(method, UnityWebRequest.kHttpVerbHEAD, StringComparison.OrdinalIgnoreCase))
+            {
+                using (var request = new UnityWebRequest(packageUri.AbsoluteUri, UnityWebRequest.kHttpVerbHEAD))
+                {
+                    request.downloadHandler = new DownloadHandlerBuffer();
+                    request.timeout = timeoutSeconds;
+                    yield return request.SendWebRequest();
+                    PopulatePackageProbeOutcomeFromRequest(request, UnityWebRequest.kHttpVerbHEAD, outcome);
+                }
+                yield break;
+            }
+
+            using (var request = UnityWebRequest.Get(packageUri.AbsoluteUri))
+            {
+                request.timeout = timeoutSeconds;
+                request.SetRequestHeader("Range", "bytes=0-0");
+                yield return request.SendWebRequest();
+                PopulatePackageProbeOutcomeFromRequest(request, UnityWebRequest.kHttpVerbGET, outcome);
+            }
+        }
+
+        private bool ShouldFallbackPackageProbeToGet(PackageProbeOutcome outcome)
+        {
+            if (!_packageProbeFallbackToGet || outcome == null)
+            {
+                return false;
+            }
+
+            if (!string.Equals(
+                    outcome.method,
+                    UnityWebRequest.kHttpVerbHEAD,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if (outcome.success)
+            {
+                return false;
+            }
+
+            return outcome.statusCode == 0 || outcome.statusCode == 405 || outcome.statusCode == 501;
+        }
+
+        private void PopulatePackageProbeOutcomeFromRequest(
+            UnityWebRequest request,
+            string method,
+            PackageProbeOutcome outcome)
+        {
+            if (outcome == null)
+            {
+                return;
+            }
+
+            outcome.method = method ?? string.Empty;
+            if (request == null)
+            {
+                outcome.success = false;
+                outcome.statusCode = 0;
+                outcome.contentLength = 0;
+                outcome.eTag = string.Empty;
+                outcome.contentType = string.Empty;
+                outcome.reasonCode = PackageProbeReasonCodes.RequestFailed;
+                return;
+            }
+
+            var statusCode = request.responseCode;
+            outcome.statusCode = statusCode;
+            outcome.contentLength = ParsePackageProbeContentLength(
+                request.GetResponseHeader("Content-Length"),
+                request.downloadedBytes);
+            outcome.eTag = request.GetResponseHeader("ETag") ?? string.Empty;
+            outcome.contentType = request.GetResponseHeader("Content-Type") ?? string.Empty;
+            outcome.success = statusCode >= 200 && statusCode < 400;
+            outcome.reasonCode = ResolvePackageProbeReasonCode(request, statusCode);
+        }
+
+        private static long ParsePackageProbeContentLength(string headerValue, ulong downloadedBytes)
+        {
+            if (!string.IsNullOrWhiteSpace(headerValue) &&
+                long.TryParse(
+                    headerValue.Trim(),
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var parsedHeader) &&
+                parsedHeader >= 0)
+            {
+                return parsedHeader;
+            }
+
+            return downloadedBytes > long.MaxValue
+                ? long.MaxValue
+                : (long)downloadedBytes;
+        }
+
+        private static string ResolvePackageProbeReasonCode(UnityWebRequest request, long statusCode)
+        {
+            if (request == null)
+            {
+                return PackageProbeReasonCodes.RequestFailed;
+            }
+
+            if (statusCode >= 200 && statusCode < 400)
+            {
+                return PackageProbeReasonCodes.Ok;
+            }
+
+            if (request.result == UnityWebRequest.Result.ConnectionError)
+            {
+                var networkError = request.error ?? string.Empty;
+                if (networkError.IndexOf("timeout", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return PackageProbeReasonCodes.Timeout;
+                }
+
+                return PackageProbeReasonCodes.ConnectionError;
+            }
+
+            if (request.result == UnityWebRequest.Result.ProtocolError)
+            {
+                if (statusCode == 408 || statusCode == 504)
+                {
+                    return PackageProbeReasonCodes.Timeout;
+                }
+
+                return PackageProbeReasonCodes.ProtocolError;
+            }
+
+            if (request.result == UnityWebRequest.Result.DataProcessingError)
+            {
+                return PackageProbeReasonCodes.DataProcessingError;
+            }
+
+            return PackageProbeReasonCodes.RequestFailed;
+        }
+
+        private void EmitPackageProbeResult(
+            string gameId,
+            string correlationId,
+            string packageUri,
+            bool success,
+            string method,
+            long statusCode,
+            long contentLength,
+            string eTag,
+            string contentType,
+            string reasonCode,
+            bool probeOnly)
+        {
+            var normalizedGameId = string.IsNullOrWhiteSpace(gameId)
+                ? string.Empty
+                : gameId.Trim();
+            if (string.IsNullOrWhiteSpace(normalizedGameId))
+            {
+                return;
+            }
+
+            var normalizedReasonCode = string.IsNullOrWhiteSpace(reasonCode)
+                ? PackageProbeReasonCodes.RequestFailed
+                : reasonCode.Trim();
+            var command = new PackageProbeResultCommand
+            {
+                correlationId = string.IsNullOrWhiteSpace(correlationId)
+                    ? Guid.NewGuid().ToString()
+                    : correlationId,
+                gameId = normalizedGameId,
+                packageUri = string.IsNullOrWhiteSpace(packageUri) ? string.Empty : packageUri.Trim(),
+                success = success,
+                method = string.IsNullOrWhiteSpace(method) ? string.Empty : method.Trim().ToUpperInvariant(),
+                statusCode = statusCode,
+                contentLength = contentLength,
+                eTag = string.IsNullOrWhiteSpace(eTag) ? string.Empty : eTag.Trim(),
+                contentType = string.IsNullOrWhiteSpace(contentType) ? string.Empty : contentType.Trim(),
+                reasonCode = normalizedReasonCode,
+                probedAtUtc = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture),
+                probeOnly = probeOnly,
+            };
+
+            _ = PublishPackageProbeResultAsync(command);
+            TrackCriticalRuntimeEvent("package_probe_result", new Dictionary<string, object>
+            {
+                { "gameId", command.gameId },
+                { "packageUri", command.packageUri },
+                { "success", command.success },
+                { "method", command.method },
+                { "statusCode", command.statusCode },
+                { "contentLength", command.contentLength },
+                { "eTag", command.eTag },
+                { "contentType", command.contentType },
+                { "reasonCode", command.reasonCode },
+                { "probeOnly", command.probeOnly },
+                { "probedAtUtc", command.probedAtUtc },
+            });
+        }
+
+        private void StopPackageProbeRoutine(string gameId)
+        {
+            if (string.IsNullOrWhiteSpace(gameId) ||
+                !_packageProbeRoutineByGameId.TryGetValue(gameId, out var routine))
+            {
+                return;
+            }
+
+            if (routine != null)
+            {
+                StopCoroutine(routine);
+            }
+
+            CompletePackageProbeRoutine(gameId);
+        }
+
+        private void StopAllPackageProbeRoutines()
+        {
+            if (_packageProbeRoutineByGameId.Count == 0)
+            {
+                return;
+            }
+
+            var gameIds = new List<string>(_packageProbeRoutineByGameId.Keys);
+            for (var i = 0; i < gameIds.Count; i++)
+            {
+                StopPackageProbeRoutine(gameIds[i]);
+            }
+        }
+
+        private void CompletePackageProbeRoutine(string gameId)
+        {
+            if (string.IsNullOrWhiteSpace(gameId))
+            {
+                return;
+            }
+
+            _packageProbeRoutineByGameId.Remove(gameId);
         }
 
         private void PublishSimulatedContentCatalogSnapshot(string correlationId, string reasonCode)
@@ -3459,6 +3895,29 @@ namespace TheraplyCore.Games.Runtime
             {
                 Logger.Warning(
                     $"[GameRuntime] Failed to publish {GameCommandIds.GameInstallStatus} ({state.gameId}, reason={reasonCode}): {e.Message}");
+            }
+        }
+
+        private async Task PublishPackageProbeResultAsync(PackageProbeResultCommand command)
+        {
+            if (_commandBus == null || command == null || string.IsNullOrWhiteSpace(command.gameId))
+            {
+                return;
+            }
+
+            if (!HasStatusDeliveryRoute())
+            {
+                return;
+            }
+
+            try
+            {
+                await _commandBus.PublishAsync(command);
+            }
+            catch (Exception e)
+            {
+                Logger.Warning(
+                    $"[GameRuntime] Failed to publish {GameCommandIds.PackageProbeResult} ({command.gameId}, reason={command.reasonCode}): {e.Message}");
             }
         }
 

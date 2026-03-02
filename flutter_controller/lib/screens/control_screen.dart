@@ -69,6 +69,10 @@ class ControlScreen extends StatefulWidget {
 class _ControlScreenState extends State<ControlScreen>
     with WidgetsBindingObserver {
   static final bool _contentDeliveryEnabled = true;
+  static const bool _boardSafePackageProbeFeatureEnabled = bool.fromEnvironment(
+    'THERAPLY_BOARD_SAFE_PACKAGE_PROBE_ENABLED',
+    defaultValue: true,
+  );
   static final bool _serverAuthoritativeHandoffGate = true;
   static const bool _showCatalogRescueTerminateButton = false;
   static final MobileControlSchemaParseResult
@@ -561,6 +565,7 @@ class _ControlScreenState extends State<ControlScreen>
   bool _isPrimaryActionInFlight = false;
   bool _allowSystemPop = false;
   bool _contentSyncInFlight = false;
+  bool _packageProbeKillSwitchEnabled = false;
   bool _autoReconnectLoopActive = false;
   bool _autoReconnectEnabled = true;
   bool _isVideoPreviewExpanded = false;
@@ -576,6 +581,8 @@ class _ControlScreenState extends State<ControlScreen>
   TherapistRuntimeStatus? _runtimeStatus;
   final Map<String, PurchasedContentState> _contentStatesByGameId =
       <String, PurchasedContentState>{};
+  final Map<String, PackageProbeResultSignal> _latestPackageProbeByGameId =
+      <String, PackageProbeResultSignal>{};
   final Set<String> _contentActionsInFlight = <String>{};
   final Set<String> _questReportedContentGameIds = <String>{};
 
@@ -778,6 +785,8 @@ class _ControlScreenState extends State<ControlScreen>
       );
       final contentStatusSignal =
           ContentInstallStatusSignal.tryFromNetworkMessage(message);
+      final packageProbeSignal =
+          PackageProbeResultSignal.tryFromNetworkMessage(message);
 
       if (mounted && devicePresenceUpdate != null) {
         final previousSignal = _lastDevicePresenceSignal;
@@ -922,6 +931,10 @@ class _ControlScreenState extends State<ControlScreen>
 
       if (mounted && contentStatusSignal != null) {
         _applyContentInstallStatusSignal(contentStatusSignal);
+      }
+
+      if (mounted && packageProbeSignal != null) {
+        _applyPackageProbeResultSignal(packageProbeSignal);
       }
     });
   }
@@ -3698,6 +3711,11 @@ class _ControlScreenState extends State<ControlScreen>
         !_isHeadsetPresenceBlocking;
   }
 
+  bool get _isPackageProbeEnabled {
+    return _boardSafePackageProbeFeatureEnabled &&
+        !_packageProbeKillSwitchEnabled;
+  }
+
   String get _controlLinkBlockedHint {
     if (!_isConnected) {
       return 'Headset is offline.';
@@ -3814,6 +3832,9 @@ class _ControlScreenState extends State<ControlScreen>
     );
     _questReportedContentGameIds.removeWhere(
       (gameId) => !knownGameIds.contains(gameId),
+    );
+    _latestPackageProbeByGameId.removeWhere(
+      (gameId, _) => !knownGameIds.contains(gameId),
     );
   }
 
@@ -4022,6 +4043,65 @@ class _ControlScreenState extends State<ControlScreen>
     });
   }
 
+  void _applyPackageProbeResultSignal(PackageProbeResultSignal signal) {
+    final gameId = signal.gameId.trim();
+    if (gameId.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _latestPackageProbeByGameId[gameId] = signal;
+      _contentActionsInFlight.remove(gameId);
+    });
+    unawaited(_persistPackageProbeResult(signal));
+
+    final statusLabel =
+        signal.statusCode > 0 ? '${signal.statusCode}' : signal.reasonCode;
+    final summary = signal.success
+        ? 'Package probe OK ($statusLabel)'
+        : 'Package probe failed ($statusLabel)';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$summary for $gameId'),
+        duration: const Duration(seconds: 2),
+        backgroundColor: signal.success ? null : Colors.orange.shade800,
+      ),
+    );
+  }
+
+  Future<void> _persistPackageProbeResult(
+      PackageProbeResultSignal signal) async {
+    final sessionId = _activeSessionId.trim();
+    if (sessionId.isEmpty) {
+      return;
+    }
+
+    try {
+      await SessionJournalService.appendSessionEvent(
+        sessionId: sessionId,
+        studentId: widget.student.id,
+        therapistId: _resolveActorTherapistId(),
+        eventType: 'PACKAGE_PROBE_RESULT',
+        gameId: signal.gameId,
+        source: 'vr_runtime',
+        eventAtUtc: signal.probedAtUtc,
+        details: <String, dynamic>{
+          'success': signal.success,
+          'statusCode': signal.statusCode,
+          'contentLength': signal.contentLength,
+          'method': signal.method,
+          'eTag': signal.eTag,
+          'contentType': signal.contentType,
+          'reasonCode': signal.reasonCode,
+          'probeOnly': signal.probeOnly,
+          'packageUri': signal.packageUri,
+        },
+      );
+    } catch (e) {
+      debugPrint('[ControlScreen] Persist package probe result failed: $e');
+    }
+  }
+
   Future<void> _syncContentCatalog({bool silent = false}) async {
     if (!_contentDeliveryEnabled) {
       return;
@@ -4082,6 +4162,8 @@ class _ControlScreenState extends State<ControlScreen>
         break;
       }
     }
+    final shouldRequestPackageProbe =
+        _isPackageProbeEnabled && packageUri.trim().isNotEmpty;
 
     setState(() {
       _contentActionsInFlight.add(state.gameId);
@@ -4100,6 +4182,8 @@ class _ControlScreenState extends State<ControlScreen>
         gameId: state.gameId,
         targetVersion: state.targetVersion,
         packageUri: packageUri,
+        requestPackageProbe: shouldRequestPackageProbe,
+        probeOnly: false,
       ),
       showSuccessSnack: false,
     );
@@ -4120,9 +4204,97 @@ class _ControlScreenState extends State<ControlScreen>
       return;
     }
 
+    unawaited(
+      _persistCatalogInteractionEvent(
+        eventType: 'CONTENT_INSTALL_REQUESTED',
+        gameId: state.gameId,
+        details: <String, dynamic>{
+          'targetVersion': state.targetVersion,
+          'requestPackageProbe': shouldRequestPackageProbe,
+          'packageUri': packageUri,
+        },
+      ),
+    );
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Install/update requested for ${state.gameId}'),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
+  Future<void> _requestPackageProbe(PurchasedContentState state) async {
+    if (!_contentDeliveryEnabled ||
+        !_boardSafePackageProbeFeatureEnabled ||
+        !_isConnected ||
+        _contentActionsInFlight.contains(state.gameId)) {
+      return;
+    }
+
+    String packageUri = '';
+    for (final entry in _effectiveGameCatalog) {
+      if (entry.gameId == state.gameId) {
+        packageUri = entry.packageUri;
+        break;
+      }
+    }
+
+    if (packageUri.trim().isEmpty) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Selected game has no packageUri to probe.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _contentActionsInFlight.add(state.gameId);
+    });
+
+    final success = await _sendCommand(
+      ContentDeliveryCommandIds.installGame,
+      extraPayload: ContentDeliveryRequests.buildInstallRequest(
+        actorId: _resolveActorTherapistId(),
+        gameId: state.gameId,
+        targetVersion: state.targetVersion,
+        packageUri: packageUri,
+        requestPackageProbe: true,
+        probeOnly: true,
+      ),
+      showSuccessSnack: false,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (!success) {
+      setState(() {
+        _contentActionsInFlight.remove(state.gameId);
+      });
+      return;
+    }
+
+    unawaited(
+      _persistCatalogInteractionEvent(
+        eventType: 'PACKAGE_PROBE_REQUESTED',
+        gameId: state.gameId,
+        details: <String, dynamic>{
+          'packageUri': packageUri,
+          'probeOnly': true,
+          'killSwitchEnabled': _packageProbeKillSwitchEnabled,
+        },
+      ),
+    );
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Package probe requested for ${state.gameId}'),
         duration: const Duration(seconds: 1),
       ),
     );
@@ -4166,6 +4338,15 @@ class _ControlScreenState extends State<ControlScreen>
         );
       });
 
+      unawaited(
+        _persistCatalogInteractionEvent(
+          eventType: 'CONTENT_UNINSTALL_REQUESTED',
+          gameId: state.gameId,
+          details: <String, dynamic>{
+            'targetVersion': state.targetVersion,
+          },
+        ),
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Uninstall requested for ${state.gameId}'),
@@ -4186,6 +4367,33 @@ class _ControlScreenState extends State<ControlScreen>
       setState(() {
         _contentActionsInFlight.remove(state.gameId);
       });
+    }
+  }
+
+  Future<void> _persistCatalogInteractionEvent({
+    required String eventType,
+    required String gameId,
+    Map<String, dynamic>? details,
+  }) async {
+    final sessionId = _activeSessionId.trim();
+    if (sessionId.isEmpty) {
+      return;
+    }
+
+    try {
+      await SessionJournalService.appendSessionEvent(
+        sessionId: sessionId,
+        studentId: widget.student.id,
+        therapistId: _resolveActorTherapistId(),
+        eventType: eventType,
+        gameId: gameId,
+        details: details ?? const <String, dynamic>{},
+      );
+    } catch (e) {
+      debugPrint(
+        '[ControlScreen] Persist catalog interaction failed: '
+        'eventType=$eventType gameId=$gameId error=$e',
+      );
     }
   }
 
@@ -7719,18 +7927,42 @@ class _ControlScreenState extends State<ControlScreen>
               ),
             ),
             if (_contentDeliveryEnabled)
-              TextButton.icon(
-                onPressed: _isConnected && !_contentSyncInFlight
-                    ? () => unawaited(_syncContentCatalog())
-                    : null,
-                icon: _contentSyncInFlight
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.sync, size: 16),
-                label: Text(_contentSyncInFlight ? 'Syncing...' : 'Refresh'),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  TextButton.icon(
+                    onPressed: _isConnected && !_contentSyncInFlight
+                        ? () => unawaited(_syncContentCatalog())
+                        : null,
+                    icon: _contentSyncInFlight
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.sync, size: 16),
+                    label:
+                        Text(_contentSyncInFlight ? 'Syncing...' : 'Refresh'),
+                  ),
+                  if (_boardSafePackageProbeFeatureEnabled)
+                    TextButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _packageProbeKillSwitchEnabled =
+                              !_packageProbeKillSwitchEnabled;
+                        });
+                      },
+                      icon: Icon(
+                        _isPackageProbeEnabled
+                            ? Icons.shield_outlined
+                            : Icons.shield_moon_outlined,
+                        size: 16,
+                      ),
+                      label: Text(
+                        _isPackageProbeEnabled ? 'Probe ON' : 'Probe OFF',
+                      ),
+                    ),
+                ],
               ),
           ],
         ),
@@ -7743,6 +7975,20 @@ class _ControlScreenState extends State<ControlScreen>
             fontSize: 12,
           ),
         ),
+        if (_boardSafePackageProbeFeatureEnabled)
+          Text(
+            _isPackageProbeEnabled
+                ? 'Board-safe package probe is enabled (HTTP reachability only).'
+                : 'Board-safe package probe is disabled by kill switch.',
+            style: TextStyle(
+              color: _isPackageProbeEnabled
+                  ? Colors.grey.shade700
+                  : Colors.orange.shade800,
+              fontSize: 11,
+              fontWeight:
+                  _isPackageProbeEnabled ? FontWeight.w500 : FontWeight.w700,
+            ),
+          ),
         const SizedBox(height: 8),
         Container(
           padding: const EdgeInsets.all(4),
@@ -7907,6 +8153,14 @@ class _ControlScreenState extends State<ControlScreen>
                                     ContentRuntimeStatus.failed);
                         final primaryStoreActionEnabled =
                             !contentState.owned && entry.availableForPurchase;
+                        final latestProbeSignal =
+                            _latestPackageProbeByGameId[entry.gameId];
+                        final hasProbeableUri =
+                            entry.packageUri.trim().isNotEmpty;
+                        final showProbeAction = _contentDeliveryEnabled &&
+                            _boardSafePackageProbeFeatureEnabled &&
+                            hasProbeableUri &&
+                            _catalogFilterTab != _CatalogFilterTab.store;
 
                         return Card(
                           elevation: selected ? 2 : 0.5,
@@ -8027,6 +8281,32 @@ class _ControlScreenState extends State<ControlScreen>
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
+                                if (latestProbeSignal != null)
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      10,
+                                      6,
+                                      10,
+                                      0,
+                                    ),
+                                    child: Text(
+                                      latestProbeSignal.success
+                                          ? 'Probe: HTTP ${latestProbeSignal.statusCode} '
+                                              'len=${latestProbeSignal.contentLength} '
+                                              '${latestProbeSignal.eTag.isNotEmpty ? 'etag=${latestProbeSignal.eTag}' : ''}'
+                                          : 'Probe: ${latestProbeSignal.reasonCode} '
+                                              '(HTTP ${latestProbeSignal.statusCode})',
+                                      style: TextStyle(
+                                        color: latestProbeSignal.success
+                                            ? Colors.green.shade700
+                                            : Colors.orange.shade800,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
                                 const Spacer(),
                                 Padding(
                                   padding: const EdgeInsets.fromLTRB(
@@ -8055,57 +8335,95 @@ class _ControlScreenState extends State<ControlScreen>
                                           ),
                                         )
                                       : (_contentDeliveryEnabled &&
-                                              shouldInstallOrUpdate
-                                          ? Row(
+                                              (shouldInstallOrUpdate ||
+                                                  showProbeAction)
+                                          ? Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.stretch,
                                               children: [
-                                                Expanded(
-                                                  child: ElevatedButton.icon(
+                                                if (shouldInstallOrUpdate)
+                                                  Row(
+                                                    children: [
+                                                      Expanded(
+                                                        child:
+                                                            ElevatedButton.icon(
+                                                          onPressed: !_isConnected ||
+                                                                  actionInFlight ||
+                                                                  !shouldInstallOrUpdate
+                                                              ? null
+                                                              : () => unawaited(
+                                                                    _requestInstallOrUpdate(
+                                                                      contentState,
+                                                                    ),
+                                                                  ),
+                                                          icon: const Icon(
+                                                            Icons.download,
+                                                          ),
+                                                          label: Text(
+                                                            contentState.runtimeStatus ==
+                                                                    ContentRuntimeStatus
+                                                                        .updateRequired
+                                                                ? 'Update'
+                                                                : contentState
+                                                                            .runtimeStatus ==
+                                                                        ContentRuntimeStatus
+                                                                            .failed
+                                                                    ? 'Retry'
+                                                                    : 'Install',
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      if (installManaged &&
+                                                          contentState
+                                                              .isInstalled) ...[
+                                                        const SizedBox(
+                                                          width: 8,
+                                                        ),
+                                                        Expanded(
+                                                          child: OutlinedButton
+                                                              .icon(
+                                                            onPressed:
+                                                                !_isConnected ||
+                                                                        actionInFlight
+                                                                    ? null
+                                                                    : () =>
+                                                                        unawaited(
+                                                                          _requestUninstall(
+                                                                            contentState,
+                                                                          ),
+                                                                        ),
+                                                            icon: const Icon(
+                                                              Icons
+                                                                  .delete_outline,
+                                                            ),
+                                                            label: const Text(
+                                                              'Remove',
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ],
+                                                  ),
+                                                if (showProbeAction) ...[
+                                                  if (shouldInstallOrUpdate)
+                                                    const SizedBox(height: 8),
+                                                  OutlinedButton.icon(
                                                     onPressed: !_isConnected ||
                                                             actionInFlight ||
-                                                            !shouldInstallOrUpdate
+                                                            !_isPackageProbeEnabled
                                                         ? null
                                                         : () => unawaited(
-                                                              _requestInstallOrUpdate(
+                                                              _requestPackageProbe(
                                                                 contentState,
                                                               ),
                                                             ),
                                                     icon: const Icon(
-                                                      Icons.download,
+                                                      Icons.travel_explore,
                                                     ),
                                                     label: Text(
-                                                      contentState.runtimeStatus ==
-                                                              ContentRuntimeStatus
-                                                                  .updateRequired
-                                                          ? 'Update'
-                                                          : contentState
-                                                                      .runtimeStatus ==
-                                                                  ContentRuntimeStatus
-                                                                      .failed
-                                                              ? 'Retry'
-                                                              : 'Install',
-                                                    ),
-                                                  ),
-                                                ),
-                                                if (installManaged &&
-                                                    contentState
-                                                        .isInstalled) ...[
-                                                  const SizedBox(width: 8),
-                                                  Expanded(
-                                                    child: OutlinedButton.icon(
-                                                      onPressed:
-                                                          !_isConnected ||
-                                                                  actionInFlight
-                                                              ? null
-                                                              : () => unawaited(
-                                                                    _requestUninstall(
-                                                                      contentState,
-                                                                    ),
-                                                                  ),
-                                                      icon: const Icon(
-                                                        Icons.delete_outline,
-                                                      ),
-                                                      label:
-                                                          const Text('Remove'),
+                                                      _isPackageProbeEnabled
+                                                          ? 'Probe URL'
+                                                          : 'Probe disabled',
                                                     ),
                                                   ),
                                                 ],

@@ -132,6 +132,10 @@ Do not show:
    - publish result telemetry (`statusCode`, `contentLength`, `reasonCode`).
 2. Keep existing install simulation lifecycle unchanged as fallback.
 3. Add kill-switch flag so probe can be disabled instantly.
+4. Runtime + mobile signal contract:
+   - command: `PACKAGE_PROBE_RESULT`,
+   - canonical reason codes: `PACKAGE_PROBE_OK`, `PACKAGE_PROBE_DISABLED`, `PACKAGE_PROBE_URI_MISSING`, `PACKAGE_PROBE_URI_INVALID`, `PACKAGE_PROBE_TIMEOUT`, `PACKAGE_PROBE_HTTP_ERROR`, `PACKAGE_PROBE_CONNECTION_ERROR`, `PACKAGE_PROBE_DATA_ERROR`, `PACKAGE_PROBE_REQUEST_FAILED`, `PACKAGE_PROBE_EXCEPTION`,
+   - payload: `statusCode`, `contentLength`, `eTag`, `contentType`, `method`, `probeOnly`.
 
 ### BD-006 Rehearsal and Evidence
 1. Run mandatory validations:

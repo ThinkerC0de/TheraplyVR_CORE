@@ -163,7 +163,7 @@ Execution details: `docs/47-Board-Demo-Execution-Checklist.md`
 | SF-M-002 | Stabilize runtime UX blockers before demo | DONE | `Connected` status reflects effective control/streaming readiness; `End Session` always closes and returns to student selection | SF-M-001 |
 | SF-M-003 | Align therapist settings persistence with access rules | DONE | Therapist session settings write path is compatible with Firestore rules (no silent save failure) | SF-M-002 |
 | SF-M-004 | Publish CMS on domain and wire catalog package URLs | DONE | Admin console hosted on target domain, `game_catalog` entries expose valid `packageUri`/`deliveryMode`, and grant flow is demo-usable | SF-M-001 |
-| SF-M-005 | Add board-safe package download proof path | TODO | Optional runtime probe verifies `packageUri` reachability (HTTP status + payload metadata) without introducing risky dynamic content loading | SF-M-004 |
+| SF-M-005 | Add board-safe package download proof path | DONE | Optional runtime probe verifies `packageUri` reachability (HTTP status + payload metadata) without introducing risky dynamic content loading | SF-M-004 |
 | SF-M-006 | Execute board validation matrix and evidence pack | TODO | Manual runbook scenarios + Unity/Flutter/trace validations pass and evidence bundle is complete | SF-M-002, SF-M-003, SF-M-004 |
 | SF-M-007 | Cut and tag board demo candidate with rollback plan | TODO | `board-demo-rc` tag points to validated commit and rollback instruction is documented | SF-M-006 |
 

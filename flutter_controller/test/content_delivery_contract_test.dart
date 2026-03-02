@@ -79,6 +79,61 @@ void main() {
     expect(payload['issuedAtUtc'], timestamp.toIso8601String());
   });
 
+  test('install request includes package probe fields when enabled', () {
+    final payload = ContentDeliveryRequests.buildInstallRequest(
+      actorId: 'therapist-1',
+      gameId: 'board_demo_probe',
+      targetVersion: '1.0.0',
+      packageUri: 'https://theraply-vr-demo.web.app/content/pkg.json',
+      requestPackageProbe: true,
+      probeOnly: true,
+    );
+
+    expect(payload['requestPackageProbe'], isTrue);
+    expect(payload['probeOnly'], isTrue);
+    expect(
+      payload['packageUri'],
+      'https://theraply-vr-demo.web.app/content/pkg.json',
+    );
+  });
+
+  test('parses PACKAGE_PROBE_RESULT payload', () {
+    final probedAtUtc = DateTime.utc(2026, 3, 2, 13, 30, 0);
+    final message = <String, dynamic>{
+      'commandId': ContentDeliveryCommandIds.packageProbeResult,
+      'payload': base64Encode(
+        utf8.encode(
+          jsonEncode(<String, dynamic>{
+            'correlationId': 'corr-1',
+            'gameId': 'board_demo_probe',
+            'packageUri':
+                'https://theraply-vr-demo.web.app/content/board_demo_probe_1_0_0.pkg.json',
+            'success': true,
+            'method': 'HEAD',
+            'statusCode': 200,
+            'contentLength': 128,
+            'eTag': '"abc123"',
+            'contentType': 'application/json',
+            'reasonCode': 'PACKAGE_PROBE_OK',
+            'probedAtUtc': probedAtUtc.toIso8601String(),
+            'probeOnly': true,
+          }),
+        ),
+      ),
+    };
+
+    final signal = PackageProbeResultSignal.tryFromNetworkMessage(message);
+
+    expect(signal, isNotNull);
+    expect(signal!.gameId, 'board_demo_probe');
+    expect(signal.success, isTrue);
+    expect(signal.statusCode, 200);
+    expect(signal.contentLength, 128);
+    expect(signal.reasonCode, 'PACKAGE_PROBE_OK');
+    expect(signal.probeOnly, isTrue);
+    expect(signal.probedAtUtc, probedAtUtc);
+  });
+
   test('request install transition starts with syncing manifest phase', () {
     expect(
       ContentDeliveryTransitionRule.nextStatus(
