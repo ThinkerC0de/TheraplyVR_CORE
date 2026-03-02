@@ -300,6 +300,120 @@ void main() {
     expect(entry.parameterSchema?['schema'], 'demo_parameter_schema');
   });
 
+  test('upsertGameCatalogEntry writes row and audit event', () async {
+    const correlationId = 'corr-catalog-upsert-1';
+    const reason = 'catalog-manual-edit';
+    const gameId = 'board_probe_game';
+
+    await EntitlementAdminService.upsertGameCatalogEntry(
+      entry: const AdminGameCatalogSeedEntry(
+        gameId: gameId,
+        title: 'Board Probe',
+        description: 'Board entry',
+        targetContentVersion: '1.0.0',
+        packageUri: 'https://example.com/probe.pkg.json',
+        thumbnailUrl: 'https://example.com/thumb.png',
+        supportsSaveResume: false,
+        availableForPurchase: false,
+        requiresExplicitLicense: false,
+        runtimeLaunchEnabled: true,
+        sortOrder: 77,
+        active: true,
+        previewLines: <String>['line1'],
+      ),
+      reason: reason,
+      correlationId: correlationId,
+      action: 'CREATE_GAME_CATALOG_ENTRY',
+    );
+
+    final doc = await firestore.collection('game_catalog').doc(gameId).get();
+    final data = doc.data()!;
+    expect(data['title'], 'Board Probe');
+    expect(data['sortOrder'], 77);
+    expect(data['updatedBy'], 'admin-user-1');
+    expect(data['correlationId'], correlationId);
+
+    final auditSnapshot = await firestore
+        .collection('admin_audit_trail')
+        .where('correlationId', isEqualTo: correlationId)
+        .get();
+    expect(auditSnapshot.docs, hasLength(1));
+    expect(auditSnapshot.docs.single.data()['action'],
+        'CREATE_GAME_CATALOG_ENTRY');
+  });
+
+  test('watchGameCatalog returns rows sorted by sortOrder then gameId',
+      () async {
+    await firestore.collection('game_catalog').doc('game-z').set(
+      <String, dynamic>{
+        'gameId': 'game-z',
+        'title': 'Game Z',
+        'targetContentVersion': '1.0.0',
+        'sortOrder': 20,
+      },
+    );
+    await firestore.collection('game_catalog').doc('game-a').set(
+      <String, dynamic>{
+        'gameId': 'game-a',
+        'title': 'Game A',
+        'targetContentVersion': '1.0.0',
+        'sortOrder': 10,
+      },
+    );
+
+    final rows = await EntitlementAdminService.watchGameCatalog().first;
+    expect(rows, hasLength(2));
+    expect(rows.first.gameId, 'game-a');
+    expect(rows.last.gameId, 'game-z');
+  });
+
+  test('deactivate and delete game catalog entry update data and audit',
+      () async {
+    const gameId = 'game-to-disable';
+    await firestore.collection('game_catalog').doc(gameId).set(
+      <String, dynamic>{
+        'gameId': gameId,
+        'title': 'Disable Me',
+        'targetContentVersion': '1.0.0',
+        'sortOrder': 5,
+        'active': true,
+        'runtimeLaunchEnabled': true,
+      },
+    );
+
+    await EntitlementAdminService.deactivateGameCatalogEntry(
+      gameId: gameId,
+      reason: 'ops-deactivate',
+      correlationId: 'corr-catalog-deactivate-1',
+    );
+
+    final deactivated =
+        await firestore.collection('game_catalog').doc(gameId).get();
+    final deactivatedData = deactivated.data()!;
+    expect(deactivatedData['active'], isFalse);
+    expect(deactivatedData['runtimeLaunchEnabled'], isFalse);
+
+    await EntitlementAdminService.deleteGameCatalogEntry(
+      gameId: gameId,
+      reason: 'ops-delete',
+      correlationId: 'corr-catalog-delete-1',
+    );
+
+    final deleted =
+        await firestore.collection('game_catalog').doc(gameId).get();
+    expect(deleted.exists, isFalse);
+
+    final auditSnapshot = await firestore
+        .collection('admin_audit_trail')
+        .where('targetDocumentId', isEqualTo: gameId)
+        .get();
+    final actions = auditSnapshot.docs
+        .map((doc) => doc.data()['action'] as String? ?? '')
+        .toSet();
+    expect(actions.contains('DEACTIVATE_GAME_CATALOG_ENTRY'), isTrue);
+    expect(actions.contains('DELETE_GAME_CATALOG_ENTRY'), isTrue);
+  });
+
   test('watchRecentTherapySessions returns sorted session rows', () async {
     await firestore.collection('therapy_sessions').doc('session-a').set(
       <String, dynamic>{

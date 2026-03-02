@@ -54,6 +54,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
 
   bool _savingEntitlement = false;
   bool _savingGrant = false;
+  bool _savingCatalogEntry = false;
   bool _seedingGameCatalog = false;
   bool _loadingCatalogSeed = true;
   bool _loadingExportManifest = true;
@@ -498,6 +499,493 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
       if (mounted) {
         setState(() {
           _seedingGameCatalog = false;
+        });
+      }
+    }
+  }
+
+  Future<AdminGameCatalogSeedEntry?> _openGameCatalogEditorDialog({
+    AdminGameCatalogSeedEntry? existing,
+  }) async {
+    final isCreate = existing == null;
+    final gameIdController =
+        TextEditingController(text: existing?.gameId ?? '');
+    final titleController = TextEditingController(text: existing?.title ?? '');
+    final descriptionController =
+        TextEditingController(text: existing?.description ?? '');
+    final targetVersionController =
+        TextEditingController(text: existing?.targetContentVersion ?? '');
+    final contentVersionController =
+        TextEditingController(text: existing?.contentVersion ?? '');
+    final sceneKeyController =
+        TextEditingController(text: existing?.sceneKey ?? '');
+    final entitlementKeyController =
+        TextEditingController(text: existing?.entitlementKey ?? '');
+    final packageUriController =
+        TextEditingController(text: existing?.packageUri ?? '');
+    final thumbnailUrlController =
+        TextEditingController(text: existing?.thumbnailUrl ?? '');
+    final sortOrderController = TextEditingController(
+      text: (existing?.sortOrder ?? 0).toString(),
+    );
+    final previewLinesController = TextEditingController(
+      text: (existing?.previewLines ?? const <String>[]).join('\n'),
+    );
+
+    var active = existing?.active ?? true;
+    var runtimeLaunchEnabled = existing?.runtimeLaunchEnabled ?? true;
+    var availableForPurchase = existing?.availableForPurchase ?? false;
+    var requiresExplicitLicense = existing?.requiresExplicitLicense ?? false;
+    var supportsSaveResume = existing?.supportsSaveResume ?? false;
+    var deliveryMode =
+        existing?.deliveryMode ?? AdminGameCatalogSeedEntry.deliveryModeBundled;
+    var validationError = '';
+
+    final result = await showDialog<AdminGameCatalogSeedEntry>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text(
+                isCreate
+                    ? 'Create game_catalog entry'
+                    : 'Edit game_catalog entry',
+              ),
+              content: SizedBox(
+                width: 620,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: gameIdController,
+                        enabled: isCreate,
+                        decoration: const InputDecoration(
+                          labelText: 'gameId',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: titleController,
+                        decoration: const InputDecoration(
+                          labelText: 'title',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: descriptionController,
+                        maxLines: 2,
+                        decoration: const InputDecoration(
+                          labelText: 'description',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: targetVersionController,
+                        decoration: const InputDecoration(
+                          labelText: 'targetContentVersion',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: contentVersionController,
+                        decoration: const InputDecoration(
+                          labelText: 'contentVersion (optional)',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: sceneKeyController,
+                        decoration: const InputDecoration(
+                          labelText: 'sceneKey (optional)',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: entitlementKeyController,
+                        decoration: const InputDecoration(
+                          labelText: 'entitlementKey (optional)',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        initialValue: deliveryMode,
+                        decoration: const InputDecoration(
+                          labelText: 'deliveryMode',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value:
+                                AdminGameCatalogSeedEntry.deliveryModeBundled,
+                            child: Text('bundled'),
+                          ),
+                          DropdownMenuItem(
+                            value:
+                                AdminGameCatalogSeedEntry.deliveryModeOnDemand,
+                            child: Text('on_demand'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) {
+                            return;
+                          }
+                          setDialogState(() {
+                            deliveryMode = value;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: packageUriController,
+                        decoration: const InputDecoration(
+                          labelText: 'packageUri',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: thumbnailUrlController,
+                        decoration: const InputDecoration(
+                          labelText: 'thumbnailUrl',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: sortOrderController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'sortOrder',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: previewLinesController,
+                        minLines: 2,
+                        maxLines: 4,
+                        decoration: const InputDecoration(
+                          labelText: 'previewLines (one per line)',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SwitchListTile(
+                        value: active,
+                        onChanged: (value) {
+                          setDialogState(() {
+                            active = value;
+                          });
+                        },
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('active'),
+                      ),
+                      SwitchListTile(
+                        value: runtimeLaunchEnabled,
+                        onChanged: (value) {
+                          setDialogState(() {
+                            runtimeLaunchEnabled = value;
+                          });
+                        },
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('runtimeLaunchEnabled'),
+                      ),
+                      SwitchListTile(
+                        value: availableForPurchase,
+                        onChanged: (value) {
+                          setDialogState(() {
+                            availableForPurchase = value;
+                          });
+                        },
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('availableForPurchase'),
+                      ),
+                      SwitchListTile(
+                        value: requiresExplicitLicense,
+                        onChanged: (value) {
+                          setDialogState(() {
+                            requiresExplicitLicense = value;
+                          });
+                        },
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('requiresExplicitLicense'),
+                      ),
+                      SwitchListTile(
+                        value: supportsSaveResume,
+                        onChanged: (value) {
+                          setDialogState(() {
+                            supportsSaveResume = value;
+                          });
+                        },
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('supportsSaveResume'),
+                      ),
+                      if (validationError.trim().isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          validationError,
+                          style: TextStyle(color: Colors.red.shade700),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton.icon(
+                  onPressed: () {
+                    final normalizedGameId = gameIdController.text.trim();
+                    final normalizedTargetVersion =
+                        targetVersionController.text.trim();
+                    final sortOrder =
+                        int.tryParse(sortOrderController.text.trim());
+                    if (normalizedGameId.isEmpty) {
+                      setDialogState(() {
+                        validationError = 'gameId is required.';
+                      });
+                      return;
+                    }
+                    if (normalizedTargetVersion.isEmpty) {
+                      setDialogState(() {
+                        validationError = 'targetContentVersion is required.';
+                      });
+                      return;
+                    }
+                    if (sortOrder == null) {
+                      setDialogState(() {
+                        validationError = 'sortOrder must be an integer.';
+                      });
+                      return;
+                    }
+
+                    final previewLines = previewLinesController.text
+                        .split(RegExp(r'[\r\n]+'))
+                        .map((line) => line.trim())
+                        .where((line) => line.isNotEmpty)
+                        .toList(growable: false);
+
+                    final entry = AdminGameCatalogSeedEntry(
+                      gameId: normalizedGameId,
+                      title: titleController.text.trim(),
+                      description: descriptionController.text.trim(),
+                      targetContentVersion: normalizedTargetVersion,
+                      contentVersion: contentVersionController.text.trim(),
+                      sceneKey: sceneKeyController.text.trim(),
+                      entitlementKey: entitlementKeyController.text.trim(),
+                      deliveryMode: deliveryMode,
+                      parameterSchema: existing?.parameterSchema,
+                      packageUri: packageUriController.text.trim(),
+                      thumbnailUrl: thumbnailUrlController.text.trim(),
+                      supportsSaveResume: supportsSaveResume,
+                      availableForPurchase: availableForPurchase,
+                      requiresExplicitLicense: requiresExplicitLicense,
+                      runtimeLaunchEnabled: runtimeLaunchEnabled,
+                      sortOrder: sortOrder,
+                      active: active,
+                      previewLines: previewLines,
+                      mobileControlSchema: existing?.mobileControlSchema,
+                    );
+                    Navigator.of(dialogContext).pop(entry);
+                  },
+                  icon: const Icon(Icons.save),
+                  label: Text(isCreate ? 'Create' : 'Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    gameIdController.dispose();
+    titleController.dispose();
+    descriptionController.dispose();
+    targetVersionController.dispose();
+    contentVersionController.dispose();
+    sceneKeyController.dispose();
+    entitlementKeyController.dispose();
+    packageUriController.dispose();
+    thumbnailUrlController.dispose();
+    sortOrderController.dispose();
+    previewLinesController.dispose();
+
+    return result;
+  }
+
+  Future<void> _createGameCatalogEntry() async {
+    final entry = await _openGameCatalogEditorDialog();
+    if (entry == null) {
+      return;
+    }
+
+    final reason = _resolveReason('manual-game-catalog-create');
+    final correlationId = _resolveCorrelationId();
+    setState(() {
+      _savingCatalogEntry = true;
+    });
+    try {
+      await EntitlementAdminService.upsertGameCatalogEntry(
+        entry: entry,
+        reason: reason,
+        correlationId: correlationId,
+        action: 'CREATE_GAME_CATALOG_ENTRY',
+      );
+      _snack('Created game_catalog/${entry.gameId} ($correlationId)');
+      _rotateCorrelationId();
+    } catch (e) {
+      _snack('Create game_catalog failed: $e', error: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _savingCatalogEntry = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _editGameCatalogEntry(AdminGameCatalogSeedEntry existing) async {
+    final entry = await _openGameCatalogEditorDialog(existing: existing);
+    if (entry == null) {
+      return;
+    }
+
+    final reason = _resolveReason('manual-game-catalog-edit');
+    final correlationId = _resolveCorrelationId();
+    setState(() {
+      _savingCatalogEntry = true;
+    });
+    try {
+      await EntitlementAdminService.upsertGameCatalogEntry(
+        entry: entry,
+        reason: reason,
+        correlationId: correlationId,
+        action: 'UPDATE_GAME_CATALOG_ENTRY',
+      );
+      _snack('Updated game_catalog/${entry.gameId} ($correlationId)');
+      _rotateCorrelationId();
+    } catch (e) {
+      _snack('Update game_catalog failed: $e', error: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _savingCatalogEntry = false;
+        });
+      }
+    }
+  }
+
+  Future<bool> _confirmCatalogAction({
+    required String title,
+    required String message,
+    required String confirmLabel,
+    bool danger = false,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: danger
+                  ? FilledButton.styleFrom(
+                      backgroundColor: Colors.red.shade700,
+                    )
+                  : null,
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(confirmLabel),
+            ),
+          ],
+        );
+      },
+    );
+    return confirmed == true;
+  }
+
+  Future<void> _deactivateGameCatalogEntry(String gameId) async {
+    final confirmed = await _confirmCatalogAction(
+      title: 'Deactivate game',
+      message: 'Set active=false and runtimeLaunchEnabled=false for "$gameId"?',
+      confirmLabel: 'Deactivate',
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    final reason = _resolveReason('manual-game-catalog-deactivate');
+    final correlationId = _resolveCorrelationId();
+    setState(() {
+      _savingCatalogEntry = true;
+    });
+    try {
+      await EntitlementAdminService.deactivateGameCatalogEntry(
+        gameId: gameId,
+        reason: reason,
+        correlationId: correlationId,
+      );
+      _snack('Deactivated game_catalog/$gameId ($correlationId)');
+      _rotateCorrelationId();
+    } catch (e) {
+      _snack('Deactivate game_catalog failed: $e', error: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _savingCatalogEntry = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteGameCatalogEntry(String gameId) async {
+    final confirmed = await _confirmCatalogAction(
+      title: 'Delete game',
+      message:
+          'Permanently delete game_catalog/$gameId?\nUse deactivate if you only need to hide the game.',
+      confirmLabel: 'Delete',
+      danger: true,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    final reason = _resolveReason('manual-game-catalog-delete');
+    final correlationId = _resolveCorrelationId();
+    setState(() {
+      _savingCatalogEntry = true;
+    });
+    try {
+      await EntitlementAdminService.deleteGameCatalogEntry(
+        gameId: gameId,
+        reason: reason,
+        correlationId: correlationId,
+      );
+      _snack('Deleted game_catalog/$gameId ($correlationId)');
+      _rotateCorrelationId();
+    } catch (e) {
+      _snack('Delete game_catalog failed: $e', error: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _savingCatalogEntry = false;
         });
       }
     }
@@ -1427,6 +1915,213 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
     );
   }
 
+  Widget _buildGameCatalogCrudCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'game_catalog CRUD',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Live Firestore editor for create/update/deactivate/delete.',
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed:
+                      _savingCatalogEntry ? null : _createGameCatalogEntry,
+                  icon: _savingCatalogEntry
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.add),
+                  label: const Text('Create entry'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _loadCatalogAuthoringAssets,
+                  icon: const Icon(Icons.sync),
+                  label: const Text('Refresh seed status'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            StreamBuilder<Map<String, AdminGameGrantStats>>(
+              stream: EntitlementAdminService.watchGameGrantStats(),
+              builder: (context, statsSnapshot) {
+                final statsByGameId =
+                    statsSnapshot.data ?? const <String, AdminGameGrantStats>{};
+                return StreamBuilder<List<AdminGameCatalogSeedEntry>>(
+                  stream: EntitlementAdminService.watchGameCatalog(limit: 500),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      return Text(
+                        'Blad odczytu game_catalog: ${snapshot.error}',
+                        style: TextStyle(color: Colors.red.shade700),
+                      );
+                    }
+
+                    if (!snapshot.hasData) {
+                      return const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(12),
+                          child: CircularProgressIndicator(),
+                        ),
+                      );
+                    }
+
+                    final rows = snapshot.data!;
+                    if (rows.isEmpty) {
+                      return const Text('Brak rekordow game_catalog.');
+                    }
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Live rows: ${rows.length}'),
+                        const SizedBox(height: 8),
+                        for (final row in rows)
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        row.title.trim().isEmpty
+                                            ? row.gameId
+                                            : row.title,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 3,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: row.active
+                                            ? Colors.green.shade100
+                                            : Colors.red.shade100,
+                                        borderRadius:
+                                            BorderRadius.circular(999),
+                                      ),
+                                      child: Text(
+                                        row.active ? 'ACTIVE' : 'INACTIVE',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: row.active
+                                              ? Colors.green.shade800
+                                              : Colors.red.shade800,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'gameId=${row.gameId} | sortOrder=${row.sortOrder} | delivery=${row.deliveryMode}',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                Text(
+                                  'targetVersion=${row.targetContentVersion} | launchEnabled=${row.runtimeLaunchEnabled}',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                Text(
+                                  'purchasable=${row.availableForPurchase} | '
+                                  'explicitLicense=${row.requiresExplicitLicense} | '
+                                  'saveResume=${row.supportsSaveResume}',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                if (row.packageUri.trim().isNotEmpty)
+                                  Text(
+                                    'packageUri=${row.packageUri}',
+                                    style: const TextStyle(fontSize: 12),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                if (row.description.trim().isNotEmpty)
+                                  Text(
+                                    row.description,
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                Text(
+                                  'Grant stats: active=${statsByGameId[row.gameId]?.activeAssignments ?? 0}, '
+                                  'revoked=${statsByGameId[row.gameId]?.revokedAssignments ?? 0}',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                const SizedBox(height: 6),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          _useGameIdForGrant(row.gameId),
+                                      child: const Text('Use gameId'),
+                                    ),
+                                    OutlinedButton(
+                                      onPressed: _savingCatalogEntry
+                                          ? null
+                                          : () => _editGameCatalogEntry(row),
+                                      child: const Text('Edit'),
+                                    ),
+                                    OutlinedButton(
+                                      onPressed: _savingCatalogEntry ||
+                                              !row.active
+                                          ? null
+                                          : () => _deactivateGameCatalogEntry(
+                                              row.gameId),
+                                      child: const Text('Deactivate'),
+                                    ),
+                                    OutlinedButton(
+                                      onPressed: _savingCatalogEntry
+                                          ? null
+                                          : () => _deleteGameCatalogEntry(
+                                              row.gameId),
+                                      child: Text(
+                                        'Delete',
+                                        style: TextStyle(
+                                          color: Colors.red.shade700,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    );
+                  },
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   bool _matchesGamesAuthoringFilter(_AuthoringStatus status) {
     switch (_gamesAuthoringFilter) {
       case _GamesAuthoringFilter.all:
@@ -1480,6 +2175,8 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        _buildGameCatalogCrudCard(),
+        const SizedBox(height: 12),
         Card(
           child: Padding(
             padding: const EdgeInsets.all(12),

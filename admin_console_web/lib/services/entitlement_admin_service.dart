@@ -318,6 +318,168 @@ class EntitlementAdminService {
     });
   }
 
+  static Stream<List<AdminGameCatalogSeedEntry>> watchGameCatalog({
+    int limit = 400,
+  }) {
+    final resolvedLimit = limit <= 0 ? 1 : limit;
+    return _gameCatalogCollection.limit(resolvedLimit).snapshots().map(
+      (snapshot) {
+        final rows = snapshot.docs
+            .map(
+              (doc) => AdminGameCatalogSeedEntry.fromCatalogDocument(
+                doc.id,
+                doc.data(),
+              ),
+            )
+            .toList(growable: false);
+        rows.sort((left, right) {
+          final bySortOrder = left.sortOrder.compareTo(right.sortOrder);
+          if (bySortOrder != 0) {
+            return bySortOrder;
+          }
+          return left.gameId
+              .toLowerCase()
+              .compareTo(right.gameId.toLowerCase());
+        });
+        return rows;
+      },
+    );
+  }
+
+  static Future<void> upsertGameCatalogEntry({
+    required AdminGameCatalogSeedEntry entry,
+    required String reason,
+    required String correlationId,
+    String action = 'UPSERT_GAME_CATALOG_ENTRY',
+  }) async {
+    final normalizedGameId = _requireTrimmed(entry.gameId, 'gameId');
+    final normalizedReason = _requireTrimmed(reason, 'reason');
+    final normalizedCorrelationId =
+        _requireTrimmed(correlationId, 'correlationId');
+    final actor = await _resolveActor();
+    final nowUtc = DateTime.now().toUtc();
+
+    final payload = <String, dynamic>{
+      ...entry.toFirestore(),
+      'updatedAtUtc': nowUtc.toIso8601String(),
+      'updatedBy': actor.uid,
+      'updateReason': normalizedReason,
+      'correlationId': normalizedCorrelationId,
+    };
+
+    final auditEvent = AdminAuditEvent(
+      actorUid: actor.uid,
+      actorEmail: actor.email,
+      actorRole: actor.role,
+      action: action,
+      targetCollection: 'game_catalog',
+      targetDocumentId: normalizedGameId,
+      targetUserId: null,
+      occurredAtUtc: nowUtc,
+      reason: normalizedReason,
+      correlationId: normalizedCorrelationId,
+      payloadSummary: <String, dynamic>{
+        'gameId': normalizedGameId,
+        'active': entry.active,
+        'runtimeLaunchEnabled': entry.runtimeLaunchEnabled,
+        'deliveryMode': entry.deliveryMode,
+        'targetContentVersion': entry.targetContentVersion,
+      },
+    );
+
+    final batch = _firestore.batch();
+    batch.set(
+      _gameCatalogCollection.doc(normalizedGameId),
+      payload,
+      SetOptions(merge: true),
+    );
+    batch.set(_auditCollection.doc(), auditEvent.toFirestore());
+    await batch.commit();
+  }
+
+  static Future<void> deactivateGameCatalogEntry({
+    required String gameId,
+    required String reason,
+    required String correlationId,
+  }) async {
+    final normalizedGameId = _requireTrimmed(gameId, 'gameId');
+    final normalizedReason = _requireTrimmed(reason, 'reason');
+    final normalizedCorrelationId =
+        _requireTrimmed(correlationId, 'correlationId');
+    final actor = await _resolveActor();
+    final nowUtc = DateTime.now().toUtc();
+
+    final payload = <String, dynamic>{
+      'active': false,
+      'runtimeLaunchEnabled': false,
+      'updatedAtUtc': nowUtc.toIso8601String(),
+      'updatedBy': actor.uid,
+      'updateReason': normalizedReason,
+      'correlationId': normalizedCorrelationId,
+    };
+
+    final auditEvent = AdminAuditEvent(
+      actorUid: actor.uid,
+      actorEmail: actor.email,
+      actorRole: actor.role,
+      action: 'DEACTIVATE_GAME_CATALOG_ENTRY',
+      targetCollection: 'game_catalog',
+      targetDocumentId: normalizedGameId,
+      targetUserId: null,
+      occurredAtUtc: nowUtc,
+      reason: normalizedReason,
+      correlationId: normalizedCorrelationId,
+      payloadSummary: <String, dynamic>{
+        'gameId': normalizedGameId,
+        'active': false,
+        'runtimeLaunchEnabled': false,
+      },
+    );
+
+    final batch = _firestore.batch();
+    batch.set(
+      _gameCatalogCollection.doc(normalizedGameId),
+      payload,
+      SetOptions(merge: true),
+    );
+    batch.set(_auditCollection.doc(), auditEvent.toFirestore());
+    await batch.commit();
+  }
+
+  static Future<void> deleteGameCatalogEntry({
+    required String gameId,
+    required String reason,
+    required String correlationId,
+  }) async {
+    final normalizedGameId = _requireTrimmed(gameId, 'gameId');
+    final normalizedReason = _requireTrimmed(reason, 'reason');
+    final normalizedCorrelationId =
+        _requireTrimmed(correlationId, 'correlationId');
+    final actor = await _resolveActor();
+    final nowUtc = DateTime.now().toUtc();
+
+    final auditEvent = AdminAuditEvent(
+      actorUid: actor.uid,
+      actorEmail: actor.email,
+      actorRole: actor.role,
+      action: 'DELETE_GAME_CATALOG_ENTRY',
+      targetCollection: 'game_catalog',
+      targetDocumentId: normalizedGameId,
+      targetUserId: null,
+      occurredAtUtc: nowUtc,
+      reason: normalizedReason,
+      correlationId: normalizedCorrelationId,
+      payloadSummary: <String, dynamic>{
+        'gameId': normalizedGameId,
+      },
+    );
+
+    final batch = _firestore.batch();
+    batch.delete(_gameCatalogCollection.doc(normalizedGameId));
+    batch.set(_auditCollection.doc(), auditEvent.toFirestore());
+    await batch.commit();
+  }
+
   static Stream<Map<String, AdminGameGrantStats>> watchGameGrantStats() {
     return _grantsCollection
         .where('scope', isEqualTo: EntitlementGrantScope.game.wireValue)
@@ -490,6 +652,96 @@ class AdminGameCatalogSeedEntry {
     required this.previewLines,
     this.mobileControlSchema,
   });
+
+  factory AdminGameCatalogSeedEntry.fromCatalogDocument(
+    String documentId,
+    Map<String, dynamic> map,
+  ) {
+    String readString(String key, {String fallback = ''}) {
+      final value = map[key];
+      if (value is String) {
+        return value.trim();
+      }
+      return fallback;
+    }
+
+    bool readBool(String key, {bool fallback = false}) {
+      final value = map[key];
+      if (value is bool) {
+        return value;
+      }
+      return fallback;
+    }
+
+    int readInt(String key, {int fallback = 0}) {
+      final value = map[key];
+      if (value is int) {
+        return value;
+      }
+      if (value is num) {
+        return value.toInt();
+      }
+      return fallback;
+    }
+
+    final rawPreviewLines = map['previewLines'];
+    final previewLines = <String>[];
+    if (rawPreviewLines is List) {
+      for (final item in rawPreviewLines) {
+        if (item is String && item.trim().isNotEmpty) {
+          previewLines.add(item.trim());
+        }
+      }
+    }
+
+    final rawSchema = map['mobileControlSchema'];
+    Map<String, dynamic>? mobileControlSchema;
+    if (rawSchema is Map) {
+      mobileControlSchema = _deepCopyMap(rawSchema);
+    }
+    final rawParameterSchema = map['parameterSchema'];
+    Map<String, dynamic>? parameterSchema;
+    if (rawParameterSchema is Map) {
+      parameterSchema = _deepCopyMap(rawParameterSchema);
+    }
+
+    final gameIdRaw = readString('gameId', fallback: documentId);
+    final gameId = gameIdRaw.isEmpty ? documentId.trim() : gameIdRaw;
+    final targetContentVersion = readString('targetContentVersion');
+    final rawContentVersion =
+        readString('contentVersion', fallback: targetContentVersion);
+    final contentVersion =
+        rawContentVersion.isEmpty ? targetContentVersion : rawContentVersion;
+    final rawSceneKey = readString('sceneKey', fallback: gameId);
+    final sceneKey = rawSceneKey.isEmpty ? gameId : rawSceneKey;
+    final rawEntitlementKey =
+        readString('entitlementKey', fallback: 'game:$gameId');
+    final entitlementKey =
+        rawEntitlementKey.isEmpty ? 'game:$gameId' : rawEntitlementKey;
+    final deliveryMode = _normalizeDeliveryMode(readString('deliveryMode'));
+
+    return AdminGameCatalogSeedEntry(
+      gameId: gameId,
+      title: readString('title'),
+      description: readString('description'),
+      targetContentVersion: targetContentVersion,
+      contentVersion: contentVersion,
+      sceneKey: sceneKey,
+      entitlementKey: entitlementKey,
+      deliveryMode: deliveryMode,
+      parameterSchema: parameterSchema,
+      packageUri: readString('packageUri'),
+      thumbnailUrl: readString('thumbnailUrl'),
+      supportsSaveResume: readBool('supportsSaveResume'),
+      availableForPurchase: readBool('availableForPurchase'),
+      requiresExplicitLicense: readBool('requiresExplicitLicense'),
+      runtimeLaunchEnabled: readBool('runtimeLaunchEnabled'),
+      sortOrder: readInt('sortOrder'),
+      active: readBool('active', fallback: true),
+      previewLines: previewLines,
+      mobileControlSchema: mobileControlSchema,
+    );
+  }
 
   factory AdminGameCatalogSeedEntry.fromSeedMap(Map<String, dynamic> map) {
     String readString(String key, {String fallback = ''}) {
