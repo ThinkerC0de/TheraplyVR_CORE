@@ -220,7 +220,7 @@ if (-not $SkipValidation) {
         -Arguments @(
             "-ExecutionPolicy", "Bypass",
             "-File", (Join-Path $repoRoot "scripts\unity_ops_dataset_trace_export_validate.ps1"),
-            "-LogFile", (Join-Path $script:CommandsDir "unity_ops_dataset_trace_export_validate.log"),
+            "-LogFile", (Join-Path $script:CommandsDir "unity_ops_dataset_trace_export_validate_unity.log"),
             "-ExportOutputDirectory", (Join-Path $EvidenceRoot "artifacts\trace_export")
         )
 }
