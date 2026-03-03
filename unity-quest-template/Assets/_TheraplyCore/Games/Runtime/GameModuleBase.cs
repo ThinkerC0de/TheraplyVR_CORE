@@ -16,6 +16,13 @@ namespace TheraplyCore.Games.Runtime
         private float _startedAtRealtime = -1f;
         private float _pauseStartedAtRealtime = -1f;
         private float _accumulatedPauseSeconds = 0f;
+        private bool _motionTraceStartedForCurrentRun;
+
+        [Header("Motion Trace (VRL)")]
+        [SerializeField] private bool _enableVrlMotionTrace = true;
+        [SerializeField] private bool _autoProvisionVrlMotionTraceRecorder = true;
+        [SerializeField] private MotionTraceRecorder _motionTraceRecorder;
+        [SerializeField] private bool _logMotionTraceLifecycle;
 
         protected GameContracts.IGameContext Context { get; private set; }
         protected GameContracts.IGameConfig CurrentConfig { get; private set; }
@@ -34,6 +41,8 @@ namespace TheraplyCore.Games.Runtime
             State = GameContracts.GameState.Initialized;
 
             ResetTiming();
+            _motionTraceStartedForCurrentRun = false;
+            ResolveMotionTraceRecorder();
 
             TrackEvent("game_initialized", new Dictionary<string, object>
             {
@@ -63,8 +72,13 @@ namespace TheraplyCore.Games.Runtime
             }
 
             var eventName = State == GameContracts.GameState.Paused ? "game_resumed" : "game_started";
+            var shouldBeginTrace = State == GameContracts.GameState.Initialized;
             State = GameContracts.GameState.Playing;
             TrackEvent(eventName);
+            if (shouldBeginTrace)
+            {
+                TryBeginMotionTrace();
+            }
         }
 
         public virtual void PauseGame()
@@ -127,6 +141,8 @@ namespace TheraplyCore.Games.Runtime
                 { "finalState", finalState },
                 { "sessionState", finalState },
             });
+
+            TryPublishMotionTrace(reasonCode);
         }
 
         public virtual void UpdateConfig(GameContracts.IGameConfig newConfig)
@@ -217,6 +233,85 @@ namespace TheraplyCore.Games.Runtime
             _startedAtRealtime = -1f;
             _pauseStartedAtRealtime = -1f;
             _accumulatedPauseSeconds = 0f;
+        }
+
+        private void ResolveMotionTraceRecorder()
+        {
+            if (!_enableVrlMotionTrace || _motionTraceRecorder != null)
+            {
+                return;
+            }
+
+            _motionTraceRecorder = FindFirstObjectByType<MotionTraceRecorder>();
+            if (_motionTraceRecorder != null || !_autoProvisionVrlMotionTraceRecorder)
+            {
+                return;
+            }
+
+            var recorderHost = new GameObject("MotionTraceRecorder");
+            _motionTraceRecorder = recorderHost.AddComponent<MotionTraceRecorder>();
+            if (_logMotionTraceLifecycle)
+            {
+                Logger.Info($"[{GameId}] Auto-provisioned MotionTraceRecorder.");
+            }
+        }
+
+        private void TryBeginMotionTrace()
+        {
+            if (!_enableVrlMotionTrace)
+            {
+                return;
+            }
+
+            ResolveMotionTraceRecorder();
+            if (_motionTraceRecorder == null || _motionTraceRecorder.IsRecording)
+            {
+                return;
+            }
+
+            var sessionId = ResolveSessionIdForTrace();
+            _motionTraceRecorder.BeginTrace(GameId, GameId, sessionId);
+            _motionTraceStartedForCurrentRun = true;
+
+            if (_logMotionTraceLifecycle)
+            {
+                Logger.Info($"[{GameId}] Motion trace started (VRL). sessionId={sessionId}");
+            }
+        }
+
+        private void TryPublishMotionTrace(string reasonCode)
+        {
+            if (!_enableVrlMotionTrace || !_motionTraceStartedForCurrentRun)
+            {
+                return;
+            }
+
+            ResolveMotionTraceRecorder();
+            if (_motionTraceRecorder == null)
+            {
+                _motionTraceStartedForCurrentRun = false;
+                return;
+            }
+
+            _motionTraceRecorder.StopAndPublish(NormalizeOrFallbackReasonCode(reasonCode));
+            _motionTraceStartedForCurrentRun = false;
+
+            if (_logMotionTraceLifecycle)
+            {
+                Logger.Info($"[{GameId}] Motion trace published (VRL). reason={NormalizeOrFallbackReasonCode(reasonCode)}");
+            }
+        }
+
+        private string ResolveSessionIdForTrace()
+        {
+            var session = Context == null ? null : Context.Session;
+            var sessionId = session == null ? string.Empty : session.SessionId;
+            return string.IsNullOrWhiteSpace(sessionId) ? "unknown_session" : sessionId.Trim();
+        }
+
+        private static string NormalizeOrFallbackReasonCode(string reasonCode)
+        {
+            return string.IsNullOrWhiteSpace(reasonCode) ? "GAME_RUNTIME_STOP" : reasonCode.Trim();
         }
 
         private static string ResolveTerminalReasonCode(GameContracts.GameStopReason reason)
