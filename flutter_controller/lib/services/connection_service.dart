@@ -10,6 +10,7 @@ class ConnectionService {
   bool _isConnected = false;
   bool _isDisconnecting = false;
   Future<bool>? _connectInFlight;
+  Future<void> _writeQueue = Future<void>.value();
   String? _lastIp;
   int? _lastPort;
 
@@ -231,7 +232,7 @@ class ConnectionService {
     String? messageId,
     DateTime? timestampUtc,
   }) async {
-    if (!_isConnected || _socket == null) {
+    if (!_isConnected || _socket == null || _isDisconnecting) {
       print('[Connection] ⚠️ Cannot send - not connected');
       return;
     }
@@ -257,16 +258,37 @@ class ConnectionService {
       // Send length prefix (4 bytes, big-endian)
       final lengthBytes = ByteData(4)
         ..setInt32(0, messageBytes.length, Endian.big);
+      final framedMessage = Uint8List(4 + messageBytes.length);
+      framedMessage.setAll(0, lengthBytes.buffer.asUint8List());
+      framedMessage.setAll(4, messageBytes);
 
-      _socket!.add(lengthBytes.buffer.asUint8List());
-      _socket!.add(messageBytes);
-      await _socket!.flush();
+      await _enqueueWrite(framedMessage);
 
       print('[Connection] 📤 Sent: $commandId (${messageBytes.length} bytes)');
     } catch (e) {
       print('[Connection] ❌ Send failed: $e');
-      disconnect();
+      unawaited(disconnect());
     }
+  }
+
+  Future<void> _enqueueWrite(Uint8List framedMessage) async {
+    Future<void> writeTask() async {
+      if (!_isConnected || _isDisconnecting) {
+        throw StateError('DISCONNECTED');
+      }
+
+      final socket = _socket;
+      if (socket == null) {
+        throw StateError('DISCONNECTED');
+      }
+
+      socket.add(framedMessage);
+      await socket.flush();
+    }
+
+    final pending = _writeQueue.then((_) => writeTask());
+    _writeQueue = pending.catchError((_) {});
+    await pending;
   }
 
   Future<void> sendCriticalCommand({
@@ -397,6 +419,7 @@ class ConnectionService {
     _isDisconnecting = true;
     _socket = null;
     _isConnected = false;
+    _writeQueue = Future<void>.value();
     _receiveBuffer.clear();
     _failPendingCriticalAcks('DISCONNECTED');
     if (!_connectionController.isClosed) {
@@ -405,10 +428,6 @@ class ConnectionService {
     _discoveryService?.resumeScanning();
 
     try {
-      // Flush any pending data before closing
-      await socket.flush();
-      // Give a moment for flush to complete
-      await Future.delayed(const Duration(milliseconds: 50));
       // Gracefully close the socket
       await socket.close();
     } catch (e) {

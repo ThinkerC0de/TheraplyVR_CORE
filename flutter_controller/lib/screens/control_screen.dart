@@ -433,9 +433,6 @@ class _ControlScreenState extends State<ControlScreen>
             _hasConnectedAtLeastOnce ? 'AUTO_RECONNECT' : 'INITIAL_CONNECT';
         _hasConnectedAtLeastOnce = true;
 
-        if (_contentDeliveryEnabled) {
-          unawaited(_syncContentCatalog(silent: true));
-        }
         unawaited(_loadTherapistSessionSettings());
         unawaited(_refreshPersistedSessionSnapshot(triggerPrompt: true));
         if (!wasConnected) {
