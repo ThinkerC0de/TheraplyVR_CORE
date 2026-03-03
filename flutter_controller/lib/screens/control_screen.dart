@@ -4061,6 +4061,49 @@ class _ControlScreenState extends State<ControlScreen>
       return;
     }
 
+    var gameTitle = state.gameId;
+    for (final entry in _effectiveGameCatalog) {
+      if (entry.gameId == state.gameId) {
+        gameTitle = entry.title;
+        break;
+      }
+    }
+
+    final confirmed = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            title: const Text('Remove installed game?'),
+            content: Text(
+              'Remove "$gameTitle" from Quest storage now? You can install it again anytime from mobile.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Remove'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!confirmed) {
+      unawaited(
+        _persistCatalogInteractionEvent(
+          eventType: 'CONTENT_UNINSTALL_CANCELLED',
+          gameId: state.gameId,
+          details: const <String, dynamic>{
+            'reasonCode': 'THERAPIST_CANCELLED_REMOVE',
+          },
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _contentActionsInFlight.add(state.gameId);
     });
@@ -4101,7 +4144,8 @@ class _ControlScreenState extends State<ControlScreen>
       );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Uninstall requested for ${state.gameId}'),
+          content:
+              Text('Removed $gameTitle. You can install it again anytime.'),
           duration: const Duration(seconds: 1),
         ),
       );
@@ -7915,6 +7959,8 @@ class _ControlScreenState extends State<ControlScreen>
                             _contentActionsInFlight.contains(entry.gameId);
                         final installManaged =
                             _requiresQuestInstallState(entry.gameId);
+                        final canRemoveInstalled =
+                            installManaged && contentState.isInstalled;
                         final shouldInstallOrUpdate = contentState.owned &&
                             ((installManaged &&
                                     (contentState.runtimeStatus ==
@@ -8115,49 +8161,54 @@ class _ControlScreenState extends State<ControlScreen>
                                         )
                                       : (_contentDeliveryEnabled &&
                                               (shouldInstallOrUpdate ||
+                                                  canRemoveInstalled ||
                                                   showProbeAction)
                                           ? Column(
                                               crossAxisAlignment:
                                                   CrossAxisAlignment.stretch,
                                               children: [
-                                                if (shouldInstallOrUpdate)
+                                                if (shouldInstallOrUpdate ||
+                                                    canRemoveInstalled)
                                                   Row(
                                                     children: [
-                                                      Expanded(
-                                                        child:
-                                                            ElevatedButton.icon(
-                                                          onPressed: !_isConnected ||
-                                                                  actionInFlight ||
-                                                                  !shouldInstallOrUpdate
-                                                              ? null
-                                                              : () => unawaited(
-                                                                    _requestInstallOrUpdate(
-                                                                      contentState,
+                                                      if (shouldInstallOrUpdate)
+                                                        Expanded(
+                                                          child: ElevatedButton
+                                                              .icon(
+                                                            onPressed: !_isConnected ||
+                                                                    actionInFlight ||
+                                                                    !shouldInstallOrUpdate
+                                                                ? null
+                                                                : () =>
+                                                                    unawaited(
+                                                                      _requestInstallOrUpdate(
+                                                                        contentState,
+                                                                      ),
                                                                     ),
-                                                                  ),
-                                                          icon: const Icon(
-                                                            Icons.download,
-                                                          ),
-                                                          label: Text(
-                                                            contentState.runtimeStatus ==
-                                                                    ContentRuntimeStatus
-                                                                        .updateRequired
-                                                                ? 'Update'
-                                                                : contentState
-                                                                            .runtimeStatus ==
-                                                                        ContentRuntimeStatus
-                                                                            .failed
-                                                                    ? 'Retry'
-                                                                    : 'Install',
+                                                            icon: const Icon(
+                                                              Icons.download,
+                                                            ),
+                                                            label: Text(
+                                                              contentState.runtimeStatus ==
+                                                                      ContentRuntimeStatus
+                                                                          .updateRequired
+                                                                  ? 'Update'
+                                                                  : contentState
+                                                                              .runtimeStatus ==
+                                                                          ContentRuntimeStatus
+                                                                              .failed
+                                                                      ? 'Retry'
+                                                                      : 'Install',
+                                                            ),
                                                           ),
                                                         ),
-                                                      ),
-                                                      if (installManaged &&
-                                                          contentState
-                                                              .isInstalled) ...[
+                                                      if (shouldInstallOrUpdate &&
+                                                          canRemoveInstalled) ...[
                                                         const SizedBox(
                                                           width: 8,
                                                         ),
+                                                      ],
+                                                      if (canRemoveInstalled)
                                                         Expanded(
                                                           child: OutlinedButton
                                                               .icon(
@@ -8180,7 +8231,6 @@ class _ControlScreenState extends State<ControlScreen>
                                                             ),
                                                           ),
                                                         ),
-                                                      ],
                                                     ],
                                                   ),
                                                 if (showProbeAction) ...[
