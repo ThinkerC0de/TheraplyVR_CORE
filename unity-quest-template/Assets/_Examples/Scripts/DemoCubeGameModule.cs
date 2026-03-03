@@ -87,6 +87,7 @@ namespace TheraplyExamples
         private float _playfieldHalfHeightWorld;
         private Material _runtimeCubeMaterial;
         private bool _gameplayFloorMaterialEnsured;
+        private bool _loggedRuntimeShaderSelection;
 
         public override string GameId => DemoCubeGameConfig.DefaultGameId;
 
@@ -938,13 +939,64 @@ namespace TheraplyExamples
                 }
             }
 
+            var leftEyeAnchor = GameObject.Find("OVRCameraRig/TrackingSpace/LeftEyeAnchor");
+            if (leftEyeAnchor != null)
+            {
+                var leftEyeCamera = leftEyeAnchor.GetComponent<Camera>();
+                if (leftEyeCamera != null && leftEyeCamera.isActiveAndEnabled)
+                {
+                    return leftEyeCamera;
+                }
+
+                leftEyeCamera = leftEyeAnchor.GetComponentInChildren<Camera>(true);
+                if (leftEyeCamera != null && leftEyeCamera.isActiveAndEnabled)
+                {
+                    return leftEyeCamera;
+                }
+            }
+
+            var rightEyeAnchor = GameObject.Find("OVRCameraRig/TrackingSpace/RightEyeAnchor");
+            if (rightEyeAnchor != null)
+            {
+                var rightEyeCamera = rightEyeAnchor.GetComponent<Camera>();
+                if (rightEyeCamera != null && rightEyeCamera.isActiveAndEnabled)
+                {
+                    return rightEyeCamera;
+                }
+
+                rightEyeCamera = rightEyeAnchor.GetComponentInChildren<Camera>(true);
+                if (rightEyeCamera != null && rightEyeCamera.isActiveAndEnabled)
+                {
+                    return rightEyeCamera;
+                }
+            }
+
+            var allCameras = FindObjectsByType<Camera>(FindObjectsSortMode.None);
+            if (allCameras != null)
+            {
+                for (var i = 0; i < allCameras.Length; i++)
+                {
+                    var camera = allCameras[i];
+                    if (camera == null || !camera.isActiveAndEnabled)
+                    {
+                        continue;
+                    }
+
+                    if (camera.stereoTargetEye == StereoTargetEyeMask.None)
+                    {
+                        continue;
+                    }
+
+                    return camera;
+                }
+            }
+
             var taggedMainCamera = Camera.main;
             if (taggedMainCamera != null && taggedMainCamera.isActiveAndEnabled)
             {
                 return taggedMainCamera;
             }
 
-            var allCameras = FindObjectsByType<Camera>(FindObjectsSortMode.None);
             if (allCameras != null)
             {
                 for (var i = 0; i < allCameras.Length; i++)
@@ -1034,28 +1086,71 @@ namespace TheraplyExamples
         {
             if (_cubeFallbackShader != null && _cubeFallbackShader.isSupported)
             {
+                LogResolvedRuntimeShader(_cubeFallbackShader, "serialized_fallback");
                 return _cubeFallbackShader;
             }
 
             var shaderNames = new[]
             {
+                "Standard",
+                "Legacy Shaders/Diffuse",
+                "Legacy Shaders/Transparent/Diffuse",
                 "Sprites/Default",
                 "Unlit/Color",
                 "Mobile/Diffuse",
-                "Legacy Shaders/Diffuse",
-                "Standard",
+                "Universal Render Pipeline/Unlit",
+                "Universal Render Pipeline/Simple Lit",
+                "Universal Render Pipeline/Lit",
+                "UI/Default",
+                "Hidden/Internal-Colored",
             };
 
             for (var i = 0; i < shaderNames.Length; i++)
             {
                 var shader = Shader.Find(shaderNames[i]);
-                if (shader != null && shader.isSupported)
+                if (shader == null)
                 {
+                    continue;
+                }
+
+                var canUseUnsupportedInternal = string.Equals(
+                    shader.name,
+                    "Hidden/Internal-Colored",
+                    StringComparison.Ordinal);
+                if (shader.isSupported || canUseUnsupportedInternal)
+                {
+                    LogResolvedRuntimeShader(shader, "lookup:" + shaderNames[i]);
                     return shader;
                 }
             }
 
+            if (!_loggedRuntimeShaderSelection)
+            {
+                _loggedRuntimeShaderSelection = true;
+                Debug.LogWarning(
+                    "[DemoCube] No supported fallback shader found for runtime cube material. " +
+                    "Generated cubes may render pink/invisible on Quest.");
+            }
+
             return null;
+        }
+
+        private void LogResolvedRuntimeShader(Shader shader, string source)
+        {
+            if (_loggedRuntimeShaderSelection || shader == null)
+            {
+                return;
+            }
+
+            _loggedRuntimeShaderSelection = true;
+            Debug.Log(
+                "[DemoCube] Runtime fallback shader selected: " +
+                shader.name +
+                " (supported=" +
+                shader.isSupported +
+                ", source=" +
+                source +
+                ")");
         }
 
         private bool TryRestoreSavedStateIfRequested()

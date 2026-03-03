@@ -26,7 +26,9 @@ namespace TheraplyExamples
             "OVRCameraRig/TrackingSpace/RightControllerInHandAnchor",
             "OVRCameraRig/TrackingSpace/RightHandOnControllerAnchor",
             "OVRCameraRig/TrackingSpace/RightTouchControllerAnchor",
+            "OVRCameraRig/TrackingSpace/RightControllerAnchor",
             "OVRCameraRig/TrackingSpace/RightHandAnchor",
+            "OVRCameraRig/TrackingSpace/RightHandAnchor/PointerPose",
             "OVRCameraRig/TrackingSpace/RightHandAnchorDetached",
             "XR Origin/Camera Offset/Right Controller",
             "XR Origin/Right Controller",
@@ -39,7 +41,9 @@ namespace TheraplyExamples
             "OVRCameraRig/TrackingSpace/LeftControllerInHandAnchor",
             "OVRCameraRig/TrackingSpace/LeftHandOnControllerAnchor",
             "OVRCameraRig/TrackingSpace/LeftTouchControllerAnchor",
+            "OVRCameraRig/TrackingSpace/LeftControllerAnchor",
             "OVRCameraRig/TrackingSpace/LeftHandAnchor",
+            "OVRCameraRig/TrackingSpace/LeftHandAnchor/PointerPose",
             "OVRCameraRig/TrackingSpace/LeftHandAnchorDetached",
             "XR Origin/Camera Offset/Left Controller",
             "XR Origin/Left Controller",
@@ -80,6 +84,7 @@ namespace TheraplyExamples
         [SerializeField] private float _wandLength = 0.24f;
         [SerializeField] private float _wandRadius = 0.008f;
         [SerializeField] private float _wandTipRadius = 0.016f;
+        [SerializeField] private Shader _pointerFallbackShader;
         [SerializeField] private bool _hideWandInBilateralMarkers = true;
         [SerializeField] private bool _hidePointerVisualsInBilateralMarkers = false;
         [SerializeField] private string _bilateralMarkersGameId = "bilateral_markers";
@@ -149,9 +154,9 @@ namespace TheraplyExamples
 
         private void Awake()
         {
-            if (_rayCamera == null)
+            if (_rayCamera == null || !_rayCamera.isActiveAndEnabled)
             {
-                _rayCamera = Camera.main;
+                _rayCamera = ResolvePreferredRayCamera();
             }
 
             if (_gameRuntimeService == null)
@@ -291,7 +296,7 @@ namespace TheraplyExamples
 
             if (_rayCamera == null)
             {
-                _rayCamera = Camera.main;
+                _rayCamera = ResolvePreferredRayCamera();
             }
         }
 
@@ -849,20 +854,12 @@ namespace TheraplyExamples
             line.numCapVertices = 2;
             line.enabled = false;
 
-            Material material = null;
-            var shader = Shader.Find("Sprites/Default");
-            if (shader == null)
+            var material = CreatePointerVisualMaterial(
+                "QuestPointerLaserMaterial" + safeSuffix,
+                fallbackColor,
+                line.sharedMaterial);
+            if (material != null)
             {
-                shader = Shader.Find("Unlit/Color");
-            }
-
-            if (shader != null)
-            {
-                material = new Material(shader)
-                {
-                    name = "QuestPointerLaserMaterial" + safeSuffix,
-                    color = fallbackColor
-                };
                 line.material = material;
             }
 
@@ -909,23 +906,29 @@ namespace TheraplyExamples
             var bodyRenderer = body.GetComponent<Renderer>();
             if (bodyRenderer != null)
             {
-                wand.bodyMaterial = new Material(bodyRenderer.sharedMaterial)
+                var bodyMaterial = CreatePointerVisualMaterial(
+                    "QuestPointerWandBodyMaterial" + safeSuffix,
+                    fallbackColor,
+                    bodyRenderer.sharedMaterial);
+                if (bodyMaterial != null)
                 {
-                    name = "QuestPointerWandBodyMaterial" + safeSuffix,
-                    color = fallbackColor
-                };
-                bodyRenderer.material = wand.bodyMaterial;
+                    wand.bodyMaterial = bodyMaterial;
+                    bodyRenderer.material = bodyMaterial;
+                }
             }
 
             var tipRenderer = tip.GetComponent<Renderer>();
             if (tipRenderer != null)
             {
-                wand.tipMaterial = new Material(tipRenderer.sharedMaterial)
+                var tipMaterial = CreatePointerVisualMaterial(
+                    "QuestPointerWandTipMaterial" + safeSuffix,
+                    fallbackColor,
+                    tipRenderer.sharedMaterial);
+                if (tipMaterial != null)
                 {
-                    name = "QuestPointerWandTipMaterial" + safeSuffix,
-                    color = fallbackColor
-                };
-                tipRenderer.material = wand.tipMaterial;
+                    wand.tipMaterial = tipMaterial;
+                    tipRenderer.material = tipMaterial;
+                }
             }
         }
 
@@ -1148,7 +1151,7 @@ namespace TheraplyExamples
 
             if (_rayCamera == null)
             {
-                _rayCamera = Camera.main;
+                _rayCamera = ResolvePreferredRayCamera();
             }
 
             if (_rayCamera != null)
@@ -1182,7 +1185,7 @@ namespace TheraplyExamples
         {
             if (_rayCamera == null)
             {
-                _rayCamera = Camera.main;
+                _rayCamera = ResolvePreferredRayCamera();
             }
 
             if (_rayCamera == null)
@@ -1476,6 +1479,188 @@ namespace TheraplyExamples
             }
 
             return score;
+        }
+
+        private Material CreatePointerVisualMaterial(
+            string materialName,
+            Color color,
+            Material sharedMaterialFallback)
+        {
+            var resolvedShader = ResolvePointerVisualShader();
+            Material material = null;
+            if (resolvedShader != null)
+            {
+                material = new Material(resolvedShader);
+            }
+            else if (!IsMaterialShaderBroken(sharedMaterialFallback))
+            {
+                material = new Material(sharedMaterialFallback);
+            }
+
+            if (material == null)
+            {
+                return null;
+            }
+
+            material.name = string.IsNullOrWhiteSpace(materialName)
+                ? "QuestPointerVisualMaterial"
+                : materialName.Trim();
+            if (material.HasProperty("_Color"))
+            {
+                material.color = color;
+            }
+
+            return material;
+        }
+
+        private Shader ResolvePointerVisualShader()
+        {
+            if (_pointerFallbackShader != null && _pointerFallbackShader.isSupported)
+            {
+                return _pointerFallbackShader;
+            }
+
+            var shaderNames = new[]
+            {
+                "Standard",
+                "Legacy Shaders/Diffuse",
+                "Legacy Shaders/Transparent/Diffuse",
+                "Sprites/Default",
+                "Unlit/Color",
+                "Mobile/Diffuse",
+                "Universal Render Pipeline/Unlit",
+                "Universal Render Pipeline/Simple Lit",
+                "Universal Render Pipeline/Lit",
+                "UI/Default",
+                "Hidden/Internal-Colored",
+            };
+
+            for (var i = 0; i < shaderNames.Length; i++)
+            {
+                var shader = Shader.Find(shaderNames[i]);
+                if (shader == null)
+                {
+                    continue;
+                }
+
+                var canUseUnsupportedInternal = string.Equals(
+                    shader.name,
+                    "Hidden/Internal-Colored",
+                    System.StringComparison.Ordinal);
+                if (shader.isSupported || canUseUnsupportedInternal)
+                {
+                    return shader;
+                }
+            }
+
+            return null;
+        }
+
+        private static bool IsMaterialShaderBroken(Material material)
+        {
+            return material == null ||
+                material.shader == null ||
+                string.Equals(
+                    material.shader.name,
+                    "Hidden/InternalErrorShader",
+                    System.StringComparison.Ordinal) ||
+                !material.shader.isSupported;
+        }
+
+        private Camera ResolvePreferredRayCamera()
+        {
+            if (_rayCamera != null && _rayCamera.isActiveAndEnabled)
+            {
+                return _rayCamera;
+            }
+
+            var centerEyeAnchor = GameObject.Find("OVRCameraRig/TrackingSpace/CenterEyeAnchor");
+            if (centerEyeAnchor != null)
+            {
+                var centerEyeCamera = centerEyeAnchor.GetComponent<Camera>();
+                if (centerEyeCamera != null && centerEyeCamera.isActiveAndEnabled)
+                {
+                    return centerEyeCamera;
+                }
+
+                centerEyeCamera = centerEyeAnchor.GetComponentInChildren<Camera>(true);
+                if (centerEyeCamera != null && centerEyeCamera.isActiveAndEnabled)
+                {
+                    return centerEyeCamera;
+                }
+            }
+
+            var leftEyeAnchor = GameObject.Find("OVRCameraRig/TrackingSpace/LeftEyeAnchor");
+            if (leftEyeAnchor != null)
+            {
+                var leftEyeCamera = leftEyeAnchor.GetComponent<Camera>();
+                if (leftEyeCamera != null && leftEyeCamera.isActiveAndEnabled)
+                {
+                    return leftEyeCamera;
+                }
+
+                leftEyeCamera = leftEyeAnchor.GetComponentInChildren<Camera>(true);
+                if (leftEyeCamera != null && leftEyeCamera.isActiveAndEnabled)
+                {
+                    return leftEyeCamera;
+                }
+            }
+
+            var rightEyeAnchor = GameObject.Find("OVRCameraRig/TrackingSpace/RightEyeAnchor");
+            if (rightEyeAnchor != null)
+            {
+                var rightEyeCamera = rightEyeAnchor.GetComponent<Camera>();
+                if (rightEyeCamera != null && rightEyeCamera.isActiveAndEnabled)
+                {
+                    return rightEyeCamera;
+                }
+
+                rightEyeCamera = rightEyeAnchor.GetComponentInChildren<Camera>(true);
+                if (rightEyeCamera != null && rightEyeCamera.isActiveAndEnabled)
+                {
+                    return rightEyeCamera;
+                }
+            }
+
+            var allCameras = FindObjectsByType<Camera>(FindObjectsSortMode.None);
+            if (allCameras != null)
+            {
+                for (var i = 0; i < allCameras.Length; i++)
+                {
+                    var candidate = allCameras[i];
+                    if (candidate == null || !candidate.isActiveAndEnabled)
+                    {
+                        continue;
+                    }
+
+                    if (candidate.stereoTargetEye == StereoTargetEyeMask.None)
+                    {
+                        continue;
+                    }
+
+                    return candidate;
+                }
+            }
+
+            var taggedMainCamera = Camera.main;
+            if (taggedMainCamera != null && taggedMainCamera.isActiveAndEnabled)
+            {
+                return taggedMainCamera;
+            }
+
+            if (allCameras != null)
+            {
+                for (var i = 0; i < allCameras.Length; i++)
+                {
+                    var candidate = allCameras[i];
+                    if (candidate != null && candidate.isActiveAndEnabled)
+                    {
+                        return candidate;
+                    }
+                }
+            }
+
+            return null;
         }
 
         private static string BuildTransformPath(Transform transform)
