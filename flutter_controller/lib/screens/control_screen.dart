@@ -3435,7 +3435,6 @@ class _ControlScreenState extends State<ControlScreen>
 
   bool get _isControlLinkReadyForCommands {
     return _isConnected &&
-        _mediaPreviewState == MediaPreviewState.streaming &&
         _sessionAttachReady &&
         !_isHeadsetPresenceBlocking;
   }
@@ -8292,7 +8291,7 @@ class _ControlScreenState extends State<ControlScreen>
                   icon: Icons.wifi_tethering_error_rounded,
                   color: Colors.orange.shade800,
                   text:
-                      'VR preview is unavailable. Commands are blocked until preview recovers.',
+                      'VR preview is unavailable. Commands remain available if session sync is ready.',
                 ),
                 const SizedBox(height: 8),
               ] else if (_headsetPresenceBannerText != null) ...[
