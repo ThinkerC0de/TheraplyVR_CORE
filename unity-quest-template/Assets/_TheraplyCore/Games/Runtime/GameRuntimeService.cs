@@ -88,6 +88,25 @@ namespace TheraplyCore.Games.Runtime
             public const string ProfileUnknownSuffix = "ENTITLEMENT_PROFILE_UNKNOWN";
         }
 
+        private static class InstallReasonCodes
+        {
+            public const string ManifestSyncStarted = "INSTALL_MANIFEST_SYNC_STARTED";
+            public const string DownloadStarted = "INSTALL_DOWNLOAD_STARTED";
+            public const string VerifyStarted = "INSTALL_VERIFY_STARTED";
+            public const string ActivationStarted = "INSTALL_ACTIVATION_STARTED";
+            public const string Completed = "INSTALL_COMPLETED";
+            public const string DownloadFailed = "INSTALL_DOWNLOAD_FAILED";
+            public const string DownloadTimeout = "INSTALL_DOWNLOAD_TIMEOUT";
+            public const string DownloadConnectionError = "INSTALL_DOWNLOAD_CONNECTION_ERROR";
+            public const string DownloadHttpError = "INSTALL_DOWNLOAD_HTTP_ERROR";
+            public const string PackageUriMissing = "INSTALL_PACKAGE_URI_MISSING";
+            public const string PackageUriInvalid = "INSTALL_PACKAGE_URI_INVALID";
+            public const string PackageEmpty = "INSTALL_PACKAGE_EMPTY";
+            public const string VerifyFailed = "INSTALL_VERIFY_FAILED";
+            public const string StorageWriteFailed = "INSTALL_STORAGE_WRITE_FAILED";
+            public const string UnexpectedException = "INSTALL_EXCEPTION";
+        }
+
         private sealed class RuntimeEntitlementSnapshot
         {
             public bool hasExplicitSnapshot;
@@ -111,6 +130,8 @@ namespace TheraplyCore.Games.Runtime
 
         [Header("Runtime")]
         [SerializeField] private string _defaultGameId = "";
+        [SerializeField] private bool _allowDefaultGameFallback = false;
+        [SerializeField] private bool _autoResumeOnControllerReconnect = false;
         [SerializeField] private bool _subscribeToStandardCommands = true;
         [SerializeField] private float _syncStatusPollIntervalSeconds = 1f;
         [SerializeField] private string _defaultMobileDisconnectBehavior =
@@ -137,12 +158,17 @@ namespace TheraplyCore.Games.Runtime
                 new SimulatedContentCatalogEntry
                 {
                     gameId = "demo_cube_clicker",
-                    owned = true,
-                    installedVersion = "1.1.0",
+                    owned = false,
+                    installedVersion = string.Empty,
                     targetVersion = "1.2.0",
                     updateOptional = false,
                 },
             };
+
+        [Header("Content Package Install")]
+        [SerializeField] private int _packageInstallTimeoutSeconds = 25;
+        [SerializeField] private string _packageInstallFolder = "content_packages";
+        [SerializeField] private string _packageInstallFallbackFileName = "package.pkg.json";
 
         [Header("Content Package Probe (Board-Safe)")]
         [SerializeField] private bool _enableBoardSafePackageProbe = true;
@@ -229,7 +255,8 @@ namespace TheraplyCore.Games.Runtime
             _mobileDisconnectBehavior = NormalizeMobileDisconnectBehavior(_defaultMobileDisconnectBehavior);
             EnsureContentDeliveryStatePathInitialized();
 
-            if (!string.IsNullOrWhiteSpace(_defaultGameId))
+            if (_allowDefaultGameFallback &&
+                !string.IsNullOrWhiteSpace(_defaultGameId))
             {
                 SetActiveGame(_defaultGameId);
             }
@@ -1004,19 +1031,6 @@ namespace TheraplyCore.Games.Runtime
                 return;
             }
 
-            if (!state.owned)
-            {
-                state.runtimeStatus = ContentRuntimeStatusValues.Failed;
-                state.lastError = "NOT_OWNED";
-                state.updatedAtUtc = DateTime.UtcNow;
-                PersistSimulatedContentStates("INSTALL_NOT_OWNED");
-                _ = PublishGameInstallStatusAsync(
-                    state,
-                    correlationId,
-                    "INSTALL_NOT_OWNED");
-                return;
-            }
-
             TryStartPackageProbeFromInstallCommand(state.gameId, correlationId, command);
             if (command != null && command.probeOnly)
             {
@@ -1024,24 +1038,27 @@ namespace TheraplyCore.Games.Runtime
                 return;
             }
 
+            state.owned = true;
             state.targetVersion = NormalizeContentVersion(
                 command == null ? null : command.targetVersion,
                 state.targetVersion);
+            var packageUri = command == null ? string.Empty : command.packageUri;
             var previousInstalledVersion = state.installedVersion;
             state.runtimeStatus = ContentRuntimeStatusValues.SyncingManifest;
             state.updateRequired = false;
             state.lastError = string.Empty;
             state.updatedAtUtc = DateTime.UtcNow;
-            PersistSimulatedContentStates("INSTALL_MANIFEST_SYNC_STARTED");
+            PersistSimulatedContentStates(InstallReasonCodes.ManifestSyncStarted);
             _ = PublishGameInstallStatusAsync(
                 state,
                 correlationId,
-                "INSTALL_MANIFEST_SYNC_STARTED");
+                InstallReasonCodes.ManifestSyncStarted);
 
             var shouldSimulateVerifyFailure = ShouldSimulateVerifyFailure(state.targetVersion);
             StartSimulatedInstallRoutine(
                 state,
                 correlationId,
+                packageUri,
                 previousInstalledVersion,
                 shouldSimulateVerifyFailure);
         }
@@ -1069,6 +1086,7 @@ namespace TheraplyCore.Games.Runtime
             }
 
             StopSimulatedInstallRoutine(normalizedGameId);
+            RemoveInstalledPackageArtifacts(normalizedGameId);
             state.installedVersion = string.Empty;
             state.runtimeStatus = ContentRuntimeStatusValues.NotInstalled;
             state.updateRequired = false;
@@ -1150,13 +1168,18 @@ namespace TheraplyCore.Games.Runtime
                         continue;
                     }
 
+                    if (!IsCatalogGameId(record.gameId))
+                    {
+                        continue;
+                    }
+
                     var gameId = record.gameId.Trim();
                     if (!_simulatedContentStateByGameId.TryGetValue(gameId, out var state))
                     {
                         state = new SimulatedContentState
                         {
                             gameId = gameId,
-                            owned = true,
+                            owned = false,
                             installedVersion = string.Empty,
                             targetVersion = NormalizeContentVersion(
                                 record.targetVersion,
@@ -1305,20 +1328,13 @@ namespace TheraplyCore.Games.Runtime
                 }
 
                 var targetVersion = NormalizeContentVersion(entry.targetVersion, _defaultSimulatedContentVersion);
-                var installedVersion = string.IsNullOrWhiteSpace(entry.installedVersion)
-                    ? string.Empty
-                    : entry.installedVersion.Trim();
-                var updateRequired = entry.owned &&
-                                     !string.IsNullOrWhiteSpace(installedVersion) &&
-                                     !string.Equals(
-                                         installedVersion,
-                                         targetVersion,
-                                         StringComparison.OrdinalIgnoreCase);
+                var installedVersion = string.Empty;
+                var updateRequired = false;
 
                 var state = new SimulatedContentState
                 {
                     gameId = gameId,
-                    owned = entry.owned,
+                    owned = false,
                     installedVersion = installedVersion,
                     targetVersion = targetVersion,
                     updateRequired = updateRequired,
@@ -1334,7 +1350,9 @@ namespace TheraplyCore.Games.Runtime
                 _simulatedContentStateByGameId[gameId] = state;
             }
 
-            if (_simulatedContentStateByGameId.Count == 0 && !string.IsNullOrWhiteSpace(_defaultGameId))
+            if (_allowDefaultGameFallback &&
+                _simulatedContentStateByGameId.Count == 0 &&
+                !string.IsNullOrWhiteSpace(_defaultGameId))
             {
                 var gameId = _defaultGameId.Trim();
                 _simulatedContentStateByGameId[gameId] = new SimulatedContentState
@@ -1369,6 +1387,13 @@ namespace TheraplyCore.Games.Runtime
                 return false;
             }
 
+            if (!IsCatalogGameId(gameId))
+            {
+                Logger.Warning(
+                    $"[GameRuntime] Ignoring content state request for game outside active catalog: {gameId}");
+                return false;
+            }
+
             if (_simulatedContentStateByGameId.TryGetValue(gameId, out state))
             {
                 if (!string.IsNullOrWhiteSpace(requestedTargetVersion))
@@ -1384,7 +1409,7 @@ namespace TheraplyCore.Games.Runtime
             state = new SimulatedContentState
             {
                 gameId = gameId,
-                owned = true,
+                owned = false,
                 installedVersion = string.Empty,
                 targetVersion = NormalizeContentVersion(
                     requestedTargetVersion,
@@ -1398,6 +1423,38 @@ namespace TheraplyCore.Games.Runtime
             _simulatedContentStateByGameId[gameId] = state;
             PersistSimulatedContentStates("CONTENT_STATE_CREATED");
             return true;
+        }
+
+        private bool IsCatalogGameId(string gameId)
+        {
+            var normalized = string.IsNullOrWhiteSpace(gameId)
+                ? string.Empty
+                : gameId.Trim();
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return false;
+            }
+
+            if (_simulatedContentCatalog == null || _simulatedContentCatalog.Count == 0)
+            {
+                return true;
+            }
+
+            for (var i = 0; i < _simulatedContentCatalog.Count; i++)
+            {
+                var entry = _simulatedContentCatalog[i];
+                if (entry == null || string.IsNullOrWhiteSpace(entry.gameId))
+                {
+                    continue;
+                }
+
+                if (string.Equals(entry.gameId.Trim(), normalized, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private void StartSimulatedCatalogSyncRoutine(string correlationId)
@@ -1415,71 +1472,9 @@ namespace TheraplyCore.Games.Runtime
         private IEnumerator SimulateCatalogSyncRoutine(string correlationId)
         {
             EnsureSimulatedContentStatesInitialized();
-
-            var synchronizedGameIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var startedAtUtc = DateTime.UtcNow;
-            foreach (var pair in _simulatedContentStateByGameId)
-            {
-                var state = pair.Value;
-                if (state == null || string.IsNullOrWhiteSpace(state.gameId))
-                {
-                    continue;
-                }
-
-                if (_simulatedInstallRoutineByGameId.ContainsKey(state.gameId) ||
-                    IsInstallLifecycleInProgressStatus(state.runtimeStatus) ||
-                    string.Equals(
-                        state.runtimeStatus,
-                        ContentRuntimeStatusValues.Failed,
-                        StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                state.runtimeStatus = ContentRuntimeStatusValues.SyncingManifest;
-                state.updatedAtUtc = startedAtUtc;
-                synchronizedGameIds.Add(state.gameId);
-            }
-
-            if (synchronizedGameIds.Count > 0)
-            {
-                PersistSimulatedContentStates("SYNC_CATALOG_MANIFEST_SYNC_STARTED");
-            }
-
-            PublishSimulatedContentCatalogSnapshot(correlationId, "SYNC_CATALOG_MANIFEST_SYNC_STARTED");
-            yield return new WaitForSeconds(Mathf.Max(0.05f, _simulatedManifestSyncDurationSeconds));
-
-            var completedAtUtc = DateTime.UtcNow;
-            var restoredAnyState = false;
-            foreach (var gameId in synchronizedGameIds)
-            {
-                if (!_simulatedContentStateByGameId.TryGetValue(gameId, out var state) ||
-                    state == null ||
-                    _simulatedInstallRoutineByGameId.ContainsKey(gameId) ||
-                    !string.Equals(
-                        state.runtimeStatus,
-                        ContentRuntimeStatusValues.SyncingManifest,
-                        StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                state.runtimeStatus = ResolveRuntimeStatusForContentState(
-                    state.owned,
-                    state.installedVersion,
-                    state.updateRequired);
-                state.lastError = string.Empty;
-                state.updatedAtUtc = completedAtUtc;
-                restoredAnyState = true;
-            }
-
-            if (restoredAnyState)
-            {
-                PersistSimulatedContentStates("SYNC_CATALOG_COMPLETED");
-            }
-
             PublishSimulatedContentCatalogSnapshot(correlationId, "SYNC_CATALOG_COMPLETED");
             _simulatedCatalogSyncRoutine = null;
+            yield break;
         }
 
         private bool ShouldSimulateVerifyFailure(string targetVersion)
@@ -1504,6 +1499,7 @@ namespace TheraplyCore.Games.Runtime
         private void StartSimulatedInstallRoutine(
             SimulatedContentState state,
             string correlationId,
+            string packageUri,
             string previousInstalledVersion,
             bool shouldSimulateVerifyFailure)
         {
@@ -1517,6 +1513,7 @@ namespace TheraplyCore.Games.Runtime
                 SimulateInstallRoutine(
                     state,
                     correlationId,
+                    packageUri,
                     previousInstalledVersion,
                     shouldSimulateVerifyFailure));
             _simulatedInstallRoutineByGameId[state.gameId] = routine;
@@ -1525,6 +1522,7 @@ namespace TheraplyCore.Games.Runtime
         private IEnumerator SimulateInstallRoutine(
             SimulatedContentState state,
             string correlationId,
+            string packageUri,
             string previousInstalledVersion,
             bool shouldSimulateVerifyFailure)
         {
@@ -1545,9 +1543,11 @@ namespace TheraplyCore.Games.Runtime
             state.runtimeStatus = ContentRuntimeStatusValues.Downloading;
             state.lastError = string.Empty;
             state.updatedAtUtc = DateTime.UtcNow;
-            PersistSimulatedContentStates("INSTALL_DOWNLOAD_STARTED");
-            _ = PublishGameInstallStatusAsync(state, correlationId, "INSTALL_DOWNLOAD_STARTED");
-            yield return new WaitForSeconds(Mathf.Max(0.05f, _simulatedDownloadDurationSeconds));
+            PersistSimulatedContentStates(InstallReasonCodes.DownloadStarted);
+            _ = PublishGameInstallStatusAsync(
+                state,
+                correlationId,
+                InstallReasonCodes.DownloadStarted);
 
             if (!_simulatedContentStateByGameId.ContainsKey(gameId))
             {
@@ -1555,11 +1555,65 @@ namespace TheraplyCore.Games.Runtime
                 yield break;
             }
 
+            var normalizedPackageUri = NormalizePackageInstallUri(packageUri);
+            if (string.IsNullOrWhiteSpace(normalizedPackageUri))
+            {
+                MarkInstallFailed(
+                    state,
+                    correlationId,
+                    InstallReasonCodes.PackageUriMissing,
+                    previousInstalledVersion);
+                CompleteSimulatedInstallRoutine(gameId);
+                yield break;
+            }
+
+            if (!Uri.TryCreate(normalizedPackageUri, UriKind.Absolute, out var parsedUri) ||
+                (parsedUri.Scheme != Uri.UriSchemeHttp && parsedUri.Scheme != Uri.UriSchemeHttps))
+            {
+                MarkInstallFailed(
+                    state,
+                    correlationId,
+                    InstallReasonCodes.PackageUriInvalid,
+                    previousInstalledVersion);
+                CompleteSimulatedInstallRoutine(gameId);
+                yield break;
+            }
+
+            byte[] downloadedBytes = null;
+            var timeoutSeconds = Mathf.Clamp(_packageInstallTimeoutSeconds, 3, 120);
+            using (var request = UnityWebRequest.Get(parsedUri.AbsoluteUri))
+            {
+                request.timeout = timeoutSeconds;
+                yield return request.SendWebRequest();
+
+                if (request.result != UnityWebRequest.Result.Success ||
+                    request.responseCode < 200 ||
+                    request.responseCode >= 400)
+                {
+                    MarkInstallFailed(
+                        state,
+                        correlationId,
+                        ResolveInstallDownloadFailureReasonCode(request),
+                        previousInstalledVersion);
+                    CompleteSimulatedInstallRoutine(gameId);
+                    yield break;
+                }
+
+                downloadedBytes = request.downloadHandler == null
+                    ? null
+                    : request.downloadHandler.data;
+            }
+
+            yield return new WaitForSeconds(Mathf.Max(0.05f, _simulatedDownloadDurationSeconds));
+
             state.runtimeStatus = ContentRuntimeStatusValues.Verifying;
             state.lastError = string.Empty;
             state.updatedAtUtc = DateTime.UtcNow;
-            PersistSimulatedContentStates("INSTALL_VERIFY_STARTED");
-            _ = PublishGameInstallStatusAsync(state, correlationId, "INSTALL_VERIFY_STARTED");
+            PersistSimulatedContentStates(InstallReasonCodes.VerifyStarted);
+            _ = PublishGameInstallStatusAsync(
+                state,
+                correlationId,
+                InstallReasonCodes.VerifyStarted);
             yield return new WaitForSeconds(Mathf.Max(0.05f, _simulatedVerifyDurationSeconds));
 
             if (!_simulatedContentStateByGameId.ContainsKey(gameId))
@@ -1568,53 +1622,41 @@ namespace TheraplyCore.Games.Runtime
                 yield break;
             }
 
+            if (downloadedBytes == null || downloadedBytes.Length == 0)
+            {
+                MarkInstallFailed(
+                    state,
+                    correlationId,
+                    InstallReasonCodes.PackageEmpty,
+                    previousInstalledVersion);
+                CompleteSimulatedInstallRoutine(gameId);
+                yield break;
+            }
+
             if (shouldSimulateVerifyFailure)
             {
-                if (_simulateRollbackAfterVerifyFailure)
-                {
-                    state.runtimeStatus = ContentRuntimeStatusValues.RollingBack;
-                    state.lastError = "VERIFY_FAILED";
-                    state.updatedAtUtc = DateTime.UtcNow;
-                    PersistSimulatedContentStates("INSTALL_VERIFY_FAILED_ROLLBACK_STARTED");
-                    _ = PublishGameInstallStatusAsync(
-                        state,
-                        correlationId,
-                        "INSTALL_VERIFY_FAILED_ROLLBACK_STARTED");
-                    yield return new WaitForSeconds(Mathf.Max(0.05f, _simulatedRollbackDurationSeconds));
+                MarkInstallFailed(
+                    state,
+                    correlationId,
+                    InstallReasonCodes.VerifyFailed,
+                    previousInstalledVersion);
+                CompleteSimulatedInstallRoutine(gameId);
+                yield break;
+            }
 
-                    state.installedVersion = string.IsNullOrWhiteSpace(previousInstalledVersion)
-                        ? string.Empty
-                        : previousInstalledVersion.Trim();
-                    state.updateRequired = state.owned &&
-                                          !string.IsNullOrWhiteSpace(state.installedVersion) &&
-                                          !string.Equals(
-                                              state.installedVersion,
-                                              state.targetVersion,
-                                              StringComparison.OrdinalIgnoreCase);
-                    state.runtimeStatus = ResolveRuntimeStatusForContentState(
-                        state.owned,
-                        state.installedVersion,
-                        state.updateRequired);
-                    state.lastError = "VERIFY_FAILED_ROLLBACK_COMPLETED";
-                    state.updatedAtUtc = DateTime.UtcNow;
-                    PersistSimulatedContentStates("INSTALL_ROLLBACK_COMPLETED");
-                    _ = PublishGameInstallStatusAsync(state, correlationId, "INSTALL_ROLLBACK_COMPLETED");
-                }
-                else
-                {
-                    state.updateRequired = state.owned &&
-                                          !string.IsNullOrWhiteSpace(state.installedVersion) &&
-                                          !string.Equals(
-                                              state.installedVersion,
-                                              state.targetVersion,
-                                              StringComparison.OrdinalIgnoreCase);
-                    state.runtimeStatus = ContentRuntimeStatusValues.Failed;
-                    state.lastError = "VERIFY_FAILED";
-                    state.updatedAtUtc = DateTime.UtcNow;
-                    PersistSimulatedContentStates("INSTALL_VERIFY_FAILED");
-                    _ = PublishGameInstallStatusAsync(state, correlationId, "INSTALL_VERIFY_FAILED");
-                }
-
+            if (!TryPersistInstalledPackage(
+                    gameId,
+                    state.targetVersion,
+                    parsedUri,
+                    downloadedBytes,
+                    out var installedPath,
+                    out var persistReasonCode))
+            {
+                MarkInstallFailed(
+                    state,
+                    correlationId,
+                    persistReasonCode,
+                    previousInstalledVersion);
                 CompleteSimulatedInstallRoutine(gameId);
                 yield break;
             }
@@ -1622,8 +1664,11 @@ namespace TheraplyCore.Games.Runtime
             state.runtimeStatus = ContentRuntimeStatusValues.Activating;
             state.lastError = string.Empty;
             state.updatedAtUtc = DateTime.UtcNow;
-            PersistSimulatedContentStates("INSTALL_ACTIVATION_STARTED");
-            _ = PublishGameInstallStatusAsync(state, correlationId, "INSTALL_ACTIVATION_STARTED");
+            PersistSimulatedContentStates(InstallReasonCodes.ActivationStarted);
+            _ = PublishGameInstallStatusAsync(
+                state,
+                correlationId,
+                InstallReasonCodes.ActivationStarted);
             yield return new WaitForSeconds(Mathf.Max(0.05f, _simulatedActivationDurationSeconds));
 
             if (!_simulatedContentStateByGameId.ContainsKey(gameId))
@@ -1639,9 +1684,226 @@ namespace TheraplyCore.Games.Runtime
             state.runtimeStatus = ContentRuntimeStatusValues.Ready;
             state.lastError = string.Empty;
             state.updatedAtUtc = DateTime.UtcNow;
-            PersistSimulatedContentStates("INSTALL_COMPLETED");
-            _ = PublishGameInstallStatusAsync(state, correlationId, "INSTALL_COMPLETED");
+            PersistSimulatedContentStates(InstallReasonCodes.Completed);
+            _ = PublishGameInstallStatusAsync(
+                state,
+                correlationId,
+                InstallReasonCodes.Completed);
+
+            TrackCriticalRuntimeEvent("content_install_completed", new Dictionary<string, object>
+            {
+                { "gameId", gameId },
+                { "targetVersion", state.targetVersion ?? string.Empty },
+                { "packageUri", normalizedPackageUri },
+                { "installedPath", installedPath },
+                { "reasonCode", InstallReasonCodes.Completed },
+            });
             CompleteSimulatedInstallRoutine(gameId);
+        }
+
+        private void MarkInstallFailed(
+            SimulatedContentState state,
+            string correlationId,
+            string reasonCode,
+            string previousInstalledVersion)
+        {
+            if (state == null || string.IsNullOrWhiteSpace(state.gameId))
+            {
+                return;
+            }
+
+            state.installedVersion = string.IsNullOrWhiteSpace(previousInstalledVersion)
+                ? string.Empty
+                : previousInstalledVersion.Trim();
+            state.updateRequired = state.owned &&
+                                  !string.IsNullOrWhiteSpace(state.installedVersion) &&
+                                  !string.Equals(
+                                      state.installedVersion,
+                                      state.targetVersion,
+                                      StringComparison.OrdinalIgnoreCase);
+            state.runtimeStatus = ContentRuntimeStatusValues.Failed;
+            state.lastError = string.IsNullOrWhiteSpace(reasonCode)
+                ? InstallReasonCodes.DownloadFailed
+                : reasonCode.Trim();
+            state.updatedAtUtc = DateTime.UtcNow;
+            PersistSimulatedContentStates(state.lastError);
+            _ = PublishGameInstallStatusAsync(state, correlationId, state.lastError);
+        }
+
+        private static string ResolveInstallDownloadFailureReasonCode(UnityWebRequest request)
+        {
+            if (request == null)
+            {
+                return InstallReasonCodes.DownloadFailed;
+            }
+
+            if (request.result == UnityWebRequest.Result.ConnectionError)
+            {
+                var networkError = request.error ?? string.Empty;
+                if (networkError.IndexOf("timeout", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return InstallReasonCodes.DownloadTimeout;
+                }
+
+                return InstallReasonCodes.DownloadConnectionError;
+            }
+
+            if (request.result == UnityWebRequest.Result.ProtocolError)
+            {
+                if (request.responseCode == 408 || request.responseCode == 504)
+                {
+                    return InstallReasonCodes.DownloadTimeout;
+                }
+
+                return InstallReasonCodes.DownloadHttpError;
+            }
+
+            return InstallReasonCodes.DownloadFailed;
+        }
+
+        private bool TryPersistInstalledPackage(
+            string gameId,
+            string targetVersion,
+            Uri packageUri,
+            byte[] downloadedBytes,
+            out string installedPath,
+            out string reasonCode)
+        {
+            installedPath = string.Empty;
+            reasonCode = string.Empty;
+
+            if (downloadedBytes == null || downloadedBytes.Length == 0)
+            {
+                reasonCode = InstallReasonCodes.PackageEmpty;
+                return false;
+            }
+
+            try
+            {
+                installedPath = ResolvePackageInstallPath(gameId, targetVersion, packageUri);
+                if (string.IsNullOrWhiteSpace(installedPath))
+                {
+                    reasonCode = InstallReasonCodes.StorageWriteFailed;
+                    return false;
+                }
+
+                var directory = Path.GetDirectoryName(installedPath);
+                if (string.IsNullOrWhiteSpace(directory))
+                {
+                    reasonCode = InstallReasonCodes.StorageWriteFailed;
+                    return false;
+                }
+
+                Directory.CreateDirectory(directory);
+                File.WriteAllBytes(installedPath, downloadedBytes);
+                return true;
+            }
+            catch (Exception e)
+            {
+                Logger.Warning(
+                    $"[GameRuntime] INSTALL_GAME persist failed: game={gameId ?? string.Empty}, reason={e.Message}");
+                reasonCode = InstallReasonCodes.StorageWriteFailed;
+                return false;
+            }
+        }
+
+        private void RemoveInstalledPackageArtifacts(string gameId)
+        {
+            var normalizedGameId = string.IsNullOrWhiteSpace(gameId)
+                ? string.Empty
+                : gameId.Trim();
+            if (string.IsNullOrWhiteSpace(normalizedGameId))
+            {
+                return;
+            }
+
+            var installRoot = string.IsNullOrWhiteSpace(_packageInstallFolder)
+                ? "content_packages"
+                : _packageInstallFolder.Trim();
+            var gameFolder = Path.Combine(
+                Application.persistentDataPath,
+                installRoot,
+                SanitizePathSegment(normalizedGameId, "unknown_game"));
+
+            if (!Directory.Exists(gameFolder))
+            {
+                return;
+            }
+
+            try
+            {
+                Directory.Delete(gameFolder, true);
+            }
+            catch (Exception e)
+            {
+                Logger.Warning(
+                    $"[GameRuntime] Failed to remove installed package artifacts for {normalizedGameId}: {e.Message}");
+            }
+        }
+
+        private string ResolvePackageInstallPath(string gameId, string targetVersion, Uri packageUri)
+        {
+            var installRoot = string.IsNullOrWhiteSpace(_packageInstallFolder)
+                ? "content_packages"
+                : _packageInstallFolder.Trim();
+            var gameSegment = SanitizePathSegment(gameId, "unknown_game");
+            var versionSegment = SanitizePathSegment(
+                NormalizeContentVersion(targetVersion, _defaultSimulatedContentVersion),
+                "1_0_0");
+            var fileName = ResolvePackageInstallFileName(packageUri);
+            return Path.Combine(
+                Application.persistentDataPath,
+                installRoot,
+                gameSegment,
+                versionSegment,
+                fileName);
+        }
+
+        private string ResolvePackageInstallFileName(Uri packageUri)
+        {
+            var fallbackName = string.IsNullOrWhiteSpace(_packageInstallFallbackFileName)
+                ? "package.pkg.json"
+                : _packageInstallFallbackFileName.Trim();
+            var candidate = packageUri == null
+                ? string.Empty
+                : Path.GetFileName(packageUri.LocalPath ?? string.Empty);
+            if (string.IsNullOrWhiteSpace(candidate))
+            {
+                return SanitizePathSegment(fallbackName, "package.pkg.json");
+            }
+
+            return SanitizePathSegment(candidate, "package.pkg.json");
+        }
+
+        private static string SanitizePathSegment(string value, string fallback)
+        {
+            var resolved = string.IsNullOrWhiteSpace(value)
+                ? fallback
+                : value.Trim();
+            if (string.IsNullOrWhiteSpace(resolved))
+            {
+                return string.IsNullOrWhiteSpace(fallback) ? "segment" : fallback.Trim();
+            }
+
+            var invalidChars = Path.GetInvalidFileNameChars();
+            var builder = new StringBuilder(resolved.Length);
+            for (var i = 0; i < resolved.Length; i++)
+            {
+                var current = resolved[i];
+                builder.Append(Array.IndexOf(invalidChars, current) >= 0 ? '_' : current);
+            }
+
+            var sanitized = builder.ToString().Trim();
+            return string.IsNullOrWhiteSpace(sanitized)
+                ? (string.IsNullOrWhiteSpace(fallback) ? "segment" : fallback.Trim())
+                : sanitized;
+        }
+
+        private static string NormalizePackageInstallUri(string packageUri)
+        {
+            return string.IsNullOrWhiteSpace(packageUri)
+                ? string.Empty
+                : packageUri.Trim();
         }
 
         private void StopSimulatedInstallRoutine(string gameId)
@@ -2145,7 +2407,13 @@ namespace TheraplyCore.Games.Runtime
             EnsureSimulatedContentStatesInitialized();
             foreach (var pair in _simulatedContentStateByGameId)
             {
-                _ = PublishGameInstallStatusAsync(pair.Value, correlationId, reasonCode);
+                var state = pair.Value;
+                if (state == null || !IsCatalogGameId(state.gameId))
+                {
+                    continue;
+                }
+
+                _ = PublishGameInstallStatusAsync(state, correlationId, reasonCode);
             }
         }
 
@@ -2194,7 +2462,8 @@ namespace TheraplyCore.Games.Runtime
                 return true;
             }
 
-            if (!string.IsNullOrWhiteSpace(_defaultGameId))
+            if (_allowDefaultGameFallback &&
+                !string.IsNullOrWhiteSpace(_defaultGameId))
             {
                 return SetActiveGame(_defaultGameId);
             }
@@ -2720,9 +2989,12 @@ namespace TheraplyCore.Games.Runtime
                 DevicePresenceStateValues.Connected,
                 "TCP_CLIENT_CONNECTED",
                 force: true);
-            TryResumeAfterControlRecovered(
-                reasonCode: "TCP_CLIENT_CONNECTED",
-                trigger: "controller_reconnected");
+            if (_autoResumeOnControllerReconnect)
+            {
+                TryResumeAfterControlRecovered(
+                    reasonCode: "TCP_CLIENT_CONNECTED",
+                    trigger: "controller_reconnected");
+            }
             PublishRuntimeStatusIfChanged("TCP_CLIENT_CONNECTED");
             if (_publishContentCatalogOnClientConnect)
             {

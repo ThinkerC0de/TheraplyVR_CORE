@@ -17,6 +17,8 @@ class OpsDashboardScreen extends StatefulWidget {
 }
 
 class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
+  static const String _demoCatalogGameId = 'demo_cube_clicker';
+
   final TextEditingController _targetUserIdController = TextEditingController();
   final TextEditingController _operationReasonController =
       TextEditingController();
@@ -122,7 +124,10 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
       }
 
       setState(() {
-        _catalogSeedEntries = entries;
+        _catalogSeedEntries = entries
+            .where((entry) =>
+                entry.gameId.trim().toLowerCase() == _demoCatalogGameId)
+            .toList(growable: false);
       });
     } catch (error) {
       if (!mounted) {
@@ -3525,16 +3530,21 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                     }
 
                     final rows = snapshot.data!;
-                    if (rows.isEmpty) {
+                    final scopedRows = rows
+                        .where((row) =>
+                            row.gameId.trim().toLowerCase() ==
+                            _demoCatalogGameId)
+                        .toList(growable: false);
+                    if (scopedRows.isEmpty) {
                       return const Text('Brak rekordow game_catalog.');
                     }
 
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Live rows: ${rows.length}'),
+                        Text('Live rows: ${scopedRows.length}'),
                         const SizedBox(height: 8),
-                        for (final row in rows)
+                        for (final row in scopedRows)
                           Container(
                             margin: const EdgeInsets.only(bottom: 8),
                             padding: const EdgeInsets.all(8),
@@ -3830,14 +3840,18 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                           const <GameDefinitionExportManifestEntry>[])
                         entry.gameId.toLowerCase(): entry,
                     };
-                    final knownIds = _catalogSeedEntries
-                        .map((entry) => entry.gameId)
-                        .toSet();
+                    final scopedSeedEntries = _catalogSeedEntries
+                        .where((entry) =>
+                            entry.gameId.trim().toLowerCase() ==
+                            _demoCatalogGameId)
+                        .toList(growable: false);
+                    final knownIds =
+                        scopedSeedEntries.map((entry) => entry.gameId).toSet();
                     final unknownGrantGames = statsByGameId.keys
                         .where((gameId) => !knownIds.contains(gameId))
                         .toList()
                       ..sort();
-                    final catalogRows = _catalogSeedEntries.map((game) {
+                    final catalogRows = scopedSeedEntries.map((game) {
                       final manifestEntry =
                           manifestEntriesByGameId[game.gameId.toLowerCase()];
                       final authoringStatus = _resolveAuthoringStatus(

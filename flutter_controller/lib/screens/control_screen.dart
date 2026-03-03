@@ -387,11 +387,11 @@ class _ControlScreenState extends State<ControlScreen>
           'Wersja pogladowa: klikaj poruszajace sie cubey, mierz czas i best score.',
       targetContentVersion: '1.2.0',
       packageUri:
-          'https://theraply-vr-demo.web.app/content/demo_cube_clicker_1_2_0.pkg.json',
+          'https://pranasense.pl/content/demo_cube_clicker_1_2_0.pkg.json',
       thumbnailUrl: '',
       supportsSaveResume: true,
-      availableForPurchase: false,
-      requiresExplicitLicense: false,
+      availableForPurchase: true,
+      requiresExplicitLicense: true,
       runtimeLaunchEnabled: true,
       sortOrder: 10,
       previewLines: <String>[
@@ -3365,11 +3365,26 @@ class _ControlScreenState extends State<ControlScreen>
     }
   }
 
+  static bool _isDemoCatalogGameId(String gameId) {
+    return gameId.trim().toLowerCase() == _demoCubeGameId;
+  }
+
+  static bool _isDemoCatalogEntry(_GameCatalogEntry entry) {
+    return _isDemoCatalogGameId(entry.gameId);
+  }
+
   List<_GameCatalogEntry> get _effectiveGameCatalog {
-    if (_remoteGameCatalog.isNotEmpty) {
-      return _remoteGameCatalog;
+    final source = _remoteGameCatalog.isNotEmpty
+        ? _remoteGameCatalog
+        : _fallbackGameCatalog;
+    final demoOnly = source.where(_isDemoCatalogEntry).toList(growable: false);
+    if (demoOnly.isNotEmpty) {
+      return demoOnly;
     }
-    return _fallbackGameCatalog;
+
+    return _fallbackGameCatalog.where(_isDemoCatalogEntry).toList(
+          growable: false,
+        );
   }
 
   void _startGameCatalogSubscription() {
@@ -3383,6 +3398,7 @@ class _ControlScreenState extends State<ControlScreen>
         final mapped = entries
             .map(_GameCatalogEntry.fromRemoteEntry)
             .where((entry) => entry.gameId.isNotEmpty)
+            .where(_isDemoCatalogEntry)
             .toList(growable: false);
         setState(() {
           _remoteGameCatalog = mapped;
@@ -3406,6 +3422,10 @@ class _ControlScreenState extends State<ControlScreen>
     final normalizedGameId = entry.gameId.trim();
     if (normalizedGameId.isEmpty) {
       return false;
+    }
+
+    if (_isDemoCatalogGameId(normalizedGameId)) {
+      return _simulatedOwnedGameIds.contains(normalizedGameId);
     }
 
     if (_simulatedOwnedGameIds.contains(normalizedGameId)) {
@@ -4021,6 +4041,19 @@ class _ControlScreenState extends State<ControlScreen>
         targetVersion: targetVersion,
         installedVersion: targetVersion,
         runtimeStatus: ContentRuntimeStatus.ready,
+        updateRequired: false,
+        updateOptional: false,
+        lastError: null,
+        updatedAtUtc: DateTime.now().toUtc(),
+      );
+    }
+
+    if (_isDemoCatalogGameId(state.gameId) &&
+        !_simulatedOwnedGameIds.contains(state.gameId.trim())) {
+      nextState = nextState.copyWith(
+        owned: false,
+        installedVersion: null,
+        runtimeStatus: ContentRuntimeStatus.notInstalled,
         updateRequired: false,
         updateOptional: false,
         lastError: null,
@@ -7275,7 +7308,7 @@ class _ControlScreenState extends State<ControlScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Need more games?',
+                  'Demo catalog mode',
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 13,
@@ -7283,7 +7316,7 @@ class _ControlScreenState extends State<ControlScreen>
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Use Installed/Store tabs. Additional titles can be granted or seeded by admin.',
+                  'Only demo_cube_clicker is visible in this build to keep Store -> Buy(sim) -> Install -> Start stable.',
                   style: TextStyle(
                     color: Colors.grey.shade700,
                     fontSize: 12,
@@ -7310,10 +7343,10 @@ class _ControlScreenState extends State<ControlScreen>
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Add more games'),
+          title: const Text('Demo catalog scope'),
           content: const Text(
-            'Store tab shows titles available to add. Installed tab shows games already owned. '
-            'If catalog is empty, ask admin to seed game_catalog and grant licenses, then tap Refresh.',
+            'This demo scope intentionally exposes only demo_cube_clicker. '
+            'Use CMS seed to keep a single active catalog entry for end-to-end install/start validation.',
           ),
           actions: [
             TextButton(
@@ -8677,6 +8710,17 @@ class _ControlScreenState extends State<ControlScreen>
     if (!mounted) {
       return;
     }
+
+    unawaited(
+      _persistCatalogInteractionEvent(
+        eventType: 'STORE_PURCHASE_SIMULATED',
+        gameId: entry.gameId,
+        details: <String, dynamic>{
+          'targetVersion': entry.targetContentVersion,
+          'packageUri': entry.packageUri,
+        },
+      ),
+    );
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
