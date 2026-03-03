@@ -1499,31 +1499,8 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     final therapistId = _resolveActorTherapistId();
-    final latestPersistedId = _latestPersistedSession?.sessionId.trim() ?? '';
-    final requiresHandoff =
-        _latestPersistedSession?.requiresHandoffDecision ?? false;
-    final shouldSeedCreatedState = (eventType == 'CONTROLLER_CONNECTED' ||
-            eventType == 'CONTROLLER_RECONNECTED') &&
-        sessionId.startsWith('mobile-') &&
-        !requiresHandoff &&
-        latestPersistedId != sessionId;
 
     try {
-      if (shouldSeedCreatedState) {
-        await SessionJournalService.upsertSessionState(
-          sessionId: sessionId,
-          studentId: widget.student.id,
-          therapistId: therapistId,
-          state: SessionLifecycleState.created,
-          latestGameId: _selectedGameId,
-          reasonCode: reasonCode,
-          metadata: <String, dynamic>{
-            'origin': 'mobile_connection',
-            'eventType': eventType,
-          },
-        );
-      }
-
       await SessionJournalService.appendSessionEvent(
         sessionId: sessionId,
         studentId: widget.student.id,
@@ -2750,6 +2727,7 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     final persistedGameId = persisted.latestGameId.trim();
+    final shouldAdoptPersistedGameSelection = persisted.requiresHandoffDecision;
     final activeSessionId = _activeSessionId.trim();
     final canAdoptPersistedSession = activeSessionId.isEmpty ||
         activeSessionId.startsWith('mobile-') ||
@@ -2768,7 +2746,8 @@ class _ControlScreenState extends State<ControlScreen>
       shouldSetState = true;
     }
 
-    if (persistedGameId.isNotEmpty &&
+    if (shouldAdoptPersistedGameSelection &&
+        persistedGameId.isNotEmpty &&
         _isKnownGameId(persistedGameId) &&
         _selectedGameId != persistedGameId) {
       _selectedGameId = persistedGameId;
@@ -3149,6 +3128,20 @@ class _ControlScreenState extends State<ControlScreen>
         '[ControlScreen] Ignoring runtime session state from foreign session '
         'while attached: incoming=$sessionId active=$activeSessionId '
         'state=${sessionUpdate.state.wireValue}',
+      );
+      return;
+    }
+
+    final shouldSuppressPlaceholderCreatedState =
+        sessionUpdate.state == SessionLifecycleState.created &&
+            sessionUpdate.reasonCode.trim().toUpperCase() == 'BEGIN_SESSION' &&
+            sessionUpdate.previousState != null &&
+            SessionRecoveryPolicy.isTerminalState(sessionUpdate.previousState!);
+    if (shouldSuppressPlaceholderCreatedState) {
+      debugPrint(
+        '[ControlScreen] Suppressing placeholder CREATED rollover signal: '
+        'session=$sessionId previous=${sessionUpdate.previousState?.wireValue ?? ''} '
+        'reason=${sessionUpdate.reasonCode}',
       );
       return;
     }

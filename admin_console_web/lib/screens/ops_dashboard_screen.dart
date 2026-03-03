@@ -1035,8 +1035,32 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
       return '-';
     }
 
+    final utcValue = value.toUtc();
+    final utcPart = _formatDateTimeCompact(utcValue);
+    final localValue = utcValue.toLocal();
+    final localPart = _formatDateTimeCompact(localValue);
+    final localOffset = _formatUtcOffset(localValue.timeZoneOffset);
+    return '${utcPart}Z (local $localPart $localOffset)';
+  }
+
+  String _formatDateTimeCompact(DateTime value) {
     final datePart = value.toIso8601String().replaceFirst('T', ' ');
-    return datePart.endsWith('Z') ? datePart : '${datePart}Z';
+    final dotIndex = datePart.indexOf('.');
+    if (dotIndex > 0) {
+      return datePart.substring(0, dotIndex);
+    }
+    return datePart.endsWith('Z')
+        ? datePart.substring(0, datePart.length - 1)
+        : datePart;
+  }
+
+  String _formatUtcOffset(Duration offset) {
+    final totalMinutes = offset.inMinutes;
+    final sign = totalMinutes >= 0 ? '+' : '-';
+    final absoluteMinutes = totalMinutes.abs();
+    final hours = (absoluteMinutes ~/ 60).toString().padLeft(2, '0');
+    final minutes = (absoluteMinutes % 60).toString().padLeft(2, '0');
+    return 'UTC$sign$hours:$minutes';
   }
 
   _SeedFreshnessStatus _evaluateSeedFreshness() {
