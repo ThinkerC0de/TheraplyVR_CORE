@@ -2451,7 +2451,11 @@ class _ControlScreenState extends State<ControlScreen>
 
     var shouldSetState = false;
 
-    if (canAdoptPersistedSession && activeSessionId != persistedSessionId) {
+    // Do not silently switch local session context to an unfinished remote one.
+    // Keep mismatch so decision gate can prompt therapist (resume/start new).
+    if (!persisted.requiresHandoffDecision &&
+        canAdoptPersistedSession &&
+        activeSessionId != persistedSessionId) {
       _activeSessionId = persistedSessionId;
       _sessionAttachReady = false;
       shouldSetState = true;
@@ -2465,11 +2469,12 @@ class _ControlScreenState extends State<ControlScreen>
       shouldSetState = true;
     }
 
-    if (shouldShowSetupScreen && _workflowStep != _WorkflowStep.gameSetup) {
-      _workflowStep = _WorkflowStep.gameSetup;
-      _isVideoPreviewExpanded = true;
-      shouldSetState = true;
-    } else if (!shouldShowSetupScreen &&
+    final hasRuntimeOrActionInProgress =
+        _isGameRuntimeActive || _isPrimaryActionInFlight;
+    final shouldPreferCatalog =
+        persisted.requiresHandoffDecision || !shouldShowSetupScreen;
+    if (shouldPreferCatalog &&
+        !hasRuntimeOrActionInProgress &&
         _workflowStep != _WorkflowStep.gameCatalog) {
       _workflowStep = _WorkflowStep.gameCatalog;
       _isVideoPreviewExpanded = false;
