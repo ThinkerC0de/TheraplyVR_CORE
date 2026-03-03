@@ -661,8 +661,8 @@ MonoBehaviour:
   _logFirebaseBackendPayloads: 1
   _logFirebaseBackendDiagnostics: 1
   _rewriteLoopbackBackendHostOutsideEditor: 1
-  _useConnectedControllerIpForLoopbackRewrite: 1
-  _nonEditorLoopbackHostOverride: 
+  _useConnectedControllerIpForLoopbackRewrite: 0
+  _nonEditorLoopbackHostOverride: 192.168.0.221
   _tcpServerService: {fileID: 0}
   _persistCriticalSessionEventsLocally: 1
   _persistAllEventsToDurableStore: 1
