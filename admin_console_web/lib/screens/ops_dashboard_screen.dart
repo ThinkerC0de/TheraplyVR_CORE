@@ -7,6 +7,7 @@ import 'package:admin_console_web/models/entitlement_grant_contract.dart';
 import 'package:admin_console_web/services/entitlement_admin_service.dart';
 import 'package:admin_console_web/services/firebase_service.dart';
 import 'package:admin_console_web/services/game_catalog_seed_source.dart';
+import 'package:admin_console_web/services/vrl_trace_codec.dart';
 
 class OpsDashboardScreen extends StatefulWidget {
   const OpsDashboardScreen({super.key});
@@ -70,6 +71,11 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
   String _sessionStudentFilter = '';
   String _selectedSessionDocumentId = '';
   final Set<String> _selectedSessionDocumentIds = <String>{};
+  String _expandedMotionEventKey = '';
+  final Map<String, Future<_MotionTraceDecodeState>>
+      _motionTraceDecodeFutureByEventKey =
+      <String, Future<_MotionTraceDecodeState>>{};
+  final Map<String, int> _motionTraceSelectedFrameByEventKey = <String, int>{};
 
   String get _targetUserId => _targetUserIdController.text.trim();
 
@@ -3037,42 +3043,346 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
               ),
               const SizedBox(height: 8),
               for (final event in events)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${event.eventType.isEmpty ? 'UNKNOWN_EVENT' : event.eventType} @ ${_formatUtc(event.eventAtUtc)}',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Source=${event.source.isEmpty ? '-' : event.source} | '
-                        'Game=${event.gameId.isEmpty ? '-' : event.gameId}',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      Text(
-                        'TimelineId=${event.timelineEventId.isEmpty ? '-' : event.timelineEventId}',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      Text(
-                        'Details=${event.detailsPreview()}',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ],
-                  ),
+                _buildSessionEventRow(
+                  sessionDocumentId: normalizedSessionDocumentId,
+                  event: event,
                 ),
             ],
           );
         },
       ),
     );
+  }
+
+  Widget _buildSessionEventRow({
+    required String sessionDocumentId,
+    required AdminSessionEventRow event,
+  }) {
+    final eventKey = '$sessionDocumentId|${event.eventId}';
+    final motionTracePayload = _extractInlineMotionTracePayload(event);
+    final canShowMotionPanel =
+        motionTracePayload != null && motionTracePayload.hasInlinePayload;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${event.eventType.isEmpty ? 'UNKNOWN_EVENT' : event.eventType} @ ${_formatUtc(event.eventAtUtc)}',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Source=${event.source.isEmpty ? '-' : event.source} | '
+            'Game=${event.gameId.isEmpty ? '-' : event.gameId}',
+            style: const TextStyle(fontSize: 12),
+          ),
+          Text(
+            'TimelineId=${event.timelineEventId.isEmpty ? '-' : event.timelineEventId}',
+            style: const TextStyle(fontSize: 12),
+          ),
+          Text(
+            'Details=${event.detailsPreview()}',
+            style: const TextStyle(fontSize: 12),
+          ),
+          if (motionTracePayload != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Motion trace: status=${motionTracePayload.inlinePayloadStatus} | '
+              'encoding=${motionTracePayload.traceEncoding} | '
+              'frames=${motionTracePayload.frameCount <= 0 ? '-' : motionTracePayload.frameCount}',
+              style: const TextStyle(fontSize: 12),
+            ),
+            if (canShowMotionPanel) ...[
+              const SizedBox(height: 6),
+              FilledButton.tonal(
+                onPressed: () {
+                  setState(() {
+                    if (_expandedMotionEventKey == eventKey) {
+                      _expandedMotionEventKey = '';
+                    } else {
+                      _expandedMotionEventKey = eventKey;
+                    }
+                  });
+                },
+                child: Text(
+                  _expandedMotionEventKey == eventKey
+                      ? 'Hide motion data'
+                      : 'Show motion data',
+                ),
+              ),
+            ],
+          ],
+          if (_expandedMotionEventKey == eventKey &&
+              motionTracePayload != null &&
+              canShowMotionPanel) ...[
+            const SizedBox(height: 8),
+            _buildMotionTracePanel(
+              eventKey: eventKey,
+              payload: motionTracePayload,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  _InlineMotionTracePayload? _extractInlineMotionTracePayload(
+    AdminSessionEventRow event,
+  ) {
+    if (event.eventType.trim().toUpperCase() != 'TRACE_REF') {
+      return null;
+    }
+
+    final normalizedDetails = Map<String, dynamic>.from(event.details);
+    final nestedDetails = normalizedDetails['details'] is Map
+        ? Map<String, dynamic>.from(
+            normalizedDetails['details'] as Map,
+          )
+        : const <String, dynamic>{};
+
+    String readString(List<String> keys, {String fallback = ''}) {
+      for (final key in keys) {
+        final rootValue = normalizedDetails[key];
+        if (rootValue != null) {
+          final text = rootValue.toString().trim();
+          if (text.isNotEmpty) {
+            return text;
+          }
+        }
+
+        final nestedValue = nestedDetails[key];
+        if (nestedValue != null) {
+          final text = nestedValue.toString().trim();
+          if (text.isNotEmpty) {
+            return text;
+          }
+        }
+      }
+      return fallback;
+    }
+
+    int readInt(List<String> keys, {int fallback = 0}) {
+      for (final key in keys) {
+        final rootValue = normalizedDetails[key];
+        if (rootValue is int) {
+          return rootValue;
+        }
+        if (rootValue is num) {
+          return rootValue.toInt();
+        }
+        if (rootValue is String) {
+          final parsed = int.tryParse(rootValue.trim());
+          if (parsed != null) {
+            return parsed;
+          }
+        }
+
+        final nestedValue = nestedDetails[key];
+        if (nestedValue is int) {
+          return nestedValue;
+        }
+        if (nestedValue is num) {
+          return nestedValue.toInt();
+        }
+        if (nestedValue is String) {
+          final parsed = int.tryParse(nestedValue.trim());
+          if (parsed != null) {
+            return parsed;
+          }
+        }
+      }
+      return fallback;
+    }
+
+    final tracePayloadBase64 = readString(
+      const <String>['tracePayloadBase64'],
+    );
+    final inlinePayloadStatus = readString(
+      const <String>['inlinePayloadStatus'],
+      fallback: 'UNKNOWN',
+    );
+    return _InlineMotionTracePayload(
+      tracePayloadBase64: tracePayloadBase64,
+      traceEncoding: readString(
+        const <String>['tracePayloadEncoding', 'encoding'],
+        fallback: 'vrl',
+      ),
+      traceFormat: readString(
+        const <String>['tracePayloadFormat', 'format'],
+        fallback: 'VRL',
+      ),
+      traceId: readString(
+        const <String>['traceId', 'trace_ref'],
+      ),
+      checksum: readString(
+        const <String>['checksum'],
+      ),
+      frameCount: readInt(
+        const <String>['frameCount'],
+      ),
+      inlinePayloadStatus: inlinePayloadStatus,
+      inlinePayloadBytes: readInt(
+        const <String>['inlinePayloadBytes'],
+      ),
+      inlinePayloadMaxBytes: readInt(
+        const <String>['inlinePayloadMaxBytes'],
+      ),
+    );
+  }
+
+  Future<_MotionTraceDecodeState> _decodeMotionTracePayload(
+    _InlineMotionTracePayload payload,
+  ) async {
+    if (!payload.hasInlinePayload) {
+      return _MotionTraceDecodeState.error(
+        'Inline payload is missing for this event.',
+      );
+    }
+
+    try {
+      final trace = VrlTraceCodec.decode(
+        base64Payload: payload.tracePayloadBase64,
+        encoding: payload.traceEncoding,
+      );
+      return _MotionTraceDecodeState.success(trace);
+    } catch (error) {
+      return _MotionTraceDecodeState.error(error.toString());
+    }
+  }
+
+  Widget _buildMotionTracePanel({
+    required String eventKey,
+    required _InlineMotionTracePayload payload,
+  }) {
+    final decodeFuture = _motionTraceDecodeFutureByEventKey.putIfAbsent(
+      eventKey,
+      () => _decodeMotionTracePayload(payload),
+    );
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blueGrey.shade100),
+      ),
+      child: FutureBuilder<_MotionTraceDecodeState>(
+        future: decodeFuture,
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Padding(
+              padding: EdgeInsets.all(8),
+              child: Center(
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+
+          final decodeState = snapshot.data!;
+          if (!decodeState.success || decodeState.trace == null) {
+            return Text(
+              'Motion decode failed: ${decodeState.errorMessage}',
+              style: TextStyle(color: Colors.red.shade700),
+            );
+          }
+
+          final trace = decodeState.trace!;
+          if (trace.frames.isEmpty) {
+            return const Text('Motion trace decoded but contains no frames.');
+          }
+
+          final maxFrameIndex = trace.frames.length - 1;
+          var selectedFrameIndex =
+              _motionTraceSelectedFrameByEventKey[eventKey] ?? 0;
+          if (selectedFrameIndex < 0) {
+            selectedFrameIndex = 0;
+          }
+          if (selectedFrameIndex > maxFrameIndex) {
+            selectedFrameIndex = maxFrameIndex;
+          }
+
+          final selectedFrame = trace.frames[selectedFrameIndex];
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'VRL decoded | format=${payload.traceFormat} | rev=${trace.schemaRevision} | '
+                'rate=${trace.sampleRateHz}Hz',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'traceId=${payload.traceId.isEmpty ? trace.traceId : payload.traceId} | '
+                'frames=${trace.frames.length}/${trace.declaredFrameCount} | '
+                'duration=${trace.durationSec.toStringAsFixed(2)}s',
+                style: const TextStyle(fontSize: 12),
+              ),
+              Text(
+                'session=${trace.sessionId} | game=${trace.gameId.isEmpty ? '-' : trace.gameId} | '
+                'flow=${trace.flowId.isEmpty ? '-' : trace.flowId}',
+                style: const TextStyle(fontSize: 12),
+              ),
+              Text(
+                'bytes=${trace.sourceByteLength} -> ${trace.decodedByteLength} | '
+                'inline=${payload.inlinePayloadBytes}/${payload.inlinePayloadMaxBytes} | '
+                'checksum=${payload.checksum.isEmpty ? '-' : payload.checksum}',
+                style: const TextStyle(fontSize: 12),
+              ),
+              const SizedBox(height: 8),
+              Slider(
+                value: selectedFrameIndex.toDouble(),
+                min: 0,
+                max: maxFrameIndex.toDouble(),
+                divisions: maxFrameIndex > 0 ? maxFrameIndex : null,
+                onChanged: (value) {
+                  setState(() {
+                    _motionTraceSelectedFrameByEventKey[eventKey] =
+                        value.round();
+                  });
+                },
+              ),
+              Text(
+                'Frame #${selectedFrame.index} | time=${selectedFrame.monotonicSec.toStringAsFixed(3)}s',
+                style:
+                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Head: ${_formatMotionPose(selectedFrame.head)}',
+                style: const TextStyle(fontSize: 12),
+              ),
+              Text(
+                'Left: ${_formatMotionPose(selectedFrame.left)}',
+                style: const TextStyle(fontSize: 12),
+              ),
+              Text(
+                'Right: ${_formatMotionPose(selectedFrame.right)}',
+                style: const TextStyle(fontSize: 12),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  String _formatMotionPose(VrlPoseSample? pose) {
+    if (pose == null) {
+      return '-';
+    }
+
+    return 'p=(${pose.px.toStringAsFixed(3)}, ${pose.py.toStringAsFixed(3)}, ${pose.pz.toStringAsFixed(3)}) '
+        'r=(${pose.rx.toStringAsFixed(3)}, ${pose.ry.toStringAsFixed(3)}, '
+        '${pose.rz.toStringAsFixed(3)}, ${pose.rw.toStringAsFixed(3)})';
   }
 
   Widget _buildGamePackageOpsGuideCard() {
@@ -4425,6 +4735,60 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _InlineMotionTracePayload {
+  final String tracePayloadBase64;
+  final String traceEncoding;
+  final String traceFormat;
+  final String traceId;
+  final String checksum;
+  final int frameCount;
+  final String inlinePayloadStatus;
+  final int inlinePayloadBytes;
+  final int inlinePayloadMaxBytes;
+
+  const _InlineMotionTracePayload({
+    required this.tracePayloadBase64,
+    required this.traceEncoding,
+    required this.traceFormat,
+    required this.traceId,
+    required this.checksum,
+    required this.frameCount,
+    required this.inlinePayloadStatus,
+    required this.inlinePayloadBytes,
+    required this.inlinePayloadMaxBytes,
+  });
+
+  bool get hasInlinePayload => tracePayloadBase64.trim().isNotEmpty;
+}
+
+class _MotionTraceDecodeState {
+  final bool success;
+  final VrlTraceData? trace;
+  final String errorMessage;
+
+  const _MotionTraceDecodeState._({
+    required this.success,
+    required this.trace,
+    required this.errorMessage,
+  });
+
+  factory _MotionTraceDecodeState.success(VrlTraceData trace) {
+    return _MotionTraceDecodeState._(
+      success: true,
+      trace: trace,
+      errorMessage: '',
+    );
+  }
+
+  factory _MotionTraceDecodeState.error(String message) {
+    return _MotionTraceDecodeState._(
+      success: false,
+      trace: null,
+      errorMessage: message,
     );
   }
 }

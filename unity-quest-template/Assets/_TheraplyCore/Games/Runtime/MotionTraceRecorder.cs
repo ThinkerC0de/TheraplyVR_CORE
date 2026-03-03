@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using UnityEngine;
@@ -45,6 +46,10 @@ namespace TheraplyCore.Games.Runtime
         [SerializeField] [Range(5f, 120f)] private float _sampleRateHz = 20f;
         [SerializeField] [Range(128, 120000)] private int _maxSamples = 24000;
         [SerializeField] private bool _persistTraceToDisk = true;
+        [SerializeField] private bool _compressTraceWithGzip = true;
+        [SerializeField] private bool _persistDebugTraceAsNdjson = false;
+        [SerializeField] private bool _includeTracePayloadInTraceRefEvent = true;
+        [SerializeField] [Range(16384, 900000)] private int _maxInlineTracePayloadBytes = 512000;
         [SerializeField] private string _traceFolder = "session_resilience/traces";
         [SerializeField] private bool _emitTraceRefEvent = true;
         [SerializeField] private bool _logLifecycle;
@@ -151,17 +156,18 @@ namespace TheraplyCore.Games.Runtime
             var tracePath = string.Empty;
             var encoding = "none";
             var checksum = string.Empty;
+            var persistedTraceBytes = Array.Empty<byte>();
             var frameCount = _samples.Count;
 
             if (_persistTraceToDisk && frameCount > 0)
             {
-                if (TryPersistTrace(out tracePath, out checksum))
+                if (TryPersistTrace(
+                    out tracePath,
+                    out checksum,
+                    out encoding,
+                    out persistedTraceBytes))
                 {
-                    encoding = "ndjson";
-                }
-                else
-                {
-                    encoding = "volatile";
+                    // encoding is assigned by the serializer output path.
                 }
             }
 
@@ -175,6 +181,7 @@ namespace TheraplyCore.Games.Runtime
                     { "traceId", NormalizeOrFallback(_traceId, Guid.NewGuid().ToString("N")) },
                     { "traceType", "motion_trace" },
                     { "encoding", encoding },
+                    { "format", "vrl" },
                     { "checksum", NormalizeOrFallback(checksum, string.Empty) },
                     { "frameCount", frameCount },
                     { "tracePath", NormalizeOrFallback(tracePath, string.Empty) },
@@ -184,6 +191,7 @@ namespace TheraplyCore.Games.Runtime
                     { "monotonicSec", Time.realtimeSinceStartup },
                     { "actionOutcome", "OBSERVED" },
                 };
+                AppendInlinePayloadMetadata(payload, persistedTraceBytes, encoding);
 
                 _interactionEventBridge.RecordGameplayEvent(
                     NormalizeOrFallback(_activeGameId, "session_flow"),
@@ -269,10 +277,55 @@ namespace TheraplyCore.Games.Runtime
             };
         }
 
-        private bool TryPersistTrace(out string tracePath, out string checksum)
+        private void AppendInlinePayloadMetadata(
+            Dictionary<string, object> payload,
+            byte[] persistedTraceBytes,
+            string encoding)
+        {
+            if (payload == null)
+            {
+                return;
+            }
+
+            var safeMaxInlineBytes = Mathf.Clamp(_maxInlineTracePayloadBytes, 16384, 900000);
+            payload["tracePayloadFormat"] = "VRL";
+            payload["tracePayloadEncoding"] = NormalizeOrFallback(encoding, "none");
+            payload["inlinePayloadEnabled"] = _includeTracePayloadInTraceRefEvent;
+            payload["inlinePayloadMaxBytes"] = safeMaxInlineBytes;
+
+            if (!_includeTracePayloadInTraceRefEvent)
+            {
+                payload["inlinePayloadStatus"] = "DISABLED";
+                return;
+            }
+
+            if (persistedTraceBytes == null || persistedTraceBytes.Length <= 0)
+            {
+                payload["inlinePayloadStatus"] = "UNAVAILABLE";
+                return;
+            }
+
+            payload["inlinePayloadBytes"] = persistedTraceBytes.Length;
+            if (persistedTraceBytes.Length > safeMaxInlineBytes)
+            {
+                payload["inlinePayloadStatus"] = "SKIPPED_SIZE_LIMIT";
+                return;
+            }
+
+            payload["tracePayloadBase64"] = Convert.ToBase64String(persistedTraceBytes);
+            payload["inlinePayloadStatus"] = "INCLUDED";
+        }
+
+        private bool TryPersistTrace(
+            out string tracePath,
+            out string checksum,
+            out string encoding,
+            out byte[] persistedTraceBytes)
         {
             tracePath = string.Empty;
             checksum = string.Empty;
+            encoding = "volatile";
+            persistedTraceBytes = Array.Empty<byte>();
 
             try
             {
@@ -284,13 +337,32 @@ namespace TheraplyCore.Games.Runtime
 
                 var safeSessionId = SanitizeFileToken(_activeSessionId, "session");
                 var safeTraceId = SanitizeFileToken(_traceId, "trace");
-                var fileName = safeSessionId + "_" + safeTraceId + ".ndjson";
+                var fileExtension = _compressTraceWithGzip ? ".vrl.gz" : ".vrl";
+                var fileName = safeSessionId + "_" + safeTraceId + fileExtension;
                 tracePath = Path.Combine(fullFolderPath, fileName);
 
-                var content = BuildTraceContent();
-                var bytes = Encoding.UTF8.GetBytes(content);
+                var bytes = BuildTraceBinaryContent();
+                if (_compressTraceWithGzip)
+                {
+                    bytes = CompressWithGzip(bytes);
+                    encoding = "vrl_gzip";
+                }
+                else
+                {
+                    encoding = "vrl";
+                }
+
                 checksum = ComputeSha256Hex(bytes);
-                File.WriteAllText(tracePath, content, new UTF8Encoding(false));
+                File.WriteAllBytes(tracePath, bytes);
+                persistedTraceBytes = bytes;
+
+                if (_persistDebugTraceAsNdjson)
+                {
+                    var debugPath = Path.Combine(fullFolderPath, safeSessionId + "_" + safeTraceId + ".ndjson");
+                    var debugContent = BuildTraceDebugContent();
+                    File.WriteAllText(debugPath, debugContent, new UTF8Encoding(false));
+                }
+
                 return true;
             }
             catch (Exception e)
@@ -300,7 +372,160 @@ namespace TheraplyCore.Games.Runtime
             }
         }
 
-        private string BuildTraceContent()
+        private byte[] BuildTraceBinaryContent()
+        {
+            using (var stream = new MemoryStream(Mathf.Max(1024, _samples.Count * 48)))
+            using (var writer = new BinaryWriter(stream, Encoding.UTF8, true))
+            {
+                writer.Write((byte)'V');
+                writer.Write((byte)'R');
+                writer.Write((byte)'L');
+                writer.Write((byte)1); // format schema revision
+                writer.Write((ushort)Mathf.Clamp(Mathf.RoundToInt(_sampleRateHz), 1, 240));
+                WriteString(writer, _activeSessionId);
+                WriteString(writer, _activeGameId);
+                WriteString(writer, _activeFlowId);
+                WriteString(writer, _traceId);
+                writer.Write(_samples.Count);
+
+                for (var i = 0; i < _samples.Count; i++)
+                {
+                    WriteSample(writer, i, _samples[i]);
+                }
+
+                writer.Flush();
+                return stream.ToArray();
+            }
+        }
+
+        private static void WriteSample(BinaryWriter writer, int index, MotionSample sample)
+        {
+            var presenceMask = 0;
+            if (sample.head.hasData)
+            {
+                presenceMask |= 1;
+            }
+
+            if (sample.left.hasData)
+            {
+                presenceMask |= 1 << 1;
+            }
+
+            if (sample.right.hasData)
+            {
+                presenceMask |= 1 << 2;
+            }
+
+            writer.Write((byte)presenceMask);
+            writer.Write(index);
+            writer.Write(sample.monotonicSec);
+            if (sample.head.hasData)
+            {
+                WritePose(writer, sample.head);
+            }
+
+            if (sample.left.hasData)
+            {
+                WritePose(writer, sample.left);
+            }
+
+            if (sample.right.hasData)
+            {
+                WritePose(writer, sample.right);
+            }
+        }
+
+        private static void WritePose(BinaryWriter writer, PoseSample pose)
+        {
+            WriteHalf(writer, pose.position.x);
+            WriteHalf(writer, pose.position.y);
+            WriteHalf(writer, pose.position.z);
+            WriteHalf(writer, pose.rotation.x);
+            WriteHalf(writer, pose.rotation.y);
+            WriteHalf(writer, pose.rotation.z);
+            WriteHalf(writer, pose.rotation.w);
+        }
+
+        private static void WriteHalf(BinaryWriter writer, float value)
+        {
+            writer.Write(FloatToHalfBits(value));
+        }
+
+        private static ushort FloatToHalfBits(float value)
+        {
+            var bits = BitConverter.ToUInt32(BitConverter.GetBytes(value), 0);
+            var sign = (bits >> 31) & 0x1u;
+            var exponent = (bits >> 23) & 0xFFu;
+            var mantissa = bits & 0x7FFFFFu;
+
+            if (exponent == 255u)
+            {
+                var halfNaN = mantissa == 0u ? 0u : 0x200u;
+                return (ushort)((sign << 15) | 0x7C00u | halfNaN);
+            }
+
+            var adjustedExp = (int)exponent - 127 + 15;
+            if (adjustedExp >= 31)
+            {
+                return (ushort)((sign << 15) | 0x7C00u);
+            }
+
+            if (adjustedExp <= 0)
+            {
+                if (adjustedExp < -10)
+                {
+                    return (ushort)(sign << 15);
+                }
+
+                mantissa |= 0x800000u;
+                var shift = 14 - adjustedExp;
+                var halfMantissa = mantissa >> shift;
+                var roundingBit = (mantissa >> (shift - 1)) & 1u;
+                halfMantissa += roundingBit;
+                return (ushort)((sign << 15) | (halfMantissa & 0x3FFu));
+            }
+
+            var roundedMantissa = mantissa + 0x1000u;
+            if ((roundedMantissa & 0x800000u) != 0u)
+            {
+                roundedMantissa = 0u;
+                adjustedExp += 1;
+                if (adjustedExp >= 31)
+                {
+                    return (ushort)((sign << 15) | 0x7C00u);
+                }
+            }
+
+            return (ushort)((sign << 15) | ((uint)adjustedExp << 10) | (roundedMantissa >> 13));
+        }
+
+        private static void WriteString(BinaryWriter writer, string value)
+        {
+            var normalized = NormalizeOrFallback(value, string.Empty);
+            var bytes = Encoding.UTF8.GetBytes(normalized);
+            writer.Write(bytes.Length);
+            writer.Write(bytes);
+        }
+
+        private static byte[] CompressWithGzip(byte[] bytes)
+        {
+            if (bytes == null || bytes.Length <= 0)
+            {
+                return Array.Empty<byte>();
+            }
+
+            using (var output = new MemoryStream(bytes.Length))
+            {
+                using (var gzip = new GZipStream(output, System.IO.Compression.CompressionLevel.Optimal, true))
+                {
+                    gzip.Write(bytes, 0, bytes.Length);
+                }
+
+                return output.ToArray();
+            }
+        }
+
+        private string BuildTraceDebugContent()
         {
             var builder = new StringBuilder(Mathf.Max(256, _samples.Count * 96));
             for (var i = 0; i < _samples.Count; i++)
