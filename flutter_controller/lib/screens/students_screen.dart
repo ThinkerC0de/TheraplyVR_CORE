@@ -1246,6 +1246,7 @@ class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
   late bool _autoCloseInterruptedSessionsEnabled;
   late bool _requireResumeConfirmationAfterRecoveryWindow;
   late bool _keepScreenAwakeWhenForeground;
+  late bool _autoInstallOwnedGames;
   late MobileDisconnectBehavior _mobileDisconnectBehavior;
   late TherapistUiLanguage _operatorUiLanguage;
   late GuidedSessionContinuationPolicy _guidedSessionContinuationPolicy;
@@ -1283,6 +1284,7 @@ class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
     _requireResumeConfirmationAfterRecoveryWindow =
         initial.requireResumeConfirmationAfterRecoveryWindow;
     _keepScreenAwakeWhenForeground = initial.keepScreenAwakeWhenForeground;
+    _autoInstallOwnedGames = initial.autoInstallOwnedGames;
     _mobileDisconnectBehavior = initial.mobileDisconnectBehavior;
     _operatorUiLanguage = initial.operatorUiLanguage;
     _guidedSessionContinuationPolicy = initial.guidedSessionContinuationPolicy;
@@ -1352,6 +1354,7 @@ class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
       _requireResumeConfirmationAfterRecoveryWindow =
           defaults.requireResumeConfirmationAfterRecoveryWindow;
       _keepScreenAwakeWhenForeground = defaults.keepScreenAwakeWhenForeground;
+      _autoInstallOwnedGames = defaults.autoInstallOwnedGames;
       _mobileDisconnectBehavior = defaults.mobileDisconnectBehavior;
       _operatorUiLanguage = defaults.operatorUiLanguage;
       _guidedSessionContinuationPolicy =
@@ -1454,6 +1457,7 @@ class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
             widget.initialSettings.adaptiveDifficultySensitivity,
         'labelPipelineEnabled': widget.initialSettings.labelPipelineEnabled,
         'keepScreenAwakeWhenForeground': _keepScreenAwakeWhenForeground,
+        'autoInstallOwnedGames': _autoInstallOwnedGames,
         'mobileDisconnectBehavior': _mobileDisconnectBehavior.wireValue,
         'operatorUiLanguage': _operatorUiLanguage.wireValue,
         'timelineQuickNoteTemplates': timelineQuickNoteTemplates,
@@ -1559,6 +1563,21 @@ class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
                     : (value) {
                         setState(() {
                           _keepScreenAwakeWhenForeground = value;
+                        });
+                      },
+              ),
+              SwitchListTile(
+                value: _autoInstallOwnedGames,
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Auto-install game after Buy (sim)'),
+                subtitle: const Text(
+                  'When enabled, purchased game installs immediately after moving to Owned tab.',
+                ),
+                onChanged: _isSaving
+                    ? null
+                    : (value) {
+                        setState(() {
+                          _autoInstallOwnedGames = value;
                         });
                       },
               ),

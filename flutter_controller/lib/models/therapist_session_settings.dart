@@ -68,6 +68,7 @@ class TherapistSessionSettings {
 
   static const bool defaultLabelPipelineEnabled = true;
   static const bool defaultKeepScreenAwakeWhenForeground = false;
+  static const bool defaultAutoInstallOwnedGames = false;
   static const MobileDisconnectBehavior defaultMobileDisconnectBehavior =
       MobileDisconnectBehavior.pause;
   static const TherapistUiLanguage defaultOperatorUiLanguage =
@@ -83,6 +84,7 @@ class TherapistSessionSettings {
   final double adaptiveDifficultySensitivity;
   final bool labelPipelineEnabled;
   final bool keepScreenAwakeWhenForeground;
+  final bool autoInstallOwnedGames;
   final MobileDisconnectBehavior mobileDisconnectBehavior;
   final TherapistUiLanguage operatorUiLanguage;
   final List<String> timelineQuickNoteTemplates;
@@ -101,6 +103,7 @@ class TherapistSessionSettings {
     required this.adaptiveDifficultySensitivity,
     required this.labelPipelineEnabled,
     required this.keepScreenAwakeWhenForeground,
+    required this.autoInstallOwnedGames,
     required this.mobileDisconnectBehavior,
     required this.operatorUiLanguage,
     required this.timelineQuickNoteTemplates,
@@ -123,6 +126,7 @@ class TherapistSessionSettings {
       adaptiveDifficultySensitivity: defaultAdaptiveDifficultySensitivity,
       labelPipelineEnabled: defaultLabelPipelineEnabled,
       keepScreenAwakeWhenForeground: defaultKeepScreenAwakeWhenForeground,
+      autoInstallOwnedGames: defaultAutoInstallOwnedGames,
       mobileDisconnectBehavior: defaultMobileDisconnectBehavior,
       operatorUiLanguage: defaultOperatorUiLanguage,
       timelineQuickNoteTemplates: <String>[
@@ -203,6 +207,10 @@ class TherapistSessionSettings {
         source['keepScreenAwakeWhenForeground'],
         fallback: defaults.keepScreenAwakeWhenForeground,
       ),
+      autoInstallOwnedGames: _asBool(
+        source['autoInstallOwnedGames'],
+        fallback: defaults.autoInstallOwnedGames,
+      ),
       mobileDisconnectBehavior: _asMobileDisconnectBehavior(
         source['mobileDisconnectBehavior'],
         fallback: defaults.mobileDisconnectBehavior,
@@ -243,6 +251,7 @@ class TherapistSessionSettings {
     double? adaptiveDifficultySensitivity,
     bool? labelPipelineEnabled,
     bool? keepScreenAwakeWhenForeground,
+    bool? autoInstallOwnedGames,
     MobileDisconnectBehavior? mobileDisconnectBehavior,
     TherapistUiLanguage? operatorUiLanguage,
     List<String>? timelineQuickNoteTemplates,
@@ -272,6 +281,8 @@ class TherapistSessionSettings {
       labelPipelineEnabled: labelPipelineEnabled ?? this.labelPipelineEnabled,
       keepScreenAwakeWhenForeground:
           keepScreenAwakeWhenForeground ?? this.keepScreenAwakeWhenForeground,
+      autoInstallOwnedGames:
+          autoInstallOwnedGames ?? this.autoInstallOwnedGames,
       mobileDisconnectBehavior:
           mobileDisconnectBehavior ?? this.mobileDisconnectBehavior,
       operatorUiLanguage: operatorUiLanguage ?? this.operatorUiLanguage,
@@ -302,6 +313,7 @@ class TherapistSessionSettings {
       'adaptiveDifficultySensitivity': adaptiveDifficultySensitivity,
       'labelPipelineEnabled': labelPipelineEnabled,
       'keepScreenAwakeWhenForeground': keepScreenAwakeWhenForeground,
+      'autoInstallOwnedGames': autoInstallOwnedGames,
       'mobileDisconnectBehavior': mobileDisconnectBehavior.wireValue,
       'operatorUiLanguage': operatorUiLanguage.wireValue,
       'timelineQuickNoteTemplates':

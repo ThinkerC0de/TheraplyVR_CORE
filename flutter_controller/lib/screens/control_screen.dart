@@ -7830,7 +7830,7 @@ class _ControlScreenState extends State<ControlScreen>
                             _catalogFilterTab = _CatalogFilterTab.installed;
                           });
                         },
-                  child: Text('Installed (${installedCatalog.length})'),
+                  child: Text('Owned (${installedCatalog.length})'),
                 ),
               ),
               const SizedBox(width: 6),
@@ -7843,7 +7843,7 @@ class _ControlScreenState extends State<ControlScreen>
                             _catalogFilterTab = _CatalogFilterTab.store;
                           });
                         },
-                  child: Text('Store (${storeCatalog.length})'),
+                  child: Text('Shop (${storeCatalog.length})'),
                 ),
               ),
             ],
@@ -8484,19 +8484,20 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   Future<void> _simulateStorePurchase(_GameCatalogEntry entry) async {
-    if (entry.gameId.trim().isEmpty) {
+    final normalizedGameId = entry.gameId.trim();
+    if (normalizedGameId.isEmpty) {
       return;
     }
 
     final nowUtc = DateTime.now().toUtc();
-    final currentState = _contentStateForGame(entry.gameId);
+    final currentState = _contentStateForGame(normalizedGameId);
     final requiresExplicitInstall =
-        _isDemoCatalogGameId(entry.gameId) || entry.requiresExplicitLicense;
+        _isDemoCatalogGameId(normalizedGameId) || entry.requiresExplicitLicense;
     setState(() {
-      _simulatedOwnedGameIds.add(entry.gameId);
+      _simulatedOwnedGameIds.add(normalizedGameId);
       _catalogFilterTab = _CatalogFilterTab.installed;
-      _selectedGameId = entry.gameId;
-      _contentStatesByGameId[entry.gameId] = currentState.copyWith(
+      _selectedGameId = normalizedGameId;
+      _contentStatesByGameId[normalizedGameId] = currentState.copyWith(
         owned: true,
         targetVersion: entry.targetContentVersion,
         installedVersion:
@@ -8517,17 +8518,43 @@ class _ControlScreenState extends State<ControlScreen>
     unawaited(
       _persistCatalogInteractionEvent(
         eventType: 'STORE_PURCHASE_SIMULATED',
-        gameId: entry.gameId,
+        gameId: normalizedGameId,
         details: <String, dynamic>{
           'targetVersion': entry.targetContentVersion,
           'packageUri': entry.packageUri,
+          'autoInstallOwnedGames':
+              _therapistSessionSettings.autoInstallOwnedGames,
         },
       ),
     );
 
+    final shouldAutoInstallPurchasedGame =
+        _therapistSessionSettings.autoInstallOwnedGames &&
+            _contentDeliveryEnabled &&
+            requiresExplicitInstall;
+
+    if (shouldAutoInstallPurchasedGame) {
+      unawaited(
+        _persistCatalogInteractionEvent(
+          eventType: 'STORE_PURCHASE_AUTO_INSTALL_REQUESTED',
+          gameId: normalizedGameId,
+          details: <String, dynamic>{
+            'targetVersion': entry.targetContentVersion,
+            'packageUri': entry.packageUri,
+          },
+        ),
+      );
+      unawaited(
+          _requestInstallOrUpdate(_contentStateForGame(normalizedGameId)));
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Simulated purchase completed for ${entry.title}.'),
+        content: Text(
+          shouldAutoInstallPurchasedGame
+              ? 'Simulated purchase completed for ${entry.title}. Switched to Owned and started install.'
+              : 'Simulated purchase completed for ${entry.title}. Switched to Owned tab.',
+        ),
         duration: const Duration(seconds: 2),
       ),
     );
