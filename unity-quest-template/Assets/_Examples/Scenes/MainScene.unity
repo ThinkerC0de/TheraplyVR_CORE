@@ -727,8 +727,9 @@ MonoBehaviour:
   _defaultGameId: 
   _subscribeToStandardCommands: 1
   _syncStatusPollIntervalSeconds: 1
-  _enableContentDeliverySimulation: 1
-  _publishContentCatalogOnClientConnect: 1
+  _defaultMobileDisconnectBehavior: pause
+  _enableContentDeliverySimulation: 0
+  _publishContentCatalogOnClientConnect: 0
   _simulatedManifestSyncDurationSeconds: 0.35
   _simulatedDownloadDurationSeconds: 1.2
   _simulatedVerifyDurationSeconds: 0.45
@@ -742,21 +743,15 @@ MonoBehaviour:
   _contentDeliveryStateFolder: session_resilience
   _contentDeliveryStateFileName: content_delivery_state.json
   _simulatedContentCatalog:
-  - gameId: smoke_test_game
-    owned: 1
-    installedVersion: 1.0.0
-    targetVersion: 1.0.0
-    updateOptional: 0
   - gameId: demo_cube_clicker
-    owned: 1
-    installedVersion: 1.1.0
+    owned: 0
+    installedVersion: 
     targetVersion: 1.2.0
     updateOptional: 0
-  - gameId: pulse_target_tap
-    owned: 1
-    installedVersion: 
-    targetVersion: 1.0.0
-    updateOptional: 0
+  _enableBoardSafePackageProbe: 0
+  _packageProbeTimeoutSeconds: 3
+  _packageProbePreferHeadRequest: 1
+  _packageProbeFallbackToGet: 1
   _enableSessionWatchdog: 1
   _watchdogHeartbeatIntervalSeconds: 2
   _watchdogHungThresholdSeconds: 8

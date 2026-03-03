@@ -157,6 +157,8 @@ namespace TheraplyCore.Games.Runtime
             public const string VerifyFailed = "INSTALL_VERIFY_FAILED";
             public const string StorageWriteFailed = "INSTALL_STORAGE_WRITE_FAILED";
             public const string UnexpectedException = "INSTALL_EXCEPTION";
+            public const string RecoveredStaleProgress = "INSTALL_RECOVERED_STALE_PROGRESS";
+            public const string RecoveredMissingArtifacts = "INSTALL_RECOVERED_MISSING_ARTIFACTS";
             public const string StartBundleLoadFailed = "START_CONTENT_BUNDLE_LOAD_FAILED";
             public const string StartSceneMissing = "START_CONTENT_SCENE_MISSING";
             public const string StartSceneLoadFailed = "START_CONTENT_SCENE_LOAD_FAILED";
@@ -1489,6 +1491,68 @@ namespace TheraplyCore.Games.Runtime
             }
 
             ApplyPersistedSimulatedContentStates();
+            if (ReconcilePersistedSimulatedContentStates())
+            {
+                PersistSimulatedContentStates(InstallReasonCodes.RecoveredMissingArtifacts);
+            }
+        }
+
+        private bool ReconcilePersistedSimulatedContentStates()
+        {
+            if (_simulatedContentStateByGameId.Count == 0)
+            {
+                return false;
+            }
+
+            var hasChanges = false;
+            var nowUtc = DateTime.UtcNow;
+            foreach (var pair in _simulatedContentStateByGameId)
+            {
+                var state = pair.Value;
+                if (state == null)
+                {
+                    continue;
+                }
+
+                if (IsInstallLifecycleInProgressStatus(state.runtimeStatus))
+                {
+                    state.runtimeStatus = ResolveRuntimeStatusForContentState(
+                        state.owned,
+                        state.installedVersion,
+                        state.updateRequired);
+                    state.lastError = InstallReasonCodes.RecoveredStaleProgress;
+                    state.updatedAtUtc = nowUtc;
+                    hasChanges = true;
+                }
+
+                var installedBundlePath = string.IsNullOrWhiteSpace(state.installedBundlePath)
+                    ? string.Empty
+                    : state.installedBundlePath.Trim();
+                var hasInstalledMarkers =
+                    !string.IsNullOrWhiteSpace(state.installedVersion) ||
+                    !string.IsNullOrWhiteSpace(state.installedManifestPath) ||
+                    !string.IsNullOrWhiteSpace(installedBundlePath);
+                if (!hasInstalledMarkers)
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(installedBundlePath) && File.Exists(installedBundlePath))
+                {
+                    continue;
+                }
+
+                state.installedVersion = string.Empty;
+                state.updateRequired = false;
+                state.updateOptional = false;
+                state.runtimeStatus = ContentRuntimeStatusValues.NotInstalled;
+                state.lastError = InstallReasonCodes.RecoveredMissingArtifacts;
+                ClearInstalledContentMetadata(state);
+                state.updatedAtUtc = nowUtc;
+                hasChanges = true;
+            }
+
+            return hasChanges;
         }
 
         private bool TryGetOrCreateSimulatedContentState(
