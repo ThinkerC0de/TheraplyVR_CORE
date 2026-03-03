@@ -303,6 +303,8 @@ namespace TheraplyCore.Games.Runtime
         private string _activeInstalledContentScenePath = string.Empty;
         private string _activeInstalledContentGameId = string.Empty;
         private string _activeInstalledContentBundlePath = string.Empty;
+        private bool _deferredStartPending;
+        private string _deferredStartGameId = string.Empty;
 
         public GameContracts.IGameModule ActiveGame => _activeGame;
         public string ActiveGameId => _activeGameId;
@@ -579,11 +581,96 @@ namespace TheraplyCore.Games.Runtime
                 _activeGame.Initialize(startupConfig, _contextService);
             }
 
-            if (!TryLoadInstalledContentSceneForGame(_activeGameId, out var sceneLoadReason))
+            if (!TryLoadInstalledContentSceneForGame(_activeGameId, out var sceneLoadReason, out var sceneLoadPending))
             {
                 Logger.Warning(
                     $"[GameRuntime] Start failed: could not activate installed content scene for {_activeGameId}: {sceneLoadReason}");
                 return false;
+            }
+
+            if (sceneLoadPending)
+            {
+                BeginDeferredStartAfterSceneLoad(_activeGameId, shouldEmitSessionStart);
+                return true;
+            }
+
+            return CompleteGameStart(shouldEmitSessionStart);
+        }
+
+        private void BeginDeferredStartAfterSceneLoad(string gameId, bool shouldEmitSessionStart)
+        {
+            if (string.IsNullOrWhiteSpace(gameId))
+            {
+                return;
+            }
+
+            if (_deferredStartPending &&
+                string.Equals(_deferredStartGameId, gameId, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _deferredStartPending = true;
+            _deferredStartGameId = gameId;
+            StartCoroutine(DeferredStartAfterSceneLoadCoroutine(gameId, shouldEmitSessionStart));
+        }
+
+        private IEnumerator DeferredStartAfterSceneLoadCoroutine(string gameId, bool shouldEmitSessionStart)
+        {
+            var timeoutSeconds = 5f;
+            while (timeoutSeconds > 0f)
+            {
+                if (!_deferredStartPending ||
+                    !string.Equals(_deferredStartGameId, gameId, StringComparison.OrdinalIgnoreCase))
+                {
+                    yield break;
+                }
+
+                if (_activeGame == null ||
+                    !string.Equals(_activeGameId, gameId, StringComparison.OrdinalIgnoreCase))
+                {
+                    break;
+                }
+
+                var scene = string.IsNullOrWhiteSpace(_activeInstalledContentScenePath)
+                    ? new Scene()
+                    : SceneManager.GetSceneByPath(_activeInstalledContentScenePath);
+                if (scene.IsValid() && scene.isLoaded)
+                {
+                    break;
+                }
+
+                timeoutSeconds -= Mathf.Max(0.01f, Time.unscaledDeltaTime);
+                yield return null;
+            }
+
+            _deferredStartPending = false;
+            _deferredStartGameId = string.Empty;
+
+            if (_activeGame == null ||
+                !string.Equals(_activeGameId, gameId, StringComparison.OrdinalIgnoreCase))
+            {
+                yield break;
+            }
+
+            if (!CompleteGameStart(shouldEmitSessionStart))
+            {
+                Logger.Warning(
+                    $"[GameRuntime] Deferred START_GAME failed after content scene wait for game={gameId}.");
+            }
+        }
+
+        private bool CompleteGameStart(bool shouldEmitSessionStart)
+        {
+            if (_activeGame == null)
+            {
+                return false;
+            }
+
+            if (_activeGame.State == GameContracts.GameState.Playing ||
+                _activeGame.State == GameContracts.GameState.Paused)
+            {
+                return true;
             }
 
             _activeGame.StartGame();
@@ -2404,8 +2491,12 @@ namespace TheraplyCore.Games.Runtime
             state.installedBundleSha256 = string.Empty;
         }
 
-        private bool TryLoadInstalledContentSceneForGame(string gameId, out string reasonCode)
+        private bool TryLoadInstalledContentSceneForGame(
+            string gameId,
+            out string reasonCode,
+            out bool sceneLoadPending)
         {
+            sceneLoadPending = false;
             reasonCode = "START_CONTENT_SCENE_SKIPPED";
             if (!_loadInstalledContentSceneOnStart)
             {
@@ -2495,6 +2586,7 @@ namespace TheraplyCore.Games.Runtime
             _activeInstalledContentScenePath = resolvedScenePath;
             _activeInstalledContentGameId = normalizedGameId;
             _activeInstalledContentBundlePath = installedBundlePath;
+            sceneLoadPending = !loadOperation.isDone;
             loadOperation.completed += _ =>
             {
                 TrackCriticalRuntimeEvent("content_scene_load_completed", new Dictionary<string, object>
@@ -2513,7 +2605,9 @@ namespace TheraplyCore.Games.Runtime
                 { "bundlePath", installedBundlePath },
                 { "reasonCode", "START_CONTENT_SCENE_LOAD_REQUESTED" },
             });
-            reasonCode = "START_CONTENT_SCENE_LOAD_REQUESTED";
+            reasonCode = sceneLoadPending
+                ? "START_CONTENT_SCENE_LOAD_REQUESTED"
+                : "START_CONTENT_SCENE_LOAD_COMPLETED";
             return true;
         }
 
@@ -5141,6 +5235,8 @@ namespace TheraplyCore.Games.Runtime
                 $"[GameRuntime] Active game cleared: {_activeGameId ?? string.Empty} (reason={reasonCode ?? "unspecified"})");
             _activeGame = null;
             _activeGameId = string.Empty;
+            _deferredStartPending = false;
+            _deferredStartGameId = string.Empty;
         }
 
         private static GameContracts.SessionLifecycleState MapStopReasonToSessionState(GameContracts.GameStopReason reason)
