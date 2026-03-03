@@ -257,6 +257,11 @@ class _ControlScreenState extends State<ControlScreen>
     'RUNTIME_SIGNAL_STALE',
     'TCP_CLIENT_DISCONNECTED',
   };
+  static const Set<String> _headsetUnavailableReasonCodes = <String>{
+    'APP_BACKGROUND',
+    'APP_FOCUS_LOST',
+    'APP_QUIT',
+  };
   static final Map<String, DateTime> _recentlyEndedSessionIds =
       <String, DateTime>{};
   static const List<String> _demoLevelModes = <String>[
@@ -662,6 +667,7 @@ class _ControlScreenState extends State<ControlScreen>
         !_isConnected ||
         _allowSystemPop ||
         _autoReconnectLoopActive ||
+        _isPrimaryActionInFlight ||
         _sessionAttachInFlight ||
         _livenessRecoveryInFlight) {
       return;
@@ -1902,6 +1908,20 @@ class _ControlScreenState extends State<ControlScreen>
       return false;
     }
     return _transportFailureReasonCodes.contains(normalized);
+  }
+
+  bool _shouldApplyLocalEndSessionFallback(String failureReasonCode) {
+    if (!_isConnected || _isHeadsetPresenceBlocking) {
+      return true;
+    }
+
+    final normalized = failureReasonCode.trim().toUpperCase();
+    if (normalized.isEmpty) {
+      return false;
+    }
+
+    return _transportFailureReasonCodes.contains(normalized) ||
+        _headsetUnavailableReasonCodes.contains(normalized);
   }
 
   void _handleMediaPreviewStateChanged(MediaPreviewState state) {
@@ -3436,9 +3456,7 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   bool get _isControlLinkReadyForCommands {
-    return _isConnected &&
-        _sessionAttachReady &&
-        !_isHeadsetPresenceBlocking;
+    return _isConnected && _sessionAttachReady && !_isHeadsetPresenceBlocking;
   }
 
   bool get _isPackageProbeEnabled {
@@ -3591,9 +3609,7 @@ class _ControlScreenState extends State<ControlScreen>
         owned: isOwnedByEntitlement,
         installedVersion: localBundledAlwaysReady
             ? entry.targetContentVersion
-            : (requiresExplicitInstall
-                ? null
-                : entry.targetContentVersion),
+            : (requiresExplicitInstall ? null : entry.targetContentVersion),
         targetVersion: entry.targetContentVersion,
         updateRequired: false,
         updateOptional: false,
@@ -5876,6 +5892,21 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   Future<void> _returnToGameCatalog() async {
+    final shouldForceLocalCatalogReturn =
+        !_isConnected || _isHeadsetPresenceBlocking;
+    if (shouldForceLocalCatalogReturn) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _workflowStep = _WorkflowStep.gameCatalog;
+        _isVideoPreviewExpanded = false;
+        _optimisticRuntimeActive = false;
+        _optimisticRuntimePaused = false;
+      });
+      return;
+    }
+
     var shouldStopRunningGame = false;
     if (_isGameRuntimeActive) {
       final decision = await showDialog<bool>(
@@ -5962,6 +5993,18 @@ class _ControlScreenState extends State<ControlScreen>
       return false;
     }
 
+    if (allowLocalFallbackOnTransportFailure && _isHeadsetPresenceBlocking) {
+      final presenceReasonCode =
+          _lastDevicePresenceSignal?.reasonCode.trim().toUpperCase() ?? '';
+      await _applyLocalEndSessionFallback(
+        sessionIdToEnd: sessionIdToEnd,
+        reasonCode: reasonCode,
+        failureReasonCode:
+            presenceReasonCode.isEmpty ? 'APP_FOCUS_LOST' : presenceReasonCode,
+      );
+      return true;
+    }
+
     _logAttachDecision(
       decision: 'END_SESSION_REQUEST',
       reasonCode: reasonCode,
@@ -5982,7 +6025,7 @@ class _ControlScreenState extends State<ControlScreen>
           _lastCriticalFailureReasonByCommand[CriticalCommandIds.endSession] ??
               'UNSPECIFIED';
       if (allowLocalFallbackOnTransportFailure &&
-          _isTransportFailureReasonCode(failureReasonCode)) {
+          _shouldApplyLocalEndSessionFallback(failureReasonCode)) {
         await _applyLocalEndSessionFallback(
           sessionIdToEnd: sessionIdToEnd,
           reasonCode: reasonCode,

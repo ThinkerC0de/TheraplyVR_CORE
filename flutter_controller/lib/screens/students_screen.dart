@@ -1479,10 +1479,13 @@ class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
     }
 
     if (!saved) {
-      setState(() {
-        _isSaving = false;
-        _validationError = 'Could not save settings right now. Try again.';
-      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not save settings right now.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      await _closeSafely();
       return;
     }
 
