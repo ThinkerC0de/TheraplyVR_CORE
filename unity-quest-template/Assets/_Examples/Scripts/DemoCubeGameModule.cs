@@ -41,6 +41,9 @@ namespace TheraplyExamples
         [SerializeField] private bool _showOverlayHud = true;
         [SerializeField] private bool _anchorPlayfieldToSessionStart = true;
 
+        [Header("Visuals")]
+        [SerializeField] private Shader _cubeFallbackShader;
+
         [Header("Save/Resume")]
         [SerializeField] private bool _enableSaveResume = true;
         [SerializeField] private string _saveFolder = "session_resilience";
@@ -82,6 +85,8 @@ namespace TheraplyExamples
         private Vector3 _playfieldUpWorld;
         private float _playfieldHalfWidthWorld;
         private float _playfieldHalfHeightWorld;
+        private Material _runtimeCubeMaterial;
+        private bool _gameplayFloorMaterialEnsured;
 
         public override string GameId => DemoCubeGameConfig.DefaultGameId;
 
@@ -132,6 +137,7 @@ namespace TheraplyExamples
             _restoredDurationOffsetSec = 0f;
             _pendingRestoreState = null;
             _playfieldAnchorReady = false;
+            _gameplayFloorMaterialEnsured = false;
 
             if (_enableSaveResume && !_activeConfig.ResumeFromSaved)
             {
@@ -272,6 +278,11 @@ namespace TheraplyExamples
                 return;
             }
 
+            if (!_gameplayFloorMaterialEnsured)
+            {
+                _gameplayFloorMaterialEnsured = EnsureGameplayFloorMaterial();
+            }
+
             if (_anchorPlayfieldToSessionStart && !_playfieldAnchorReady)
             {
                 CapturePlayfieldAnchor();
@@ -341,6 +352,11 @@ namespace TheraplyExamples
 
             ClearActiveCubes();
             ClearPointerTargetIndicator();
+            if (_runtimeCubeMaterial != null)
+            {
+                Destroy(_runtimeCubeMaterial);
+                _runtimeCubeMaterial = null;
+            }
         }
 
         private void OnGUI()
@@ -479,7 +495,17 @@ namespace TheraplyExamples
             var renderer = cubeObject.GetComponent<Renderer>();
             if (renderer != null)
             {
-                renderer.material.color = ToUnityColor(cubeState.color);
+                var runtimeMaterial = ResolveRuntimeCubeMaterial();
+                if (runtimeMaterial != null)
+                {
+                    renderer.sharedMaterial = runtimeMaterial;
+                }
+
+                var cubeMaterial = renderer.material;
+                if (cubeMaterial != null && cubeMaterial.HasProperty("_Color"))
+                {
+                    cubeMaterial.color = ToUnityColor(cubeState.color);
+                }
             }
 
             var clickable = cubeObject.AddComponent<DemoCubeClickTarget>();
@@ -886,16 +912,150 @@ namespace TheraplyExamples
 
         private void EnsureCamera()
         {
-            if (_targetCamera != null)
+            if (_targetCamera != null && _targetCamera.isActiveAndEnabled)
             {
                 return;
             }
 
-            _targetCamera = Camera.main;
-            if (_targetCamera == null)
+            _targetCamera = ResolvePreferredCamera();
+        }
+
+        private Camera ResolvePreferredCamera()
+        {
+            var centerEyeAnchor = GameObject.Find("OVRCameraRig/TrackingSpace/CenterEyeAnchor");
+            if (centerEyeAnchor != null)
             {
-                _targetCamera = FindFirstObjectByType<Camera>();
+                var centerEyeCamera = centerEyeAnchor.GetComponent<Camera>();
+                if (centerEyeCamera != null && centerEyeCamera.isActiveAndEnabled)
+                {
+                    return centerEyeCamera;
+                }
+
+                centerEyeCamera = centerEyeAnchor.GetComponentInChildren<Camera>(true);
+                if (centerEyeCamera != null && centerEyeCamera.isActiveAndEnabled)
+                {
+                    return centerEyeCamera;
+                }
             }
+
+            var taggedMainCamera = Camera.main;
+            if (taggedMainCamera != null && taggedMainCamera.isActiveAndEnabled)
+            {
+                return taggedMainCamera;
+            }
+
+            var allCameras = FindObjectsByType<Camera>(FindObjectsSortMode.None);
+            if (allCameras != null)
+            {
+                for (var i = 0; i < allCameras.Length; i++)
+                {
+                    var camera = allCameras[i];
+                    if (camera == null || !camera.isActiveAndEnabled)
+                    {
+                        continue;
+                    }
+
+                    if (camera.name.IndexOf("CenterEye", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        return camera;
+                    }
+                }
+            }
+
+            return FindFirstObjectByType<Camera>();
+        }
+
+        private bool EnsureGameplayFloorMaterial()
+        {
+            var floorObject = GameObject.Find("GameplayFloor");
+            if (floorObject == null)
+            {
+                return false;
+            }
+
+            var floorRenderer = floorObject.GetComponent<Renderer>();
+            if (floorRenderer == null)
+            {
+                return false;
+            }
+
+            var sharedMaterial = floorRenderer.sharedMaterial;
+            var shaderBroken = sharedMaterial == null ||
+                               sharedMaterial.shader == null ||
+                               sharedMaterial.shader.name == "Hidden/InternalErrorShader" ||
+                               !sharedMaterial.shader.isSupported;
+            if (!shaderBroken)
+            {
+                return true;
+            }
+
+            var fallbackMaterial = ResolveRuntimeCubeMaterial();
+            if (fallbackMaterial == null)
+            {
+                return false;
+            }
+
+            floorRenderer.sharedMaterial = fallbackMaterial;
+            var floorMaterial = floorRenderer.material;
+            if (floorMaterial != null && floorMaterial.HasProperty("_Color"))
+            {
+                floorMaterial.color = new Color(0.18f, 0.18f, 0.2f, 1f);
+            }
+
+            return true;
+        }
+
+        private Material ResolveRuntimeCubeMaterial()
+        {
+            if (_runtimeCubeMaterial != null && _runtimeCubeMaterial.shader != null)
+            {
+                return _runtimeCubeMaterial;
+            }
+
+            var shader = ResolveRuntimeCubeShader();
+            if (shader == null)
+            {
+                return null;
+            }
+
+            _runtimeCubeMaterial = new Material(shader)
+            {
+                name = "DemoCubeRuntimeMaterial",
+            };
+            if (_runtimeCubeMaterial.HasProperty("_Color"))
+            {
+                _runtimeCubeMaterial.color = Color.white;
+            }
+
+            return _runtimeCubeMaterial;
+        }
+
+        private Shader ResolveRuntimeCubeShader()
+        {
+            if (_cubeFallbackShader != null && _cubeFallbackShader.isSupported)
+            {
+                return _cubeFallbackShader;
+            }
+
+            var shaderNames = new[]
+            {
+                "Sprites/Default",
+                "Unlit/Color",
+                "Mobile/Diffuse",
+                "Legacy Shaders/Diffuse",
+                "Standard",
+            };
+
+            for (var i = 0; i < shaderNames.Length; i++)
+            {
+                var shader = Shader.Find(shaderNames[i]);
+                if (shader != null && shader.isSupported)
+                {
+                    return shader;
+                }
+            }
+
+            return null;
         }
 
         private bool TryRestoreSavedStateIfRequested()
