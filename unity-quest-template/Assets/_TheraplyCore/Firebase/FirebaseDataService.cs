@@ -42,7 +42,7 @@ namespace TheraplyCore.Firebase
         [SerializeField] private bool _logFirebaseBackendPayloads = false;
         [SerializeField] private bool _logFirebaseBackendDiagnostics = true;
         [SerializeField] private bool _rewriteLoopbackBackendHostOutsideEditor = true;
-        [SerializeField] private bool _useConnectedControllerIpForLoopbackRewrite = false;
+        [SerializeField] private bool _useConnectedControllerIpForLoopbackRewrite = true;
         [SerializeField] private string _nonEditorLoopbackHostOverride = string.Empty;
         [SerializeField] private TCPServerService _tcpServerService;
 
