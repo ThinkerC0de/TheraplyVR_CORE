@@ -2274,7 +2274,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
                                 TextButton(
                                   onPressed: () =>
                                       _openDirectoryUserInOperations(user),
-                                  child: const Text('Open in Operations'),
+                                  child: const Text('Edit entitlement'),
                                 ),
                                 TextButton(
                                   onPressed: _savingAccountDirectory
@@ -3883,6 +3883,7 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
       length: 5,
       child: Scaffold(
         appBar: AppBar(
+          surfaceTintColor: Colors.transparent,
           title: const Text('Theraply Entitlement Admin'),
           actions: [
             if (FirebaseService.currentUser != null)
@@ -3913,14 +3914,24 @@ class _OpsDashboardScreenState extends State<OpsDashboardScreen> {
             ],
           ),
         ),
-        body: TabBarView(
-          children: [
-            _buildOperationsTab(),
-            _buildAccountsTab(),
-            _buildChildrenTab(),
-            _buildSessionsTab(),
-            _buildGamesTab(),
-          ],
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            return Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1560),
+                child: TabBarView(
+                  children: [
+                    _buildOperationsTab(),
+                    _buildAccountsTab(),
+                    _buildChildrenTab(),
+                    _buildSessionsTab(),
+                    _buildGamesTab(),
+                  ],
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
