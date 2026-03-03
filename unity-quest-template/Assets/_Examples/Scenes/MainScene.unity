@@ -789,7 +789,10 @@ MonoBehaviour:
   _autoProvisionFallbackModuleTypeName: 
   _autoProvisionHostObjectName: GameModuleRuntime
   _enableOnDemandProvisioning: 1
-  _runtimeProvisionEntries: []
+  _runtimeProvisionEntries:
+  - gameId: demo_cube_clicker
+    moduleTypeName: TheraplyExamples.DemoCubeGameModule
+    hostObjectName: DemoCubeGameRuntime
 --- !u!114 &1784697670
 MonoBehaviour:
   m_ObjectHideFlags: 0

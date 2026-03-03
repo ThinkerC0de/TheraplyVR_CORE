@@ -209,9 +209,16 @@ namespace TheraplyExamples
 
     public static class ExampleSceneRouterBootstrap
     {
+        private const bool AutoBootstrapEnabled = false;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void EnsureRouter()
         {
+            if (!AutoBootstrapEnabled)
+            {
+                return;
+            }
+
             var existing = UnityEngine.Object.FindFirstObjectByType<ExampleAdditiveSceneRouter>();
             if (existing != null)
             {
