@@ -1076,6 +1076,10 @@ class _ControlScreenState extends State<ControlScreen>
         reasonCode: reasonCode,
         sessionIdOverride: targetSessionId,
       );
+
+      if (_contentDeliveryEnabled) {
+        unawaited(_syncContentCatalog(silent: true));
+      }
     } catch (e) {
       if (!mounted) {
         return;
@@ -3758,19 +3762,6 @@ class _ControlScreenState extends State<ControlScreen>
         targetVersion: targetVersion,
         installedVersion: targetVersion,
         runtimeStatus: ContentRuntimeStatus.ready,
-        updateRequired: false,
-        updateOptional: false,
-        lastError: null,
-        updatedAtUtc: DateTime.now().toUtc(),
-      );
-    }
-
-    if (_isDemoCatalogGameId(state.gameId) &&
-        !_simulatedOwnedGameIds.contains(state.gameId.trim())) {
-      nextState = nextState.copyWith(
-        owned: false,
-        installedVersion: null,
-        runtimeStatus: ContentRuntimeStatus.notInstalled,
         updateRequired: false,
         updateOptional: false,
         lastError: null,

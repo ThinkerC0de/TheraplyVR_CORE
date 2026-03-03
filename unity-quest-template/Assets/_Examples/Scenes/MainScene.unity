@@ -697,8 +697,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.GameSessionSnapshotService
   _sessionContext: {fileID: 1784697675}
   _runtimeService: {fileID: 1784697668}
-  _autoRestoreOnStart: 1
-  _recoverToInterruptedOnStart: 1
+  _autoRestoreOnStart: 0
+  _recoverToInterruptedOnStart: 0
   _recoveryReasonCode: AUTO_RECOVERY_APP_RESTART
   _snapshotOnSessionChanged: 1
   _snapshotOnStateBoundaries: 1
@@ -729,7 +729,7 @@ MonoBehaviour:
   _syncStatusPollIntervalSeconds: 1
   _defaultMobileDisconnectBehavior: pause
   _enableContentDeliverySimulation: 0
-  _publishContentCatalogOnClientConnect: 0
+  _publishContentCatalogOnClientConnect: 1
   _simulatedManifestSyncDurationSeconds: 0.35
   _simulatedDownloadDurationSeconds: 1.2
   _simulatedVerifyDurationSeconds: 0.45
