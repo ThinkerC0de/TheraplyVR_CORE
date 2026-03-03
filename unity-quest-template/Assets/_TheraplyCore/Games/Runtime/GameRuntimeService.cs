@@ -193,7 +193,7 @@ namespace TheraplyCore.Games.Runtime
             MobileDisconnectBehaviorValues.Pause;
 
         [Header("Content Delivery (Dev Simulator)")]
-        [SerializeField] private bool _enableContentDeliverySimulation = false;
+        [SerializeField] private bool _enableContentDeliverySimulation = true;
         [SerializeField] private bool _publishContentCatalogOnClientConnect = false;
         [SerializeField] private float _simulatedManifestSyncDurationSeconds = 0.35f;
         [SerializeField] private float _simulatedDownloadDurationSeconds = 1.2f;
@@ -1046,22 +1046,12 @@ namespace TheraplyCore.Games.Runtime
 
         private void HandleSyncCatalogCommand(SyncCatalogCommand command)
         {
-            if (!_enableContentDeliverySimulation)
-            {
-                return;
-            }
-
             EnsureSimulatedContentStatesInitialized();
             StartSimulatedCatalogSyncRoutine(command == null ? string.Empty : command.correlationId);
         }
 
         private void HandleInstallGameCommand(InstallGameCommand command)
         {
-            if (!_enableContentDeliverySimulation)
-            {
-                return;
-            }
-
             EnsureSimulatedContentStatesInitialized();
             var correlationId = command == null ? string.Empty : command.correlationId;
 
@@ -1141,11 +1131,6 @@ namespace TheraplyCore.Games.Runtime
 
         private void HandleUninstallGameCommand(UninstallGameCommand command)
         {
-            if (!_enableContentDeliverySimulation)
-            {
-                return;
-            }
-
             EnsureSimulatedContentStatesInitialized();
 
             var requestedGameId = command == null ? string.Empty : command.gameId;
@@ -1183,7 +1168,7 @@ namespace TheraplyCore.Games.Runtime
 
         private void EnsureContentDeliveryStatePathInitialized()
         {
-            if (!_enableContentDeliverySimulation || !_persistContentDeliverySimulationState)
+            if (!_persistContentDeliverySimulationState)
             {
                 return;
             }
@@ -1215,7 +1200,7 @@ namespace TheraplyCore.Games.Runtime
 
         private void ApplyPersistedSimulatedContentStates()
         {
-            if (!_enableContentDeliverySimulation || !_persistContentDeliverySimulationState)
+            if (!_persistContentDeliverySimulationState)
             {
                 return;
             }
@@ -1337,7 +1322,7 @@ namespace TheraplyCore.Games.Runtime
 
         private void PersistSimulatedContentStates(string reasonCode)
         {
-            if (!_enableContentDeliverySimulation || !_persistContentDeliverySimulationState)
+            if (!_persistContentDeliverySimulationState)
             {
                 return;
             }
@@ -1419,7 +1404,7 @@ namespace TheraplyCore.Games.Runtime
 
         private void EnsureSimulatedContentStatesInitialized()
         {
-            if (!_enableContentDeliverySimulation || _simulatedContentStateByGameId.Count > 0)
+            if (_simulatedContentStateByGameId.Count > 0)
             {
                 return;
             }
@@ -1596,11 +1581,6 @@ namespace TheraplyCore.Games.Runtime
 
         private void StartSimulatedCatalogSyncRoutine(string correlationId)
         {
-            if (!_enableContentDeliverySimulation)
-            {
-                return;
-            }
-
             EnsureSimulatedContentStatesInitialized();
             StopSimulatedCatalogSyncRoutine();
             _simulatedCatalogSyncRoutine = StartCoroutine(SimulateCatalogSyncRoutine(correlationId));
@@ -3135,11 +3115,6 @@ namespace TheraplyCore.Games.Runtime
 
         private void PublishSimulatedContentCatalogSnapshot(string correlationId, string reasonCode)
         {
-            if (!_enableContentDeliverySimulation)
-            {
-                return;
-            }
-
             EnsureSimulatedContentStatesInitialized();
             foreach (var pair in _simulatedContentStateByGameId)
             {

@@ -69,10 +69,7 @@ class ControlScreen extends StatefulWidget {
 class _ControlScreenState extends State<ControlScreen>
     with WidgetsBindingObserver {
   static final bool _contentDeliveryEnabled = true;
-  static const bool _boardSafePackageProbeFeatureEnabled = bool.fromEnvironment(
-    'THERAPLY_BOARD_SAFE_PACKAGE_PROBE_ENABLED',
-    defaultValue: true,
-  );
+  static const bool _boardSafePackageProbeFeatureEnabled = false;
   static final bool _serverAuthoritativeHandoffGate = true;
   static const bool _showCatalogRescueTerminateButton = false;
   static final MobileControlSchemaParseResult
@@ -3727,8 +3724,7 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   bool get _isPackageProbeEnabled {
-    return _boardSafePackageProbeFeatureEnabled &&
-        !_packageProbeKillSwitchEnabled;
+    return false;
   }
 
   String get _controlLinkBlockedHint {
@@ -3787,17 +3783,19 @@ class _ControlScreenState extends State<ControlScreen>
       knownGameIds.add(entry.gameId);
       final isOwnedByEntitlement =
           _isGameOwnedByEntitlement(entry, atUtc: nowUtc);
+      final requiresExplicitInstall =
+          _isDemoCatalogGameId(entry.gameId) || entry.requiresExplicitLicense;
       final existing = _contentStatesByGameId[entry.gameId];
       final localBundledAlwaysReady =
           _isLocalBundledAlwaysReadyGame(entry.gameId);
 
       final defaultInstalledVersion = localBundledAlwaysReady
           ? entry.targetContentVersion
-          : (entry.requiresExplicitLicense ? null : entry.targetContentVersion);
+          : (requiresExplicitInstall ? null : entry.targetContentVersion);
       final defaultRuntimeStatus = isOwnedByEntitlement
           ? (localBundledAlwaysReady
               ? ContentRuntimeStatus.ready
-              : (entry.requiresExplicitLicense
+              : (requiresExplicitInstall
                   ? ContentRuntimeStatus.notInstalled
                   : ContentRuntimeStatus.ready))
           : ContentRuntimeStatus.notInstalled;
@@ -3867,13 +3865,15 @@ class _ControlScreenState extends State<ControlScreen>
         entry,
         atUtc: DateTime.now().toUtc(),
       );
+      final requiresExplicitInstall =
+          _isDemoCatalogGameId(entry.gameId) || entry.requiresExplicitLicense;
       final localBundledAlwaysReady = _isLocalBundledAlwaysReadyGame(gameId);
       return PurchasedContentState(
         gameId: gameId,
         owned: isOwnedByEntitlement,
         installedVersion: localBundledAlwaysReady
             ? entry.targetContentVersion
-            : (entry.requiresExplicitLicense
+            : (requiresExplicitInstall
                 ? null
                 : entry.targetContentVersion),
         targetVersion: entry.targetContentVersion,
@@ -3882,7 +3882,7 @@ class _ControlScreenState extends State<ControlScreen>
         runtimeStatus: isOwnedByEntitlement
             ? (localBundledAlwaysReady
                 ? ContentRuntimeStatus.ready
-                : (entry.requiresExplicitLicense
+                : (requiresExplicitInstall
                     ? ContentRuntimeStatus.notInstalled
                     : ContentRuntimeStatus.ready))
             : ContentRuntimeStatus.notInstalled,
@@ -3936,6 +3936,10 @@ class _ControlScreenState extends State<ControlScreen>
   bool _requiresQuestInstallState(String gameId) {
     if (!_contentDeliveryEnabled) {
       return false;
+    }
+
+    if (_isDemoCatalogGameId(gameId)) {
+      return true;
     }
 
     if (_isLocalBundledAlwaysReadyGame(gameId)) {
@@ -4190,8 +4194,7 @@ class _ControlScreenState extends State<ControlScreen>
         break;
       }
     }
-    final shouldRequestPackageProbe =
-        _isPackageProbeEnabled && packageUri.trim().isNotEmpty;
+    const shouldRequestPackageProbe = false;
 
     setState(() {
       _contentActionsInFlight.add(state.gameId);
@@ -8689,6 +8692,8 @@ class _ControlScreenState extends State<ControlScreen>
 
     final nowUtc = DateTime.now().toUtc();
     final currentState = _contentStateForGame(entry.gameId);
+    final requiresExplicitInstall =
+        _isDemoCatalogGameId(entry.gameId) || entry.requiresExplicitLicense;
     setState(() {
       _simulatedOwnedGameIds.add(entry.gameId);
       _catalogFilterTab = _CatalogFilterTab.installed;
@@ -8697,8 +8702,8 @@ class _ControlScreenState extends State<ControlScreen>
         owned: true,
         targetVersion: entry.targetContentVersion,
         installedVersion:
-            entry.requiresExplicitLicense ? null : entry.targetContentVersion,
-        runtimeStatus: entry.requiresExplicitLicense
+            requiresExplicitInstall ? null : entry.targetContentVersion,
+        runtimeStatus: requiresExplicitInstall
             ? ContentRuntimeStatus.notInstalled
             : ContentRuntimeStatus.ready,
         updateRequired: false,
