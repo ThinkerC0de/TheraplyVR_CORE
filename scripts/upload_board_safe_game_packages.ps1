@@ -123,24 +123,40 @@ if ($packages.Count -eq 0) {
 
 $filesToUpload = New-Object 'System.Collections.Generic.List[string]'
 foreach ($pkg in $packages) {
-    $fileName = [string]$pkg.fileName
-    if ([string]::IsNullOrWhiteSpace($fileName)) {
-        throw "Index entry is missing fileName."
+    $artifactFileNames = New-Object 'System.Collections.Generic.List[string]'
+    if ($null -ne $pkg.artifactFiles) {
+        foreach ($artifactFile in @($pkg.artifactFiles)) {
+            $candidate = [string]$artifactFile
+            if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+                $artifactFileNames.Add($candidate.Trim()) | Out-Null
+            }
+        }
     }
 
-    $filePath = Join-Path (Split-Path -Parent $packageIndexFullPath) $fileName.Trim()
-    if (-not (Test-Path -Path $filePath -PathType Leaf)) {
-        throw "Package file from index not found: $filePath"
+    if ($artifactFileNames.Count -eq 0) {
+        $fallbackFileName = [string]$pkg.fileName
+        if ([string]::IsNullOrWhiteSpace($fallbackFileName)) {
+            throw "Index entry is missing fileName/artifactFiles."
+        }
+
+        $artifactFileNames.Add($fallbackFileName.Trim()) | Out-Null
     }
 
-    $filesToUpload.Add($filePath) | Out-Null
+    foreach ($artifactName in $artifactFileNames | Select-Object -Unique) {
+        $filePath = Join-Path (Split-Path -Parent $packageIndexFullPath) $artifactName
+        if (-not (Test-Path -Path $filePath -PathType Leaf)) {
+            throw "Package artifact from index not found: $filePath"
+        }
+
+        $filesToUpload.Add($filePath) | Out-Null
+    }
 }
 
 if ($IncludeIndexFile.IsPresent) {
     $filesToUpload.Add($packageIndexFullPath) | Out-Null
 }
 
-foreach ($filePath in $filesToUpload) {
+foreach ($filePath in $filesToUpload | Select-Object -Unique) {
     Upload-FileViaCurl `
         -CurlPath $curlPath `
         -ProtocolValue $Protocol `
@@ -154,22 +170,29 @@ foreach ($filePath in $filesToUpload) {
 if (-not $SkipHttpProbe) {
     $timeoutSec = [Math]::Max(2, [Math]::Min(30, $HttpProbeTimeoutSec))
     foreach ($pkg in $packages) {
-        $publicUrl = [string]$pkg.packageUri
-        if ([string]::IsNullOrWhiteSpace($publicUrl)) {
-            continue
+        $publicUrls = New-Object 'System.Collections.Generic.List[string]'
+        $packageUrl = [string]$pkg.packageUri
+        $bundleUrl = [string]$pkg.bundleUri
+        if (-not [string]::IsNullOrWhiteSpace($packageUrl)) {
+            $publicUrls.Add($packageUrl.Trim()) | Out-Null
+        }
+        if (-not [string]::IsNullOrWhiteSpace($bundleUrl)) {
+            $publicUrls.Add($bundleUrl.Trim()) | Out-Null
         }
 
-        try {
-            $headResponse = Invoke-WebRequest -Uri $publicUrl -Method Head -UseBasicParsing -TimeoutSec $timeoutSec
-            Write-Host ("[PROBE] HEAD {0} -> {1}" -f $publicUrl, $headResponse.StatusCode)
-        }
-        catch {
+        foreach ($publicUrl in $publicUrls | Select-Object -Unique) {
             try {
-                $getResponse = Invoke-WebRequest -Uri $publicUrl -Method Get -UseBasicParsing -TimeoutSec $timeoutSec
-                Write-Host ("[PROBE] GET  {0} -> {1}" -f $publicUrl, $getResponse.StatusCode)
+                $headResponse = Invoke-WebRequest -Uri $publicUrl -Method Head -UseBasicParsing -TimeoutSec $timeoutSec
+                Write-Host ("[PROBE] HEAD {0} -> {1}" -f $publicUrl, $headResponse.StatusCode)
             }
             catch {
-                throw "HTTP probe failed for '$publicUrl': $($_.Exception.Message)"
+                try {
+                    $getResponse = Invoke-WebRequest -Uri $publicUrl -Method Get -UseBasicParsing -TimeoutSec $timeoutSec
+                    Write-Host ("[PROBE] GET  {0} -> {1}" -f $publicUrl, $getResponse.StatusCode)
+                }
+                catch {
+                    throw "HTTP probe failed for '$publicUrl': $($_.Exception.Message)"
+                }
             }
         }
     }

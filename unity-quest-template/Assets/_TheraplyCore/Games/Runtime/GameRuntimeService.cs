@@ -3,10 +3,12 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Networking;
+using UnityEngine.SceneManagement;
 using TheraplyCore.Firebase;
 using GameContracts = TheraplyCore.Games.Contracts;
 using TheraplyCore.Games.Contracts;
@@ -41,6 +43,13 @@ namespace TheraplyCore.Games.Runtime
             public bool updateOptional;
             public string runtimeStatus;
             public string lastError;
+            public string installedPackageUri;
+            public string installedManifestPath;
+            public string installedBundlePath;
+            public string installedBundleUri;
+            public string installedSceneAssetPath;
+            public string installedSceneName;
+            public string installedBundleSha256;
             public DateTime updatedAtUtc;
         }
 
@@ -55,6 +64,13 @@ namespace TheraplyCore.Games.Runtime
             public bool updateOptional;
             public string runtimeStatus;
             public string lastError;
+            public string installedPackageUri;
+            public string installedManifestPath;
+            public string installedBundlePath;
+            public string installedBundleUri;
+            public string installedSceneAssetPath;
+            public string installedSceneName;
+            public string installedBundleSha256;
             public string updatedAtUtc;
         }
 
@@ -65,6 +81,34 @@ namespace TheraplyCore.Games.Runtime
             public string schemaVersion;
             public string generatedAtUtc;
             public List<SimulatedContentStateRecord> states = new List<SimulatedContentStateRecord>();
+        }
+
+        [Serializable]
+        private sealed class InstalledPackageManifestRecord
+        {
+            public string schema;
+            public string schemaVersion;
+            public string packageId;
+            public string contentVersion;
+            public string artifactType;
+            public string deliveryMode;
+            public string generatedAtUtc;
+            public string packageUri;
+            public InstalledPackageAssetBundleRecord assetBundle;
+        }
+
+        [Serializable]
+        private sealed class InstalledPackageAssetBundleRecord
+        {
+            public string bundleUri;
+            public string bundleFileName;
+            public string bundleSha256;
+            public long bundleBytes;
+            public string unityBuildTarget;
+            public string compression;
+            public string sceneAssetPath;
+            public string sceneName;
+            public string loadMode;
         }
 
         private sealed class PackageProbeOutcome
@@ -92,6 +136,7 @@ namespace TheraplyCore.Games.Runtime
         {
             public const string ManifestSyncStarted = "INSTALL_MANIFEST_SYNC_STARTED";
             public const string DownloadStarted = "INSTALL_DOWNLOAD_STARTED";
+            public const string BundleDownloadStarted = "INSTALL_BUNDLE_DOWNLOAD_STARTED";
             public const string VerifyStarted = "INSTALL_VERIFY_STARTED";
             public const string ActivationStarted = "INSTALL_ACTIVATION_STARTED";
             public const string Completed = "INSTALL_COMPLETED";
@@ -102,9 +147,19 @@ namespace TheraplyCore.Games.Runtime
             public const string PackageUriMissing = "INSTALL_PACKAGE_URI_MISSING";
             public const string PackageUriInvalid = "INSTALL_PACKAGE_URI_INVALID";
             public const string PackageEmpty = "INSTALL_PACKAGE_EMPTY";
+            public const string ManifestParseFailed = "INSTALL_MANIFEST_PARSE_FAILED";
+            public const string ManifestSchemaUnsupported = "INSTALL_MANIFEST_SCHEMA_UNSUPPORTED";
+            public const string ManifestGameMismatch = "INSTALL_MANIFEST_GAME_MISMATCH";
+            public const string BundleUriMissing = "INSTALL_BUNDLE_URI_MISSING";
+            public const string BundleUriInvalid = "INSTALL_BUNDLE_URI_INVALID";
+            public const string BundleEmpty = "INSTALL_BUNDLE_EMPTY";
+            public const string BundleChecksumMismatch = "INSTALL_BUNDLE_CHECKSUM_MISMATCH";
             public const string VerifyFailed = "INSTALL_VERIFY_FAILED";
             public const string StorageWriteFailed = "INSTALL_STORAGE_WRITE_FAILED";
             public const string UnexpectedException = "INSTALL_EXCEPTION";
+            public const string StartBundleLoadFailed = "START_CONTENT_BUNDLE_LOAD_FAILED";
+            public const string StartSceneMissing = "START_CONTENT_SCENE_MISSING";
+            public const string StartSceneLoadFailed = "START_CONTENT_SCENE_LOAD_FAILED";
         }
 
         private sealed class RuntimeEntitlementSnapshot
@@ -169,6 +224,10 @@ namespace TheraplyCore.Games.Runtime
         [SerializeField] private int _packageInstallTimeoutSeconds = 25;
         [SerializeField] private string _packageInstallFolder = "content_packages";
         [SerializeField] private string _packageInstallFallbackFileName = "package.pkg.json";
+
+        [Header("Installed Content Scene")]
+        [SerializeField] private bool _loadInstalledContentSceneOnStart = true;
+        [SerializeField] private bool _unloadInstalledContentSceneOnStop = true;
 
         [Header("Content Package Probe (Board-Safe)")]
         [SerializeField] private bool _enableBoardSafePackageProbe = true;
@@ -238,6 +297,10 @@ namespace TheraplyCore.Games.Runtime
         private string _contentDeliveryStatePath = string.Empty;
         private RuntimeEntitlementSnapshot _runtimeEntitlementSnapshot =
             new RuntimeEntitlementSnapshot();
+        private AssetBundle _activeInstalledContentBundle;
+        private string _activeInstalledContentScenePath = string.Empty;
+        private string _activeInstalledContentGameId = string.Empty;
+        private string _activeInstalledContentBundlePath = string.Empty;
 
         public GameContracts.IGameModule ActiveGame => _activeGame;
         public string ActiveGameId => _activeGameId;
@@ -337,6 +400,7 @@ namespace TheraplyCore.Games.Runtime
             StopAllPackageProbeRoutines();
             StopSyncStatusPolling();
             StopSessionWatchdog();
+            TryUnloadInstalledContentScene("RUNTIME_DISABLED", true);
         }
 
         private void Update()
@@ -513,6 +577,13 @@ namespace TheraplyCore.Games.Runtime
                 _activeGame.Initialize(startupConfig, _contextService);
             }
 
+            if (!TryLoadInstalledContentSceneForGame(_activeGameId, out var sceneLoadReason))
+            {
+                Logger.Warning(
+                    $"[GameRuntime] Start failed: could not activate installed content scene for {_activeGameId}: {sceneLoadReason}");
+                return false;
+            }
+
             _activeGame.StartGame();
             TryTransitionSessionState(GameContracts.SessionLifecycleState.IN_PROGRESS, "START_GAME");
             TrackCriticalRuntimeEvent("game_start", new Dictionary<string, object>
@@ -566,6 +637,10 @@ namespace TheraplyCore.Games.Runtime
                 { "reason", reason.ToString() },
             });
             TryReportActiveGameResult(reason);
+            if (_unloadInstalledContentSceneOnStop)
+            {
+                TryUnloadInstalledContentScene($"STOP_GAME:{reason}", false);
+            }
             ClearActiveGameSelection($"STOP_GAME:{reason}");
             TrackCriticalRuntimeEvent("session_stop", new Dictionary<string, object>
             {
@@ -1047,6 +1122,7 @@ namespace TheraplyCore.Games.Runtime
             state.runtimeStatus = ContentRuntimeStatusValues.SyncingManifest;
             state.updateRequired = false;
             state.lastError = string.Empty;
+            state.installedPackageUri = NormalizePackageInstallUri(packageUri);
             state.updatedAtUtc = DateTime.UtcNow;
             PersistSimulatedContentStates(InstallReasonCodes.ManifestSyncStarted);
             _ = PublishGameInstallStatusAsync(
@@ -1086,11 +1162,16 @@ namespace TheraplyCore.Games.Runtime
             }
 
             StopSimulatedInstallRoutine(normalizedGameId);
+            if (string.Equals(_activeInstalledContentGameId, normalizedGameId, StringComparison.OrdinalIgnoreCase))
+            {
+                TryUnloadInstalledContentScene("UNINSTALL_COMPLETED", true);
+            }
             RemoveInstalledPackageArtifacts(normalizedGameId);
             state.installedVersion = string.Empty;
             state.runtimeStatus = ContentRuntimeStatusValues.NotInstalled;
             state.updateRequired = false;
             state.lastError = string.Empty;
+            ClearInstalledContentMetadata(state);
             state.updatedAtUtc = DateTime.UtcNow;
             PersistSimulatedContentStates("UNINSTALL_COMPLETED");
 
@@ -1188,6 +1269,13 @@ namespace TheraplyCore.Games.Runtime
                             updateOptional = false,
                             runtimeStatus = ContentRuntimeStatusValues.NotInstalled,
                             lastError = string.Empty,
+                            installedPackageUri = string.Empty,
+                            installedManifestPath = string.Empty,
+                            installedBundlePath = string.Empty,
+                            installedBundleUri = string.Empty,
+                            installedSceneAssetPath = string.Empty,
+                            installedSceneName = string.Empty,
+                            installedBundleSha256 = string.Empty,
                             updatedAtUtc = DateTime.UtcNow,
                         };
                         _simulatedContentStateByGameId[gameId] = state;
@@ -1211,6 +1299,27 @@ namespace TheraplyCore.Games.Runtime
                     state.lastError = string.IsNullOrWhiteSpace(record.lastError)
                         ? string.Empty
                         : record.lastError.Trim();
+                    state.installedPackageUri = string.IsNullOrWhiteSpace(record.installedPackageUri)
+                        ? string.Empty
+                        : record.installedPackageUri.Trim();
+                    state.installedManifestPath = string.IsNullOrWhiteSpace(record.installedManifestPath)
+                        ? string.Empty
+                        : record.installedManifestPath.Trim();
+                    state.installedBundlePath = string.IsNullOrWhiteSpace(record.installedBundlePath)
+                        ? string.Empty
+                        : record.installedBundlePath.Trim();
+                    state.installedBundleUri = string.IsNullOrWhiteSpace(record.installedBundleUri)
+                        ? string.Empty
+                        : record.installedBundleUri.Trim();
+                    state.installedSceneAssetPath = string.IsNullOrWhiteSpace(record.installedSceneAssetPath)
+                        ? string.Empty
+                        : record.installedSceneAssetPath.Trim();
+                    state.installedSceneName = string.IsNullOrWhiteSpace(record.installedSceneName)
+                        ? string.Empty
+                        : record.installedSceneName.Trim();
+                    state.installedBundleSha256 = string.IsNullOrWhiteSpace(record.installedBundleSha256)
+                        ? string.Empty
+                        : record.installedBundleSha256.Trim();
                     state.runtimeStatus = string.IsNullOrWhiteSpace(record.runtimeStatus)
                         ? ResolveRuntimeStatusForContentState(
                             state.owned,
@@ -1268,6 +1377,13 @@ namespace TheraplyCore.Games.Runtime
                         updateOptional = state.updateOptional,
                         runtimeStatus = state.runtimeStatus ?? string.Empty,
                         lastError = state.lastError ?? string.Empty,
+                        installedPackageUri = state.installedPackageUri ?? string.Empty,
+                        installedManifestPath = state.installedManifestPath ?? string.Empty,
+                        installedBundlePath = state.installedBundlePath ?? string.Empty,
+                        installedBundleUri = state.installedBundleUri ?? string.Empty,
+                        installedSceneAssetPath = state.installedSceneAssetPath ?? string.Empty,
+                        installedSceneName = state.installedSceneName ?? string.Empty,
+                        installedBundleSha256 = state.installedBundleSha256 ?? string.Empty,
                         updatedAtUtc = (state.updatedAtUtc == DateTime.MinValue
                                 ? DateTime.UtcNow
                                 : state.updatedAtUtc.ToUniversalTime())
@@ -1344,6 +1460,13 @@ namespace TheraplyCore.Games.Runtime
                         installedVersion,
                         updateRequired),
                     lastError = string.Empty,
+                    installedPackageUri = string.Empty,
+                    installedManifestPath = string.Empty,
+                    installedBundlePath = string.Empty,
+                    installedBundleUri = string.Empty,
+                    installedSceneAssetPath = string.Empty,
+                    installedSceneName = string.Empty,
+                    installedBundleSha256 = string.Empty,
                     updatedAtUtc = DateTime.UtcNow,
                 };
 
@@ -1369,6 +1492,13 @@ namespace TheraplyCore.Games.Runtime
                     updateOptional = false,
                     runtimeStatus = ContentRuntimeStatusValues.Ready,
                     lastError = string.Empty,
+                    installedPackageUri = string.Empty,
+                    installedManifestPath = string.Empty,
+                    installedBundlePath = string.Empty,
+                    installedBundleUri = string.Empty,
+                    installedSceneAssetPath = string.Empty,
+                    installedSceneName = string.Empty,
+                    installedBundleSha256 = string.Empty,
                     updatedAtUtc = DateTime.UtcNow,
                 };
             }
@@ -1418,6 +1548,13 @@ namespace TheraplyCore.Games.Runtime
                 updateOptional = false,
                 runtimeStatus = ContentRuntimeStatusValues.NotInstalled,
                 lastError = string.Empty,
+                installedPackageUri = string.Empty,
+                installedManifestPath = string.Empty,
+                installedBundlePath = string.Empty,
+                installedBundleUri = string.Empty,
+                installedSceneAssetPath = string.Empty,
+                installedSceneName = string.Empty,
+                installedBundleSha256 = string.Empty,
                 updatedAtUtc = DateTime.UtcNow,
             };
             _simulatedContentStateByGameId[gameId] = state;
@@ -1532,6 +1669,12 @@ namespace TheraplyCore.Games.Runtime
             }
 
             var gameId = state.gameId;
+            var previousManifestPath = state.installedManifestPath ?? string.Empty;
+            var previousBundlePath = state.installedBundlePath ?? string.Empty;
+            var previousBundleUri = state.installedBundleUri ?? string.Empty;
+            var previousSceneAssetPath = state.installedSceneAssetPath ?? string.Empty;
+            var previousSceneName = state.installedSceneName ?? string.Empty;
+            var previousBundleSha256 = state.installedBundleSha256 ?? string.Empty;
             yield return new WaitForSeconds(Mathf.Max(0.05f, _simulatedManifestSyncDurationSeconds));
 
             if (!_simulatedContentStateByGameId.ContainsKey(gameId))
@@ -1562,7 +1705,13 @@ namespace TheraplyCore.Games.Runtime
                     state,
                     correlationId,
                     InstallReasonCodes.PackageUriMissing,
-                    previousInstalledVersion);
+                    previousInstalledVersion,
+                    previousManifestPath,
+                    previousBundlePath,
+                    previousBundleUri,
+                    previousSceneAssetPath,
+                    previousSceneName,
+                    previousBundleSha256);
                 CompleteSimulatedInstallRoutine(gameId);
                 yield break;
             }
@@ -1574,12 +1723,18 @@ namespace TheraplyCore.Games.Runtime
                     state,
                     correlationId,
                     InstallReasonCodes.PackageUriInvalid,
-                    previousInstalledVersion);
+                    previousInstalledVersion,
+                    previousManifestPath,
+                    previousBundlePath,
+                    previousBundleUri,
+                    previousSceneAssetPath,
+                    previousSceneName,
+                    previousBundleSha256);
                 CompleteSimulatedInstallRoutine(gameId);
                 yield break;
             }
 
-            byte[] downloadedBytes = null;
+            byte[] manifestBytes = null;
             var timeoutSeconds = Mathf.Clamp(_packageInstallTimeoutSeconds, 3, 120);
             using (var request = UnityWebRequest.Get(parsedUri.AbsoluteUri))
             {
@@ -1594,17 +1749,145 @@ namespace TheraplyCore.Games.Runtime
                         state,
                         correlationId,
                         ResolveInstallDownloadFailureReasonCode(request),
-                        previousInstalledVersion);
+                        previousInstalledVersion,
+                        previousManifestPath,
+                        previousBundlePath,
+                        previousBundleUri,
+                        previousSceneAssetPath,
+                        previousSceneName,
+                        previousBundleSha256);
                     CompleteSimulatedInstallRoutine(gameId);
                     yield break;
                 }
 
-                downloadedBytes = request.downloadHandler == null
+                manifestBytes = request.downloadHandler == null
                     ? null
                     : request.downloadHandler.data;
             }
 
+            if (manifestBytes == null || manifestBytes.Length == 0)
+            {
+                MarkInstallFailed(
+                    state,
+                    correlationId,
+                    InstallReasonCodes.PackageEmpty,
+                    previousInstalledVersion,
+                    previousManifestPath,
+                    previousBundlePath,
+                    previousBundleUri,
+                    previousSceneAssetPath,
+                    previousSceneName,
+                    previousBundleSha256);
+                CompleteSimulatedInstallRoutine(gameId);
+                yield break;
+            }
+
+            var manifestJson = Encoding.UTF8.GetString(manifestBytes);
+            if (!TryParseInstalledPackageManifest(
+                    gameId,
+                    manifestJson,
+                    out var packageManifest,
+                    out var manifestReasonCode))
+            {
+                MarkInstallFailed(
+                    state,
+                    correlationId,
+                    manifestReasonCode,
+                    previousInstalledVersion,
+                    previousManifestPath,
+                    previousBundlePath,
+                    previousBundleUri,
+                    previousSceneAssetPath,
+                    previousSceneName,
+                    previousBundleSha256);
+                CompleteSimulatedInstallRoutine(gameId);
+                yield break;
+            }
+
+            if (!TryResolveBundleInstallUri(
+                    packageManifest,
+                    parsedUri,
+                    out var bundleInstallUri,
+                    out var bundleUriReasonCode))
+            {
+                MarkInstallFailed(
+                    state,
+                    correlationId,
+                    bundleUriReasonCode,
+                    previousInstalledVersion,
+                    previousManifestPath,
+                    previousBundlePath,
+                    previousBundleUri,
+                    previousSceneAssetPath,
+                    previousSceneName,
+                    previousBundleSha256);
+                CompleteSimulatedInstallRoutine(gameId);
+                yield break;
+            }
+
+            state.runtimeStatus = ContentRuntimeStatusValues.Downloading;
+            state.lastError = string.Empty;
+            state.updatedAtUtc = DateTime.UtcNow;
+            PersistSimulatedContentStates(InstallReasonCodes.BundleDownloadStarted);
+            _ = PublishGameInstallStatusAsync(
+                state,
+                correlationId,
+                InstallReasonCodes.BundleDownloadStarted);
+
+            byte[] bundleBytes = null;
+            using (var bundleRequest = UnityWebRequest.Get(bundleInstallUri.AbsoluteUri))
+            {
+                bundleRequest.timeout = timeoutSeconds;
+                yield return bundleRequest.SendWebRequest();
+
+                if (bundleRequest.result != UnityWebRequest.Result.Success ||
+                    bundleRequest.responseCode < 200 ||
+                    bundleRequest.responseCode >= 400)
+                {
+                    MarkInstallFailed(
+                        state,
+                        correlationId,
+                        ResolveInstallDownloadFailureReasonCode(bundleRequest),
+                        previousInstalledVersion,
+                        previousManifestPath,
+                        previousBundlePath,
+                        previousBundleUri,
+                        previousSceneAssetPath,
+                        previousSceneName,
+                        previousBundleSha256);
+                    CompleteSimulatedInstallRoutine(gameId);
+                    yield break;
+                }
+
+                bundleBytes = bundleRequest.downloadHandler == null
+                    ? null
+                    : bundleRequest.downloadHandler.data;
+            }
+
             yield return new WaitForSeconds(Mathf.Max(0.05f, _simulatedDownloadDurationSeconds));
+
+            if (!_simulatedContentStateByGameId.ContainsKey(gameId))
+            {
+                CompleteSimulatedInstallRoutine(gameId);
+                yield break;
+            }
+
+            if (bundleBytes == null || bundleBytes.Length == 0)
+            {
+                MarkInstallFailed(
+                    state,
+                    correlationId,
+                    InstallReasonCodes.BundleEmpty,
+                    previousInstalledVersion,
+                    previousManifestPath,
+                    previousBundlePath,
+                    previousBundleUri,
+                    previousSceneAssetPath,
+                    previousSceneName,
+                    previousBundleSha256);
+                CompleteSimulatedInstallRoutine(gameId);
+                yield break;
+            }
 
             state.runtimeStatus = ContentRuntimeStatusValues.Verifying;
             state.lastError = string.Empty;
@@ -1622,24 +1905,41 @@ namespace TheraplyCore.Games.Runtime
                 yield break;
             }
 
-            if (downloadedBytes == null || downloadedBytes.Length == 0)
-            {
-                MarkInstallFailed(
-                    state,
-                    correlationId,
-                    InstallReasonCodes.PackageEmpty,
-                    previousInstalledVersion);
-                CompleteSimulatedInstallRoutine(gameId);
-                yield break;
-            }
-
             if (shouldSimulateVerifyFailure)
             {
                 MarkInstallFailed(
                     state,
                     correlationId,
                     InstallReasonCodes.VerifyFailed,
-                    previousInstalledVersion);
+                    previousInstalledVersion,
+                    previousManifestPath,
+                    previousBundlePath,
+                    previousBundleUri,
+                    previousSceneAssetPath,
+                    previousSceneName,
+                    previousBundleSha256);
+                CompleteSimulatedInstallRoutine(gameId);
+                yield break;
+            }
+
+            var manifestBundleSha = packageManifest.assetBundle == null
+                ? string.Empty
+                : (packageManifest.assetBundle.bundleSha256 ?? string.Empty).Trim();
+            var downloadedBundleSha = ComputeSha256(bundleBytes);
+            if (!string.IsNullOrWhiteSpace(manifestBundleSha) &&
+                !string.Equals(manifestBundleSha, downloadedBundleSha, StringComparison.OrdinalIgnoreCase))
+            {
+                MarkInstallFailed(
+                    state,
+                    correlationId,
+                    InstallReasonCodes.BundleChecksumMismatch,
+                    previousInstalledVersion,
+                    previousManifestPath,
+                    previousBundlePath,
+                    previousBundleUri,
+                    previousSceneAssetPath,
+                    previousSceneName,
+                    previousBundleSha256);
                 CompleteSimulatedInstallRoutine(gameId);
                 yield break;
             }
@@ -1648,15 +1948,44 @@ namespace TheraplyCore.Games.Runtime
                     gameId,
                     state.targetVersion,
                     parsedUri,
-                    downloadedBytes,
-                    out var installedPath,
-                    out var persistReasonCode))
+                    manifestBytes,
+                    out var installedManifestPath,
+                    out var manifestPersistReasonCode))
             {
                 MarkInstallFailed(
                     state,
                     correlationId,
-                    persistReasonCode,
-                    previousInstalledVersion);
+                    manifestPersistReasonCode,
+                    previousInstalledVersion,
+                    previousManifestPath,
+                    previousBundlePath,
+                    previousBundleUri,
+                    previousSceneAssetPath,
+                    previousSceneName,
+                    previousBundleSha256);
+                CompleteSimulatedInstallRoutine(gameId);
+                yield break;
+            }
+
+            if (!TryPersistInstalledPackage(
+                    gameId,
+                    state.targetVersion,
+                    bundleInstallUri,
+                    bundleBytes,
+                    out var installedBundlePath,
+                    out var bundlePersistReasonCode))
+            {
+                MarkInstallFailed(
+                    state,
+                    correlationId,
+                    bundlePersistReasonCode,
+                    previousInstalledVersion,
+                    previousManifestPath,
+                    previousBundlePath,
+                    previousBundleUri,
+                    previousSceneAssetPath,
+                    previousSceneName,
+                    previousBundleSha256);
                 CompleteSimulatedInstallRoutine(gameId);
                 yield break;
             }
@@ -1677,12 +2006,25 @@ namespace TheraplyCore.Games.Runtime
                 yield break;
             }
 
+            var installedSceneAssetPath = packageManifest.assetBundle == null
+                ? string.Empty
+                : NormalizePackageInstallUri(packageManifest.assetBundle.sceneAssetPath);
+            var installedSceneName = packageManifest.assetBundle == null
+                ? string.Empty
+                : NormalizePackageInstallUri(packageManifest.assetBundle.sceneName);
             state.installedVersion = NormalizeContentVersion(
                 state.targetVersion,
                 _defaultSimulatedContentVersion);
             state.updateRequired = false;
             state.runtimeStatus = ContentRuntimeStatusValues.Ready;
             state.lastError = string.Empty;
+            state.installedPackageUri = normalizedPackageUri;
+            state.installedManifestPath = installedManifestPath;
+            state.installedBundlePath = installedBundlePath;
+            state.installedBundleUri = bundleInstallUri.AbsoluteUri;
+            state.installedSceneAssetPath = installedSceneAssetPath;
+            state.installedSceneName = installedSceneName;
+            state.installedBundleSha256 = downloadedBundleSha;
             state.updatedAtUtc = DateTime.UtcNow;
             PersistSimulatedContentStates(InstallReasonCodes.Completed);
             _ = PublishGameInstallStatusAsync(
@@ -1695,7 +2037,12 @@ namespace TheraplyCore.Games.Runtime
                 { "gameId", gameId },
                 { "targetVersion", state.targetVersion ?? string.Empty },
                 { "packageUri", normalizedPackageUri },
-                { "installedPath", installedPath },
+                { "installedManifestPath", installedManifestPath },
+                { "installedBundlePath", installedBundlePath },
+                { "bundleUri", bundleInstallUri.AbsoluteUri },
+                { "bundleSha256", downloadedBundleSha },
+                { "sceneAssetPath", installedSceneAssetPath },
+                { "sceneName", installedSceneName },
                 { "reasonCode", InstallReasonCodes.Completed },
             });
             CompleteSimulatedInstallRoutine(gameId);
@@ -1705,7 +2052,13 @@ namespace TheraplyCore.Games.Runtime
             SimulatedContentState state,
             string correlationId,
             string reasonCode,
-            string previousInstalledVersion)
+            string previousInstalledVersion,
+            string previousManifestPath,
+            string previousBundlePath,
+            string previousBundleUri,
+            string previousSceneAssetPath,
+            string previousSceneName,
+            string previousBundleSha256)
         {
             if (state == null || string.IsNullOrWhiteSpace(state.gameId))
             {
@@ -1721,6 +2074,28 @@ namespace TheraplyCore.Games.Runtime
                                       state.installedVersion,
                                       state.targetVersion,
                                       StringComparison.OrdinalIgnoreCase);
+            state.installedManifestPath = string.IsNullOrWhiteSpace(previousManifestPath)
+                ? string.Empty
+                : previousManifestPath.Trim();
+            state.installedBundlePath = string.IsNullOrWhiteSpace(previousBundlePath)
+                ? string.Empty
+                : previousBundlePath.Trim();
+            state.installedBundleUri = string.IsNullOrWhiteSpace(previousBundleUri)
+                ? string.Empty
+                : previousBundleUri.Trim();
+            state.installedSceneAssetPath = string.IsNullOrWhiteSpace(previousSceneAssetPath)
+                ? string.Empty
+                : previousSceneAssetPath.Trim();
+            state.installedSceneName = string.IsNullOrWhiteSpace(previousSceneName)
+                ? string.Empty
+                : previousSceneName.Trim();
+            state.installedBundleSha256 = string.IsNullOrWhiteSpace(previousBundleSha256)
+                ? string.Empty
+                : previousBundleSha256.Trim();
+            if (string.IsNullOrWhiteSpace(previousInstalledVersion))
+            {
+                state.installedPackageUri = string.Empty;
+            }
             state.runtimeStatus = ContentRuntimeStatusValues.Failed;
             state.lastError = string.IsNullOrWhiteSpace(reasonCode)
                 ? InstallReasonCodes.DownloadFailed
@@ -1728,6 +2103,134 @@ namespace TheraplyCore.Games.Runtime
             state.updatedAtUtc = DateTime.UtcNow;
             PersistSimulatedContentStates(state.lastError);
             _ = PublishGameInstallStatusAsync(state, correlationId, state.lastError);
+        }
+
+        private bool TryParseInstalledPackageManifest(
+            string gameId,
+            string manifestJson,
+            out InstalledPackageManifestRecord manifest,
+            out string reasonCode)
+        {
+            manifest = null;
+            reasonCode = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(manifestJson))
+            {
+                reasonCode = InstallReasonCodes.ManifestParseFailed;
+                return false;
+            }
+
+            try
+            {
+                manifest = JsonUtility.FromJson<InstalledPackageManifestRecord>(manifestJson);
+            }
+            catch (Exception e)
+            {
+                Logger.Warning($"[GameRuntime] Failed to parse package manifest: {e.Message}");
+                reasonCode = InstallReasonCodes.ManifestParseFailed;
+                return false;
+            }
+
+            if (manifest == null || string.IsNullOrWhiteSpace(manifest.schema))
+            {
+                reasonCode = InstallReasonCodes.ManifestParseFailed;
+                return false;
+            }
+
+            var schema = manifest.schema.Trim();
+            if (!string.Equals(schema, "THERAPLY_ASSET_BUNDLE_GAME_PACKAGE", StringComparison.OrdinalIgnoreCase))
+            {
+                reasonCode = InstallReasonCodes.ManifestSchemaUnsupported;
+                return false;
+            }
+
+            var manifestGameId = string.IsNullOrWhiteSpace(manifest.packageId)
+                ? string.Empty
+                : manifest.packageId.Trim();
+            var normalizedGameId = string.IsNullOrWhiteSpace(gameId)
+                ? string.Empty
+                : gameId.Trim();
+            if (!string.IsNullOrWhiteSpace(manifestGameId) &&
+                !string.Equals(manifestGameId, normalizedGameId, StringComparison.OrdinalIgnoreCase))
+            {
+                reasonCode = InstallReasonCodes.ManifestGameMismatch;
+                return false;
+            }
+
+            if (manifest.assetBundle == null)
+            {
+                reasonCode = InstallReasonCodes.BundleUriMissing;
+                return false;
+            }
+
+            reasonCode = string.Empty;
+            return true;
+        }
+
+        private bool TryResolveBundleInstallUri(
+            InstalledPackageManifestRecord manifest,
+            Uri fallbackManifestUri,
+            out Uri bundleUri,
+            out string reasonCode)
+        {
+            bundleUri = null;
+            reasonCode = string.Empty;
+
+            var bundleUriRaw = manifest == null || manifest.assetBundle == null
+                ? string.Empty
+                : NormalizePackageInstallUri(manifest.assetBundle.bundleUri);
+            if (string.IsNullOrWhiteSpace(bundleUriRaw) &&
+                manifest != null &&
+                manifest.assetBundle != null &&
+                !string.IsNullOrWhiteSpace(manifest.assetBundle.bundleFileName))
+            {
+                bundleUriRaw = manifest.assetBundle.bundleFileName.Trim();
+            }
+            if (string.IsNullOrWhiteSpace(bundleUriRaw))
+            {
+                reasonCode = InstallReasonCodes.BundleUriMissing;
+                return false;
+            }
+
+            if (!Uri.TryCreate(bundleUriRaw, UriKind.Absolute, out bundleUri))
+            {
+                if (fallbackManifestUri != null &&
+                    Uri.TryCreate(fallbackManifestUri, bundleUriRaw, out bundleUri))
+                {
+                    // Relative URI resolved from package manifest URI.
+                }
+            }
+
+            if (bundleUri == null ||
+                (bundleUri.Scheme != Uri.UriSchemeHttp && bundleUri.Scheme != Uri.UriSchemeHttps))
+            {
+                reasonCode = InstallReasonCodes.BundleUriInvalid;
+                bundleUri = null;
+                return false;
+            }
+
+            reasonCode = string.Empty;
+            return true;
+        }
+
+        private static string ComputeSha256(byte[] payload)
+        {
+            if (payload == null || payload.Length == 0)
+            {
+                return string.Empty;
+            }
+
+            using (var sha = SHA256.Create())
+            {
+                var hash = sha.ComputeHash(payload);
+                var builder = new StringBuilder(hash.Length * 2);
+                for (var i = 0; i < hash.Length; i++)
+                {
+                    builder.Append(hash[i].ToString("x2", CultureInfo.InvariantCulture));
+                }
+
+                return builder.ToString();
+            }
         }
 
         private static string ResolveInstallDownloadFailureReasonCode(UnityWebRequest request)
@@ -1839,6 +2342,239 @@ namespace TheraplyCore.Games.Runtime
                 Logger.Warning(
                     $"[GameRuntime] Failed to remove installed package artifacts for {normalizedGameId}: {e.Message}");
             }
+        }
+
+        private static void ClearInstalledContentMetadata(SimulatedContentState state)
+        {
+            if (state == null)
+            {
+                return;
+            }
+
+            state.installedPackageUri = string.Empty;
+            state.installedManifestPath = string.Empty;
+            state.installedBundlePath = string.Empty;
+            state.installedBundleUri = string.Empty;
+            state.installedSceneAssetPath = string.Empty;
+            state.installedSceneName = string.Empty;
+            state.installedBundleSha256 = string.Empty;
+        }
+
+        private bool TryLoadInstalledContentSceneForGame(string gameId, out string reasonCode)
+        {
+            reasonCode = "START_CONTENT_SCENE_SKIPPED";
+            if (!_loadInstalledContentSceneOnStart)
+            {
+                return true;
+            }
+
+            var normalizedGameId = string.IsNullOrWhiteSpace(gameId)
+                ? string.Empty
+                : gameId.Trim();
+            if (string.IsNullOrWhiteSpace(normalizedGameId))
+            {
+                reasonCode = "START_CONTENT_GAME_ID_REQUIRED";
+                return true;
+            }
+
+            EnsureSimulatedContentStatesInitialized();
+            if (!_simulatedContentStateByGameId.TryGetValue(normalizedGameId, out var state) ||
+                state == null)
+            {
+                return true;
+            }
+
+            var installedBundlePath = string.IsNullOrWhiteSpace(state.installedBundlePath)
+                ? string.Empty
+                : state.installedBundlePath.Trim();
+            if (string.IsNullOrWhiteSpace(installedBundlePath))
+            {
+                return true;
+            }
+
+            if (!File.Exists(installedBundlePath))
+            {
+                reasonCode = InstallReasonCodes.StartBundleLoadFailed;
+                return false;
+            }
+
+            var preferredSceneAssetPath = string.IsNullOrWhiteSpace(state.installedSceneAssetPath)
+                ? string.Empty
+                : state.installedSceneAssetPath.Trim();
+            var preferredSceneName = string.IsNullOrWhiteSpace(state.installedSceneName)
+                ? string.Empty
+                : state.installedSceneName.Trim();
+
+            var activeSceneByPath = string.IsNullOrWhiteSpace(_activeInstalledContentScenePath)
+                ? new Scene()
+                : SceneManager.GetSceneByPath(_activeInstalledContentScenePath);
+            if (!string.IsNullOrWhiteSpace(_activeInstalledContentGameId) &&
+                string.Equals(_activeInstalledContentGameId, normalizedGameId, StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(_activeInstalledContentBundlePath) &&
+                string.Equals(_activeInstalledContentBundlePath, installedBundlePath, StringComparison.OrdinalIgnoreCase) &&
+                activeSceneByPath.IsValid() &&
+                activeSceneByPath.isLoaded)
+            {
+                reasonCode = "START_CONTENT_SCENE_ALREADY_LOADED";
+                return true;
+            }
+
+            TryUnloadInstalledContentScene("START_CONTENT_REPLACE", false);
+
+            var bundle = AssetBundle.LoadFromFile(installedBundlePath);
+            if (bundle == null)
+            {
+                reasonCode = InstallReasonCodes.StartBundleLoadFailed;
+                return false;
+            }
+
+            if (!TryResolveInstalledScenePathFromBundle(
+                    bundle,
+                    preferredSceneAssetPath,
+                    preferredSceneName,
+                    out var resolvedScenePath))
+            {
+                bundle.Unload(true);
+                reasonCode = InstallReasonCodes.StartSceneMissing;
+                return false;
+            }
+
+            var loadOperation = SceneManager.LoadSceneAsync(resolvedScenePath, LoadSceneMode.Additive);
+            if (loadOperation == null)
+            {
+                bundle.Unload(true);
+                reasonCode = InstallReasonCodes.StartSceneLoadFailed;
+                return false;
+            }
+
+            _activeInstalledContentBundle = bundle;
+            _activeInstalledContentScenePath = resolvedScenePath;
+            _activeInstalledContentGameId = normalizedGameId;
+            _activeInstalledContentBundlePath = installedBundlePath;
+            loadOperation.completed += _ =>
+            {
+                TrackCriticalRuntimeEvent("content_scene_load_completed", new Dictionary<string, object>
+                {
+                    { "gameId", normalizedGameId },
+                    { "scenePath", resolvedScenePath },
+                    { "bundlePath", installedBundlePath },
+                    { "reasonCode", "START_CONTENT_SCENE_LOAD_COMPLETED" },
+                });
+            };
+
+            TrackCriticalRuntimeEvent("content_scene_load_requested", new Dictionary<string, object>
+            {
+                { "gameId", normalizedGameId },
+                { "scenePath", resolvedScenePath },
+                { "bundlePath", installedBundlePath },
+                { "reasonCode", "START_CONTENT_SCENE_LOAD_REQUESTED" },
+            });
+            reasonCode = "START_CONTENT_SCENE_LOAD_REQUESTED";
+            return true;
+        }
+
+        private static bool TryResolveInstalledScenePathFromBundle(
+            AssetBundle bundle,
+            string preferredSceneAssetPath,
+            string preferredSceneName,
+            out string resolvedScenePath)
+        {
+            resolvedScenePath = string.Empty;
+            if (bundle == null)
+            {
+                return false;
+            }
+
+            var scenePaths = bundle.GetAllScenePaths();
+            if (scenePaths == null || scenePaths.Length == 0)
+            {
+                return false;
+            }
+
+            var preferredPath = string.IsNullOrWhiteSpace(preferredSceneAssetPath)
+                ? string.Empty
+                : preferredSceneAssetPath.Trim();
+            if (!string.IsNullOrWhiteSpace(preferredPath))
+            {
+                for (var i = 0; i < scenePaths.Length; i++)
+                {
+                    if (string.Equals(scenePaths[i], preferredPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        resolvedScenePath = scenePaths[i];
+                        return true;
+                    }
+                }
+            }
+
+            var preferredName = string.IsNullOrWhiteSpace(preferredSceneName)
+                ? string.Empty
+                : preferredSceneName.Trim();
+            if (!string.IsNullOrWhiteSpace(preferredName))
+            {
+                for (var i = 0; i < scenePaths.Length; i++)
+                {
+                    var candidateName = Path.GetFileNameWithoutExtension(scenePaths[i] ?? string.Empty);
+                    if (string.Equals(candidateName, preferredName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        resolvedScenePath = scenePaths[i];
+                        return true;
+                    }
+                }
+            }
+
+            resolvedScenePath = scenePaths[0] ?? string.Empty;
+            return !string.IsNullOrWhiteSpace(resolvedScenePath);
+        }
+
+        private bool TryUnloadInstalledContentScene(string reasonCode, bool forceBundleUnload)
+        {
+            if (string.IsNullOrWhiteSpace(_activeInstalledContentScenePath) &&
+                _activeInstalledContentBundle == null)
+            {
+                return true;
+            }
+
+            var scenePath = _activeInstalledContentScenePath ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(scenePath))
+            {
+                var loadedScene = SceneManager.GetSceneByPath(scenePath);
+                if (loadedScene.IsValid() && loadedScene.isLoaded)
+                {
+                    var unloadOperation = SceneManager.UnloadSceneAsync(loadedScene);
+                    if (unloadOperation == null)
+                    {
+                        Logger.Warning(
+                            $"[GameRuntime] Failed to request unload for installed content scene: {scenePath}");
+                    }
+                }
+            }
+
+            if (_activeInstalledContentBundle != null)
+            {
+                try
+                {
+                    _activeInstalledContentBundle.Unload(forceBundleUnload);
+                }
+                catch (Exception e)
+                {
+                    Logger.Warning(
+                        $"[GameRuntime] Installed content bundle unload failed: {e.Message}");
+                }
+            }
+
+            TrackCriticalRuntimeEvent("content_scene_unload_requested", new Dictionary<string, object>
+            {
+                { "gameId", _activeInstalledContentGameId ?? string.Empty },
+                { "scenePath", scenePath },
+                { "bundlePath", _activeInstalledContentBundlePath ?? string.Empty },
+                { "reasonCode", string.IsNullOrWhiteSpace(reasonCode) ? "CONTENT_SCENE_UNLOAD" : reasonCode },
+            });
+
+            _activeInstalledContentBundle = null;
+            _activeInstalledContentScenePath = string.Empty;
+            _activeInstalledContentGameId = string.Empty;
+            _activeInstalledContentBundlePath = string.Empty;
+            return true;
         }
 
         private string ResolvePackageInstallPath(string gameId, string targetVersion, Uri packageUri)
@@ -3752,6 +4488,10 @@ namespace TheraplyCore.Games.Runtime
                 { "reason", stopReason.ToString() },
             });
             TryReportActiveGameResult(stopReason);
+            if (_unloadInstalledContentSceneOnStop)
+            {
+                TryUnloadInstalledContentScene(reasonCode, false);
+            }
             ClearActiveGameSelection(reasonCode);
             TrackCriticalRuntimeEvent("session_stop", new Dictionary<string, object>
             {

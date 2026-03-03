@@ -1,23 +1,28 @@
 {
-    "schema":  "THERAPLY_BOARD_SAFE_GAME_PACKAGE_INDEX",
-    "schemaVersion":  "2026-03-02",
-    "generatedAtUtc":  "2026-03-02T18:20:07.3303550Z",
+    "schema":  "THERAPLY_GAME_PACKAGE_INDEX",
+    "schemaVersion":  "2026-03-03",
+    "generatedAtUtc":  "2026-03-03T12:38:25.9172219Z",
     "outputDirectory":  "C:\\Users\\licen\\Projects\\theraply-vr-framework\\hosting\\public\\content",
-    "packageCount":  2,
+    "packageCount":  1,
     "packages":  [
                      {
                          "gameId":  "demo_cube_clicker",
                          "fileName":  "demo_cube_clicker_1_2_0.pkg.json",
-                         "packageUri":  "https://theraply-vr-demo.web.app/content/demo_cube_clicker_1_2_0.pkg.json",
+                         "packageUri":  "https://pranasense.pl/content/demo_cube_clicker_1_2_0.pkg.json",
                          "contentVersion":  "1.2.0",
-                         "checksumSha256":  "2b7b8d6d1e9ab01cae908bbce20313335776dcd1f9a11630a406943134e59574"
-                     },
-                     {
-                         "gameId":  "pulse_target_tap",
-                         "fileName":  "pulse_target_tap_1_0_0.pkg.json",
-                         "packageUri":  "https://theraply-vr-demo.web.app/content/pulse_target_tap_1_0_0.pkg.json",
-                         "contentVersion":  "1.0.0",
-                         "checksumSha256":  "60d23504235983646f14a939b99c97d78cba6387e9916744149b4ec0bb2b8368"
+                         "checksumSha256":  "2b7b8d6d1e9ab01cae908bbce20313335776dcd1f9a11630a406943134e59574",
+                         "artifactType":  "unity_scene_asset_bundle",
+                         "deliveryMode":  "on_demand",
+                         "artifactFiles":  [
+                                               "demo_cube_clicker_1_2_0.pkg.json",
+                                               "demo_cube_clicker_1_2_0_android.bundle"
+                                           ],
+                         "bundleFileName":  "demo_cube_clicker_1_2_0_android.bundle",
+                         "bundleUri":  "https://pranasense.pl/content/demo_cube_clicker_1_2_0_android.bundle",
+                         "bundleSha256":  "f09efd5572c25812156c193bcca20ce9813740fe37fb56bb1e2b42ac36c3851f",
+                         "bundleBytes":  197921,
+                         "sceneAssetPath":  "Assets/_Examples/Scenes/CubeClickerVR.unity",
+                         "sceneName":  "CubeClickerVR"
                      }
                  ]
 }

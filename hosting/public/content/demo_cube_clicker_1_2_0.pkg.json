@@ -1,12 +1,26 @@
 {
-    "schema":  "THERAPLY_BOARD_SAFE_GAME_PACKAGE",
-    "schemaVersion":  "2026-03-02",
+    "schema":  "THERAPLY_ASSET_BUNDLE_GAME_PACKAGE",
+    "schemaVersion":  "2026-03-03",
     "packageId":  "demo_cube_clicker",
     "contentVersion":  "1.2.0",
-    "artifactType":  "game_contract_bundle",
+    "artifactType":  "unity_scene_asset_bundle",
     "deliveryMode":  "on_demand",
-    "generatedAtUtc":  "2026-03-02T18:20:07.3012859Z",
-    "packageUri":  "https://theraply-vr-demo.web.app/content/demo_cube_clicker_1_2_0.pkg.json",
+    "generatedAtUtc":  "2026-03-03T12:38:08.7240212Z",
+    "packageUri":  "https://pranasense.pl/content/demo_cube_clicker_1_2_0.pkg.json",
+    "assetBundle":  {
+                        "bundleUri":  "https://pranasense.pl/content/demo_cube_clicker_1_2_0_android.bundle",
+                        "bundleFileName":  "demo_cube_clicker_1_2_0_android.bundle",
+                        "bundleSha256":  "f09efd5572c25812156c193bcca20ce9813740fe37fb56bb1e2b42ac36c3851f",
+                        "bundleBytes":  197921,
+                        "unityBuildTarget":  "Android",
+                        "compression":  "chunk",
+                        "sceneAssetPath":  "Assets/_Examples/Scenes/CubeClickerVR.unity",
+                        "sceneName":  "CubeClickerVR",
+                        "loadMode":  "additive"
+                    },
+    "gameDefinitionPath":  "contracts/game_definitions/demo_cube_clicker.json",
+    "mobileControlSchemaPath":  "contracts/mobile_control_schema_demo_cube_clicker.json",
+    "mobileControlLayoutPath":  "contracts/mobile_control_layout_demo_cube_clicker.json",
     "sourceContracts":  [
                             {
                                 "path":  "contracts/game_definitions/demo_cube_clicker.json",
@@ -25,6 +39,5 @@
                             }
                         ],
     "checksumSha256":  "2b7b8d6d1e9ab01cae908bbce20313335776dcd1f9a11630a406943134e59574",
-    "probeOnly":  true,
-    "notes":  "Board-safe package manifest for packageUri download proof without runtime executable module loading."
+    "notes":  "Install downloads package manifest + asset bundle; START loads scene additively from persistent storage."
 }
