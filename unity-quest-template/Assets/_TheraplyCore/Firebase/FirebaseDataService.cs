@@ -79,6 +79,7 @@ namespace TheraplyCore.Firebase
         private string _localDurablePath;
         private string _sqliteStorePath;
         private string _connectedControllerIp;
+        private bool _suppressControllerIpLoopbackRewriteUntilDisconnect;
         private DurableEventOutbox _durableEventOutbox;
 
         private int _pointsQueued = 0;
@@ -1326,7 +1327,11 @@ namespace TheraplyCore.Firebase
                 return simulated;
             }
 
-            if (!TryResolveBackendEndpointUrl(_sessionIngestEndpointUrl, out var endpointUrl, out var endpointErrorCode))
+            if (!TryResolveBackendEndpointUrl(
+                    _sessionIngestEndpointUrl,
+                    out var endpointUrl,
+                    out var fallbackEndpointUrl,
+                    out var endpointErrorCode))
             {
                 LogBackendCallFailure(
                     operationName: "SESSION_INGEST",
@@ -1362,6 +1367,20 @@ namespace TheraplyCore.Firebase
             }
 
             var backendResult = await PostBackendJsonAsync(endpointUrl, requestJson, "SESSION_INGEST");
+            if (!backendResult.success &&
+                ShouldRetryWithLoopbackFallback(
+                    operationName: "SESSION_INGEST",
+                    primaryEndpointUrl: endpointUrl,
+                    fallbackEndpointUrl: fallbackEndpointUrl,
+                    errorCode: backendResult.errorCode))
+            {
+                backendResult = await PostBackendJsonAsync(fallbackEndpointUrl, requestJson, "SESSION_INGEST");
+                if (backendResult.success)
+                {
+                    endpointUrl = fallbackEndpointUrl;
+                }
+            }
+
             if (!backendResult.success)
             {
                 LogBackendCallFailure(
@@ -1561,6 +1580,7 @@ namespace TheraplyCore.Firebase
             if (!TryResolveBackendEndpointUrl(
                     _sessionReconciliationEndpointUrl,
                     out var endpointUrl,
+                    out var fallbackEndpointUrl,
                     out var endpointErrorCode))
             {
                 LogBackendCallFailure(
@@ -1597,6 +1617,23 @@ namespace TheraplyCore.Firebase
             }
 
             var backendResult = await PostBackendJsonAsync(endpointUrl, requestJson, "SESSION_RECONCILIATION");
+            if (!backendResult.success &&
+                ShouldRetryWithLoopbackFallback(
+                    operationName: "SESSION_RECONCILIATION",
+                    primaryEndpointUrl: endpointUrl,
+                    fallbackEndpointUrl: fallbackEndpointUrl,
+                    errorCode: backendResult.errorCode))
+            {
+                backendResult = await PostBackendJsonAsync(
+                    fallbackEndpointUrl,
+                    requestJson,
+                    "SESSION_RECONCILIATION");
+                if (backendResult.success)
+                {
+                    endpointUrl = fallbackEndpointUrl;
+                }
+            }
+
             if (!backendResult.success)
             {
                 LogBackendCallFailure(
@@ -1689,9 +1726,14 @@ namespace TheraplyCore.Firebase
             return response;
         }
 
-        private bool TryResolveBackendEndpointUrl(string configuredUrl, out string resolvedUrl, out string errorCode)
+        private bool TryResolveBackendEndpointUrl(
+            string configuredUrl,
+            out string resolvedUrl,
+            out string fallbackEndpointUrl,
+            out string errorCode)
         {
             resolvedUrl = string.Empty;
+            fallbackEndpointUrl = string.Empty;
             errorCode = string.Empty;
 
             var trimmed = configuredUrl?.Trim() ?? string.Empty;
@@ -1714,14 +1756,26 @@ namespace TheraplyCore.Firebase
                 return false;
             }
 
+            var isLoopbackEndpoint = IsLoopbackHost(parsed.Host);
+            if (isLoopbackEndpoint)
+            {
+                fallbackEndpointUrl = AppendApiKeyToEndpoint(parsed.ToString());
+            }
+
             if (_rewriteLoopbackBackendHostOutsideEditor &&
                 !Application.isEditor &&
-                IsLoopbackHost(parsed.Host))
+                isLoopbackEndpoint)
             {
                 if (!TryResolveNonEditorLoopbackHost(out var replacementHost))
                 {
-                    errorCode = "FIREBASE_ENDPOINT_DEVICE_HOST_NOT_CONFIGURED";
-                    return false;
+                    if (_logFirebaseBackendDiagnostics || _logOutboxSync || _logFirebaseBackendPayloads)
+                    {
+                        Logger.Warning(
+                            $"[FirebaseData] Loopback backend endpoint host rewrite unavailable; using original endpoint: {trimmed}");
+                    }
+
+                    resolvedUrl = fallbackEndpointUrl;
+                    return !string.IsNullOrWhiteSpace(resolvedUrl);
                 }
 
                 var builder = new UriBuilder(parsed)
@@ -1738,6 +1792,11 @@ namespace TheraplyCore.Firebase
             }
 
             resolvedUrl = AppendApiKeyToEndpoint(parsed.ToString());
+            if (string.Equals(resolvedUrl, fallbackEndpointUrl, StringComparison.OrdinalIgnoreCase))
+            {
+                fallbackEndpointUrl = string.Empty;
+            }
+
             return true;
         }
 
@@ -1749,7 +1808,8 @@ namespace TheraplyCore.Firebase
                 return true;
             }
 
-            if (_useConnectedControllerIpForLoopbackRewrite)
+            if (_useConnectedControllerIpForLoopbackRewrite &&
+                !_suppressControllerIpLoopbackRewriteUntilDisconnect)
             {
                 var discoveredHost = (_connectedControllerIp ?? string.Empty).Trim();
                 if (IsValidBackendHost(discoveredHost))
@@ -1762,6 +1822,72 @@ namespace TheraplyCore.Firebase
             Logger.Warning(
                 "[FirebaseData] Non-editor runtime is using a loopback backend URL but no host override/controller IP is available. Set _nonEditorLoopbackHostOverride or connect controller first.");
             return false;
+        }
+
+        private bool ShouldRetryWithLoopbackFallback(
+            string operationName,
+            string primaryEndpointUrl,
+            string fallbackEndpointUrl,
+            string errorCode)
+        {
+            if (string.IsNullOrWhiteSpace(primaryEndpointUrl) ||
+                string.IsNullOrWhiteSpace(fallbackEndpointUrl))
+            {
+                return false;
+            }
+
+            if (string.Equals(primaryEndpointUrl, fallbackEndpointUrl, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if (!IsEndpointUsingControllerIpRewrite(primaryEndpointUrl))
+            {
+                return false;
+            }
+
+            if (!IsLoopbackFallbackEligibleError(errorCode))
+            {
+                return false;
+            }
+
+            _suppressControllerIpLoopbackRewriteUntilDisconnect = true;
+            if (_logFirebaseBackendDiagnostics || _logOutboxSync || _logFirebaseBackendPayloads)
+            {
+                Logger.Warning(
+                    $"[FirebaseData] {operationName} transport failed via controller endpoint " +
+                    $"(reason={NormalizeOutboxErrorCode(errorCode)}). Falling back to loopback endpoint.");
+            }
+
+            return true;
+        }
+
+        private bool IsEndpointUsingControllerIpRewrite(string endpointUrl)
+        {
+            var controllerIp = (_connectedControllerIp ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(controllerIp))
+            {
+                return false;
+            }
+
+            if (!Uri.TryCreate(endpointUrl, UriKind.Absolute, out var parsed))
+            {
+                return false;
+            }
+
+            return string.Equals(parsed.Host, controllerIp, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsLoopbackFallbackEligibleError(string errorCode)
+        {
+            if (string.IsNullOrWhiteSpace(errorCode))
+            {
+                return false;
+            }
+
+            return errorCode.EndsWith("_INSECURE_CONNECTION", StringComparison.OrdinalIgnoreCase) ||
+                   errorCode.EndsWith("_CONNECTION_ERROR", StringComparison.OrdinalIgnoreCase) ||
+                   errorCode.EndsWith("_TIMEOUT", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsValidBackendHost(string host)
@@ -1859,7 +1985,24 @@ namespace TheraplyCore.Firebase
                         $"[FirebaseData] Backend {operationName} request -> {endpointUrl} ({payloadBytes.Length} bytes)");
                 }
 
-                var asyncOperation = request.SendWebRequest();
+                UnityWebRequestAsyncOperation asyncOperation;
+                try
+                {
+                    asyncOperation = request.SendWebRequest();
+                }
+                catch (Exception e)
+                {
+                    result.errorCode = ClassifyBackendRequestException(operationName, e);
+                    if (_logOutboxSync || _logFirebaseBackendPayloads)
+                    {
+                        Logger.Warning(
+                            $"[FirebaseData] Backend {operationName} failed before network dispatch: " +
+                            $"{NormalizeOutboxErrorCode(result.errorCode)} (endpoint={endpointUrl}, details={e.Message})");
+                    }
+
+                    return result;
+                }
+
                 var requestDeadlineUtc = DateTime.UtcNow.AddSeconds(Math.Max(3, timeoutSeconds + 2));
                 while (!asyncOperation.isDone)
                 {
@@ -1898,7 +2041,15 @@ namespace TheraplyCore.Firebase
 
                 if (request.result == UnityWebRequest.Result.ConnectionError)
                 {
-                    result.errorCode = $"{operationName}_CONNECTION_ERROR";
+                    var networkError = request.error ?? string.Empty;
+                    if (networkError.IndexOf("Insecure connection not allowed", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        result.errorCode = $"{operationName}_INSECURE_CONNECTION";
+                    }
+                    else
+                    {
+                        result.errorCode = $"{operationName}_CONNECTION_ERROR";
+                    }
                 }
                 else if (request.result == UnityWebRequest.Result.DataProcessingError)
                 {
@@ -1925,6 +2076,22 @@ namespace TheraplyCore.Firebase
 
                 return result;
             }
+        }
+
+        private static string ClassifyBackendRequestException(string operationName, Exception exception)
+        {
+            if (exception == null)
+            {
+                return $"{operationName}_REQUEST_EXCEPTION";
+            }
+
+            var message = exception.Message ?? string.Empty;
+            if (message.IndexOf("Insecure connection not allowed", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return $"{operationName}_INSECURE_CONNECTION";
+            }
+
+            return $"{operationName}_REQUEST_EXCEPTION";
         }
 
         private void LogBackendCallFailure(
@@ -2535,6 +2702,7 @@ namespace TheraplyCore.Firebase
             }
 
             _connectedControllerIp = normalized;
+            _suppressControllerIpLoopbackRewriteUntilDisconnect = false;
 
             if (_logFirebaseBackendDiagnostics || _logOutboxSync || _logFirebaseBackendPayloads)
             {
@@ -2545,6 +2713,7 @@ namespace TheraplyCore.Firebase
         private void HandleControllerDisconnected()
         {
             _connectedControllerIp = string.Empty;
+            _suppressControllerIpLoopbackRewriteUntilDisconnect = false;
         }
 
         private void RefreshSessionMetadataFromContext()
