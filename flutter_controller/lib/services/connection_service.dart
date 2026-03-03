@@ -75,9 +75,6 @@ class ConnectionService {
         _connectionController.add(true);
       }
 
-      // Pause UDP discovery when TCP connected
-      _discoveryService?.pauseScanning();
-
       print('[Connection] ✅ Connected successfully');
 
       // Listen for incoming messages

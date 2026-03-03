@@ -860,13 +860,14 @@ class _ControlScreenState extends State<ControlScreen>
         reasonCode: reason.toUpperCase(),
       );
 
-      var ok = await _connection.reconnect(
-        maxAttempts: 4,
-        baseDelay: const Duration(milliseconds: 350),
-      );
-
+      // Prefer the freshest discovery endpoint first. This avoids getting
+      // stuck on stale IPs that can still accept TCP but never ACK SESSION_ATTACH.
+      var ok = await _tryReconnectViaDiscoveryCandidate();
       if (!ok) {
-        ok = await _tryReconnectViaDiscoveryCandidate();
+        ok = await _connection.reconnect(
+          maxAttempts: 4,
+          baseDelay: const Duration(milliseconds: 350),
+        );
       }
 
       if (!mounted || !_autoReconnectEnabled || _allowSystemPop) {
