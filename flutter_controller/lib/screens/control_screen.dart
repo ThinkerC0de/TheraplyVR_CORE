@@ -2470,11 +2470,6 @@ class _ControlScreenState extends State<ControlScreen>
         activeSessionId.startsWith('mobile-') ||
         activeSessionId == persistedSessionId;
 
-    final shouldShowSetupScreen = !persisted.isTerminal &&
-        !SessionRecoveryPolicy.isTerminalState(
-          persisted.state ?? SessionLifecycleState.created,
-        );
-
     var shouldSetState = false;
 
     // Do not silently switch local session context to an unfinished remote one.
@@ -2497,8 +2492,9 @@ class _ControlScreenState extends State<ControlScreen>
 
     final hasRuntimeOrActionInProgress =
         _isGameRuntimeActive || _isPrimaryActionInFlight;
-    final shouldPreferCatalog =
-        persisted.requiresHandoffDecision || !shouldShowSetupScreen;
+    // Keep therapist in the current workflow after game completion.
+    // Return to catalog should be explicit (back arrow), not automatic.
+    final shouldPreferCatalog = persisted.requiresHandoffDecision;
     if (shouldPreferCatalog &&
         !hasRuntimeOrActionInProgress &&
         _workflowStep != _WorkflowStep.gameCatalog) {
@@ -7160,7 +7156,7 @@ class _ControlScreenState extends State<ControlScreen>
     );
   }
 
-  Future<void> _endSessionFromGameScreen() async {
+  Future<void> _endSessionFromCatalog() async {
     final confirmed = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
@@ -8294,6 +8290,19 @@ class _ControlScreenState extends State<ControlScreen>
           const SizedBox(height: 8),
         ],
         ElevatedButton.icon(
+          onPressed: _isPrimaryActionInFlight
+              ? null
+              : () => unawaited(_endSessionFromCatalog()),
+          icon: const Icon(Icons.flag),
+          label: const Text('End Session'),
+          style: ElevatedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            backgroundColor: Colors.deepOrange.shade700,
+            foregroundColor: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 8),
+        ElevatedButton.icon(
           onPressed: _isConnected &&
                   _sessionAttachReady &&
                   !_isPlanBlockingLaunch &&
@@ -8470,19 +8479,6 @@ class _ControlScreenState extends State<ControlScreen>
                   ? _buildParentProgressPanel()
                   : _buildTherapistTimelinePanel(),
             ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        ElevatedButton.icon(
-          onPressed: _isPrimaryActionInFlight
-              ? null
-              : () => unawaited(_endSessionFromGameScreen()),
-          icon: const Icon(Icons.flag),
-          label: const Text('End Session'),
-          style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            backgroundColor: Colors.deepOrange.shade700,
-            foregroundColor: Colors.white,
           ),
         ),
       ],
