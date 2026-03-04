@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_controller/models/game_run_record.dart';
 import 'package:flutter_controller/models/session_fsm_contract.dart';
 import 'package:flutter_controller/models/session_ownership.dart';
 import 'package:flutter_controller/models/therapy_session_record.dart';
@@ -533,6 +534,25 @@ class SessionJournalService {
         )
         .toList(growable: false);
     return _mergeAndSortTimeline(events, limit: resolvedLimit);
+  }
+
+  static Stream<List<GameRunRecord>> watchGameRuns({
+    required String sessionId,
+  }) {
+    final normalizedSessionId = sessionId.trim();
+    if (normalizedSessionId.isEmpty) {
+      return const Stream.empty();
+    }
+    return _sessionsCollection
+        .doc(normalizedSessionId)
+        .collection('game_runs')
+        .orderBy('startedAtUtc', descending: false)
+        .snapshots()
+        .map(
+          (snap) => snap.docs
+              .map((doc) => GameRunRecord.fromFirestore(doc.id, doc.data()))
+              .toList(growable: false),
+        );
   }
 
   static String buildTimelineEventId({

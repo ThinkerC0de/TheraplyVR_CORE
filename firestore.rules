@@ -98,6 +98,7 @@ service cloud.firestore {
       allow create: if isAdminOperator() || isTherapySessionOwnerByRequest();
       allow update, delete: if isAdminOperator() || isTherapySessionOwnerByResource();
 
+      // Legacy event subcollection — kept for backwards compatibility.
       match /events/{eventId} {
         allow read: if canReadTherapySession(sessionId);
         allow create: if isAdminOperator() || (
@@ -106,6 +107,29 @@ service cloud.firestore {
           request.resource.data.therapistId == request.auth.uid
         );
         allow update, delete: if false;
+      }
+
+      // Written exclusively by Cloud Functions (admin SDK bypasses these rules).
+      // Client-side reads allowed for session owner and admin.
+      match /game_runs/{gameRunId} {
+        allow read: if canReadTherapySession(sessionId);
+        allow write: if false;
+      }
+
+      match /interactions/{eventId} {
+        allow read: if canReadTherapySession(sessionId);
+        allow write: if false;
+      }
+
+      match /motion_traces/{traceId} {
+        allow read: if canReadTherapySession(sessionId);
+        allow write: if false;
+      }
+
+      // Raw / unknown events — admin only.
+      match /raw_events/{eventId} {
+        allow read: if isAdminOperator();
+        allow write: if false;
       }
     }
 

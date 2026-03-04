@@ -32,6 +32,7 @@ import 'package:flutter_controller/services/parent_progress_service.dart';
 import 'package:flutter_controller/services/session_journal_service.dart';
 import 'package:flutter_controller/services/student_reward_service.dart';
 import 'package:flutter_controller/services/therapist_session_settings_service.dart';
+import 'package:flutter_controller/models/game_run_record.dart';
 import 'package:flutter_controller/models/therapy_session_record.dart';
 import 'package:flutter_controller/widgets/media_stream_widget.dart';
 import 'package:flutter_controller/widgets/mobile_control_renderer.dart';
@@ -314,6 +315,9 @@ class _ControlScreenState extends State<ControlScreen>
   late String _activeSessionId;
   late String _selectedGameId;
   String? _remoteSessionIdPendingDecision;
+  // Session ID at the time START_GAME was sent — persists across session rollover
+  // so the VR stats panel continues to display game_runs from the correct session.
+  String? _vrStatsSessionId;
   String? _remoteActiveGameId;
   String? _lastSessionStateUpdateSessionId;
   String? _lastRuntimeStatusSessionId;
@@ -6895,6 +6899,165 @@ class _ControlScreenState extends State<ControlScreen>
     );
   }
 
+  // ── VR game-run stats ──────────────────────────────────────────────────────
+
+  Widget _buildVrGameRunsPanel(String sessionId) {
+    return StreamBuilder<List<GameRunRecord>>(
+      stream: SessionJournalService.watchGameRuns(sessionId: sessionId),
+      builder: (context, snapshot) {
+        final runs = snapshot.data ?? [];
+        if (runs.isEmpty) return const SizedBox.shrink();
+
+        final totalInteractions =
+            runs.fold(0, (sum, r) => sum + r.interactionCount);
+        final totalHits = runs.fold(0, (sum, r) => sum + r.hitCount);
+        final totalMisses = runs.fold(0, (sum, r) => sum + r.missCount);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.indigo.shade50,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.indigo.shade100),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.sports_esports, size: 14,
+                          color: Colors.indigo),
+                      const SizedBox(width: 6),
+                      Text(
+                        'VR interactions',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.indigo.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      _vrStatChip(
+                        Icons.check_circle_outline,
+                        '$totalHits hits',
+                        Colors.green.shade700,
+                        Colors.green.shade50,
+                      ),
+                      _vrStatChip(
+                        Icons.cancel_outlined,
+                        '$totalMisses misses',
+                        Colors.red.shade700,
+                        Colors.red.shade50,
+                      ),
+                      _vrStatChip(
+                        Icons.touch_app_outlined,
+                        '$totalInteractions total',
+                        Colors.blue.shade700,
+                        Colors.blue.shade50,
+                      ),
+                      _vrStatChip(
+                        Icons.videogame_asset_outlined,
+                        '${runs.length} ${runs.length == 1 ? "game" : "games"}',
+                        Colors.purple.shade700,
+                        Colors.purple.shade50,
+                      ),
+                    ],
+                  ),
+                  if (runs.length > 1) ...[
+                    const SizedBox(height: 8),
+                    for (final run in runs) _buildGameRunRow(run),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _vrStatChip(
+    IconData icon,
+    String label,
+    Color fgColor,
+    Color bgColor,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: fgColor),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: fgColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGameRunRow(GameRunRecord run) {
+    final gameLabel = run.gameId.isNotEmpty ? run.gameId : run.gameRunId;
+    final stateIcon = run.isCompleted
+        ? Icons.check_circle
+        : run.isFailed
+            ? Icons.cancel
+            : Icons.hourglass_bottom;
+    final stateColor = run.isCompleted
+        ? Colors.green.shade600
+        : run.isFailed
+            ? Colors.red.shade600
+            : Colors.orange.shade600;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        children: [
+          Icon(stateIcon, size: 12, color: stateColor),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              gameLabel,
+              style: const TextStyle(fontSize: 11),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Text(
+            '${run.hitCount}/${run.hitCount + run.missCount}',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey.shade700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Timeline panel ─────────────────────────────────────────────────────────
+
   Widget _buildTherapistTimelinePanel() {
     final sessionId = _resolveTimelineSessionId();
     final hasSessionId = sessionId.isNotEmpty;
@@ -7021,6 +7184,7 @@ class _ControlScreenState extends State<ControlScreen>
                 ],
               ),
             const SizedBox(height: 10),
+            _buildVrGameRunsPanel(sessionId),
             SizedBox(
               height: 250,
               child: StreamBuilder<List<SessionTimelineEvent>>(
