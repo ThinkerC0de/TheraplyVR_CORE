@@ -71,6 +71,7 @@ class _ControlScreenState extends State<ControlScreen>
   static final bool _contentDeliveryEnabled = true;
   static const bool _boardSafePackageProbeFeatureEnabled = false;
   static const int _sessionIngestPort = 18765;
+  static const String _setVideoBitrateCommandId = 'WEBRTC_SET_VIDEO_BITRATE';
   static final bool _serverAuthoritativeHandoffGate = true;
   static const bool _showCatalogRescueTerminateButton = false;
   static final MobileControlSchemaParseResult _fallbackDemoCubeSchemaParse =
@@ -345,6 +346,7 @@ class _ControlScreenState extends State<ControlScreen>
       <String, DateTime>{};
   final Map<String, String> _lastCriticalFailureReasonByCommand =
       <String, String>{};
+  int? _lastSentPreviewBitrateKbps;
   MediaPreviewState _mediaPreviewState = MediaPreviewState.initializing;
   DateTime? _lastMediaPreviewStateAtUtc;
 
@@ -420,6 +422,7 @@ class _ControlScreenState extends State<ControlScreen>
         _questReportedContentGameIds.clear();
         if (!connected) {
           _sessionAttachReady = false;
+          _lastSentPreviewBitrateKbps = null;
           _lastDevicePresenceSignal = null;
           _mediaPreviewState = MediaPreviewState.waitingForStream;
           _lastMediaPreviewStateAtUtc = DateTime.now().toUtc();
@@ -1089,6 +1092,9 @@ class _ControlScreenState extends State<ControlScreen>
       if (_contentDeliveryEnabled) {
         unawaited(_syncContentCatalog(silent: true));
       }
+      unawaited(
+        _syncPreviewBitrateToHeadset(reasonCode: 'SESSION_ATTACH_ACK'),
+      );
     } catch (e) {
       if (!mounted) {
         return;
@@ -1967,6 +1973,71 @@ class _ControlScreenState extends State<ControlScreen>
     setState(() {
       _therapistSessionSettings = settings;
     });
+    unawaited(
+      _syncPreviewBitrateToHeadset(
+        reasonCode: 'THERAPIST_SETTINGS_SYNC',
+      ),
+    );
+  }
+
+  int _resolvePreviewBitrateKbps() {
+    final configured = _therapistSessionSettings.previewStreamBitrateKbps;
+    if (configured < TherapistSessionSettings.minPreviewStreamBitrateKbps) {
+      return TherapistSessionSettings.minPreviewStreamBitrateKbps;
+    }
+    if (configured > TherapistSessionSettings.maxPreviewStreamBitrateKbps) {
+      return TherapistSessionSettings.maxPreviewStreamBitrateKbps;
+    }
+    return configured;
+  }
+
+  Future<void> _syncPreviewBitrateToHeadset({
+    required String reasonCode,
+    bool force = false,
+  }) async {
+    if (!_isConnected || !_sessionAttachReady) {
+      return;
+    }
+
+    final targetKbps = _resolvePreviewBitrateKbps();
+    if (!force &&
+        _lastSentPreviewBitrateKbps != null &&
+        _lastSentPreviewBitrateKbps == targetKbps) {
+      return;
+    }
+
+    final payload = <String, dynamic>{
+      'bitrateKbps': targetKbps,
+      'bitrateBps': targetKbps * 1000,
+      'origin': 'mobile_settings',
+      'reasonCode': reasonCode,
+    };
+
+    try {
+      await _connection.sendCommand(_setVideoBitrateCommandId, payload);
+      _lastSentPreviewBitrateKbps = targetKbps;
+      debugPrint(
+        '[ControlScreen] Applied preview bitrate override: '
+        '${targetKbps}kbps ($reasonCode)',
+      );
+    } catch (e) {
+      _lastSentPreviewBitrateKbps = null;
+      if (!mounted) {
+        return;
+      }
+      final summary = OpsErrorCatalog.buildOperatorSummary(
+        error: e,
+        fallbackReasonCode: 'WEBRTC_VIDEO_BITRATE_SYNC_FAILED',
+      );
+      _enqueueIncidentAlert(
+        title: 'Preview bitrate sync failed',
+        message: 'Could not apply preview bitrate: $summary',
+        reasonCode:
+            OpsErrorCatalog.tryExtractReasonCode(e) ??
+            'WEBRTC_VIDEO_BITRATE_SYNC_FAILED',
+        severity: OperatorIncidentSeverity.warning,
+      );
+    }
   }
 
   String _resolveOwnerKey({String? therapistIdOverride}) {

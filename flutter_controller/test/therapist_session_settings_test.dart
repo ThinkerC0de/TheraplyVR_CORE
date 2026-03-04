@@ -36,6 +36,10 @@ void main() {
         TherapistSessionSettings.defaultKeepScreenAwakeWhenForeground,
       );
       expect(
+        settings.previewStreamBitrateKbps,
+        TherapistSessionSettings.defaultPreviewStreamBitrateKbps,
+      );
+      expect(
         settings.mobileDisconnectBehavior,
         TherapistSessionSettings.defaultMobileDisconnectBehavior,
       );
@@ -57,6 +61,7 @@ void main() {
         'criticalCommandMaxRetries': -1,
         'criticalCommandAckTimeoutMs': 999999,
         'adaptiveDifficultySensitivity': 99.0,
+        'previewStreamBitrateKbps': 999999,
       });
 
       expect(
@@ -79,6 +84,10 @@ void main() {
         settings.adaptiveDifficultySensitivity,
         TherapistSessionSettings.maxAdaptiveDifficultySensitivity,
       );
+      expect(
+        settings.previewStreamBitrateKbps,
+        TherapistSessionSettings.maxPreviewStreamBitrateKbps,
+      );
     });
 
     test('parses booleans and note templates from source map', () {
@@ -86,6 +95,7 @@ void main() {
         'autoCloseInterruptedSessionsEnabled': false,
         'requireResumeConfirmationAfterRecoveryWindow': false,
         'keepScreenAwakeWhenForeground': true,
+        'previewStreamBitrateKbps': 640,
         'mobileDisconnectBehavior': 'continue',
         'operatorUiLanguage': 'pl',
         'timelineQuickNoteTemplates': <dynamic>['A', ' ', 'B'],
@@ -103,6 +113,7 @@ void main() {
       expect(settings.autoCloseInterruptedSessionsEnabled, isFalse);
       expect(settings.requireResumeConfirmationAfterRecoveryWindow, isFalse);
       expect(settings.keepScreenAwakeWhenForeground, isTrue);
+      expect(settings.previewStreamBitrateKbps, 640);
       expect(
         settings.mobileDisconnectBehavior,
         MobileDisconnectBehavior.continueGameplay,
@@ -129,6 +140,7 @@ void main() {
         'adaptiveDifficultySensitivity': 0.74,
         'labelPipelineEnabled': false,
         'keepScreenAwakeWhenForeground': true,
+        'previewStreamBitrateKbps': 900,
         'mobileDisconnectBehavior': 'continue',
         'operatorUiLanguage': 'pl',
         'timelineQuickNoteTemplates': <String>['Template A', 'Template B'],
@@ -161,6 +173,7 @@ void main() {
       expect(roundtrip.adaptiveDifficultySensitivity, 0.74);
       expect(roundtrip.labelPipelineEnabled, isFalse);
       expect(roundtrip.keepScreenAwakeWhenForeground, isTrue);
+      expect(roundtrip.previewStreamBitrateKbps, 900);
       expect(
         roundtrip.mobileDisconnectBehavior,
         MobileDisconnectBehavior.continueGameplay,
@@ -186,6 +199,7 @@ void main() {
         adaptiveDifficultySensitivity: 0.25,
         labelPipelineEnabled: false,
         keepScreenAwakeWhenForeground: true,
+        previewStreamBitrateKbps: 700,
         mobileDisconnectBehavior: MobileDisconnectBehavior.continueGameplay,
         operatorUiLanguage: TherapistUiLanguage.polish,
         timelineQuickNoteTemplates: <String>['Custom quick note'],
@@ -203,6 +217,7 @@ void main() {
       expect(updated.adaptiveDifficultySensitivity, 0.25);
       expect(updated.labelPipelineEnabled, isFalse);
       expect(updated.keepScreenAwakeWhenForeground, isTrue);
+      expect(updated.previewStreamBitrateKbps, 700);
       expect(
         updated.mobileDisconnectBehavior,
         MobileDisconnectBehavior.continueGameplay,

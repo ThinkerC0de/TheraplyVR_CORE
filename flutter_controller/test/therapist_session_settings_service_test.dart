@@ -49,6 +49,10 @@ void main() {
         TherapistSessionSettings.defaultKeepScreenAwakeWhenForeground,
       );
       expect(
+        settings.previewStreamBitrateKbps,
+        TherapistSessionSettings.defaultPreviewStreamBitrateKbps,
+      );
+      expect(
         settings.mobileDisconnectBehavior,
         TherapistSessionSettings.defaultMobileDisconnectBehavior,
       );
@@ -79,6 +83,7 @@ void main() {
           'adaptiveDifficultySensitivity': 0.2,
           'labelPipelineEnabled': false,
           'keepScreenAwakeWhenForeground': true,
+          'previewStreamBitrateKbps': 850,
           'mobileDisconnectBehavior': 'continue',
           'operatorUiLanguage': 'pl',
           'timelineQuickNoteTemplates': <String>[
@@ -112,6 +117,7 @@ void main() {
       expect(payload['adaptiveDifficultySensitivity'], 0.2);
       expect(payload['labelPipelineEnabled'], isFalse);
       expect(payload['keepScreenAwakeWhenForeground'], isTrue);
+      expect(payload['previewStreamBitrateKbps'], 850);
       expect(payload['mobileDisconnectBehavior'], 'continue');
       expect(payload['operatorUiLanguage'], 'pl');
       expect(
@@ -145,6 +151,7 @@ void main() {
       expect(fetched.adaptiveDifficultySensitivity, 0.2);
       expect(fetched.labelPipelineEnabled, isFalse);
       expect(fetched.keepScreenAwakeWhenForeground, isTrue);
+      expect(fetched.previewStreamBitrateKbps, 850);
       expect(
         fetched.mobileDisconnectBehavior,
         MobileDisconnectBehavior.continueGameplay,

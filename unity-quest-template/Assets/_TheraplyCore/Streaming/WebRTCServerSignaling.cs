@@ -14,6 +14,9 @@ namespace TheraplyCore.Streaming
     /// </summary>
     public class WebRTCServerSignaling : MonoBehaviour
     {
+        private const string SetVideoBitrateCommandId = "WEBRTC_SET_VIDEO_BITRATE";
+        private const string VideoBitrateStatusCommandId = "WEBRTC_VIDEO_BITRATE_STATUS";
+
         [Header("Dependencies")]
         [FormerlySerializedAs("_videoStreamService")]
         [SerializeField] private MediaStreamService _mediaStreamService;
@@ -168,7 +171,99 @@ namespace TheraplyCore.Streaming
                 case "WEBRTC_STUN_FALLBACK_REQUEST":
                     HandleClientStunFallbackRequest(message.payloadString);
                     break;
+                case SetVideoBitrateCommandId:
+                    HandleSetVideoBitrate(message.payloadString);
+                    break;
             }
+        }
+
+        private void HandleSetVideoBitrate(string payloadJson)
+        {
+            if (_mediaStreamService == null || _tcpServer == null)
+            {
+                return;
+            }
+
+            var request = new WebRTCSetVideoBitrateMessage();
+            if (!string.IsNullOrWhiteSpace(payloadJson))
+            {
+                try
+                {
+                    request = JsonUtility.FromJson<WebRTCSetVideoBitrateMessage>(payloadJson) ??
+                              new WebRTCSetVideoBitrateMessage();
+                }
+                catch (Exception ex)
+                {
+                    if (_logSignaling)
+                    {
+                        Debug.LogWarning($"[WebRTCServerSignaling] Failed to parse {SetVideoBitrateCommandId}: {ex.Message}");
+                    }
+                    SendVideoBitrateStatus(
+                        success: false,
+                        requestedBitrateBps: 0,
+                        appliedBitrateBps: 0,
+                        reasonCode: "VIDEO_BITRATE_INVALID_PAYLOAD");
+                    return;
+                }
+            }
+
+            var requestedBitrateBps = request.bitrateBps;
+            if (requestedBitrateBps <= 0 && request.bitrateKbps > 0)
+            {
+                requestedBitrateBps = request.bitrateKbps * 1000;
+            }
+
+            if (requestedBitrateBps <= 0)
+            {
+                SendVideoBitrateStatus(
+                    success: false,
+                    requestedBitrateBps: 0,
+                    appliedBitrateBps: 0,
+                    reasonCode: "VIDEO_BITRATE_INVALID_VALUE");
+                return;
+            }
+
+            var success = _mediaStreamService.TrySetTargetBitrateBps(
+                requestedBitrateBps,
+                out var appliedBitrateBps,
+                out var reasonCode);
+
+            if (_logSignaling)
+            {
+                Debug.Log(
+                    $"[WebRTCServerSignaling] {SetVideoBitrateCommandId}: " +
+                    $"requested={requestedBitrateBps}bps applied={appliedBitrateBps}bps success={success} reason={reasonCode}");
+            }
+
+            SendVideoBitrateStatus(
+                success: success,
+                requestedBitrateBps: requestedBitrateBps,
+                appliedBitrateBps: appliedBitrateBps,
+                reasonCode: reasonCode);
+        }
+
+        private void SendVideoBitrateStatus(
+            bool success,
+            int requestedBitrateBps,
+            int appliedBitrateBps,
+            string reasonCode)
+        {
+            if (_tcpServer == null || !_tcpServer.HasClient)
+            {
+                return;
+            }
+
+            var payload = new WebRTCVideoBitrateStatusMessage
+            {
+                success = success,
+                requestedBitrateBps = requestedBitrateBps,
+                appliedBitrateBps = appliedBitrateBps,
+                requestedBitrateKbps = requestedBitrateBps > 0 ? requestedBitrateBps / 1000 : 0,
+                appliedBitrateKbps = appliedBitrateBps > 0 ? appliedBitrateBps / 1000 : 0,
+                reasonCode = string.IsNullOrWhiteSpace(reasonCode) ? (success ? "VIDEO_BITRATE_APPLIED" : "VIDEO_BITRATE_FAILED") : reasonCode
+            };
+
+            _ = _tcpServer.SendCommandAsync(VideoBitrateStatusCommandId, payload);
         }
 
         private void HandleClientStunFallbackRequest(string payloadJson)
@@ -293,6 +388,26 @@ namespace TheraplyCore.Streaming
     [System.Serializable]
     public class WebRTCStunFallbackRequestMessage
     {
+        public string reasonCode;
+    }
+
+    [System.Serializable]
+    public class WebRTCSetVideoBitrateMessage
+    {
+        public int bitrateKbps;
+        public int bitrateBps;
+        public string reasonCode;
+        public string origin;
+    }
+
+    [System.Serializable]
+    public class WebRTCVideoBitrateStatusMessage
+    {
+        public bool success;
+        public int requestedBitrateKbps;
+        public int requestedBitrateBps;
+        public int appliedBitrateKbps;
+        public int appliedBitrateBps;
         public string reasonCode;
     }
 }

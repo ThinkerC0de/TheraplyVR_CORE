@@ -1247,6 +1247,7 @@ class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
   late bool _requireResumeConfirmationAfterRecoveryWindow;
   late bool _keepScreenAwakeWhenForeground;
   late bool _autoInstallOwnedGames;
+  late double _previewStreamBitrateKbps;
   late MobileDisconnectBehavior _mobileDisconnectBehavior;
   late TherapistUiLanguage _operatorUiLanguage;
   late GuidedSessionContinuationPolicy _guidedSessionContinuationPolicy;
@@ -1285,6 +1286,7 @@ class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
         initial.requireResumeConfirmationAfterRecoveryWindow;
     _keepScreenAwakeWhenForeground = initial.keepScreenAwakeWhenForeground;
     _autoInstallOwnedGames = initial.autoInstallOwnedGames;
+    _previewStreamBitrateKbps = initial.previewStreamBitrateKbps.toDouble();
     _mobileDisconnectBehavior = initial.mobileDisconnectBehavior;
     _operatorUiLanguage = initial.operatorUiLanguage;
     _guidedSessionContinuationPolicy = initial.guidedSessionContinuationPolicy;
@@ -1355,6 +1357,8 @@ class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
           defaults.requireResumeConfirmationAfterRecoveryWindow;
       _keepScreenAwakeWhenForeground = defaults.keepScreenAwakeWhenForeground;
       _autoInstallOwnedGames = defaults.autoInstallOwnedGames;
+      _previewStreamBitrateKbps =
+          defaults.previewStreamBitrateKbps.toDouble();
       _mobileDisconnectBehavior = defaults.mobileDisconnectBehavior;
       _operatorUiLanguage = defaults.operatorUiLanguage;
       _guidedSessionContinuationPolicy =
@@ -1441,6 +1445,14 @@ class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
       return;
     }
 
+    final previewStreamBitrateKbps = _previewStreamBitrateKbps
+        .round()
+        .clamp(
+          TherapistSessionSettings.minPreviewStreamBitrateKbps,
+          TherapistSessionSettings.maxPreviewStreamBitrateKbps,
+        )
+        .toInt();
+
     final settings = TherapistSessionSettings.fromMap(
       <String, dynamic>{
         'sessionRecoveryWindowMinutes': sessionRecoveryWindowMinutes,
@@ -1458,6 +1470,7 @@ class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
         'labelPipelineEnabled': widget.initialSettings.labelPipelineEnabled,
         'keepScreenAwakeWhenForeground': _keepScreenAwakeWhenForeground,
         'autoInstallOwnedGames': _autoInstallOwnedGames,
+        'previewStreamBitrateKbps': previewStreamBitrateKbps,
         'mobileDisconnectBehavior': _mobileDisconnectBehavior.wireValue,
         'operatorUiLanguage': _operatorUiLanguage.wireValue,
         'timelineQuickNoteTemplates': timelineQuickNoteTemplates,
@@ -1578,6 +1591,35 @@ class _TherapistSettingsDialogState extends State<_TherapistSettingsDialog> {
                     : (value) {
                         setState(() {
                           _autoInstallOwnedGames = value;
+                        });
+                      },
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'VR preview bitrate: '
+                '${(_previewStreamBitrateKbps / 1000).toStringAsFixed(1)} Mbps '
+                '(${_previewStreamBitrateKbps.round()} kbps)',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              Slider(
+                value: _previewStreamBitrateKbps,
+                min: TherapistSessionSettings.minPreviewStreamBitrateKbps
+                    .toDouble(),
+                max: TherapistSessionSettings.maxPreviewStreamBitrateKbps
+                    .toDouble(),
+                divisions: ((TherapistSessionSettings
+                                .maxPreviewStreamBitrateKbps -
+                            TherapistSessionSettings
+                                .minPreviewStreamBitrateKbps) ~/
+                        50)
+                    .clamp(1, 200)
+                    .toInt(),
+                label: '${_previewStreamBitrateKbps.round()} kbps',
+                onChanged: _isSaving
+                    ? null
+                    : (value) {
+                        setState(() {
+                          _previewStreamBitrateKbps = value;
                         });
                       },
               ),

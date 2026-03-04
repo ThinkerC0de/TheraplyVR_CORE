@@ -21,6 +21,9 @@ namespace TheraplyCore.Streaming
     [RequireComponent(typeof(Camera))]
     public class MediaStreamService : MonoBehaviour
     {
+        public const int MinTargetBitrateBps = 200000;
+        public const int MaxTargetBitrateBps = 2500000;
+
         // ============================================
         // CONFIGURATION
         // ============================================
@@ -61,6 +64,7 @@ namespace TheraplyCore.Streaming
         private RTCPeerConnection _peerConnection;
         private MediaStream _mediaStream;
         private VideoStreamTrack _videoTrack;
+        private RTCRtpSender _videoSender;
         private AudioStreamTrack _audioTrack;
         private RTCRtpTransceiver _incomingTherapistVoiceTransceiver;
         private RenderTexture _renderTexture;
@@ -264,7 +268,7 @@ namespace TheraplyCore.Streaming
                 _sourceCamera.targetTexture = _renderTexture;
             }
             
-            var configuredBitrateBps = Mathf.Max(100000, _targetBitrate);
+            var configuredBitrateBps = Mathf.Clamp(_targetBitrate, MinTargetBitrateBps, MaxTargetBitrateBps);
             Debug.Log(
                 $"[MediaStreamService] Initialized capture: {_streamWidth}x{_streamHeight} @ {_targetFps}fps (target bitrate={configuredBitrateBps}bps)");
             Debug.Log($"[MediaStreamService] RenderTexture source camera: {(_captureCamera != null ? _captureCamera.name : _sourceCamera.name)}");
@@ -345,8 +349,17 @@ namespace TheraplyCore.Streaming
                     _incomingTherapistVoiceTransceiver = null;
                 }
 
-                foreach (var track in _mediaStream.GetTracks())
-                    _peerConnection.AddTrack(track, _mediaStream);
+                _videoSender = _peerConnection.AddTrack(_videoTrack, _mediaStream);
+                if (_audioTrack != null)
+                {
+                    _peerConnection.AddTrack(_audioTrack, _mediaStream);
+                }
+
+                if (!TryApplyConfiguredVideoBitrate(_targetBitrate, out var bitrateApplyReasonCode))
+                {
+                    Debug.LogWarning(
+                        $"[MediaStreamService] Failed to apply initial video bitrate={_targetBitrate}bps: {bitrateApplyReasonCode}");
+                }
                 _peerConnection.OnIceCandidate = OnIceCandidate;
                 _peerConnection.OnIceConnectionChange = OnIceConnectionChange;
                 _peerConnection.OnConnectionStateChange = OnConnectionStateChange;
@@ -391,6 +404,7 @@ namespace TheraplyCore.Streaming
                 _peerConnection = null;
             }
             _incomingTherapistVoiceTransceiver = null;
+            _videoSender = null;
             if (_videoTrack != null)
             {
                 _videoTrack.Dispose();
@@ -873,6 +887,30 @@ namespace TheraplyCore.Streaming
         public Camera SourceCamera => _sourceCamera;
         public RTCPeerConnection PeerConnection => _peerConnection;
         public int FramesSent => _framesSent;
+
+        public bool TrySetTargetBitrateBps(
+            int bitrateBps,
+            out int appliedBitrateBps,
+            out string reasonCode)
+        {
+            var normalizedTarget = Mathf.Clamp(bitrateBps, MinTargetBitrateBps, MaxTargetBitrateBps);
+            _targetBitrate = normalizedTarget;
+            appliedBitrateBps = normalizedTarget;
+
+            if (!_isStreaming || _peerConnection == null)
+            {
+                reasonCode = "STREAM_NOT_ACTIVE_BITRATE_STORED";
+                return true;
+            }
+
+            if (!TryApplyConfiguredVideoBitrate(normalizedTarget, out reasonCode))
+            {
+                return false;
+            }
+
+            reasonCode = "VIDEO_BITRATE_APPLIED";
+            return true;
+        }
         
         /// <summary>
         /// Manually assign source camera (for testing)
@@ -903,6 +941,56 @@ namespace TheraplyCore.Streaming
                 // Rebuild capture route when source changes.
                 InitializeCapture();
                 Debug.Log($"[MediaStreamService] Camera changed to: {_sourceCamera.name}");
+            }
+        }
+
+        private bool TryApplyConfiguredVideoBitrate(int bitrateBps, out string reasonCode)
+        {
+            if (_videoSender == null)
+            {
+                reasonCode = "VIDEO_SENDER_UNAVAILABLE";
+                return false;
+            }
+
+            try
+            {
+                var parameters = _videoSender.GetParameters();
+                if (parameters == null)
+                {
+                    reasonCode = "VIDEO_SENDER_PARAMETERS_NULL";
+                    return false;
+                }
+
+                if (parameters.encodings == null || parameters.encodings.Length == 0)
+                {
+                    parameters.encodings = new[] { new RTCRtpEncodingParameters { active = true } };
+                }
+
+                for (var i = 0; i < parameters.encodings.Length; i++)
+                {
+                    var encoding = parameters.encodings[i] ?? new RTCRtpEncodingParameters { active = true };
+                    encoding.maxBitrate = (ulong)bitrateBps;
+                    if (!encoding.maxFramerate.HasValue && _targetFps > 0)
+                    {
+                        encoding.maxFramerate = (uint)_targetFps;
+                    }
+                    parameters.encodings[i] = encoding;
+                }
+
+                var error = _videoSender.SetParameters(parameters);
+                if (error.errorType != RTCErrorType.None)
+                {
+                    reasonCode = $"VIDEO_BITRATE_SET_PARAMETERS_FAILED_{error.errorType}";
+                    return false;
+                }
+
+                reasonCode = "VIDEO_BITRATE_APPLIED";
+                return true;
+            }
+            catch (Exception ex)
+            {
+                reasonCode = $"VIDEO_BITRATE_SET_EXCEPTION_{ex.GetType().Name}";
+                return false;
             }
         }
     }

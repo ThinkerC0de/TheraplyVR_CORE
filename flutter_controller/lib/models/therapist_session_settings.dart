@@ -69,6 +69,9 @@ class TherapistSessionSettings {
   static const bool defaultLabelPipelineEnabled = true;
   static const bool defaultKeepScreenAwakeWhenForeground = false;
   static const bool defaultAutoInstallOwnedGames = false;
+  static const int defaultPreviewStreamBitrateKbps = 2500;
+  static const int minPreviewStreamBitrateKbps = 200;
+  static const int maxPreviewStreamBitrateKbps = 2500;
   static const MobileDisconnectBehavior defaultMobileDisconnectBehavior =
       MobileDisconnectBehavior.pause;
   static const TherapistUiLanguage defaultOperatorUiLanguage =
@@ -85,6 +88,7 @@ class TherapistSessionSettings {
   final bool labelPipelineEnabled;
   final bool keepScreenAwakeWhenForeground;
   final bool autoInstallOwnedGames;
+  final int previewStreamBitrateKbps;
   final MobileDisconnectBehavior mobileDisconnectBehavior;
   final TherapistUiLanguage operatorUiLanguage;
   final List<String> timelineQuickNoteTemplates;
@@ -104,6 +108,7 @@ class TherapistSessionSettings {
     required this.labelPipelineEnabled,
     required this.keepScreenAwakeWhenForeground,
     required this.autoInstallOwnedGames,
+    required this.previewStreamBitrateKbps,
     required this.mobileDisconnectBehavior,
     required this.operatorUiLanguage,
     required this.timelineQuickNoteTemplates,
@@ -127,6 +132,7 @@ class TherapistSessionSettings {
       labelPipelineEnabled: defaultLabelPipelineEnabled,
       keepScreenAwakeWhenForeground: defaultKeepScreenAwakeWhenForeground,
       autoInstallOwnedGames: defaultAutoInstallOwnedGames,
+      previewStreamBitrateKbps: defaultPreviewStreamBitrateKbps,
       mobileDisconnectBehavior: defaultMobileDisconnectBehavior,
       operatorUiLanguage: defaultOperatorUiLanguage,
       timelineQuickNoteTemplates: <String>[
@@ -211,6 +217,12 @@ class TherapistSessionSettings {
         source['autoInstallOwnedGames'],
         fallback: defaults.autoInstallOwnedGames,
       ),
+      previewStreamBitrateKbps: _clampInt(
+        source['previewStreamBitrateKbps'],
+        min: minPreviewStreamBitrateKbps,
+        max: maxPreviewStreamBitrateKbps,
+        fallback: defaults.previewStreamBitrateKbps,
+      ),
       mobileDisconnectBehavior: _asMobileDisconnectBehavior(
         source['mobileDisconnectBehavior'],
         fallback: defaults.mobileDisconnectBehavior,
@@ -252,6 +264,7 @@ class TherapistSessionSettings {
     bool? labelPipelineEnabled,
     bool? keepScreenAwakeWhenForeground,
     bool? autoInstallOwnedGames,
+    int? previewStreamBitrateKbps,
     MobileDisconnectBehavior? mobileDisconnectBehavior,
     TherapistUiLanguage? operatorUiLanguage,
     List<String>? timelineQuickNoteTemplates,
@@ -283,6 +296,8 @@ class TherapistSessionSettings {
           keepScreenAwakeWhenForeground ?? this.keepScreenAwakeWhenForeground,
       autoInstallOwnedGames:
           autoInstallOwnedGames ?? this.autoInstallOwnedGames,
+      previewStreamBitrateKbps:
+          previewStreamBitrateKbps ?? this.previewStreamBitrateKbps,
       mobileDisconnectBehavior:
           mobileDisconnectBehavior ?? this.mobileDisconnectBehavior,
       operatorUiLanguage: operatorUiLanguage ?? this.operatorUiLanguage,
@@ -314,6 +329,7 @@ class TherapistSessionSettings {
       'labelPipelineEnabled': labelPipelineEnabled,
       'keepScreenAwakeWhenForeground': keepScreenAwakeWhenForeground,
       'autoInstallOwnedGames': autoInstallOwnedGames,
+      'previewStreamBitrateKbps': previewStreamBitrateKbps,
       'mobileDisconnectBehavior': mobileDisconnectBehavior.wireValue,
       'operatorUiLanguage': operatorUiLanguage.wireValue,
       'timelineQuickNoteTemplates':
