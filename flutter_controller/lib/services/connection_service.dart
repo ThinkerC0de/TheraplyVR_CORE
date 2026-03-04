@@ -32,6 +32,14 @@ class ConnectionService {
   Stream<Map<String, dynamic>> get messages => _messageController.stream;
   Stream<bool> get connectionStatus => _connectionController.stream;
   bool get isConnected => _isConnected;
+  String get localEndpointIp {
+    final raw = _socket?.address.address ?? '';
+    if (raw.startsWith('::ffff:')) {
+      return raw.substring(7);
+    }
+
+    return raw;
+  }
 
   /// Set discovery service for automatic pause/resume
   void setDiscoveryService(DiscoveryService discoveryService) {

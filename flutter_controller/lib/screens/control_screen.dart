@@ -70,6 +70,7 @@ class _ControlScreenState extends State<ControlScreen>
     with WidgetsBindingObserver {
   static final bool _contentDeliveryEnabled = true;
   static const bool _boardSafePackageProbeFeatureEnabled = false;
+  static const int _sessionIngestPort = 18765;
   static final bool _serverAuthoritativeHandoffGate = true;
   static const bool _showCatalogRescueTerminateButton = false;
   static final MobileControlSchemaParseResult _fallbackDemoCubeSchemaParse =
@@ -1022,6 +1023,7 @@ class _ControlScreenState extends State<ControlScreen>
         commandId: CriticalCommandIds.sessionAttach,
         sessionId: targetSessionId,
       );
+      final backendHost = _connection.localEndpointIp.trim();
       await _connection.sendCriticalCommand(
         commandId: CriticalCommandIds.sessionAttach,
         sessionId: targetSessionId,
@@ -1046,6 +1048,9 @@ class _ControlScreenState extends State<ControlScreen>
               entitlementEvaluatedAtUtc.toIso8601String(),
           'entitledGameIdsCsv': _serializeGameIdsCsv(entitledGameIds),
           'entitledGameIdsCount': entitledGameIds.length,
+          'backendHost': backendHost,
+          'backendPort': _sessionIngestPort,
+          'backendHostSource': 'mobile_local_endpoint',
           'mobileDisconnectBehavior':
               _therapistSessionSettings.mobileDisconnectBehavior.wireValue,
         },

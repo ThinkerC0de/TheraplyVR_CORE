@@ -779,6 +779,8 @@ namespace TheraplyCore.Games.Runtime
                 reasonCode = "SESSION_ATTACH";
             }
 
+            ApplyRuntimeBackendHostOverride(command);
+
             var currentSessionId = _sessionContext.SessionId ?? string.Empty;
             var currentState = _sessionContext.SessionState;
             var sameSession = string.Equals(currentSessionId, requestedSessionId, StringComparison.Ordinal);
@@ -3883,6 +3885,61 @@ namespace TheraplyCore.Games.Runtime
             _lastPublishedDevicePresenceReasonCode = string.Empty;
             _lastPublishedDevicePresenceAtUtc = DateTime.MinValue;
             _lastRuntimeStatus = string.Empty;
+        }
+
+        private void ApplyRuntimeBackendHostOverride(SessionAttachCommand command)
+        {
+            var backendHost = command == null
+                ? string.Empty
+                : command.backendHost ?? string.Empty;
+            var backendPort = command == null ? 0 : command.backendPort;
+            var backendHostSource = command == null
+                ? string.Empty
+                : command.backendHostSource ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(backendHost))
+            {
+                TrackCriticalRuntimeEvent("runtime_backend_host_override", new Dictionary<string, object>
+                {
+                    { "reasonCode", "BACKEND_HOST_OVERRIDE_MISSING" },
+                    { "host", string.Empty },
+                    { "port", backendPort },
+                    { "source", backendHostSource },
+                });
+                return;
+            }
+
+            if (_firebaseDataService == null)
+            {
+                _firebaseDataService = FindFirstObjectByType<FirebaseDataService>();
+            }
+
+            if (_firebaseDataService == null)
+            {
+                TrackCriticalRuntimeEvent("runtime_backend_host_override", new Dictionary<string, object>
+                {
+                    { "reasonCode", "FIREBASE_DATA_SERVICE_UNAVAILABLE" },
+                    { "host", backendHost },
+                    { "port", backendPort },
+                    { "source", backendHostSource },
+                });
+                return;
+            }
+
+            var configured = _firebaseDataService.TryConfigureRuntimeBackendHostOverride(
+                backendHost,
+                backendPort,
+                backendHostSource,
+                out var reasonCode);
+
+            TrackCriticalRuntimeEvent("runtime_backend_host_override", new Dictionary<string, object>
+            {
+                { "reasonCode", string.IsNullOrWhiteSpace(reasonCode) ? "BACKEND_HOST_OVERRIDE_UNKNOWN" : reasonCode },
+                { "configured", configured },
+                { "host", backendHost },
+                { "port", backendPort },
+                { "source", backendHostSource },
+            });
         }
 
         private void ApplyMobileDisconnectBehavior(SessionAttachCommand command)

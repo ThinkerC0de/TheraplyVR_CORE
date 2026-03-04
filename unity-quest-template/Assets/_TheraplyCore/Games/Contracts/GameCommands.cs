@@ -76,6 +76,9 @@ namespace TheraplyCore.Games.Contracts
         public string entitlementEvaluatedAtUtc;
         public string entitledGameIdsCsv;
         public int entitledGameIdsCount;
+        public string backendHost;
+        public int backendPort;
+        public string backendHostSource;
         public string mobileDisconnectBehavior;
 
         public string CorrelationId => correlationId;

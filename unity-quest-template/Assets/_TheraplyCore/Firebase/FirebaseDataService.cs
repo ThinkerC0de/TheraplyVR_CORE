@@ -44,6 +44,7 @@ namespace TheraplyCore.Firebase
         [SerializeField] private bool _rewriteLoopbackBackendHostOutsideEditor = true;
         [SerializeField] private bool _useConnectedControllerIpForLoopbackRewrite = true;
         [SerializeField] private string _nonEditorLoopbackHostOverride = string.Empty;
+        [SerializeField] [Range(0, 65535)] private int _nonEditorLoopbackPortOverride = 0;
         [SerializeField] private TCPServerService _tcpServerService;
 
         [Header("Local Durability")]
@@ -395,6 +396,65 @@ namespace TheraplyCore.Firebase
         {
             _sessionId = sessionId;
             Logger.Info($"[FirebaseData] Session ID set: {sessionId}");
+        }
+
+        public bool TryConfigureRuntimeBackendHostOverride(
+            string backendHost,
+            int backendPort,
+            string sourceTag,
+            out string reasonCode)
+        {
+            reasonCode = "BACKEND_HOST_OVERRIDE_APPLIED";
+
+            var normalizedHost = (backendHost ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(normalizedHost))
+            {
+                reasonCode = "BACKEND_HOST_OVERRIDE_EMPTY";
+                return false;
+            }
+
+            if (normalizedHost.StartsWith("::ffff:", StringComparison.OrdinalIgnoreCase))
+            {
+                normalizedHost = normalizedHost.Substring("::ffff:".Length);
+            }
+
+            if (IsLoopbackHost(normalizedHost))
+            {
+                reasonCode = "BACKEND_HOST_OVERRIDE_LOOPBACK_REJECTED";
+                return false;
+            }
+
+            if (!IsValidBackendHost(normalizedHost))
+            {
+                reasonCode = "BACKEND_HOST_OVERRIDE_INVALID";
+                return false;
+            }
+
+            var normalizedPort = backendPort;
+            if (normalizedPort < 0 || normalizedPort > 65535)
+            {
+                reasonCode = "BACKEND_PORT_OVERRIDE_INVALID";
+                return false;
+            }
+
+            _nonEditorLoopbackHostOverride = normalizedHost;
+            _nonEditorLoopbackPortOverride = normalizedPort;
+            _suppressControllerIpLoopbackRewriteUntilDisconnect = false;
+
+            if (_logFirebaseBackendDiagnostics || _logOutboxSync || _logFirebaseBackendPayloads)
+            {
+                var safeSource = string.IsNullOrWhiteSpace(sourceTag)
+                    ? "unknown"
+                    : sourceTag.Trim();
+                var configuredPort = _nonEditorLoopbackPortOverride > 0
+                    ? _nonEditorLoopbackPortOverride.ToString(CultureInfo.InvariantCulture)
+                    : "inherit";
+                Logger.Info(
+                    $"[FirebaseData] Runtime backend host override applied: host={_nonEditorLoopbackHostOverride}, " +
+                    $"port={configuredPort}, source={safeSource}");
+            }
+
+            return true;
         }
         
         public void FlushAllData()
@@ -1782,6 +1842,10 @@ namespace TheraplyCore.Firebase
                 {
                     Host = replacementHost,
                 };
+                if (_nonEditorLoopbackPortOverride > 0)
+                {
+                    builder.Port = _nonEditorLoopbackPortOverride;
+                }
                 parsed = builder.Uri;
 
                 if (_logFirebaseBackendDiagnostics || _logOutboxSync || _logFirebaseBackendPayloads)
