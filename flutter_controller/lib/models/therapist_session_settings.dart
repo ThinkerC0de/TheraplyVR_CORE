@@ -70,7 +70,7 @@ class TherapistSessionSettings {
   static const bool defaultKeepScreenAwakeWhenForeground = false;
   static const bool defaultAutoInstallOwnedGames = false;
   static const int defaultPreviewStreamBitrateKbps = 2500;
-  static const int minPreviewStreamBitrateKbps = 200;
+  static const int minPreviewStreamBitrateKbps = 125;
   static const int maxPreviewStreamBitrateKbps = 2500;
   static const MobileDisconnectBehavior defaultMobileDisconnectBehavior =
       MobileDisconnectBehavior.pause;

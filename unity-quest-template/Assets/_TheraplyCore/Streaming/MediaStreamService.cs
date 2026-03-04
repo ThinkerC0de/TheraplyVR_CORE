@@ -21,7 +21,7 @@ namespace TheraplyCore.Streaming
     [RequireComponent(typeof(Camera))]
     public class MediaStreamService : MonoBehaviour
     {
-        public const int MinTargetBitrateBps = 200000;
+        public const int MinTargetBitrateBps = 125000;
         public const int MaxTargetBitrateBps = 2500000;
 
         // ============================================
