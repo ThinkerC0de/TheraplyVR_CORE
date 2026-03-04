@@ -11,6 +11,34 @@ namespace TheraplyCore.Editor.Automation
 {
     public static class AssetBundlePackageBuilder
     {
+        public sealed class EditorBuildRequest
+        {
+            public string gameId = string.Empty;
+            public string contentVersion = "1.0.0";
+            public string sceneAssetPath = string.Empty;
+            public string outputDirectory = string.Empty;
+            public string basePackageUrl = string.Empty;
+            public string manifestFileName = string.Empty;
+            public string bundleFileName = string.Empty;
+            public string buildTarget = "Android";
+            public string gameDefinitionPath = string.Empty;
+            public string mobileControlSchemaPath = string.Empty;
+            public string mobileControlLayoutPath = string.Empty;
+            public string notes = string.Empty;
+        }
+
+        public sealed class EditorBuildResult
+        {
+            public string gameId = string.Empty;
+            public string contentVersion = string.Empty;
+            public string sceneAssetPath = string.Empty;
+            public string outputDirectory = string.Empty;
+            public string manifestPath = string.Empty;
+            public string bundlePath = string.Empty;
+            public string packageUri = string.Empty;
+            public string bundleUri = string.Empty;
+        }
+
         [Serializable]
         private sealed class SourceContractRecord
         {
@@ -80,7 +108,33 @@ namespace TheraplyCore.Editor.Automation
             BuildPackage(args);
         }
 
-        private static void BuildPackage(BuildArguments args)
+        public static EditorBuildResult BuildPackageFromEditor(EditorBuildRequest request)
+        {
+            if (request == null)
+            {
+                throw new InvalidOperationException("Editor build request is null.");
+            }
+
+            var args = new BuildArguments
+            {
+                gameId = request.gameId,
+                contentVersion = request.contentVersion,
+                sceneAssetPath = request.sceneAssetPath,
+                outputDirectory = request.outputDirectory,
+                basePackageUrl = request.basePackageUrl,
+                manifestFileName = request.manifestFileName,
+                bundleFileName = request.bundleFileName,
+                buildTarget = request.buildTarget,
+                gameDefinitionPath = request.gameDefinitionPath,
+                mobileControlSchemaPath = request.mobileControlSchemaPath,
+                mobileControlLayoutPath = request.mobileControlLayoutPath,
+                notes = request.notes,
+            };
+
+            return BuildPackage(args);
+        }
+
+        private static EditorBuildResult BuildPackage(BuildArguments args)
         {
             ValidateRequiredInputs(args);
 
@@ -209,6 +263,18 @@ namespace TheraplyCore.Editor.Automation
                     manifest.contentVersion,
                     outputBundlePath,
                     outputManifestPath));
+
+            return new EditorBuildResult
+            {
+                gameId = manifest.packageId,
+                contentVersion = manifest.contentVersion,
+                sceneAssetPath = args.sceneAssetPath.Trim(),
+                outputDirectory = outputDirectory,
+                manifestPath = outputManifestPath,
+                bundlePath = outputBundlePath,
+                packageUri = packageUri,
+                bundleUri = bundleUri,
+            };
         }
 
         private static BuildArguments ParseArgumentsFromCommandLine()
