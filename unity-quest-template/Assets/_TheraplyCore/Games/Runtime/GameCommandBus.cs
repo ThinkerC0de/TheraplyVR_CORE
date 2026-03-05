@@ -601,6 +601,14 @@ namespace TheraplyCore.Games.Runtime
                 return true;
             }
 
+            // Catalog / content-management commands are session-agnostic.
+            if (string.Equals(commandId, GameCommandIds.SyncCatalog, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(commandId, GameCommandIds.InstallGame, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(commandId, GameCommandIds.UninstallGame, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
             if (string.Equals(commandId, GameCommandIds.EndSession, StringComparison.OrdinalIgnoreCase))
             {
                 if (_sessionContext == null)
@@ -727,7 +735,10 @@ namespace TheraplyCore.Games.Runtime
             {
                 if (activeOwnershipIsBootstrapPlaceholder &&
                     (string.Equals(commandId, GameCommandIds.SessionAttach, StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(commandId, GameCommandIds.EndSession, StringComparison.OrdinalIgnoreCase)))
+                     string.Equals(commandId, GameCommandIds.EndSession, StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(commandId, GameCommandIds.SyncCatalog, StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(commandId, GameCommandIds.InstallGame, StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(commandId, GameCommandIds.UninstallGame, StringComparison.OrdinalIgnoreCase)))
                 {
                     Logger.Warning(
                         $"[GameCommandBus] Allowing {commandId} to replace bootstrap ownership placeholder. activeOwner={activeOwnerKey}, incomingOwner={incomingOwnerKey}, state={activeState}");
@@ -781,6 +792,14 @@ namespace TheraplyCore.Games.Runtime
             {
                 Logger.Warning(
                     $"[GameCommandBus] Allowing END_SESSION with ownership match despite session key mismatch. activeSessionKey={activeSessionKey}, incomingSessionKey={incomingSessionKey}");
+                return true;
+            }
+
+            // Catalog / content-management commands are session-agnostic — allow if owner matches.
+            if (string.Equals(commandId, GameCommandIds.SyncCatalog, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(commandId, GameCommandIds.InstallGame, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(commandId, GameCommandIds.UninstallGame, StringComparison.OrdinalIgnoreCase))
+            {
                 return true;
             }
 

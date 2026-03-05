@@ -184,6 +184,7 @@ namespace TheraplyCore.Games.Runtime
         [SerializeField] private GameCommandBus _commandBus;
         [SerializeField] private TCPServerService _tcpServerService;
         [SerializeField] private FirebaseDataService _firebaseDataService;
+        [SerializeField] private TheraplyCore.Network.SessionTcpRelay _sessionTcpRelay;
 
         [Header("Runtime")]
         [SerializeField] private string _defaultGameId = "";
@@ -195,6 +196,7 @@ namespace TheraplyCore.Games.Runtime
             MobileDisconnectBehaviorValues.Pause;
 
         [Header("Content Delivery (Dev Simulator)")]
+#pragma warning disable CS0414
         [SerializeField] private bool _enableContentDeliverySimulation = true;
         [SerializeField] private bool _publishContentCatalogOnClientConnect = false;
         [SerializeField] private float _simulatedManifestSyncDurationSeconds = 0.35f;
@@ -205,6 +207,7 @@ namespace TheraplyCore.Games.Runtime
         [SerializeField] private bool _simulateVerifyFailureWhenTargetVersionContainsToken = true;
         [SerializeField] private string _simulatedVerifyFailureToken = "verify_fail";
         [SerializeField] private bool _simulateRollbackAfterVerifyFailure = true;
+#pragma warning restore CS0414
         [SerializeField] private string _defaultSimulatedContentVersion = "1.0.0";
         [SerializeField] private bool _persistContentDeliverySimulationState = true;
         [SerializeField] private string _contentDeliveryStateFolder = "session_resilience";
@@ -317,6 +320,7 @@ namespace TheraplyCore.Games.Runtime
             if (_contextService == null) _contextService = FindFirstObjectByType<GameContextService>();
             if (_commandBus == null) _commandBus = FindFirstObjectByType<GameCommandBus>();
             if (_tcpServerService == null) _tcpServerService = FindFirstObjectByType<TCPServerService>();
+            if (_sessionTcpRelay == null) _sessionTcpRelay = FindFirstObjectByType<TheraplyCore.Network.SessionTcpRelay>();
             if (_firebaseDataService == null) _firebaseDataService = FindFirstObjectByType<FirebaseDataService>();
             _sessionContext = ResolveSessionContext();
             _mobileDisconnectBehavior = NormalizeMobileDisconnectBehavior(_defaultMobileDisconnectBehavior);
@@ -334,6 +338,7 @@ namespace TheraplyCore.Games.Runtime
             if (_subscribeToStandardCommands && _commandBus != null)
             {
                 _commandBus.Subscribe<SessionAttachCommand>(HandleSessionAttachCommand);
+                _commandBus.Subscribe<PrepareGameCommand>(HandlePrepareGameCommand);
                 _commandBus.Subscribe<StartGameCommand>(HandleStartCommand);
                 _commandBus.Subscribe<PauseGameCommand>(HandlePauseCommand);
                 _commandBus.Subscribe<ResumeGameCommand>(HandleResumeCommand);
@@ -374,6 +379,7 @@ namespace TheraplyCore.Games.Runtime
             if (_subscribeToStandardCommands && _commandBus != null)
             {
                 _commandBus.Unsubscribe<SessionAttachCommand>(HandleSessionAttachCommand);
+                _commandBus.Unsubscribe<PrepareGameCommand>(HandlePrepareGameCommand);
                 _commandBus.Unsubscribe<StartGameCommand>(HandleStartCommand);
                 _commandBus.Unsubscribe<PauseGameCommand>(HandlePauseCommand);
                 _commandBus.Unsubscribe<ResumeGameCommand>(HandleResumeCommand);
@@ -679,6 +685,7 @@ namespace TheraplyCore.Games.Runtime
             {
                 { "gameId", _activeGameId ?? string.Empty },
             });
+            _sessionTcpRelay?.OnGameStart(_activeGameId, _sessionContext?.SessionId);
 
             if (shouldEmitSessionStart)
             {
@@ -687,6 +694,7 @@ namespace TheraplyCore.Games.Runtime
                     { "gameId", _activeGameId ?? string.Empty },
                     { "reason", "START_GAME" },
                 });
+                _sessionTcpRelay?.OnSessionStart(_sessionContext?.SessionId);
             }
 
             return true;
@@ -725,6 +733,7 @@ namespace TheraplyCore.Games.Runtime
                 { "gameId", stoppedGameId },
                 { "reason", reason.ToString() },
             });
+            _sessionTcpRelay?.OnGameEnd(reason, _sessionContext?.SessionId);
             TryReportActiveGameResult(reason);
             if (_unloadInstalledContentSceneOnStop)
             {
@@ -736,6 +745,7 @@ namespace TheraplyCore.Games.Runtime
                 { "gameId", stoppedGameId },
                 { "reason", reason.ToString() },
             });
+            _sessionTcpRelay?.OnSessionStop(_sessionContext?.SessionId, reason.ToString());
             return true;
         }
 
@@ -869,6 +879,36 @@ namespace TheraplyCore.Games.Runtime
             });
         }
 
+        private void HandlePrepareGameCommand(PrepareGameCommand command)
+        {
+            var gameId = command?.gameId ?? string.Empty;
+
+            if (!TryResolveCommandGame(gameId))
+            {
+                Logger.Warning($"[GameRuntime] PREPARE_GAME: game not found: {gameId}");
+                return;
+            }
+
+            if (!TryAuthorizeGameCommandByEntitlement(
+                    GameCommandIds.PrepareGame,
+                    _activeGameId,
+                    out var entitlementReasonCode))
+            {
+                Logger.Warning($"[GameRuntime] PREPARE_GAME: entitlement denied: {entitlementReasonCode}");
+                return;
+            }
+
+            // Load the scene now so START_GAME executes immediately.
+            // Does NOT initialize or start the game run.
+            if (!TryLoadInstalledContentSceneForGame(_activeGameId, out var sceneLoadReason, out var sceneLoadPending))
+            {
+                Logger.Warning($"[GameRuntime] PREPARE_GAME: scene load failed: {sceneLoadReason}");
+                return;
+            }
+
+            Logger.Info($"[GameRuntime] PREPARE_GAME: game={_activeGameId} scenePending={sceneLoadPending}");
+        }
+
         private void HandleStartCommand(StartGameCommand command)
         {
             if (!TryResolveCommandGame(command?.gameId))
@@ -993,6 +1033,7 @@ namespace TheraplyCore.Games.Runtime
                 { "gameId", _activeGameId ?? string.Empty },
                 { "reason", "END_SESSION" },
             });
+            _sessionTcpRelay?.OnSessionStop(_sessionContext?.SessionId, "END_SESSION");
         }
 
         private void HandleUpdateConfigCommand(DynamicUpdateConfigCommand command)
@@ -3804,10 +3845,14 @@ namespace TheraplyCore.Games.Runtime
             }
             else
             {
-                // Terminal state reached: immediately begin a fresh CREATED session so the
-                // next game start has a valid CREATED → IN_PROGRESS transition path and
-                // Flutter sees the new session via SESSION_STATE_UPDATE(CREATED).
-                _sessionContext.BeginSession(_sessionContext.PatientId, _sessionContext.TherapistId);
+                // Terminal state reached — do NOT auto-reset here.
+                // GameCommandBus.ValidateOwnershipLock already returns true for any terminal
+                // state (line: IsTerminalState(activeState) → return true), so SYNC_CATALOG
+                // and other session-agnostic commands flow freely.
+                // The next SESSION_ATTACH from mobile will call BeginSession with fresh IDs.
+                // Auto-resetting with the old session ID was the root cause of W-1201
+                // SESSION_LOCK_CONFLICT on reconnect: Quest held the old mobile-* ID in
+                // CREATED state, blocking the new session's commands via session key mismatch.
             }
 
             if (_controllerDisconnectPausePendingResume &&
@@ -4677,6 +4722,7 @@ namespace TheraplyCore.Games.Runtime
                 { "gameId", stoppedGameId },
                 { "reason", stopReason.ToString() },
             });
+            _sessionTcpRelay?.OnGameEnd(stopReason, _sessionContext?.SessionId);
             TryReportActiveGameResult(stopReason);
             if (_unloadInstalledContentSceneOnStop)
             {
@@ -4688,6 +4734,7 @@ namespace TheraplyCore.Games.Runtime
                 { "gameId", stoppedGameId },
                 { "reason", reasonCode },
             });
+            _sessionTcpRelay?.OnSessionStop(_sessionContext?.SessionId, reasonCode);
 
             sessionState = _sessionContext == null
                 ? targetSessionState

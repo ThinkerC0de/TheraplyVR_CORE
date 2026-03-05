@@ -3,11 +3,12 @@ class GameRunRecord {
   final String gameId;
   final DateTime? startedAtUtc;
   final DateTime? endedAtUtc;
-  final String? finalState; // "completed" | "failed" | null
+  final String? finalState; // "completed" | "interrupted" | "failed" | null
   final int? durationSec;
   final int interactionCount;
   final int hitCount;
   final int missCount;
+  final String? motionTraceUrl; // gs:// link — populated in future iteration
 
   const GameRunRecord({
     required this.gameRunId,
@@ -19,6 +20,7 @@ class GameRunRecord {
     required this.interactionCount,
     required this.hitCount,
     required this.missCount,
+    this.motionTraceUrl,
   });
 
   factory GameRunRecord.fromFirestore(
@@ -39,6 +41,7 @@ class GameRunRecord {
       interactionCount: _asInt(summary['interactionCount']),
       hitCount: _asInt(summary['hitCount']),
       missCount: _asInt(summary['missCount']),
+      motionTraceUrl: json['motionTraceUrl'] as String?,
     );
   }
 

@@ -628,6 +628,7 @@ GameObject:
   - component: {fileID: 1784697668}
   - component: {fileID: 1784697667}
   - component: {fileID: 1784697666}
+  - component: {fileID: 1784697677}
   m_Layer: 0
   m_Name: RuntimeServices
   m_TagString: Untagged
@@ -663,6 +664,7 @@ MonoBehaviour:
   _rewriteLoopbackBackendHostOutsideEditor: 1
   _useConnectedControllerIpForLoopbackRewrite: 1
   _nonEditorLoopbackHostOverride: 
+  _nonEditorLoopbackPortOverride: 0
   _tcpServerService: {fileID: 0}
   _persistCriticalSessionEventsLocally: 1
   _persistAllEventsToDurableStore: 1
@@ -724,7 +726,10 @@ MonoBehaviour:
   _commandBus: {fileID: 1784697674}
   _tcpServerService: {fileID: 854900686}
   _firebaseDataService: {fileID: 1784697666}
+  _sessionTcpRelay: {fileID: 1784697677}
   _defaultGameId: 
+  _allowDefaultGameFallback: 0
+  _autoResumeOnControllerReconnect: 0
   _subscribeToStandardCommands: 1
   _syncStatusPollIntervalSeconds: 1
   _defaultMobileDisconnectBehavior: pause
@@ -748,6 +753,11 @@ MonoBehaviour:
     installedVersion: 
     targetVersion: 1.2.0
     updateOptional: 0
+  _packageInstallTimeoutSeconds: 25
+  _packageInstallFolder: content_packages
+  _packageInstallFallbackFileName: package.pkg.json
+  _loadInstalledContentSceneOnStart: 1
+  _unloadInstalledContentSceneOnStop: 1
   _enableBoardSafePackageProbe: 0
   _packageProbeTimeoutSeconds: 3
   _packageProbePreferHeadRequest: 1
@@ -917,6 +927,19 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1784697677
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1784697665}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6bd728a26e2a15a44a7f9fee3c0a6d21, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Network.SessionTcpRelay
+  _tcpServer: {fileID: 854900686}
 --- !u!1 &1965591283
 GameObject:
   m_ObjectHideFlags: 0

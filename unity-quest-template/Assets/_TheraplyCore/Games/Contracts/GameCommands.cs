@@ -28,6 +28,14 @@ namespace TheraplyCore.Games.Contracts
         public const string UninstallGame = "UNINSTALL_GAME";
         public const string GameInstallStatus = "GAME_INSTALL_STATUS";
         public const string PackageProbeResult = "PACKAGE_PROBE_RESULT";
+
+        // Quest → Mobile telemetry (replaces Cloud Function HTTP outbox)
+        public const string QuestGameEvent = "QUEST_GAME_EVENT";
+        public const string QuestInteractionBatch = "QUEST_INTERACTION_BATCH";
+        public const string QuestMotionTrace = "QUEST_MOTION_TRACE";
+
+        // Mobile → Quest: pre-load game scene without starting.
+        public const string PrepareGame = "PREPARE_GAME";
     }
 
     public static class CriticalCommandIds
@@ -95,6 +103,15 @@ namespace TheraplyCore.Games.Contracts
         public const string TherapistFull = "THERAPIST_FULL";
         public const string ParentPurchasedPacks = "PARENT_PURCHASED_PACKS";
         public const string Unknown = "UNKNOWN";
+    }
+
+    [Serializable]
+    public sealed class PrepareGameCommand : IGameCommand
+    {
+        public string correlationId;
+        public string gameId;
+
+        public string CorrelationId => correlationId;
     }
 
     [Serializable]
@@ -408,6 +425,65 @@ namespace TheraplyCore.Games.Contracts
         public string updatedAtUtc;
 
         public string CorrelationId => correlationId;
+    }
+
+    // ─── Quest → Mobile telemetry payloads ───────────────────────────────────
+
+    [Serializable]
+    public sealed class QuestGameEventPayload
+    {
+        public string eventType;      // "game_start" | "game_end" | "session_start" | "session_stop"
+        public string sessionId;
+        public string gameRunId;
+        public string gameId;
+        public string occurredAtUtc;
+        // game_end only (zero for other event types)
+        public string finalState;     // "completed" | "interrupted" | "failed"
+        public int durationSec;
+        public int hitCount;
+        public int missCount;
+        public int interactionCount;
+    }
+
+    [Serializable]
+    public sealed class QuestInteractionEventItem
+    {
+        public string eventId;
+        public string occurredAtUtc;
+        public int sequenceNo;
+        public string interactionType;
+        public string actionOutcome;  // "CORRECT" | "INCORRECT" | "OBSERVED"
+        public string targetId;
+        public string targetName;
+        public string inputHand;
+        public string inputSource;
+        public float inputValue;
+        public string sourceComponent;
+        public string reasonCode;
+    }
+
+    [Serializable]
+    public sealed class QuestInteractionBatchPayload
+    {
+        public string sessionId;
+        public string gameRunId;
+        public List<QuestInteractionEventItem> events;
+    }
+
+    [Serializable]
+    public sealed class QuestMotionTracePayload
+    {
+        public string sessionId;
+        public string gameRunId;
+        public string gameId;
+        public string traceId;
+        public string encoding;       // "vrl" | "vrl_gzip"
+        public string format;         // "vrl"
+        public string checksum;       // sha256 hex
+        public int frameCount;
+        public int payloadBytes;
+        public string tracePayloadBase64; // gzipped VRL binary, base64-encoded
+        public string inlinePayloadStatus; // "INCLUDED" | "SKIPPED_SIZE_LIMIT" | "DISABLED" | "UNAVAILABLE"
     }
 
     [Serializable]

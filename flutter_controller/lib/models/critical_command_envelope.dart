@@ -27,6 +27,11 @@ class CriticalCommandIds {
   static bool isCritical(String commandId) => values.contains(commandId);
 }
 
+/// Non-critical (fire-and-forget) command IDs.
+class GameCommandIds {
+  static const String prepareGame = 'PREPARE_GAME';
+}
+
 class CommandAckIds {
   static const String commandAck = 'COMMAND_ACK';
 }

@@ -1,0 +1,24 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "therapy_sessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "therapistId",    "order": "ASCENDING"  },
+        { "fieldPath": "unfinished",     "order": "ASCENDING"  },
+        { "fieldPath": "updatedAtUnixMs","order": "DESCENDING" },
+        { "fieldPath": "__name__",       "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "therapy_sessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ownerKey",       "order": "ASCENDING"  },
+        { "fieldPath": "updatedAtUnixMs","order": "DESCENDING" },
+        { "fieldPath": "__name__",       "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

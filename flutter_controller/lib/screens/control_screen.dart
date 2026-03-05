@@ -29,6 +29,7 @@ import 'package:flutter_controller/services/foreground_service_bridge.dart';
 import 'package:flutter_controller/services/game_catalog_service.dart';
 import 'package:flutter_controller/services/operator_incident_popup_queue.dart';
 import 'package:flutter_controller/services/parent_progress_service.dart';
+import 'package:flutter_controller/services/game_data_service.dart';
 import 'package:flutter_controller/services/session_journal_service.dart';
 import 'package:flutter_controller/services/student_reward_service.dart';
 import 'package:flutter_controller/services/therapist_session_settings_service.dart';
@@ -274,6 +275,7 @@ class _ControlScreenState extends State<ControlScreen>
   ];
 
   final ConnectionService _connection = ConnectionService();
+  late final GameDataService _gameDataService;
   late final OperatorIncidentPopupQueue _incidentPopupQueue;
   final Set<String> _simulatedOwnedGameIds = <String>{};
   List<_GameCatalogEntry> _remoteGameCatalog = const <_GameCatalogEntry>[];
@@ -376,6 +378,7 @@ class _ControlScreenState extends State<ControlScreen>
     );
 
     _connection.setDiscoveryService(widget.discoveryService);
+    _gameDataService = GameDataService(_connection);
     _startGameCatalogSubscription();
     _activeSessionId = _buildLocalSessionId();
     _selectedGameId = _resolveInitialGameId();
@@ -410,6 +413,7 @@ class _ControlScreenState extends State<ControlScreen>
     _gameCatalogSubscription?.cancel();
     _connectionLivenessTimer?.cancel();
     unawaited(ForegroundServiceBridge.stop());
+    unawaited(_gameDataService.dispose());
     _connection.dispose();
     super.dispose();
   }
@@ -481,6 +485,10 @@ class _ControlScreenState extends State<ControlScreen>
               reasonCode: disconnectReason,
             ),
           );
+          // If Quest crashed mid-game, write an interrupted game_run record.
+          if (_remoteActiveGameId != null) {
+            unawaited(_gameDataService.markActiveRunInterrupted());
+          }
         } else {
           _disconnectReasonOverride = null;
         }
@@ -542,31 +550,36 @@ class _ControlScreenState extends State<ControlScreen>
         setState(() {
           if (sessionUpdate != null) {
             if (shouldAdoptCreatedSessionRollover) {
-              final previousActiveSessionId = _activeSessionId;
-              _activeSessionId = sessionUpdate.sessionId.trim();
-              _sessionAttachReady = true;
+              // Mobile-only arch: Quest's internal session rollover is a
+              // complete no-op at the state machine level. The write remaps in
+              // _persistRuntimeSessionState and _persistDevicePresenceSignal
+              // already route Firestore writes to the correct mobile-* document.
+              // Do NOT touch _activeSessionId, _sessionAttachReady, or
+              // _sessionLifecycleState — controls must stay active.
+              _lastSessionStateUpdateSessionId = sessionUpdate.sessionId;
               debugPrint(
-                '[ControlScreen][Ownership] Accepted rollover CREATED signal: '
-                'activeSession=$previousActiveSessionId '
-                'incomingSession=$_activeSessionId',
+                '[ControlScreen][Ownership] Ignoring rollover CREATED signal (mobile-only arch): '
+                'keepActiveSession=$_activeSessionId '
+                'incomingSession=${sessionUpdate.sessionId.trim()}',
               );
-            }
-            _lastSessionStateUpdateSessionId = sessionUpdate.sessionId;
-            _sessionLifecycleState = sessionUpdate.state;
-            if (SessionRecoveryPolicy.isTerminalState(sessionUpdate.state)) {
-              _optimisticRuntimeActive = false;
-              _optimisticRuntimePaused = false;
-              _remoteActiveGameId = null;
-            } else if (sessionUpdate.state ==
-                SessionLifecycleState.inProgress) {
-              _optimisticRuntimeActive = true;
-              _optimisticRuntimePaused = false;
-            } else if (sessionUpdate.state == SessionLifecycleState.paused) {
-              _optimisticRuntimeActive = true;
-              _optimisticRuntimePaused = true;
-            } else if (sessionUpdate.state ==
-                SessionLifecycleState.interrupted) {
-              _optimisticRuntimeActive = true;
+            } else {
+              _lastSessionStateUpdateSessionId = sessionUpdate.sessionId;
+              _sessionLifecycleState = sessionUpdate.state;
+              if (SessionRecoveryPolicy.isTerminalState(sessionUpdate.state)) {
+                _optimisticRuntimeActive = false;
+                _optimisticRuntimePaused = false;
+                _remoteActiveGameId = null;
+              } else if (sessionUpdate.state ==
+                  SessionLifecycleState.inProgress) {
+                _optimisticRuntimeActive = true;
+                _optimisticRuntimePaused = false;
+              } else if (sessionUpdate.state == SessionLifecycleState.paused) {
+                _optimisticRuntimeActive = true;
+                _optimisticRuntimePaused = true;
+              } else if (sessionUpdate.state ==
+                  SessionLifecycleState.interrupted) {
+                _optimisticRuntimeActive = true;
+              }
             }
           }
 
@@ -925,6 +938,15 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   String _resolveAttachTargetSessionId() {
+    // Mobile-only arch: always prefer mobile-* for SESSION_ATTACH.
+    // Quest adopts whatever sessionId we send — sending mobile-* ensures all
+    // subsequent Quest signals carry mobile-* in their sessionKey, keeping the
+    // ownership filter working correctly and preventing infinite reconnect loops.
+    final activeSessionId = _activeSessionId.trim();
+    if (activeSessionId.startsWith('mobile-')) {
+      return activeSessionId;
+    }
+
     final runtimeSessionId = _lastSessionStateUpdateSessionId?.trim() ?? '';
     if (runtimeSessionId.isNotEmpty) {
       return runtimeSessionId;
@@ -951,11 +973,6 @@ class _ControlScreenState extends State<ControlScreen>
           !_wasSessionRecentlyEnded(persistedSessionId)) {
         return persistedSessionId;
       }
-    }
-
-    final activeSessionId = _activeSessionId.trim();
-    if (activeSessionId.isNotEmpty) {
-      return activeSessionId;
     }
 
     final generatedSessionId = _buildLocalSessionId();
@@ -1071,10 +1088,23 @@ class _ControlScreenState extends State<ControlScreen>
         return;
       }
 
+      // Mobile-only arch: _activeSessionId is always mobile-* (set by
+      // _buildLocalSessionId). targetSessionId may be a Quest UUID used
+      // only for the TCP SESSION_ATTACH command above. Do not overwrite a
+      // valid mobile-* session ID with the Quest UUID.
+      final existingMobileId = _activeSessionId.trim();
+      final firestoreSessionId = existingMobileId.startsWith('mobile-')
+          ? existingMobileId
+          : targetSessionId;
       setState(() {
         _sessionAttachReady = true;
-        _activeSessionId = targetSessionId;
+        _activeSessionId = firestoreSessionId;
       });
+      _gameDataService.attachSession(
+        sessionId: firestoreSessionId,
+        studentId: widget.student.id,
+        therapistId: therapistId,
+      );
       _logAttachDecision(
         decision: 'SESSION_ATTACH_ACK',
         reasonCode: reasonCode,
@@ -1210,7 +1240,12 @@ class _ControlScreenState extends State<ControlScreen>
 
       setState(() {
         _sessionAttachReady = false;
-        _activeSessionId = targetSessionId;
+        // Mobile-only arch guard: only adopt mobile-* IDs.
+        // A UUID targetSessionId here means the conflict was with Quest's internal
+        // session — keep the existing mobile-* _activeSessionId intact.
+        if (targetSessionId.startsWith('mobile-')) {
+          _activeSessionId = targetSessionId;
+        }
         _requiresSessionDecision = false;
         _remoteSessionIdPendingDecision = null;
       });
@@ -1225,8 +1260,10 @@ class _ControlScreenState extends State<ControlScreen>
     required String reasonCode,
     String? sessionIdOverride,
   }) async {
+    // Use _resolveTimelineSessionId (prioritises mobile-* _activeSessionId)
+    // instead of _resolveAttachTargetSessionId which may return a Quest UUID.
     final sessionId =
-        (sessionIdOverride ?? _resolveAttachTargetSessionId()).trim();
+        (sessionIdOverride ?? _resolveTimelineSessionId()).trim();
     if (sessionId.isEmpty) {
       return;
     }
@@ -1381,10 +1418,16 @@ class _ControlScreenState extends State<ControlScreen>
   Future<void> _persistDevicePresenceSignal(
     DevicePresenceUpdateSignal signal,
   ) async {
-    final sessionId = signal.sessionId.trim();
-    if (sessionId.isEmpty) {
+    final incomingSessionId = signal.sessionId.trim();
+    if (incomingSessionId.isEmpty) {
       return;
     }
+    // Remap Quest's UUID to the mobile's active session ID.
+    final activeSessionId = _activeSessionId.trim();
+    final sessionId =
+        (activeSessionId.isNotEmpty && incomingSessionId != activeSessionId)
+            ? activeSessionId
+            : incomingSessionId;
 
     final eventAtUtc = signal.changedAtUtc.toUtc();
     final details = <String, dynamic>{
@@ -1763,10 +1806,21 @@ class _ControlScreenState extends State<ControlScreen>
     String remoteSessionId, {
     required String source,
   }) async {
+    // Mobile-only arch: Firestore session IDs are always mobile-* strings.
+    // If remoteSessionId is already a mobile-* doc (came from Firestore persisted
+    // session), use it directly. If it's a Quest UUID (came from a runtime signal),
+    // keep the existing _activeSessionId so we don't overwrite the mobile-* doc.
+    final existingMobileId = _activeSessionId.trim();
+    final mobileSessionId = remoteSessionId.startsWith('mobile-')
+        ? remoteSessionId
+        : existingMobileId.isNotEmpty
+            ? existingMobileId
+            : remoteSessionId;
+
     _logSessionDecision(
       source: source,
       decision: 'AUTO_ATTACH_UNDER_WINDOW',
-      sessionId: remoteSessionId,
+      sessionId: mobileSessionId,
       reason: 'RECOVERY_UNDER_WINDOW',
     );
 
@@ -1774,13 +1828,18 @@ class _ControlScreenState extends State<ControlScreen>
       setState(() {
         _requiresSessionDecision = false;
         _remoteSessionIdPendingDecision = null;
-        _activeSessionId = remoteSessionId;
+        _activeSessionId = mobileSessionId;
       });
     } else {
       _requiresSessionDecision = false;
       _remoteSessionIdPendingDecision = null;
-      _activeSessionId = remoteSessionId;
+      _activeSessionId = mobileSessionId;
     }
+    _gameDataService.attachSession(
+      sessionId: mobileSessionId,
+      studentId: widget.student.id,
+      therapistId: _resolveActorTherapistId(),
+    );
     _clearDeferredHandoff(
       sessionId: remoteSessionId,
       source: source,
@@ -1800,9 +1859,25 @@ class _ControlScreenState extends State<ControlScreen>
       return;
     }
 
+    final selectedGameId = _selectedGameId.trim();
     setState(() {
       _lastConnectionLostAtUtc = null;
+      // If a game is already selected, drop straight into game setup so therapist
+      // can immediately start the game after reconnect (auto-load on Quest via PREPARE_GAME).
+      if (selectedGameId.isNotEmpty && _workflowStep == _WorkflowStep.gameCatalog) {
+        _workflowStep = _WorkflowStep.gameSetup;
+      }
     });
+
+    // Pre-load the game scene on Quest so START_GAME executes instantly.
+    if (selectedGameId.isNotEmpty) {
+      unawaited(
+        _connection.sendCommand(
+          GameCommandIds.prepareGame,
+          <String, dynamic>{'gameId': selectedGameId},
+        ),
+      );
+    }
   }
 
   void _logSessionDecision({
@@ -2549,9 +2624,13 @@ class _ControlScreenState extends State<ControlScreen>
 
     // Do not silently switch local session context to an unfinished remote one.
     // Keep mismatch so decision gate can prompt therapist (resume/start new).
+    // Mobile-only arch: never adopt a Quest UUID as _activeSessionId.
+    // Only adopt mobile-* session IDs (generated by _buildLocalSessionId).
     if (!persisted.requiresHandoffDecision &&
+        !persisted.isTerminal &&
         canAdoptPersistedSession &&
-        activeSessionId != persistedSessionId) {
+        activeSessionId != persistedSessionId &&
+        persistedSessionId.startsWith('mobile-')) {
       _activeSessionId = persistedSessionId;
       _sessionAttachReady = false;
       shouldSetState = true;
@@ -2932,11 +3011,15 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     final activeSessionId = _activeSessionId.trim();
-    final shouldIgnoreForeignSessionSignal = _sessionAttachReady &&
-        activeSessionId.isNotEmpty &&
-        sessionId != activeSessionId &&
-        !_requiresSessionDecision;
-    if (shouldIgnoreForeignSessionSignal) {
+    // Remap Quest's UUID session ID to mobile's active session so all
+    // Firestore writes land in the correct mobile-* document.
+    final resolvedSessionId =
+        (activeSessionId.isNotEmpty && sessionId != activeSessionId)
+            ? activeSessionId
+            : sessionId;
+    if (_sessionAttachReady &&
+        resolvedSessionId != activeSessionId &&
+        !_requiresSessionDecision) {
       debugPrint(
         '[ControlScreen] Ignoring runtime session state from foreign session '
         'while attached: incoming=$sessionId active=$activeSessionId '
@@ -2953,7 +3036,7 @@ class _ControlScreenState extends State<ControlScreen>
     if (shouldSuppressPlaceholderCreatedState) {
       debugPrint(
         '[ControlScreen] Suppressing placeholder CREATED rollover signal: '
-        'session=$sessionId previous=${sessionUpdate.previousState?.wireValue ?? ''} '
+        'session=$resolvedSessionId previous=${sessionUpdate.previousState?.wireValue ?? ''} '
         'reason=${sessionUpdate.reasonCode}',
       );
       return;
@@ -2961,7 +3044,7 @@ class _ControlScreenState extends State<ControlScreen>
 
     try {
       await SessionJournalService.upsertSessionState(
-        sessionId: sessionId,
+        sessionId: resolvedSessionId,
         studentId: widget.student.id,
         therapistId: _resolveActorTherapistId(),
         state: sessionUpdate.state,
@@ -2974,7 +3057,7 @@ class _ControlScreenState extends State<ControlScreen>
       );
 
       await SessionJournalService.appendSessionEvent(
-        sessionId: sessionId,
+        sessionId: resolvedSessionId,
         studentId: widget.student.id,
         therapistId: _resolveActorTherapistId(),
         eventType: 'RUNTIME_SESSION_STATE_UPDATE',
@@ -2982,7 +3065,7 @@ class _ControlScreenState extends State<ControlScreen>
         source: 'vr_runtime',
         eventAtUtc: sessionUpdate.changedAtUtc,
         timelineEventId: SessionJournalService.buildTimelineEventId(
-          sessionId: sessionId,
+          sessionId: resolvedSessionId,
           eventType: 'RUNTIME_SESSION_STATE_UPDATE',
           source: 'vr_runtime',
           eventAtUnixMs: sessionUpdate.changedAtUtc.millisecondsSinceEpoch,
@@ -3003,7 +3086,7 @@ class _ControlScreenState extends State<ControlScreen>
       await _refreshPersistedSessionSnapshot(triggerPrompt: true);
     } catch (e) {
       debugPrint(
-        '[ControlScreen] Persist runtime session state failed: session=$sessionId, error=$e',
+        '[ControlScreen] Persist runtime session state failed: session=$resolvedSessionId, error=$e',
       );
     }
   }
@@ -4514,11 +4597,13 @@ class _ControlScreenState extends State<ControlScreen>
     final persistedSessionId = _latestPersistedSession?.sessionId.trim() ?? '';
 
     if (command == CriticalCommandIds.endSession) {
+      // Mobile-only arch: prefer activeSessionId (always mobile-*) so
+      // END_SESSION side-effects land in the correct Firestore document.
       for (final candidate in <String>[
+        activeSessionId,
+        pendingDecisionSessionId,
         lastSessionSignalId,
         lastRuntimeSignalId,
-        pendingDecisionSessionId,
-        activeSessionId,
       ]) {
         if (candidate.isNotEmpty) {
           return candidate;
@@ -4805,7 +4890,11 @@ class _ControlScreenState extends State<ControlScreen>
     final resolvedGameId = _resolveRemoteGameIdForResume();
 
     setState(() {
-      _activeSessionId = remoteSessionId;
+      // Mobile-only arch guard: only adopt mobile-* IDs as active session.
+      // If remoteSessionId is a UUID (old Firestore data), keep current mobile-*.
+      if (remoteSessionId.startsWith('mobile-')) {
+        _activeSessionId = remoteSessionId;
+      }
       _requiresSessionDecision = false;
       _remoteSessionIdPendingDecision = null;
       _lastConnectionLostAtUtc = null;
@@ -5796,13 +5885,18 @@ class _ControlScreenState extends State<ControlScreen>
 
     if (mounted) {
       setState(() {
-        _activeSessionId = persistedSessionId;
+        // Mobile-only arch guard: only adopt mobile-* IDs as active session.
+        if (persistedSessionId.startsWith('mobile-')) {
+          _activeSessionId = persistedSessionId;
+        }
         _sessionAttachReady = false;
         _requiresSessionDecision = false;
         _remoteSessionIdPendingDecision = null;
       });
     } else {
-      _activeSessionId = persistedSessionId;
+      if (persistedSessionId.startsWith('mobile-')) {
+        _activeSessionId = persistedSessionId;
+      }
       _sessionAttachReady = false;
       _requiresSessionDecision = false;
       _remoteSessionIdPendingDecision = null;
@@ -6295,6 +6389,12 @@ class _ControlScreenState extends State<ControlScreen>
     _autoReconnectEnabled = false;
     _allowSystemPop = true;
     unawaited(ForegroundServiceBridge.stop());
+
+    // Delete Firestore session if no game was played (therapist ended without playing).
+    if (returnToStudentSelection && !_gameDataService.hasGameData) {
+      await _gameDataService.deleteSessionIfEmpty();
+    }
+
     await _connection.disconnect();
 
     if (!mounted) {
@@ -6605,7 +6705,12 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   String _resolveTimelineSessionId() {
+    // In the mobile-only architecture _activeSessionId is set in initState
+    // and always points to the mobile-* document — prefer it first so events
+    // like CONTROLLER_DISCONNECTED and SESSION_ENDED never land in a UUID doc.
     final activeSessionId = _activeSessionId.trim();
+    if (activeSessionId.isNotEmpty) return activeSessionId;
+
     final lastSessionSignalId = _lastSessionStateUpdateSessionId?.trim() ?? '';
     final lastRuntimeSignalId = _lastRuntimeStatusSessionId?.trim() ?? '';
     final pendingDecisionSessionId =
@@ -6617,7 +6722,6 @@ class _ControlScreenState extends State<ControlScreen>
       lastRuntimeSignalId,
       pendingDecisionSessionId,
       persistedSessionId,
-      activeSessionId,
     ]) {
       if (candidate.isNotEmpty) {
         return candidate;

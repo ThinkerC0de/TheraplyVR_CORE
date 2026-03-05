@@ -61,7 +61,7 @@ namespace TheraplyCore.Firebase
         [SerializeField] private GameSessionContext _sessionContext;
 
         [Header("Outbox Sync")]
-        [SerializeField] private bool _enableOutboxSync = true;
+        [SerializeField] private bool _enableOutboxSync = false; // Mobile-only arch: mobilka jest jedynym pisarzem Firestore
         [SerializeField] private float _outboxSyncIntervalSeconds = 2f;
         [SerializeField] private int _outboxBatchSize = 32;
         [SerializeField] private float _outboxBackoffBaseSeconds = 1f;

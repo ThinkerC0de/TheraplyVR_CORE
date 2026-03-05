@@ -209,7 +209,7 @@ namespace TheraplyExamples
 
     public static class ExampleSceneRouterBootstrap
     {
-        private const bool AutoBootstrapEnabled = false;
+        private static readonly bool AutoBootstrapEnabled = false;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void EnsureRouter()

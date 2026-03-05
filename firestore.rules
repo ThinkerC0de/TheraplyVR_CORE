@@ -109,21 +109,20 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
-      // Written exclusively by Cloud Functions (admin SDK bypasses these rules).
-      // Client-side reads allowed for session owner and admin.
+      // Written by mobile controller (authenticated therapist who owns the session).
       match /game_runs/{gameRunId} {
         allow read: if canReadTherapySession(sessionId);
-        allow write: if false;
+        allow write: if canReadTherapySession(sessionId);
       }
 
       match /interactions/{eventId} {
         allow read: if canReadTherapySession(sessionId);
-        allow write: if false;
+        allow write: if canReadTherapySession(sessionId);
       }
 
       match /motion_traces/{traceId} {
         allow read: if canReadTherapySession(sessionId);
-        allow write: if false;
+        allow write: if canReadTherapySession(sessionId);
       }
 
       // Raw / unknown events — admin only.
@@ -146,6 +145,16 @@ service cloud.firestore {
         request.resource.data.incidentCount is int &&
         request.resource.data.incidents is list;
       allow update, delete: if false;
+    }
+
+    match /student_rewards/{unlockId} {
+      allow read: if isSignedIn() && (
+        isAdminOperator() || resource.data.therapistId == request.auth.uid
+      );
+      allow create: if isSignedIn() && (
+        isAdminOperator() || request.resource.data.therapistId == request.auth.uid
+      );
+      allow update, delete: if isAdminOperator();
     }
 
     match /game_catalog/{gameId} {

@@ -17,7 +17,6 @@ namespace TheraplyCore.Games.Runtime
         [SerializeField] private string _patientId = "unknown_patient";
         [SerializeField] private string _therapistId = "unknown_therapist";
         [SerializeField] private string _sessionId = "";
-        [SerializeField] private bool _autoStartSessionOnAwake = true;
         [SerializeField] private bool _deferAutoStartWhenRecoverySnapshotExists = true;
         [SerializeField] private string _recoverySnapshotFolder = "session_resilience";
         [SerializeField] private string _recoverySnapshotFileName = "snapshot.json";
@@ -34,19 +33,6 @@ namespace TheraplyCore.Games.Runtime
         public event Action OnSessionChanged;
         public event Action<GameContracts.SessionLifecycleState, GameContracts.SessionLifecycleState, string> OnSessionStateChanged;
 
-        private void Awake()
-        {
-            if (_autoStartSessionOnAwake)
-            {
-                if (ShouldDeferAutoStartForRecovery())
-                {
-                    Logger.Info("[SessionContext] Auto-start deferred: recovery snapshot detected.");
-                    return;
-                }
-
-                BeginSession(_patientId, _therapistId, _sessionId);
-            }
-        }
 
         public void BeginSession(string patientId, string therapistId, string sessionId = null)
         {
