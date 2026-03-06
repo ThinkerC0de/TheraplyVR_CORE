@@ -79,20 +79,48 @@ flutter build apk
 Detailed controller notes:
 - `flutter_controller/README.md`
 
-## 4. Runtime Requirements
+## 4. Firebase Functions Setup
+
+Firebase Functions now use an automatic Firebase `predeploy` hook, so a fresh clone does not require a separate manual build step before deploy.
+
+Prerequisites:
+- Node.js `20`
+- Firebase CLI installed and authenticated
+
+Notes:
+- `functions/node_modules` contains local npm dependencies and is not source code.
+- `functions/lib` is the compiled TypeScript output used for deploy because `functions/package.json` points `main` to `lib/index.js`.
+- `firebase deploy --only functions` now runs `npm ci` and `npm run build` automatically inside `functions` before upload.
+- Because the install step uses `npm ci`, `functions/package-lock.json` must stay in sync with `functions/package.json`.
+
+Deploy:
+
+```bash
+firebase deploy --only functions
+```
+
+Optional local preparation if you want to run or debug Functions without deploying:
+
+```bash
+cd functions
+npm ci
+npm run build
+```
+
+## 5. Runtime Requirements
 
 - Quest and controller phone must be on the same WiFi subnet.
 - UDP discovery port: `8767`
 - TCP control port: `8080`
 - Video stream: WebRTC media channel (dynamic ICE ports)
 
-## 5. Lifecycle Behavior (Current)
+## 6. Lifecycle Behavior (Current)
 
 - Control sessions use Android foreground service while active.
 - Foreground service is stopped automatically when app task is removed from recents.
 - On app resume, controller attempts TCP reconnect and recovers WebRTC preview automatically.
 
-## 6. Verification Checklist
+## 7. Verification Checklist
 
 - Unity logs show:
   - TCP server started
