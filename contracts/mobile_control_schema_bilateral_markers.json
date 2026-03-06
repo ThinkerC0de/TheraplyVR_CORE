@@ -1,6 +1,6 @@
 {
     "schema": "THERAPLY_MOBILE_CONTROL_SCHEMA",
-    "schemaVersion": "2026-02-25",
+    "schemaVersion": "2026-02-26",
     "gameId": "bilateral_markers",
     "title": "Bilateral Markers Controls",
     "description": "START_GAME setup for bilateral hand-path training on Quest controllers.",
@@ -36,7 +36,7 @@
             "sectionId": "core",
             "order": 10,
             "defaultValue": "0",
-            "buttonCommandId": "",
+            "buttonCommandId": "UPDATE_CONFIG",
             "binding": {
                 "target": "game_config",
                 "path": "level",
@@ -92,7 +92,7 @@
             "sectionId": "core",
             "order": 20,
             "defaultValue": "wave",
-            "buttonCommandId": "",
+            "buttonCommandId": "UPDATE_CONFIG",
             "binding": {
                 "target": "game_config",
                 "path": "pattern",
@@ -148,7 +148,7 @@
             "sectionId": "core",
             "order": 30,
             "defaultValue": "72",
-            "buttonCommandId": "",
+            "buttonCommandId": "UPDATE_CONFIG",
             "binding": {
                 "target": "game_config",
                 "path": "tempoBpm",
@@ -183,7 +183,7 @@
             "sectionId": "core",
             "order": 40,
             "defaultValue": "45",
-            "buttonCommandId": "",
+            "buttonCommandId": "UPDATE_CONFIG",
             "binding": {
                 "target": "game_config",
                 "path": "durationSec",
@@ -218,7 +218,7 @@
             "sectionId": "advanced",
             "order": 50,
             "defaultValue": "right",
-            "buttonCommandId": "",
+            "buttonCommandId": "UPDATE_CONFIG",
             "binding": {
                 "target": "game_config",
                 "path": "dominantHand",
@@ -262,7 +262,7 @@
             "sectionId": "advanced",
             "order": 60,
             "defaultValue": "spiral",
-            "buttonCommandId": "",
+            "buttonCommandId": "UPDATE_CONFIG",
             "binding": {
                 "target": "game_config",
                 "path": "leftPattern",
@@ -318,7 +318,7 @@
             "sectionId": "advanced",
             "order": 70,
             "defaultValue": "wave",
-            "buttonCommandId": "",
+            "buttonCommandId": "UPDATE_CONFIG",
             "binding": {
                 "target": "game_config",
                 "path": "rightPattern",
@@ -374,7 +374,7 @@
             "sectionId": "advanced",
             "order": 80,
             "defaultValue": "0.11",
-            "buttonCommandId": "",
+            "buttonCommandId": "UPDATE_CONFIG",
             "binding": {
                 "target": "game_config",
                 "path": "tunnelWidthM",
@@ -409,7 +409,7 @@
             "sectionId": "advanced",
             "order": 90,
             "defaultValue": "0.7",
-            "buttonCommandId": "",
+            "buttonCommandId": "UPDATE_CONFIG",
             "binding": {
                 "target": "game_config",
                 "path": "alternationOffsetSec",
@@ -444,7 +444,7 @@
             "sectionId": "advanced",
             "order": 100,
             "defaultValue": "true",
-            "buttonCommandId": "",
+            "buttonCommandId": "UPDATE_CONFIG",
             "binding": {
                 "target": "game_config",
                 "path": "adaptiveAssistEnabled",

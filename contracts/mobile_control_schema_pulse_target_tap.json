@@ -1,9 +1,9 @@
 {
     "schema": "THERAPLY_MOBILE_CONTROL_SCHEMA",
-    "schemaVersion": "2026-02-25",
+    "schemaVersion": "2026-02-27",
     "gameId": "pulse_target_tap",
-    "title": "Pulse Target Dynamic Controls",
-    "description": "Dynamic setup rendered from schema with update button.",
+    "title": "Pulse Targets Controls",
+    "description": "Schema-driven controls for Pulse Targets START_GAME and UPDATE_CONFIG.",
     "layout": {
         "mode": "stack",
         "columns": 1
@@ -16,14 +16,19 @@
     },
     "sections": [
         {
-            "sectionId": "setup",
-            "label": "Setup",
+            "sectionId": "core",
+            "label": "Core",
             "order": 10
+        },
+        {
+            "sectionId": "adaptive",
+            "label": "Adaptive",
+            "order": 20
         },
         {
             "sectionId": "runtime",
             "label": "Runtime",
-            "order": 20
+            "order": 30
         }
     ],
     "controls": [
@@ -31,11 +36,11 @@
             "controlId": "target_count",
             "type": "slider",
             "label": "Target Count",
-            "hint": "Number of active cubes.",
+            "hint": "Number of active pulse targets.",
             "placeholder": "",
-            "sectionId": "setup",
+            "sectionId": "core",
             "order": 10,
-            "defaultValue": "12",
+            "defaultValue": "8",
             "buttonCommandId": "UPDATE_CONFIG",
             "binding": {
                 "target": "game_config",
@@ -46,7 +51,7 @@
             },
             "validation": {
                 "required": true,
-                "minValue": "4",
+                "minValue": "3",
                 "maxValue": "40",
                 "step": "1",
                 "minLength": 0,
@@ -63,26 +68,26 @@
             "options": []
         },
         {
-            "controlId": "spawn_speed",
+            "controlId": "target_speed",
             "type": "slider",
-            "label": "Target Spawn Speed",
-            "hint": "Movement speed multiplier.",
+            "label": "Target Speed",
+            "hint": "Pulse target movement speed.",
             "placeholder": "",
-            "sectionId": "setup",
+            "sectionId": "core",
             "order": 20,
             "defaultValue": "0.7",
             "buttonCommandId": "UPDATE_CONFIG",
             "binding": {
                 "target": "game_config",
-                "path": "spawnSpeed",
+                "path": "targetSpeed",
                 "valueType": "double",
                 "emitOnStartGame": true,
                 "emitOnUpdateConfig": true
             },
             "validation": {
                 "required": true,
-                "minValue": "0.2",
-                "maxValue": "2.2",
+                "minValue": "0.1",
+                "maxValue": "3.0",
                 "step": "0.1",
                 "minLength": 0,
                 "maxLength": 0,
@@ -98,24 +103,59 @@
             "options": []
         },
         {
-            "controlId": "target_mode",
-            "type": "select",
-            "label": "Target Mode",
-            "hint": "Select progression mode.",
+            "controlId": "target_scale",
+            "type": "slider",
+            "label": "Target Scale",
+            "hint": "Pulse target world scale.",
             "placeholder": "",
-            "sectionId": "setup",
+            "sectionId": "core",
             "order": 30,
-            "defaultValue": "basic",
+            "defaultValue": "0.3",
             "buttonCommandId": "UPDATE_CONFIG",
             "binding": {
                 "target": "game_config",
-                "path": "targetMode",
-                "valueType": "string",
+                "path": "targetScale",
+                "valueType": "double",
                 "emitOnStartGame": true,
                 "emitOnUpdateConfig": true
             },
             "validation": {
                 "required": true,
+                "minValue": "0.12",
+                "maxValue": "1.2",
+                "step": "0.02",
+                "minLength": 0,
+                "maxLength": 0,
+                "regex": ""
+            },
+            "visual": {
+                "x": -1.0,
+                "y": -1.0,
+                "width": 1.0,
+                "height": 1.0,
+                "scale": 1.0
+            },
+            "options": []
+        },
+        {
+            "controlId": "adaptive_difficulty_enabled",
+            "type": "toggle",
+            "label": "Adaptive Difficulty",
+            "hint": "Enable adaptive speed/scale policy.",
+            "placeholder": "",
+            "sectionId": "adaptive",
+            "order": 40,
+            "defaultValue": "true",
+            "buttonCommandId": "UPDATE_CONFIG",
+            "binding": {
+                "target": "game_config",
+                "path": "adaptiveDifficultyEnabled",
+                "valueType": "bool",
+                "emitOnStartGame": true,
+                "emitOnUpdateConfig": true
+            },
+            "validation": {
+                "required": false,
                 "minValue": "",
                 "maxValue": "",
                 "step": "",
@@ -130,36 +170,93 @@
                 "height": 1.0,
                 "scale": 1.0
             },
-            "options": [
-                {
-                    "value": "basic",
-                    "label": "Basic"
-                },
-                {
-                    "value": "alternate_colors",
-                    "label": "Alternate Colors"
-                },
-                {
-                    "value": "random_target_color",
-                    "label": "Random Target"
-                }
-            ]
+            "options": []
         },
         {
-            "controlId": "session_note",
-            "type": "text",
-            "label": "Session Note",
-            "hint": "Optional note sent with update config.",
-            "placeholder": "Note for runtime log",
-            "sectionId": "runtime",
-            "order": 40,
-            "defaultValue": "",
+            "controlId": "adaptive_difficulty_sensitivity",
+            "type": "slider",
+            "label": "Adaptive Sensitivity",
+            "hint": "How quickly adaptive logic reacts.",
+            "placeholder": "",
+            "sectionId": "adaptive",
+            "order": 50,
+            "defaultValue": "0.55",
             "buttonCommandId": "UPDATE_CONFIG",
             "binding": {
                 "target": "game_config",
-                "path": "sessionNote",
-                "valueType": "string",
-                "emitOnStartGame": false,
+                "path": "adaptiveDifficultySensitivity",
+                "valueType": "double",
+                "emitOnStartGame": true,
+                "emitOnUpdateConfig": true
+            },
+            "validation": {
+                "required": true,
+                "minValue": "0.0",
+                "maxValue": "1.0",
+                "step": "0.05",
+                "minLength": 0,
+                "maxLength": 0,
+                "regex": ""
+            },
+            "visual": {
+                "x": -1.0,
+                "y": -1.0,
+                "width": 1.0,
+                "height": 1.0,
+                "scale": 1.0
+            },
+            "options": []
+        },
+        {
+            "controlId": "adaptive_difficulty_level",
+            "type": "slider",
+            "label": "Adaptive Level",
+            "hint": "Initial adaptive difficulty bucket (1-5).",
+            "placeholder": "",
+            "sectionId": "adaptive",
+            "order": 60,
+            "defaultValue": "3",
+            "buttonCommandId": "UPDATE_CONFIG",
+            "binding": {
+                "target": "game_config",
+                "path": "adaptiveDifficultyLevel",
+                "valueType": "int",
+                "emitOnStartGame": true,
+                "emitOnUpdateConfig": true
+            },
+            "validation": {
+                "required": true,
+                "minValue": "1",
+                "maxValue": "5",
+                "step": "1",
+                "minLength": 0,
+                "maxLength": 0,
+                "regex": ""
+            },
+            "visual": {
+                "x": -1.0,
+                "y": -1.0,
+                "width": 1.0,
+                "height": 1.0,
+                "scale": 1.0
+            },
+            "options": []
+        },
+        {
+            "controlId": "label_pipeline_enabled",
+            "type": "toggle",
+            "label": "Label Pipeline",
+            "hint": "Enable task label generation pipeline.",
+            "placeholder": "",
+            "sectionId": "adaptive",
+            "order": 70,
+            "defaultValue": "true",
+            "buttonCommandId": "UPDATE_CONFIG",
+            "binding": {
+                "target": "game_config",
+                "path": "labelPipelineEnabled",
+                "valueType": "bool",
+                "emitOnStartGame": true,
                 "emitOnUpdateConfig": true
             },
             "validation": {
@@ -168,7 +265,7 @@
                 "maxValue": "",
                 "step": "",
                 "minLength": 0,
-                "maxLength": 120,
+                "maxLength": 0,
                 "regex": ""
             },
             "visual": {
@@ -184,10 +281,10 @@
             "controlId": "apply_runtime_update",
             "type": "button",
             "label": "Apply Runtime Config",
-            "hint": "Send UPDATE_CONFIG with current control values.",
+            "hint": "Send UPDATE_CONFIG with current values.",
             "placeholder": "",
             "sectionId": "runtime",
-            "order": 50,
+            "order": 80,
             "defaultValue": "",
             "buttonCommandId": "UPDATE_CONFIG",
             "binding": {

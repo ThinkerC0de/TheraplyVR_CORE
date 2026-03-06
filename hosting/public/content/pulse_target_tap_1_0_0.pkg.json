@@ -1,30 +1,28 @@
 {
-    "schema":  "THERAPLY_BOARD_SAFE_GAME_PACKAGE",
-    "schemaVersion":  "2026-03-02",
-    "packageId":  "pulse_target_tap",
-    "contentVersion":  "1.0.0",
-    "artifactType":  "game_contract_bundle",
-    "deliveryMode":  "on_demand",
-    "generatedAtUtc":  "2026-03-02T18:35:04.9764441Z",
-    "packageUri":  "https://pranasense.pl/content/pulse_target_tap_1_0_0.pkg.json",
-    "sourceContracts":  [
-                            {
-                                "path":  "contracts/game_definitions/pulse_target_tap.json",
-                                "sha256":  "5c0126cc30691fc23ba680547ac58eb5c3bedc90d7c92f7384f8b2dfb644b33b",
-                                "bytes":  14129
-                            },
-                            {
-                                "path":  "contracts/mobile_control_schema_pulse_target_tap.json",
-                                "sha256":  "d6f568508824cf46a229a15093a658ecb52d7eb22cfb3a4163b5e77907a490f9",
-                                "bytes":  6552
-                            },
-                            {
-                                "path":  "contracts/mobile_control_layout_pulse_target_tap.json",
-                                "sha256":  "9caccc279ced292b8b7ed15ff469c21c84a6f98dbac9fbc39ec91222711eefa6",
-                                "bytes":  8685
-                            }
-                        ],
-    "checksumSha256":  "60d23504235983646f14a939b99c97d78cba6387e9916744149b4ec0bb2b8368",
-    "probeOnly":  true,
-    "notes":  "Board-safe package manifest for packageUri download proof without runtime executable module loading."
+    "schema": "THERAPLY_ASSET_BUNDLE_GAME_PACKAGE",
+    "schemaVersion": "2026-03-03",
+    "packageId": "pulse_target_tap",
+    "contentVersion": "1.0.0",
+    "artifactType": "unity_scene_asset_bundle",
+    "deliveryMode": "on_demand",
+    "generatedAtUtc": "2026-03-05T18:41:42.4990148Z",
+    "packageUri": "https://pranasense.pl/content/pulse_target_tap_1_0_0.pkg.json",
+    "assetBundle": {
+        "bundleUri": "https://pranasense.pl/content/pulse_target_tap_1_0_0_android.bundle",
+        "bundleFileName": "pulse_target_tap_1_0_0_android.bundle",
+        "bundleSha256": "d7e687ea87a568a97e6fa3a987dc8556bc30058867cacaebd860c5dd6ea0b2f7",
+        "bundleBytes": 197923,
+        "unityBuildTarget": "Android",
+        "compression": "chunk",
+        "sceneAssetPath": "Assets/_Examples/Scenes/PulseTargetsScene.unity",
+        "sceneName": "PulseTargetsScene",
+        "loadMode": "additive"
+    },
+    "gameDefinitionPath": "",
+    "mobileControlSchemaPath": "",
+    "mobileControlLayoutPath": "",
+    "sourceContracts": {
+        "items": []
+    },
+    "notes": "Install downloads manifest + asset bundle; START loads scene additively from persistent storage."
 }

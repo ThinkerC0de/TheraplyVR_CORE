@@ -24,6 +24,7 @@ namespace TheraplyExamples
         [SerializeField] private float _defaultTargetScale = 0.3f;
         [SerializeField] private float _viewportPadding = 0.18f;
         [SerializeField] private Camera _targetCamera;
+        [SerializeField] private Shader _targetFallbackShader;
 
         [Header("Task Stack")]
         [SerializeField] private bool _emitSequenceTelemetry = true;
@@ -51,6 +52,8 @@ namespace TheraplyExamples
         private float _effectiveTargetScale;
         private float _effectiveCueTimeoutSec;
         private bool _labelPipelineActive;
+        private Material _runtimeTargetMaterial;
+        private bool _loggedTargetShaderSelection;
 
         private readonly StimulusScheduler _stimulusScheduler = new StimulusScheduler();
         private readonly SequenceTaskEngine _sequenceTaskEngine = new SequenceTaskEngine();
@@ -278,7 +281,12 @@ namespace TheraplyExamples
             var renderer = targetObject.GetComponent<Renderer>();
             if (renderer != null)
             {
-                renderer.material.color = Color.Lerp(Color.yellow, Color.red, 0.35f);
+                EnsureTargetMaterial(renderer);
+                var material = renderer.material;
+                if (material != null && material.HasProperty("_Color"))
+                {
+                    material.color = Color.Lerp(Color.yellow, Color.red, 0.35f);
+                }
             }
 
             var clickTarget = targetObject.AddComponent<PulseTargetClickTarget>();
@@ -737,6 +745,133 @@ namespace TheraplyExamples
             {
                 _targetCamera = FindFirstObjectByType<Camera>();
             }
+        }
+
+        private void EnsureTargetMaterial(Renderer renderer)
+        {
+            if (renderer == null)
+            {
+                return;
+            }
+
+            var sharedMaterial = renderer.sharedMaterial;
+            if (!IsMaterialShaderBroken(sharedMaterial))
+            {
+                return;
+            }
+
+            var fallbackMaterial = ResolveRuntimeTargetMaterial();
+            if (fallbackMaterial == null)
+            {
+                return;
+            }
+
+            renderer.sharedMaterial = fallbackMaterial;
+        }
+
+        private Material ResolveRuntimeTargetMaterial()
+        {
+            if (_runtimeTargetMaterial != null && _runtimeTargetMaterial.shader != null)
+            {
+                return _runtimeTargetMaterial;
+            }
+
+            var shader = ResolveRuntimeTargetShader();
+            if (shader == null)
+            {
+                return null;
+            }
+
+            _runtimeTargetMaterial = new Material(shader)
+            {
+                name = "PulseTargetRuntimeMaterial",
+            };
+            if (_runtimeTargetMaterial.HasProperty("_Color"))
+            {
+                _runtimeTargetMaterial.color = Color.white;
+            }
+
+            return _runtimeTargetMaterial;
+        }
+
+        private Shader ResolveRuntimeTargetShader()
+        {
+            if (_targetFallbackShader != null && _targetFallbackShader.isSupported)
+            {
+                LogResolvedRuntimeShader(_targetFallbackShader, "serialized_fallback");
+                return _targetFallbackShader;
+            }
+
+            var shaderNames = new[]
+            {
+                "Standard",
+                "Legacy Shaders/Diffuse",
+                "Legacy Shaders/Transparent/Diffuse",
+                "Mobile/Diffuse",
+                "Unlit/Color",
+                "Universal Render Pipeline/Simple Lit",
+                "Universal Render Pipeline/Unlit",
+                "Universal Render Pipeline/Lit",
+                "Sprites/Default",
+                "Hidden/Internal-Colored",
+            };
+
+            for (var i = 0; i < shaderNames.Length; i++)
+            {
+                var shader = Shader.Find(shaderNames[i]);
+                if (shader == null)
+                {
+                    continue;
+                }
+
+                var canUseUnsupportedInternal = string.Equals(
+                    shader.name,
+                    "Hidden/Internal-Colored",
+                    StringComparison.Ordinal);
+                if (shader.isSupported || canUseUnsupportedInternal)
+                {
+                    LogResolvedRuntimeShader(shader, "lookup:" + shaderNames[i]);
+                    return shader;
+                }
+            }
+
+            if (!_loggedTargetShaderSelection)
+            {
+                _loggedTargetShaderSelection = true;
+                Debug.LogWarning(
+                    "[PulseTargets] No supported fallback shader found. Targets may render pink/invisible on Quest.");
+            }
+
+            return null;
+        }
+
+        private void LogResolvedRuntimeShader(Shader shader, string source)
+        {
+            if (_loggedTargetShaderSelection || shader == null)
+            {
+                return;
+            }
+
+            _loggedTargetShaderSelection = true;
+            Debug.Log(
+                "[PulseTargets] Runtime fallback shader selected: " +
+                shader.name +
+                " (supported=" +
+                shader.isSupported +
+                ", source=" +
+                source +
+                ")");
+        }
+
+        private static bool IsMaterialShaderBroken(Material material)
+        {
+            return material == null ||
+                material.shader == null ||
+                string.Equals(
+                    material.shader.name,
+                    "Hidden/InternalErrorShader",
+                    StringComparison.Ordinal) ||
+                !material.shader.isSupported;
         }
 
         [Serializable]

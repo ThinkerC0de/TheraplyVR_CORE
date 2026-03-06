@@ -1,455 +1,1104 @@
 {
-    "schema":  "THERAPLY_GAME_CATALOG",
-    "schemaVersion":  "2026-02-25",
-    "version":  "2026-03-03",
-    "collection":  "game_catalog",
-    "entries":  [
+    "schema": "THERAPLY_GAME_CATALOG",
+    "schemaVersion": "2026-02-25",
+    "version": "2026-03-05",
+    "collection": "game_catalog",
+    "entries": [
                     {
-                        "gameId":  "demo_cube_clicker",
-                        "title":  "Demo Cube Clicker",
-                        "description":  "Core runtime game available in current build.",
-                        "targetContentVersion":  "1.2.0",
-                        "packageUri":  "https://pranasense.pl/content/demo_cube_clicker_1_2_0.pkg.json",
-                        "thumbnailUrl":  "",
-                        "supportsSaveResume":  true,
-                        "availableForPurchase":  true,
-                        "requiresExplicitLicense":  true,
-                        "runtimeLaunchEnabled":  true,
-                        "sortOrder":  10,
-                        "active":  true,
-                        "previewLines":  [
+                        "gameId": "demo_cube_clicker",
+                        "title": "Demo Cube Clicker",
+                        "description": "Core runtime game available in current build.",
+                        "targetContentVersion": "1.2.0",
+                        "packageUri": "https://pranasense.pl/content/demo_cube_clicker_1_2_0.pkg.json",
+                        "thumbnailUrl": "",
+                        "supportsSaveResume": true,
+                        "availableForPurchase": true,
+                        "requiresExplicitLicense": true,
+                        "runtimeLaunchEnabled": true,
+                        "sortOrder": 10,
+                        "active": true,
+                        "previewLines": [
                                              "Basic and alternation levels.",
                                              "Supports save and resume."
                                          ],
-                        "mobileControlSchema":  {
-                                                    "schema":  "THERAPLY_MOBILE_CONTROL_SCHEMA",
-                                                    "schemaVersion":  "2026-02-25",
-                                                    "gameId":  "demo_cube_clicker",
-                                                    "title":  "Demo Cube Dynamic Controls",
-                                                    "description":  "Dynamic setup rendered from schema with update button.",
-                                                    "layout":  {
-                                                                   "mode":  "stack",
-                                                                   "columns":  1
+                        "mobileControlSchema": {
+                                                    "schema": "THERAPLY_MOBILE_CONTROL_SCHEMA",
+                                                    "schemaVersion": "2026-02-27",
+                                                    "gameId": "demo_cube_clicker",
+                                                    "title": "Demo Cube Controls",
+                                                    "description": "Schema-driven controls for Demo Cube START_GAME and UPDATE_CONFIG.",
+                                                    "layout": {
+                                                                   "mode": "grid",
+                                                                   "columns": 2
                                                                },
-                                                    "payload":  {
-                                                                    "target":  "game_config",
-                                                                    "gameConfigType":  "demo_cube_config_v1",
-                                                                    "gameConfigVersion":  1,
-                                                                    "includeVersionInGameConfig":  true
+                                                    "payload": {
+                                                                    "target": "game_config",
+                                                                    "gameConfigType": "demo_cube_config_v1",
+                                                                    "gameConfigVersion": 1,
+                                                                    "includeVersionInGameConfig": true
                                                                 },
-                                                    "sections":  [
+                                                    "sections": [
                                                                      {
-                                                                         "sectionId":  "setup",
-                                                                         "label":  "Setup",
-                                                                         "order":  10
+                                                                         "sectionId": "setup",
+                                                                         "label": "Setup",
+                                                                         "order": 10
                                                                      },
                                                                      {
-                                                                         "sectionId":  "runtime",
-                                                                         "label":  "Runtime",
-                                                                         "order":  20
+                                                                         "sectionId": "runtime",
+                                                                         "label": "Runtime",
+                                                                         "order": 20
                                                                      }
                                                                  ],
-                                                    "controls":  [
+                                                    "controls": [
                                                                      {
-                                                                         "controlId":  "cube_count",
-                                                                         "type":  "slider",
-                                                                         "label":  "Cube Count",
-                                                                         "hint":  "Number of active cubes.",
-                                                                         "placeholder":  "",
-                                                                         "sectionId":  "setup",
-                                                                         "order":  10,
-                                                                         "defaultValue":  "12",
-                                                                         "buttonCommandId":  "UPDATE_CONFIG",
-                                                                         "binding":  {
-                                                                                         "target":  "game_config",
-                                                                                         "path":  "cubeCount",
-                                                                                         "valueType":  "int",
-                                                                                         "emitOnStartGame":  true,
-                                                                                         "emitOnUpdateConfig":  true
+                                                                         "controlId": "cube_count",
+                                                                         "type": "slider",
+                                                                         "label": "Cube Count",
+                                                                         "hint": "Number of spawned cubes.",
+                                                                         "placeholder": "",
+                                                                         "sectionId": "setup",
+                                                                         "order": 10,
+                                                                         "defaultValue": "12",
+                                                                         "buttonCommandId": "UPDATE_CONFIG",
+                                                                         "binding": {
+                                                                                         "target": "game_config",
+                                                                                         "path": "cubeCount",
+                                                                                         "valueType": "int",
+                                                                                         "emitOnStartGame": true,
+                                                                                         "emitOnUpdateConfig": true
                                                                                      },
-                                                                         "validation":  {
-                                                                                            "required":  true,
-                                                                                            "minValue":  "4",
-                                                                                            "maxValue":  "40",
-                                                                                            "step":  "1",
-                                                                                            "minLength":  0,
-                                                                                            "maxLength":  0,
-                                                                                            "regex":  ""
+                                                                         "validation": {
+                                                                                            "required": true,
+                                                                                            "minValue": "4",
+                                                                                            "maxValue": "40",
+                                                                                            "step": "1",
+                                                                                            "minLength": 0,
+                                                                                            "maxLength": 0,
+                                                                                            "regex": ""
                                                                                         },
-                                                                         "visual":  {
-                                                                                        "x":  -1.0,
-                                                                                        "y":  -1.0,
-                                                                                        "width":  1.0,
-                                                                                        "height":  1.0,
-                                                                                        "scale":  1.0
+                                                                         "visual": {
+                                                                                        "x": 0.0,
+                                                                                        "y": 0.0,
+                                                                                        "width": 0.4749999940395355,
+                                                                                        "height": 0.30000001192092898,
+                                                                                        "scale": 1.0
                                                                                     },
-                                                                         "options":  [
+                                                                         "options": [
 
                                                                                      ]
                                                                      },
                                                                      {
-                                                                         "controlId":  "cube_speed",
-                                                                         "type":  "slider",
-                                                                         "label":  "Cube Speed",
-                                                                         "hint":  "Movement speed multiplier.",
-                                                                         "placeholder":  "",
-                                                                         "sectionId":  "setup",
-                                                                         "order":  20,
-                                                                         "defaultValue":  "0.7",
-                                                                         "buttonCommandId":  "UPDATE_CONFIG",
-                                                                         "binding":  {
-                                                                                         "target":  "game_config",
-                                                                                         "path":  "cubeSpeed",
-                                                                                         "valueType":  "double",
-                                                                                         "emitOnStartGame":  true,
-                                                                                         "emitOnUpdateConfig":  true
+                                                                         "controlId": "cube_speed",
+                                                                         "type": "slider",
+                                                                         "label": "Cube Speed",
+                                                                         "hint": "Cube movement speed.",
+                                                                         "placeholder": "",
+                                                                         "sectionId": "setup",
+                                                                         "order": 20,
+                                                                         "defaultValue": "0.7",
+                                                                         "buttonCommandId": "UPDATE_CONFIG",
+                                                                         "binding": {
+                                                                                         "target": "game_config",
+                                                                                         "path": "cubeSpeed",
+                                                                                         "valueType": "double",
+                                                                                         "emitOnStartGame": true,
+                                                                                         "emitOnUpdateConfig": true
                                                                                      },
-                                                                         "validation":  {
-                                                                                            "required":  true,
-                                                                                            "minValue":  "0.2",
-                                                                                            "maxValue":  "2.2",
-                                                                                            "step":  "0.1",
-                                                                                            "minLength":  0,
-                                                                                            "maxLength":  0,
-                                                                                            "regex":  ""
+                                                                         "validation": {
+                                                                                            "required": true,
+                                                                                            "minValue": "0.2",
+                                                                                            "maxValue": "2.2",
+                                                                                            "step": "0.1",
+                                                                                            "minLength": 0,
+                                                                                            "maxLength": 0,
+                                                                                            "regex": ""
                                                                                         },
-                                                                         "visual":  {
-                                                                                        "x":  -1.0,
-                                                                                        "y":  -1.0,
-                                                                                        "width":  1.0,
-                                                                                        "height":  1.0,
-                                                                                        "scale":  1.0
+                                                                         "visual": {
+                                                                                        "x": 0.5,
+                                                                                        "y": 0.0,
+                                                                                        "width": 0.4749999940395355,
+                                                                                        "height": 0.30000001192092898,
+                                                                                        "scale": 1.0
                                                                                     },
-                                                                         "options":  [
+                                                                         "options": [
 
                                                                                      ]
                                                                      },
                                                                      {
-                                                                         "controlId":  "level_mode",
-                                                                         "type":  "select",
-                                                                         "label":  "Level Mode",
-                                                                         "hint":  "Select progression mode.",
-                                                                         "placeholder":  "",
-                                                                         "sectionId":  "setup",
-                                                                         "order":  30,
-                                                                         "defaultValue":  "basic",
-                                                                         "buttonCommandId":  "UPDATE_CONFIG",
-                                                                         "binding":  {
-                                                                                         "target":  "game_config",
-                                                                                         "path":  "levelMode",
-                                                                                         "valueType":  "string",
-                                                                                         "emitOnStartGame":  true,
-                                                                                         "emitOnUpdateConfig":  true
+                                                                         "controlId": "level_mode",
+                                                                         "type": "select",
+                                                                         "label": "Level Mode",
+                                                                         "hint": "Target color rule set.",
+                                                                         "placeholder": "",
+                                                                         "sectionId": "setup",
+                                                                         "order": 30,
+                                                                         "defaultValue": "basic",
+                                                                         "buttonCommandId": "UPDATE_CONFIG",
+                                                                         "binding": {
+                                                                                         "target": "game_config",
+                                                                                         "path": "levelMode",
+                                                                                         "valueType": "string",
+                                                                                         "emitOnStartGame": true,
+                                                                                         "emitOnUpdateConfig": true
                                                                                      },
-                                                                         "validation":  {
-                                                                                            "required":  true,
-                                                                                            "minValue":  "",
-                                                                                            "maxValue":  "",
-                                                                                            "step":  "",
-                                                                                            "minLength":  0,
-                                                                                            "maxLength":  0,
-                                                                                            "regex":  ""
+                                                                         "validation": {
+                                                                                            "required": true,
+                                                                                            "minValue": "",
+                                                                                            "maxValue": "",
+                                                                                            "step": "",
+                                                                                            "minLength": 0,
+                                                                                            "maxLength": 0,
+                                                                                            "regex": ""
                                                                                         },
-                                                                         "visual":  {
-                                                                                        "x":  -1.0,
-                                                                                        "y":  -1.0,
-                                                                                        "width":  1.0,
-                                                                                        "height":  1.0,
-                                                                                        "scale":  1.0
+                                                                         "visual": {
+                                                                                        "x": 0.0,
+                                                                                        "y": 0.3333333432674408,
+                                                                                        "width": 0.4749999940395355,
+                                                                                        "height": 0.30000001192092898,
+                                                                                        "scale": 1.0
                                                                                     },
-                                                                         "options":  [
+                                                                         "options": [
                                                                                          {
-                                                                                             "value":  "basic",
-                                                                                             "label":  "Basic"
+                                                                                             "value": "basic",
+                                                                                             "label": "Basic"
                                                                                          },
                                                                                          {
-                                                                                             "value":  "alternate_colors",
-                                                                                             "label":  "Alternate Colors"
+                                                                                             "value": "alternate_colors",
+                                                                                             "label": "Alternate Colors"
                                                                                          },
                                                                                          {
-                                                                                             "value":  "random_target_color",
-                                                                                             "label":  "Random Target"
+                                                                                             "value": "random_target_color",
+                                                                                             "label": "Random Target"
                                                                                          }
                                                                                      ]
                                                                      },
                                                                      {
-                                                                         "controlId":  "therapist_note",
-                                                                         "type":  "text",
-                                                                         "label":  "Session Note",
-                                                                         "hint":  "Optional note sent with update config.",
-                                                                         "placeholder":  "Note for runtime log",
-                                                                         "sectionId":  "runtime",
-                                                                         "order":  40,
-                                                                         "defaultValue":  "",
-                                                                         "buttonCommandId":  "UPDATE_CONFIG",
-                                                                         "binding":  {
-                                                                                         "target":  "game_config",
-                                                                                         "path":  "therapistNote",
-                                                                                         "valueType":  "string",
-                                                                                         "emitOnStartGame":  false,
-                                                                                         "emitOnUpdateConfig":  true
+                                                                         "controlId": "resume_from_saved",
+                                                                         "type": "toggle",
+                                                                         "label": "Resume From Saved",
+                                                                         "hint": "Start from persisted state when available.",
+                                                                         "placeholder": "",
+                                                                         "sectionId": "runtime",
+                                                                         "order": 40,
+                                                                         "defaultValue": "false",
+                                                                         "buttonCommandId": "UPDATE_CONFIG",
+                                                                         "binding": {
+                                                                                         "target": "game_config",
+                                                                                         "path": "resumeFromSaved",
+                                                                                         "valueType": "bool",
+                                                                                         "emitOnStartGame": true,
+                                                                                         "emitOnUpdateConfig": true
                                                                                      },
-                                                                         "validation":  {
-                                                                                            "required":  false,
-                                                                                            "minValue":  "",
-                                                                                            "maxValue":  "",
-                                                                                            "step":  "",
-                                                                                            "minLength":  0,
-                                                                                            "maxLength":  120,
-                                                                                            "regex":  ""
+                                                                         "validation": {
+                                                                                            "required": false,
+                                                                                            "minValue": "",
+                                                                                            "maxValue": "",
+                                                                                            "step": "",
+                                                                                            "minLength": 0,
+                                                                                            "maxLength": 0,
+                                                                                            "regex": ""
                                                                                         },
-                                                                         "visual":  {
-                                                                                        "x":  -1.0,
-                                                                                        "y":  -1.0,
-                                                                                        "width":  1.0,
-                                                                                        "height":  1.0,
-                                                                                        "scale":  1.0
+                                                                         "visual": {
+                                                                                        "x": 0.5,
+                                                                                        "y": 0.3333333432674408,
+                                                                                        "width": 0.4749999940395355,
+                                                                                        "height": 0.30000001192092898,
+                                                                                        "scale": 1.0
                                                                                     },
-                                                                         "options":  [
+                                                                         "options": [
 
                                                                                      ]
                                                                      },
                                                                      {
-                                                                         "controlId":  "apply_runtime_update",
-                                                                         "type":  "button",
-                                                                         "label":  "Apply Runtime Config",
-                                                                         "hint":  "Send UPDATE_CONFIG with current control values.",
-                                                                         "placeholder":  "",
-                                                                         "sectionId":  "runtime",
-                                                                         "order":  50,
-                                                                         "defaultValue":  "",
-                                                                         "buttonCommandId":  "UPDATE_CONFIG",
-                                                                         "binding":  {
-                                                                                         "target":  "game_config",
-                                                                                         "path":  "",
-                                                                                         "valueType":  "string",
-                                                                                         "emitOnStartGame":  false,
-                                                                                         "emitOnUpdateConfig":  false
+                                                                         "controlId": "apply_runtime_update",
+                                                                         "type": "button",
+                                                                         "label": "Apply Runtime Config",
+                                                                         "hint": "Send UPDATE_CONFIG with current values.",
+                                                                         "placeholder": "",
+                                                                         "sectionId": "runtime",
+                                                                         "order": 50,
+                                                                         "defaultValue": "",
+                                                                         "buttonCommandId": "UPDATE_CONFIG",
+                                                                         "binding": {
+                                                                                         "target": "game_config",
+                                                                                         "path": "",
+                                                                                         "valueType": "string",
+                                                                                         "emitOnStartGame": false,
+                                                                                         "emitOnUpdateConfig": false
                                                                                      },
-                                                                         "validation":  {
-                                                                                            "required":  false,
-                                                                                            "minValue":  "",
-                                                                                            "maxValue":  "",
-                                                                                            "step":  "",
-                                                                                            "minLength":  0,
-                                                                                            "maxLength":  0,
-                                                                                            "regex":  ""
+                                                                         "validation": {
+                                                                                            "required": false,
+                                                                                            "minValue": "",
+                                                                                            "maxValue": "",
+                                                                                            "step": "",
+                                                                                            "minLength": 0,
+                                                                                            "maxLength": 0,
+                                                                                            "regex": ""
                                                                                         },
-                                                                         "visual":  {
-                                                                                        "x":  -1.0,
-                                                                                        "y":  -1.0,
-                                                                                        "width":  1.0,
-                                                                                        "height":  1.0,
-                                                                                        "scale":  1.0
+                                                                         "visual": {
+                                                                                        "x": 0.0,
+                                                                                        "y": 0.6665999889373779,
+                                                                                        "width": 0.9750000238418579,
+                                                                                        "height": 0.30000001192092898,
+                                                                                        "scale": 1.0
                                                                                     },
-                                                                         "options":  [
+                                                                         "options": [
 
                                                                                      ]
                                                                      }
                                                                  ]
                                                 },
-                        "mobileControlLayout":  {
-                                                    "schema":  "THERAPLY_MOBILE_CONTROL_LAYOUT",
-                                                    "schemaVersion":  "2026-02-27",
-                                                    "gameId":  "demo_cube_clicker",
-                                                    "title":  "Demo Cube Controls",
-                                                    "description":  "Schema-driven controls for Demo Cube START_GAME and UPDATE_CONFIG.",
-                                                    "layout":  {
-                                                                   "mode":  "grid",
-                                                                   "columns":  2
+                        "mobileControlLayout": {
+                                                    "schema": "THERAPLY_MOBILE_CONTROL_LAYOUT",
+                                                    "schemaVersion": "2026-02-27",
+                                                    "gameId": "demo_cube_clicker",
+                                                    "title": "Demo Cube Controls",
+                                                    "description": "Schema-driven controls for Demo Cube START_GAME and UPDATE_CONFIG.",
+                                                    "layout": {
+                                                                   "mode": "grid",
+                                                                   "columns": 2
                                                                },
-                                                    "payload":  {
-                                                                    "target":  "game_config",
-                                                                    "gameConfigType":  "demo_cube_config_v1",
-                                                                    "gameConfigVersion":  1,
-                                                                    "includeVersionInGameConfig":  true
+                                                    "payload": {
+                                                                    "target": "game_config",
+                                                                    "gameConfigType": "demo_cube_config_v1",
+                                                                    "gameConfigVersion": 1,
+                                                                    "includeVersionInGameConfig": true
                                                                 },
-                                                    "sections":  [
+                                                    "sections": [
                                                                      {
-                                                                         "sectionId":  "setup",
-                                                                         "label":  "Setup",
-                                                                         "order":  10
+                                                                         "sectionId": "setup",
+                                                                         "label": "Setup",
+                                                                         "order": 10
                                                                      },
                                                                      {
-                                                                         "sectionId":  "runtime",
-                                                                         "label":  "Runtime",
-                                                                         "order":  20
+                                                                         "sectionId": "runtime",
+                                                                         "label": "Runtime",
+                                                                         "order": 20
                                                                      }
                                                                  ],
-                                                    "controls":  [
+                                                    "controls": [
                                                                      {
-                                                                         "controlId":  "cube_count",
-                                                                         "type":  "slider",
-                                                                         "label":  "Cube Count",
-                                                                         "description":  "Number of spawned cubes.",
-                                                                         "placeholder":  "",
-                                                                         "sectionId":  "setup",
-                                                                         "order":  10,
-                                                                         "defaultValue":  "12",
-                                                                         "bindingKey":  "cubeCount",
-                                                                         "bindingTarget":  "game_config",
-                                                                         "valueType":  "int",
-                                                                         "emitOnStartGame":  true,
-                                                                         "emitOnUpdateConfig":  true,
-                                                                         "buttonCommandId":  "",
-                                                                         "required":  true,
-                                                                         "minValue":  "4",
-                                                                         "maxValue":  "40",
-                                                                         "step":  "1",
-                                                                         "minLength":  0,
-                                                                         "maxLength":  0,
-                                                                         "regex":  "",
-                                                                         "visual":  {
-                                                                                        "x":  0.0,
-                                                                                        "y":  0.0,
-                                                                                        "width":  0.4749999940395355,
-                                                                                        "height":  0.30000001192092898,
-                                                                                        "scale":  1.0
+                                                                         "controlId": "cube_count",
+                                                                         "type": "slider",
+                                                                         "label": "Cube Count",
+                                                                         "description": "Number of spawned cubes.",
+                                                                         "placeholder": "",
+                                                                         "sectionId": "setup",
+                                                                         "order": 10,
+                                                                         "defaultValue": "12",
+                                                                         "bindingKey": "cubeCount",
+                                                                         "bindingTarget": "game_config",
+                                                                         "valueType": "int",
+                                                                         "emitOnStartGame": true,
+                                                                         "emitOnUpdateConfig": true,
+                                                                         "buttonCommandId": "",
+                                                                         "required": true,
+                                                                         "minValue": "4",
+                                                                         "maxValue": "40",
+                                                                         "step": "1",
+                                                                         "minLength": 0,
+                                                                         "maxLength": 0,
+                                                                         "regex": "",
+                                                                         "visual": {
+                                                                                        "x": 0.0,
+                                                                                        "y": 0.0,
+                                                                                        "width": 0.4749999940395355,
+                                                                                        "height": 0.30000001192092898,
+                                                                                        "scale": 1.0
                                                                                     },
-                                                                         "options":  [
+                                                                         "options": [
 
                                                                                      ]
                                                                      },
                                                                      {
-                                                                         "controlId":  "cube_speed",
-                                                                         "type":  "slider",
-                                                                         "label":  "Cube Speed",
-                                                                         "description":  "Cube movement speed.",
-                                                                         "placeholder":  "",
-                                                                         "sectionId":  "setup",
-                                                                         "order":  20,
-                                                                         "defaultValue":  "0.7",
-                                                                         "bindingKey":  "cubeSpeed",
-                                                                         "bindingTarget":  "game_config",
-                                                                         "valueType":  "double",
-                                                                         "emitOnStartGame":  true,
-                                                                         "emitOnUpdateConfig":  true,
-                                                                         "buttonCommandId":  "",
-                                                                         "required":  true,
-                                                                         "minValue":  "0.2",
-                                                                         "maxValue":  "2.2",
-                                                                         "step":  "0.1",
-                                                                         "minLength":  0,
-                                                                         "maxLength":  0,
-                                                                         "regex":  "",
-                                                                         "visual":  {
-                                                                                        "x":  0.5,
-                                                                                        "y":  0.0,
-                                                                                        "width":  0.4749999940395355,
-                                                                                        "height":  0.30000001192092898,
-                                                                                        "scale":  1.0
+                                                                         "controlId": "cube_speed",
+                                                                         "type": "slider",
+                                                                         "label": "Cube Speed",
+                                                                         "description": "Cube movement speed.",
+                                                                         "placeholder": "",
+                                                                         "sectionId": "setup",
+                                                                         "order": 20,
+                                                                         "defaultValue": "0.7",
+                                                                         "bindingKey": "cubeSpeed",
+                                                                         "bindingTarget": "game_config",
+                                                                         "valueType": "double",
+                                                                         "emitOnStartGame": true,
+                                                                         "emitOnUpdateConfig": true,
+                                                                         "buttonCommandId": "",
+                                                                         "required": true,
+                                                                         "minValue": "0.2",
+                                                                         "maxValue": "2.2",
+                                                                         "step": "0.1",
+                                                                         "minLength": 0,
+                                                                         "maxLength": 0,
+                                                                         "regex": "",
+                                                                         "visual": {
+                                                                                        "x": 0.5,
+                                                                                        "y": 0.0,
+                                                                                        "width": 0.4749999940395355,
+                                                                                        "height": 0.30000001192092898,
+                                                                                        "scale": 1.0
                                                                                     },
-                                                                         "options":  [
+                                                                         "options": [
 
                                                                                      ]
                                                                      },
                                                                      {
-                                                                         "controlId":  "level_mode",
-                                                                         "type":  "select",
-                                                                         "label":  "Level Mode",
-                                                                         "description":  "Target color rule set.",
-                                                                         "placeholder":  "",
-                                                                         "sectionId":  "setup",
-                                                                         "order":  30,
-                                                                         "defaultValue":  "basic",
-                                                                         "bindingKey":  "levelMode",
-                                                                         "bindingTarget":  "game_config",
-                                                                         "valueType":  "string",
-                                                                         "emitOnStartGame":  true,
-                                                                         "emitOnUpdateConfig":  true,
-                                                                         "buttonCommandId":  "",
-                                                                         "required":  true,
-                                                                         "minValue":  "",
-                                                                         "maxValue":  "",
-                                                                         "step":  "",
-                                                                         "minLength":  0,
-                                                                         "maxLength":  0,
-                                                                         "regex":  "",
-                                                                         "visual":  {
-                                                                                        "x":  0.0,
-                                                                                        "y":  0.3333333432674408,
-                                                                                        "width":  0.4749999940395355,
-                                                                                        "height":  0.30000001192092898,
-                                                                                        "scale":  1.0
+                                                                         "controlId": "level_mode",
+                                                                         "type": "select",
+                                                                         "label": "Level Mode",
+                                                                         "description": "Target color rule set.",
+                                                                         "placeholder": "",
+                                                                         "sectionId": "setup",
+                                                                         "order": 30,
+                                                                         "defaultValue": "basic",
+                                                                         "bindingKey": "levelMode",
+                                                                         "bindingTarget": "game_config",
+                                                                         "valueType": "string",
+                                                                         "emitOnStartGame": true,
+                                                                         "emitOnUpdateConfig": true,
+                                                                         "buttonCommandId": "",
+                                                                         "required": true,
+                                                                         "minValue": "",
+                                                                         "maxValue": "",
+                                                                         "step": "",
+                                                                         "minLength": 0,
+                                                                         "maxLength": 0,
+                                                                         "regex": "",
+                                                                         "visual": {
+                                                                                        "x": 0.0,
+                                                                                        "y": 0.3333333432674408,
+                                                                                        "width": 0.4749999940395355,
+                                                                                        "height": 0.30000001192092898,
+                                                                                        "scale": 1.0
                                                                                     },
-                                                                         "options":  [
+                                                                         "options": [
                                                                                          {
-                                                                                             "value":  "basic",
-                                                                                             "label":  "Basic"
+                                                                                             "value": "basic",
+                                                                                             "label": "Basic"
                                                                                          },
                                                                                          {
-                                                                                             "value":  "alternate_colors",
-                                                                                             "label":  "Alternate Colors"
+                                                                                             "value": "alternate_colors",
+                                                                                             "label": "Alternate Colors"
                                                                                          },
                                                                                          {
-                                                                                             "value":  "random_target_color",
-                                                                                             "label":  "Random Target"
+                                                                                             "value": "random_target_color",
+                                                                                             "label": "Random Target"
                                                                                          }
                                                                                      ]
                                                                      },
                                                                      {
-                                                                         "controlId":  "resume_from_saved",
-                                                                         "type":  "toggle",
-                                                                         "label":  "Resume From Saved",
-                                                                         "description":  "Start from persisted state when available.",
-                                                                         "placeholder":  "",
-                                                                         "sectionId":  "runtime",
-                                                                         "order":  40,
-                                                                         "defaultValue":  "false",
-                                                                         "bindingKey":  "resumeFromSaved",
-                                                                         "bindingTarget":  "game_config",
-                                                                         "valueType":  "bool",
-                                                                         "emitOnStartGame":  true,
-                                                                         "emitOnUpdateConfig":  true,
-                                                                         "buttonCommandId":  "",
-                                                                         "required":  false,
-                                                                         "minValue":  "",
-                                                                         "maxValue":  "",
-                                                                         "step":  "",
-                                                                         "minLength":  0,
-                                                                         "maxLength":  0,
-                                                                         "regex":  "",
-                                                                         "visual":  {
-                                                                                        "x":  0.5,
-                                                                                        "y":  0.3333333432674408,
-                                                                                        "width":  0.4749999940395355,
-                                                                                        "height":  0.30000001192092898,
-                                                                                        "scale":  1.0
+                                                                         "controlId": "resume_from_saved",
+                                                                         "type": "toggle",
+                                                                         "label": "Resume From Saved",
+                                                                         "description": "Start from persisted state when available.",
+                                                                         "placeholder": "",
+                                                                         "sectionId": "runtime",
+                                                                         "order": 40,
+                                                                         "defaultValue": "false",
+                                                                         "bindingKey": "resumeFromSaved",
+                                                                         "bindingTarget": "game_config",
+                                                                         "valueType": "bool",
+                                                                         "emitOnStartGame": true,
+                                                                         "emitOnUpdateConfig": true,
+                                                                         "buttonCommandId": "",
+                                                                         "required": false,
+                                                                         "minValue": "",
+                                                                         "maxValue": "",
+                                                                         "step": "",
+                                                                         "minLength": 0,
+                                                                         "maxLength": 0,
+                                                                         "regex": "",
+                                                                         "visual": {
+                                                                                        "x": 0.5,
+                                                                                        "y": 0.3333333432674408,
+                                                                                        "width": 0.4749999940395355,
+                                                                                        "height": 0.30000001192092898,
+                                                                                        "scale": 1.0
                                                                                     },
-                                                                         "options":  [
+                                                                         "options": [
 
                                                                                      ]
                                                                      },
                                                                      {
-                                                                         "controlId":  "apply_runtime_update",
-                                                                         "type":  "button",
-                                                                         "label":  "Apply Runtime Config",
-                                                                         "description":  "Send UPDATE_CONFIG with current values.",
-                                                                         "placeholder":  "",
-                                                                         "sectionId":  "runtime",
-                                                                         "order":  50,
-                                                                         "defaultValue":  "",
-                                                                         "bindingKey":  "",
-                                                                         "bindingTarget":  "game_config",
-                                                                         "valueType":  "string",
-                                                                         "emitOnStartGame":  false,
-                                                                         "emitOnUpdateConfig":  false,
-                                                                         "buttonCommandId":  "UPDATE_CONFIG",
-                                                                         "required":  false,
-                                                                         "minValue":  "",
-                                                                         "maxValue":  "",
-                                                                         "step":  "",
-                                                                         "minLength":  0,
-                                                                         "maxLength":  0,
-                                                                         "regex":  "",
-                                                                         "visual":  {
-                                                                                        "x":  0.0,
-                                                                                        "y":  0.6665999889373779,
-                                                                                        "width":  0.9750000238418579,
-                                                                                        "height":  0.30000001192092898,
-                                                                                        "scale":  1.0
+                                                                         "controlId": "apply_runtime_update",
+                                                                         "type": "button",
+                                                                         "label": "Apply Runtime Config",
+                                                                         "description": "Send UPDATE_CONFIG with current values.",
+                                                                         "placeholder": "",
+                                                                         "sectionId": "runtime",
+                                                                         "order": 50,
+                                                                         "defaultValue": "",
+                                                                         "bindingKey": "",
+                                                                         "bindingTarget": "game_config",
+                                                                         "valueType": "string",
+                                                                         "emitOnStartGame": false,
+                                                                         "emitOnUpdateConfig": false,
+                                                                         "buttonCommandId": "UPDATE_CONFIG",
+                                                                         "required": false,
+                                                                         "minValue": "",
+                                                                         "maxValue": "",
+                                                                         "step": "",
+                                                                         "minLength": 0,
+                                                                         "maxLength": 0,
+                                                                         "regex": "",
+                                                                         "visual": {
+                                                                                        "x": 0.0,
+                                                                                        "y": 0.6665999889373779,
+                                                                                        "width": 0.9750000238418579,
+                                                                                        "height": 0.30000001192092898,
+                                                                                        "scale": 1.0
                                                                                     },
-                                                                         "options":  [
+                                                                         "options": [
+
+                                                                                     ]
+                                                                     }
+                                                                 ]
+                                                }
+                    },
+                    {
+                        "gameId": "pulse_target_tap",
+                        "title": "Pulse Target Flow Definition",
+                        "description": "",
+                        "targetContentVersion": "1.2.0",
+                        "packageUri": "https://pranasense.pl/content/pulse_target_tap_1_2_0.pkg.json",
+                        "thumbnailUrl": "",
+                        "supportsSaveResume": false,
+                        "availableForPurchase": true,
+                        "requiresExplicitLicense": true,
+                        "runtimeLaunchEnabled": true,
+                        "sortOrder": 20,
+                        "active": true,
+                        "previewLines": [
+
+                                         ],
+                        "mobileControlSchema": {
+                                                    "schema": "THERAPLY_MOBILE_CONTROL_SCHEMA",
+                                                    "schemaVersion": "2026-02-27",
+                                                    "gameId": "pulse_target_tap",
+                                                    "title": "Pulse Targets Controls",
+                                                    "description": "Schema-driven controls for Pulse Targets START_GAME and UPDATE_CONFIG.",
+                                                    "layout": {
+                                                                   "mode": "stack",
+                                                                   "columns": 1
+                                                               },
+                                                    "payload": {
+                                                                    "target": "game_config",
+                                                                    "gameConfigType": "pulse_target_config_v1",
+                                                                    "gameConfigVersion": 1,
+                                                                    "includeVersionInGameConfig": true
+                                                                },
+                                                    "sections": [
+                                                                     {
+                                                                         "sectionId": "core",
+                                                                         "label": "Core",
+                                                                         "order": 10
+                                                                     },
+                                                                     {
+                                                                         "sectionId": "adaptive",
+                                                                         "label": "Adaptive",
+                                                                         "order": 20
+                                                                     },
+                                                                     {
+                                                                         "sectionId": "runtime",
+                                                                         "label": "Runtime",
+                                                                         "order": 30
+                                                                     }
+                                                                 ],
+                                                    "controls": [
+                                                                     {
+                                                                         "controlId": "target_count",
+                                                                         "type": "slider",
+                                                                         "label": "Target Count",
+                                                                         "hint": "Number of active pulse targets.",
+                                                                         "placeholder": "",
+                                                                         "sectionId": "core",
+                                                                         "order": 10,
+                                                                         "defaultValue": "8",
+                                                                         "buttonCommandId": "UPDATE_CONFIG",
+                                                                         "binding": {
+                                                                                         "target": "game_config",
+                                                                                         "path": "targetCount",
+                                                                                         "valueType": "int",
+                                                                                         "emitOnStartGame": true,
+                                                                                         "emitOnUpdateConfig": true
+                                                                                     },
+                                                                         "validation": {
+                                                                                            "required": true,
+                                                                                            "minValue": "3",
+                                                                                            "maxValue": "40",
+                                                                                            "step": "1",
+                                                                                            "minLength": 0,
+                                                                                            "maxLength": 0,
+                                                                                            "regex": ""
+                                                                                        },
+                                                                         "visual": {
+                                                                                        "x": -1.0,
+                                                                                        "y": -1.0,
+                                                                                        "width": 1.0,
+                                                                                        "height": 1.0,
+                                                                                        "scale": 1.0
+                                                                                    },
+                                                                         "options": [
+
+                                                                                     ]
+                                                                     },
+                                                                     {
+                                                                         "controlId": "target_speed",
+                                                                         "type": "slider",
+                                                                         "label": "Target Speed",
+                                                                         "hint": "Pulse target movement speed.",
+                                                                         "placeholder": "",
+                                                                         "sectionId": "core",
+                                                                         "order": 20,
+                                                                         "defaultValue": "0.7",
+                                                                         "buttonCommandId": "UPDATE_CONFIG",
+                                                                         "binding": {
+                                                                                         "target": "game_config",
+                                                                                         "path": "targetSpeed",
+                                                                                         "valueType": "double",
+                                                                                         "emitOnStartGame": true,
+                                                                                         "emitOnUpdateConfig": true
+                                                                                     },
+                                                                         "validation": {
+                                                                                            "required": true,
+                                                                                            "minValue": "0.1",
+                                                                                            "maxValue": "3.0",
+                                                                                            "step": "0.1",
+                                                                                            "minLength": 0,
+                                                                                            "maxLength": 0,
+                                                                                            "regex": ""
+                                                                                        },
+                                                                         "visual": {
+                                                                                        "x": -1.0,
+                                                                                        "y": -1.0,
+                                                                                        "width": 1.0,
+                                                                                        "height": 1.0,
+                                                                                        "scale": 1.0
+                                                                                    },
+                                                                         "options": [
+
+                                                                                     ]
+                                                                     },
+                                                                     {
+                                                                         "controlId": "target_scale",
+                                                                         "type": "slider",
+                                                                         "label": "Target Scale",
+                                                                         "hint": "Pulse target world scale.",
+                                                                         "placeholder": "",
+                                                                         "sectionId": "core",
+                                                                         "order": 30,
+                                                                         "defaultValue": "0.3",
+                                                                         "buttonCommandId": "UPDATE_CONFIG",
+                                                                         "binding": {
+                                                                                         "target": "game_config",
+                                                                                         "path": "targetScale",
+                                                                                         "valueType": "double",
+                                                                                         "emitOnStartGame": true,
+                                                                                         "emitOnUpdateConfig": true
+                                                                                     },
+                                                                         "validation": {
+                                                                                            "required": true,
+                                                                                            "minValue": "0.12",
+                                                                                            "maxValue": "1.2",
+                                                                                            "step": "0.02",
+                                                                                            "minLength": 0,
+                                                                                            "maxLength": 0,
+                                                                                            "regex": ""
+                                                                                        },
+                                                                         "visual": {
+                                                                                        "x": -1.0,
+                                                                                        "y": -1.0,
+                                                                                        "width": 1.0,
+                                                                                        "height": 1.0,
+                                                                                        "scale": 1.0
+                                                                                    },
+                                                                         "options": [
+
+                                                                                     ]
+                                                                     },
+                                                                     {
+                                                                         "controlId": "adaptive_difficulty_enabled",
+                                                                         "type": "toggle",
+                                                                         "label": "Adaptive Difficulty",
+                                                                         "hint": "Enable adaptive speed/scale policy.",
+                                                                         "placeholder": "",
+                                                                         "sectionId": "adaptive",
+                                                                         "order": 40,
+                                                                         "defaultValue": "true",
+                                                                         "buttonCommandId": "UPDATE_CONFIG",
+                                                                         "binding": {
+                                                                                         "target": "game_config",
+                                                                                         "path": "adaptiveDifficultyEnabled",
+                                                                                         "valueType": "bool",
+                                                                                         "emitOnStartGame": true,
+                                                                                         "emitOnUpdateConfig": true
+                                                                                     },
+                                                                         "validation": {
+                                                                                            "required": false,
+                                                                                            "minValue": "",
+                                                                                            "maxValue": "",
+                                                                                            "step": "",
+                                                                                            "minLength": 0,
+                                                                                            "maxLength": 0,
+                                                                                            "regex": ""
+                                                                                        },
+                                                                         "visual": {
+                                                                                        "x": -1.0,
+                                                                                        "y": -1.0,
+                                                                                        "width": 1.0,
+                                                                                        "height": 1.0,
+                                                                                        "scale": 1.0
+                                                                                    },
+                                                                         "options": [
+
+                                                                                     ]
+                                                                     },
+                                                                     {
+                                                                         "controlId": "adaptive_difficulty_sensitivity",
+                                                                         "type": "slider",
+                                                                         "label": "Adaptive Sensitivity",
+                                                                         "hint": "How quickly adaptive logic reacts.",
+                                                                         "placeholder": "",
+                                                                         "sectionId": "adaptive",
+                                                                         "order": 50,
+                                                                         "defaultValue": "0.55",
+                                                                         "buttonCommandId": "UPDATE_CONFIG",
+                                                                         "binding": {
+                                                                                         "target": "game_config",
+                                                                                         "path": "adaptiveDifficultySensitivity",
+                                                                                         "valueType": "double",
+                                                                                         "emitOnStartGame": true,
+                                                                                         "emitOnUpdateConfig": true
+                                                                                     },
+                                                                         "validation": {
+                                                                                            "required": true,
+                                                                                            "minValue": "0.0",
+                                                                                            "maxValue": "1.0",
+                                                                                            "step": "0.05",
+                                                                                            "minLength": 0,
+                                                                                            "maxLength": 0,
+                                                                                            "regex": ""
+                                                                                        },
+                                                                         "visual": {
+                                                                                        "x": -1.0,
+                                                                                        "y": -1.0,
+                                                                                        "width": 1.0,
+                                                                                        "height": 1.0,
+                                                                                        "scale": 1.0
+                                                                                    },
+                                                                         "options": [
+
+                                                                                     ]
+                                                                     },
+                                                                     {
+                                                                         "controlId": "adaptive_difficulty_level",
+                                                                         "type": "slider",
+                                                                         "label": "Adaptive Level",
+                                                                         "hint": "Initial adaptive difficulty bucket (1-5).",
+                                                                         "placeholder": "",
+                                                                         "sectionId": "adaptive",
+                                                                         "order": 60,
+                                                                         "defaultValue": "3",
+                                                                         "buttonCommandId": "UPDATE_CONFIG",
+                                                                         "binding": {
+                                                                                         "target": "game_config",
+                                                                                         "path": "adaptiveDifficultyLevel",
+                                                                                         "valueType": "int",
+                                                                                         "emitOnStartGame": true,
+                                                                                         "emitOnUpdateConfig": true
+                                                                                     },
+                                                                         "validation": {
+                                                                                            "required": true,
+                                                                                            "minValue": "1",
+                                                                                            "maxValue": "5",
+                                                                                            "step": "1",
+                                                                                            "minLength": 0,
+                                                                                            "maxLength": 0,
+                                                                                            "regex": ""
+                                                                                        },
+                                                                         "visual": {
+                                                                                        "x": -1.0,
+                                                                                        "y": -1.0,
+                                                                                        "width": 1.0,
+                                                                                        "height": 1.0,
+                                                                                        "scale": 1.0
+                                                                                    },
+                                                                         "options": [
+
+                                                                                     ]
+                                                                     },
+                                                                     {
+                                                                         "controlId": "label_pipeline_enabled",
+                                                                         "type": "toggle",
+                                                                         "label": "Label Pipeline",
+                                                                         "hint": "Enable task label generation pipeline.",
+                                                                         "placeholder": "",
+                                                                         "sectionId": "adaptive",
+                                                                         "order": 70,
+                                                                         "defaultValue": "true",
+                                                                         "buttonCommandId": "UPDATE_CONFIG",
+                                                                         "binding": {
+                                                                                         "target": "game_config",
+                                                                                         "path": "labelPipelineEnabled",
+                                                                                         "valueType": "bool",
+                                                                                         "emitOnStartGame": true,
+                                                                                         "emitOnUpdateConfig": true
+                                                                                     },
+                                                                         "validation": {
+                                                                                            "required": false,
+                                                                                            "minValue": "",
+                                                                                            "maxValue": "",
+                                                                                            "step": "",
+                                                                                            "minLength": 0,
+                                                                                            "maxLength": 0,
+                                                                                            "regex": ""
+                                                                                        },
+                                                                         "visual": {
+                                                                                        "x": -1.0,
+                                                                                        "y": -1.0,
+                                                                                        "width": 1.0,
+                                                                                        "height": 1.0,
+                                                                                        "scale": 1.0
+                                                                                    },
+                                                                         "options": [
+
+                                                                                     ]
+                                                                     },
+                                                                     {
+                                                                         "controlId": "apply_runtime_update",
+                                                                         "type": "button",
+                                                                         "label": "Apply Runtime Config",
+                                                                         "hint": "Send UPDATE_CONFIG with current values.",
+                                                                         "placeholder": "",
+                                                                         "sectionId": "runtime",
+                                                                         "order": 80,
+                                                                         "defaultValue": "",
+                                                                         "buttonCommandId": "UPDATE_CONFIG",
+                                                                         "binding": {
+                                                                                         "target": "game_config",
+                                                                                         "path": "",
+                                                                                         "valueType": "string",
+                                                                                         "emitOnStartGame": false,
+                                                                                         "emitOnUpdateConfig": false
+                                                                                     },
+                                                                         "validation": {
+                                                                                            "required": false,
+                                                                                            "minValue": "",
+                                                                                            "maxValue": "",
+                                                                                            "step": "",
+                                                                                            "minLength": 0,
+                                                                                            "maxLength": 0,
+                                                                                            "regex": ""
+                                                                                        },
+                                                                         "visual": {
+                                                                                        "x": -1.0,
+                                                                                        "y": -1.0,
+                                                                                        "width": 1.0,
+                                                                                        "height": 1.0,
+                                                                                        "scale": 1.0
+                                                                                    },
+                                                                         "options": [
+
+                                                                                     ]
+                                                                     }
+                                                                 ]
+                                                },
+                        "mobileControlLayout": {
+                                                    "schema": "THERAPLY_MOBILE_CONTROL_LAYOUT",
+                                                    "schemaVersion": "2026-02-27",
+                                                    "gameId": "pulse_target_tap",
+                                                    "title": "Pulse Targets Controls",
+                                                    "description": "Schema-driven controls for Pulse Targets START_GAME and UPDATE_CONFIG.",
+                                                    "layout": {
+                                                                   "mode": "stack",
+                                                                   "columns": 1
+                                                               },
+                                                    "payload": {
+                                                                    "target": "game_config",
+                                                                    "gameConfigType": "pulse_target_config_v1",
+                                                                    "gameConfigVersion": 1,
+                                                                    "includeVersionInGameConfig": true
+                                                                },
+                                                    "sections": [
+                                                                     {
+                                                                         "sectionId": "core",
+                                                                         "label": "Core",
+                                                                         "order": 10
+                                                                     },
+                                                                     {
+                                                                         "sectionId": "adaptive",
+                                                                         "label": "Adaptive",
+                                                                         "order": 20
+                                                                     },
+                                                                     {
+                                                                         "sectionId": "runtime",
+                                                                         "label": "Runtime",
+                                                                         "order": 30
+                                                                     }
+                                                                 ],
+                                                    "controls": [
+                                                                     {
+                                                                         "controlId": "target_count",
+                                                                         "type": "slider",
+                                                                         "label": "Target Count",
+                                                                         "description": "Number of active pulse targets.",
+                                                                         "placeholder": "",
+                                                                         "sectionId": "core",
+                                                                         "order": 10,
+                                                                         "defaultValue": "8",
+                                                                         "bindingKey": "targetCount",
+                                                                         "bindingTarget": "game_config",
+                                                                         "valueType": "int",
+                                                                         "emitOnStartGame": true,
+                                                                         "emitOnUpdateConfig": true,
+                                                                         "buttonCommandId": "",
+                                                                         "required": true,
+                                                                         "minValue": "3",
+                                                                         "maxValue": "40",
+                                                                         "step": "1",
+                                                                         "minLength": 0,
+                                                                         "maxLength": 0,
+                                                                         "regex": "",
+                                                                         "visual": {
+                                                                                        "x": -1.0,
+                                                                                        "y": -1.0,
+                                                                                        "width": 1.0,
+                                                                                        "height": 1.0,
+                                                                                        "scale": 1.0
+                                                                                    },
+                                                                         "options": [
+
+                                                                                     ]
+                                                                     },
+                                                                     {
+                                                                         "controlId": "target_speed",
+                                                                         "type": "slider",
+                                                                         "label": "Target Speed",
+                                                                         "description": "Pulse target movement speed.",
+                                                                         "placeholder": "",
+                                                                         "sectionId": "core",
+                                                                         "order": 20,
+                                                                         "defaultValue": "0.7",
+                                                                         "bindingKey": "targetSpeed",
+                                                                         "bindingTarget": "game_config",
+                                                                         "valueType": "double",
+                                                                         "emitOnStartGame": true,
+                                                                         "emitOnUpdateConfig": true,
+                                                                         "buttonCommandId": "",
+                                                                         "required": true,
+                                                                         "minValue": "0.1",
+                                                                         "maxValue": "3.0",
+                                                                         "step": "0.1",
+                                                                         "minLength": 0,
+                                                                         "maxLength": 0,
+                                                                         "regex": "",
+                                                                         "visual": {
+                                                                                        "x": -1.0,
+                                                                                        "y": -1.0,
+                                                                                        "width": 1.0,
+                                                                                        "height": 1.0,
+                                                                                        "scale": 1.0
+                                                                                    },
+                                                                         "options": [
+
+                                                                                     ]
+                                                                     },
+                                                                     {
+                                                                         "controlId": "target_scale",
+                                                                         "type": "slider",
+                                                                         "label": "Target Scale",
+                                                                         "description": "Pulse target world scale.",
+                                                                         "placeholder": "",
+                                                                         "sectionId": "core",
+                                                                         "order": 30,
+                                                                         "defaultValue": "0.3",
+                                                                         "bindingKey": "targetScale",
+                                                                         "bindingTarget": "game_config",
+                                                                         "valueType": "double",
+                                                                         "emitOnStartGame": true,
+                                                                         "emitOnUpdateConfig": true,
+                                                                         "buttonCommandId": "",
+                                                                         "required": true,
+                                                                         "minValue": "0.12",
+                                                                         "maxValue": "1.2",
+                                                                         "step": "0.02",
+                                                                         "minLength": 0,
+                                                                         "maxLength": 0,
+                                                                         "regex": "",
+                                                                         "visual": {
+                                                                                        "x": -1.0,
+                                                                                        "y": -1.0,
+                                                                                        "width": 1.0,
+                                                                                        "height": 1.0,
+                                                                                        "scale": 1.0
+                                                                                    },
+                                                                         "options": [
+
+                                                                                     ]
+                                                                     },
+                                                                     {
+                                                                         "controlId": "adaptive_difficulty_enabled",
+                                                                         "type": "toggle",
+                                                                         "label": "Adaptive Difficulty",
+                                                                         "description": "Enable adaptive speed/scale policy.",
+                                                                         "placeholder": "",
+                                                                         "sectionId": "adaptive",
+                                                                         "order": 40,
+                                                                         "defaultValue": "true",
+                                                                         "bindingKey": "adaptiveDifficultyEnabled",
+                                                                         "bindingTarget": "game_config",
+                                                                         "valueType": "bool",
+                                                                         "emitOnStartGame": true,
+                                                                         "emitOnUpdateConfig": true,
+                                                                         "buttonCommandId": "",
+                                                                         "required": false,
+                                                                         "minValue": "",
+                                                                         "maxValue": "",
+                                                                         "step": "",
+                                                                         "minLength": 0,
+                                                                         "maxLength": 0,
+                                                                         "regex": "",
+                                                                         "visual": {
+                                                                                        "x": -1.0,
+                                                                                        "y": -1.0,
+                                                                                        "width": 1.0,
+                                                                                        "height": 1.0,
+                                                                                        "scale": 1.0
+                                                                                    },
+                                                                         "options": [
+
+                                                                                     ]
+                                                                     },
+                                                                     {
+                                                                         "controlId": "adaptive_difficulty_sensitivity",
+                                                                         "type": "slider",
+                                                                         "label": "Adaptive Sensitivity",
+                                                                         "description": "How quickly adaptive logic reacts.",
+                                                                         "placeholder": "",
+                                                                         "sectionId": "adaptive",
+                                                                         "order": 50,
+                                                                         "defaultValue": "0.55",
+                                                                         "bindingKey": "adaptiveDifficultySensitivity",
+                                                                         "bindingTarget": "game_config",
+                                                                         "valueType": "double",
+                                                                         "emitOnStartGame": true,
+                                                                         "emitOnUpdateConfig": true,
+                                                                         "buttonCommandId": "",
+                                                                         "required": true,
+                                                                         "minValue": "0.0",
+                                                                         "maxValue": "1.0",
+                                                                         "step": "0.05",
+                                                                         "minLength": 0,
+                                                                         "maxLength": 0,
+                                                                         "regex": "",
+                                                                         "visual": {
+                                                                                        "x": -1.0,
+                                                                                        "y": -1.0,
+                                                                                        "width": 1.0,
+                                                                                        "height": 1.0,
+                                                                                        "scale": 1.0
+                                                                                    },
+                                                                         "options": [
+
+                                                                                     ]
+                                                                     },
+                                                                     {
+                                                                         "controlId": "adaptive_difficulty_level",
+                                                                         "type": "slider",
+                                                                         "label": "Adaptive Level",
+                                                                         "description": "Initial adaptive difficulty bucket (1-5).",
+                                                                         "placeholder": "",
+                                                                         "sectionId": "adaptive",
+                                                                         "order": 60,
+                                                                         "defaultValue": "3",
+                                                                         "bindingKey": "adaptiveDifficultyLevel",
+                                                                         "bindingTarget": "game_config",
+                                                                         "valueType": "int",
+                                                                         "emitOnStartGame": true,
+                                                                         "emitOnUpdateConfig": true,
+                                                                         "buttonCommandId": "",
+                                                                         "required": true,
+                                                                         "minValue": "1",
+                                                                         "maxValue": "5",
+                                                                         "step": "1",
+                                                                         "minLength": 0,
+                                                                         "maxLength": 0,
+                                                                         "regex": "",
+                                                                         "visual": {
+                                                                                        "x": -1.0,
+                                                                                        "y": -1.0,
+                                                                                        "width": 1.0,
+                                                                                        "height": 1.0,
+                                                                                        "scale": 1.0
+                                                                                    },
+                                                                         "options": [
+
+                                                                                     ]
+                                                                     },
+                                                                     {
+                                                                         "controlId": "label_pipeline_enabled",
+                                                                         "type": "toggle",
+                                                                         "label": "Label Pipeline",
+                                                                         "description": "Enable task label generation pipeline.",
+                                                                         "placeholder": "",
+                                                                         "sectionId": "adaptive",
+                                                                         "order": 70,
+                                                                         "defaultValue": "true",
+                                                                         "bindingKey": "labelPipelineEnabled",
+                                                                         "bindingTarget": "game_config",
+                                                                         "valueType": "bool",
+                                                                         "emitOnStartGame": true,
+                                                                         "emitOnUpdateConfig": true,
+                                                                         "buttonCommandId": "",
+                                                                         "required": false,
+                                                                         "minValue": "",
+                                                                         "maxValue": "",
+                                                                         "step": "",
+                                                                         "minLength": 0,
+                                                                         "maxLength": 0,
+                                                                         "regex": "",
+                                                                         "visual": {
+                                                                                        "x": -1.0,
+                                                                                        "y": -1.0,
+                                                                                        "width": 1.0,
+                                                                                        "height": 1.0,
+                                                                                        "scale": 1.0
+                                                                                    },
+                                                                         "options": [
+
+                                                                                     ]
+                                                                     },
+                                                                     {
+                                                                         "controlId": "apply_runtime_update",
+                                                                         "type": "button",
+                                                                         "label": "Apply Runtime Config",
+                                                                         "description": "Send UPDATE_CONFIG with current values.",
+                                                                         "placeholder": "",
+                                                                         "sectionId": "runtime",
+                                                                         "order": 80,
+                                                                         "defaultValue": "",
+                                                                         "bindingKey": "",
+                                                                         "bindingTarget": "game_config",
+                                                                         "valueType": "string",
+                                                                         "emitOnStartGame": false,
+                                                                         "emitOnUpdateConfig": false,
+                                                                         "buttonCommandId": "UPDATE_CONFIG",
+                                                                         "required": false,
+                                                                         "minValue": "",
+                                                                         "maxValue": "",
+                                                                         "step": "",
+                                                                         "minLength": 0,
+                                                                         "maxLength": 0,
+                                                                         "regex": "",
+                                                                         "visual": {
+                                                                                        "x": -1.0,
+                                                                                        "y": -1.0,
+                                                                                        "width": 1.0,
+                                                                                        "height": 1.0,
+                                                                                        "scale": 1.0
+                                                                                    },
+                                                                         "options": [
 
                                                                                      ]
                                                                      }

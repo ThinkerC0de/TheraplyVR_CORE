@@ -2127,10 +2127,14 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   Set<String> _resolveRuntimeEntitledGameIds(DateTime atUtc) {
-    return EntitlementService.resolveRuntimeEntitledGameIds(
+    final fromEntitlement = EntitlementService.resolveRuntimeEntitledGameIds(
       _effectiveGameCatalog.map((entry) => entry.gameId),
       atUtc: atUtc,
     );
+    if (_simulatedOwnedGameIds.isEmpty) {
+      return fromEntitlement;
+    }
+    return {...fromEntitlement, ..._simulatedOwnedGameIds};
   }
 
   static String _serializeGameIdsCsv(Set<String> gameIds) {
@@ -3270,14 +3274,9 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   List<_GameCatalogEntry> get _effectiveGameCatalog {
-    final source = _remoteGameCatalog.isNotEmpty
-        ? _remoteGameCatalog
-        : _fallbackGameCatalog;
-    final demoOnly = source.where(_isDemoCatalogEntry).toList(growable: false);
-    if (demoOnly.isNotEmpty) {
-      return demoOnly;
+    if (_remoteGameCatalog.isNotEmpty) {
+      return _remoteGameCatalog;
     }
-
     return _fallbackGameCatalog.where(_isDemoCatalogEntry).toList(
           growable: false,
         );
@@ -3294,7 +3293,6 @@ class _ControlScreenState extends State<ControlScreen>
         final mapped = entries
             .map(_GameCatalogEntry.fromRemoteEntry)
             .where((entry) => entry.gameId.isNotEmpty)
-            .where(_isDemoCatalogEntry)
             .toList(growable: false);
         setState(() {
           _remoteGameCatalog = mapped;
@@ -3465,6 +3463,31 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   bool get _isDemoCubeGameSelected => _selectedGameId == _demoCubeGameId;
+
+  bool get _canResetSimulatedPurchases {
+    if (_simulatedOwnedGameIds.isNotEmpty) {
+      return true;
+    }
+
+    for (final entry in _effectiveGameCatalog) {
+      if (!_isDemoCatalogGameId(entry.gameId) && !entry.requiresExplicitLicense) {
+        continue;
+      }
+
+      final state = _contentStatesByGameId[entry.gameId];
+      if (state == null) {
+        continue;
+      }
+
+      final hasInstalledVersion =
+          (state.installedVersion?.trim().isNotEmpty ?? false);
+      if (state.owned || hasInstalledVersion) {
+        return true;
+      }
+    }
+
+    return false;
+  }
   bool get _isPulseTargetGameSelected => _selectedGameId == _pulseTargetGameId;
 
   bool get _isGameRuntimeActive {
@@ -7495,6 +7518,126 @@ class _ControlScreenState extends State<ControlScreen>
     );
   }
 
+  Future<void> _resetSimulatedPurchases() async {
+    if (!mounted) {
+      return;
+    }
+
+    final resettableEntries = _effectiveGameCatalog
+        .where(
+          (entry) =>
+              _isDemoCatalogGameId(entry.gameId) || entry.requiresExplicitLicense,
+        )
+        .toList(growable: false);
+    if (resettableEntries.isEmpty && _simulatedOwnedGameIds.isEmpty) {
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            title: const Text('Reset demo purchases?'),
+            content: const Text(
+              'This clears simulated owned state and returns demo games to Store.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Reset'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed || !mounted) {
+      return;
+    }
+
+    final requestedUninstalls = <String>[];
+    if (_isConnected) {
+      for (final entry in resettableEntries) {
+        final state = _contentStateForGame(entry.gameId);
+        final hasInstalledVersion =
+            (state.installedVersion?.trim().isNotEmpty ?? false);
+        if (!state.owned && !hasInstalledVersion) {
+          continue;
+        }
+
+        final success = await _sendCommand(
+          ContentDeliveryCommandIds.uninstallGame,
+          extraPayload: ContentDeliveryRequests.buildUninstallRequest(
+            actorId: _resolveActorTherapistId(),
+            gameId: entry.gameId,
+          ),
+          showSuccessSnack: false,
+        );
+        if (success) {
+          requestedUninstalls.add(entry.gameId);
+        }
+      }
+    }
+
+    final nowUtc = DateTime.now().toUtc();
+    final clearedGameIds = resettableEntries
+        .map((entry) => entry.gameId.trim())
+        .where((gameId) => gameId.isNotEmpty)
+        .toList(growable: false)
+      ..sort();
+    setState(() {
+      _simulatedOwnedGameIds.clear();
+      _catalogFilterTab = _CatalogFilterTab.store;
+
+      for (final entry in resettableEntries) {
+        final existing = _contentStatesByGameId[entry.gameId] ??
+            _contentStateForGame(entry.gameId);
+        _contentStatesByGameId[entry.gameId] = existing.copyWith(
+          owned: false,
+          installedVersion: null,
+          runtimeStatus: ContentRuntimeStatus.notInstalled,
+          updateRequired: false,
+          updateOptional: false,
+          lastError: null,
+          updatedAtUtc: nowUtc,
+        );
+      }
+    });
+
+    unawaited(
+      _persistCatalogInteractionEvent(
+        eventType: 'STORE_PURCHASE_SIMULATED_RESET',
+        gameId: _selectedGameId,
+        details: <String, dynamic>{
+          'clearedGameIds': clearedGameIds,
+          'requestedUninstalls': requestedUninstalls,
+        },
+      ),
+    );
+
+    if (_isConnected && _sessionAttachReady) {
+      await _ensureSessionAttached(
+        reasonCode: 'ENTITLEMENT_REFRESH_AFTER_RESET',
+        force: true,
+      );
+      await _syncContentCatalog(silent: true);
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Simulated purchases reset. Store is clean again.'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
   Future<void> _endSessionFromCatalog() async {
     final confirmed = await showDialog<bool>(
           context: context,
@@ -8612,6 +8755,16 @@ class _ControlScreenState extends State<ControlScreen>
         ),
         const SizedBox(height: 8),
         _buildMoreGamesHint(),
+        if (_canResetSimulatedPurchases) ...[
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _isPrimaryActionInFlight
+                ? null
+                : () => unawaited(_resetSimulatedPurchases()),
+            icon: const Icon(Icons.restart_alt),
+            label: const Text('Reset demo purchases'),
+          ),
+        ],
         const SizedBox(height: 8),
         if (_showCatalogRescueTerminateButton) ...[
           OutlinedButton.icon(
@@ -8874,6 +9027,15 @@ class _ControlScreenState extends State<ControlScreen>
             _contentDeliveryEnabled &&
             requiresExplicitInstall;
 
+    // Refresh Quest entitlement snapshot before INSTALL_GAME so newly bought
+    // content is included in the runtime entitlement gate.
+    if (_isConnected && _sessionAttachReady) {
+      await _ensureSessionAttached(
+        reasonCode: 'ENTITLEMENT_REFRESH_AFTER_BUY',
+        force: true,
+      );
+    }
+
     if (shouldAutoInstallPurchasedGame) {
       unawaited(
         _persistCatalogInteractionEvent(
@@ -8885,8 +9047,11 @@ class _ControlScreenState extends State<ControlScreen>
           },
         ),
       );
-      unawaited(
-          _requestInstallOrUpdate(_contentStateForGame(normalizedGameId)));
+      await _requestInstallOrUpdate(_contentStateForGame(normalizedGameId));
+    }
+
+    if (!mounted) {
+      return;
     }
 
     ScaffoldMessenger.of(context).showSnackBar(

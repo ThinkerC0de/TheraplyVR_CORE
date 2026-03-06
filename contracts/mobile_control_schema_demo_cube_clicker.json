@@ -1,12 +1,12 @@
 {
     "schema": "THERAPLY_MOBILE_CONTROL_SCHEMA",
-    "schemaVersion": "2026-02-25",
+    "schemaVersion": "2026-02-27",
     "gameId": "demo_cube_clicker",
-    "title": "Demo Cube Dynamic Controls",
-    "description": "Dynamic setup rendered from schema with update button.",
+    "title": "Demo Cube Controls",
+    "description": "Schema-driven controls for Demo Cube START_GAME and UPDATE_CONFIG.",
     "layout": {
-        "mode": "stack",
-        "columns": 1
+        "mode": "grid",
+        "columns": 2
     },
     "payload": {
         "target": "game_config",
@@ -31,7 +31,7 @@
             "controlId": "cube_count",
             "type": "slider",
             "label": "Cube Count",
-            "hint": "Number of active cubes.",
+            "hint": "Number of spawned cubes.",
             "placeholder": "",
             "sectionId": "setup",
             "order": 10,
@@ -54,10 +54,10 @@
                 "regex": ""
             },
             "visual": {
-                "x": -1.0,
-                "y": -1.0,
-                "width": 1.0,
-                "height": 1.0,
+                "x": 0.0,
+                "y": 0.0,
+                "width": 0.4749999940395355,
+                "height": 0.30000001192092898,
                 "scale": 1.0
             },
             "options": []
@@ -66,7 +66,7 @@
             "controlId": "cube_speed",
             "type": "slider",
             "label": "Cube Speed",
-            "hint": "Movement speed multiplier.",
+            "hint": "Cube movement speed.",
             "placeholder": "",
             "sectionId": "setup",
             "order": 20,
@@ -89,10 +89,10 @@
                 "regex": ""
             },
             "visual": {
-                "x": -1.0,
-                "y": -1.0,
-                "width": 1.0,
-                "height": 1.0,
+                "x": 0.5,
+                "y": 0.0,
+                "width": 0.4749999940395355,
+                "height": 0.30000001192092898,
                 "scale": 1.0
             },
             "options": []
@@ -101,7 +101,7 @@
             "controlId": "level_mode",
             "type": "select",
             "label": "Level Mode",
-            "hint": "Select progression mode.",
+            "hint": "Target color rule set.",
             "placeholder": "",
             "sectionId": "setup",
             "order": 30,
@@ -124,10 +124,10 @@
                 "regex": ""
             },
             "visual": {
-                "x": -1.0,
-                "y": -1.0,
-                "width": 1.0,
-                "height": 1.0,
+                "x": 0.0,
+                "y": 0.3333333432674408,
+                "width": 0.4749999940395355,
+                "height": 0.30000001192092898,
                 "scale": 1.0
             },
             "options": [
@@ -146,20 +146,20 @@
             ]
         },
         {
-            "controlId": "therapist_note",
-            "type": "text",
-            "label": "Session Note",
-            "hint": "Optional note sent with update config.",
-            "placeholder": "Note for runtime log",
+            "controlId": "resume_from_saved",
+            "type": "toggle",
+            "label": "Resume From Saved",
+            "hint": "Start from persisted state when available.",
+            "placeholder": "",
             "sectionId": "runtime",
             "order": 40,
-            "defaultValue": "",
+            "defaultValue": "false",
             "buttonCommandId": "UPDATE_CONFIG",
             "binding": {
                 "target": "game_config",
-                "path": "therapistNote",
-                "valueType": "string",
-                "emitOnStartGame": false,
+                "path": "resumeFromSaved",
+                "valueType": "bool",
+                "emitOnStartGame": true,
                 "emitOnUpdateConfig": true
             },
             "validation": {
@@ -168,14 +168,14 @@
                 "maxValue": "",
                 "step": "",
                 "minLength": 0,
-                "maxLength": 120,
+                "maxLength": 0,
                 "regex": ""
             },
             "visual": {
-                "x": -1.0,
-                "y": -1.0,
-                "width": 1.0,
-                "height": 1.0,
+                "x": 0.5,
+                "y": 0.3333333432674408,
+                "width": 0.4749999940395355,
+                "height": 0.30000001192092898,
                 "scale": 1.0
             },
             "options": []
@@ -184,7 +184,7 @@
             "controlId": "apply_runtime_update",
             "type": "button",
             "label": "Apply Runtime Config",
-            "hint": "Send UPDATE_CONFIG with current control values.",
+            "hint": "Send UPDATE_CONFIG with current values.",
             "placeholder": "",
             "sectionId": "runtime",
             "order": 50,
@@ -207,10 +207,10 @@
                 "regex": ""
             },
             "visual": {
-                "x": -1.0,
-                "y": -1.0,
-                "width": 1.0,
-                "height": 1.0,
+                "x": 0.0,
+                "y": 0.6665999889373779,
+                "width": 0.9750000238418579,
+                "height": 0.30000001192092898,
                 "scale": 1.0
             },
             "options": []

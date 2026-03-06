@@ -133,7 +133,7 @@ namespace TheraplyCore.Network
             // Note: InteractionEventBridge sets eventType = moduleEventType ("trace_ref"),
             //       while interactionType is always "GAMEPLAY" for RecordGameplayEvent calls.
             var eventType = GetStr(payload, "eventType");
-            if (string.Equals(eventType, "trace_ref", StringComparison.Ordinal))
+            if (string.Equals(eventType, "TRACE_REF", StringComparison.OrdinalIgnoreCase))
             {
                 SendMotionTrace(payload);
                 return;

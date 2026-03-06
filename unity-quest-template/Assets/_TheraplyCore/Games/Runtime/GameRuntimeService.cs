@@ -240,6 +240,11 @@ namespace TheraplyCore.Games.Runtime
         [SerializeField] private bool _packageProbePreferHeadRequest = true;
         [SerializeField] private bool _packageProbeFallbackToGet = true;
 
+        [Header("Content Shader Recovery")]
+        [SerializeField] private bool _repairBrokenContentShaders = true;
+        [SerializeField] private Shader _contentFallbackShader;
+        [SerializeField] private bool _logContentShaderRecovery = true;
+
         [Header("Watchdog")]
         [SerializeField] private bool _enableSessionWatchdog = true;
         [SerializeField] private float _watchdogHeartbeatIntervalSeconds = 2f;
@@ -1284,9 +1289,11 @@ namespace TheraplyCore.Games.Runtime
                 TryUnloadInstalledContentScene("UNINSTALL_COMPLETED", true);
             }
             RemoveInstalledPackageArtifacts(normalizedGameId);
+            state.owned = false;
             state.installedVersion = string.Empty;
             state.runtimeStatus = ContentRuntimeStatusValues.NotInstalled;
             state.updateRequired = false;
+            state.updateOptional = false;
             state.lastError = string.Empty;
             ClearInstalledContentMetadata(state);
             state.updatedAtUtc = DateTime.UtcNow;
@@ -2639,6 +2646,7 @@ namespace TheraplyCore.Games.Runtime
                     { "bundlePath", installedBundlePath },
                     { "reasonCode", "START_CONTENT_SCENE_LOAD_COMPLETED" },
                 });
+                TryRepairLoadedContentSceneShaders(normalizedGameId, resolvedScenePath);
             };
 
             TrackCriticalRuntimeEvent("content_scene_load_requested", new Dictionary<string, object>
@@ -2705,6 +2713,196 @@ namespace TheraplyCore.Games.Runtime
 
             resolvedScenePath = scenePaths[0] ?? string.Empty;
             return !string.IsNullOrWhiteSpace(resolvedScenePath);
+        }
+
+        private void TryRepairLoadedContentSceneShaders(string gameId, string scenePath)
+        {
+            if (!_repairBrokenContentShaders)
+            {
+                return;
+            }
+
+            var loadedScene = SceneManager.GetSceneByPath(scenePath ?? string.Empty);
+            if (!loadedScene.IsValid() || !loadedScene.isLoaded)
+            {
+                return;
+            }
+
+            var fallbackShader = ResolveContentFallbackShader();
+            if (fallbackShader == null)
+            {
+                if (_logContentShaderRecovery)
+                {
+                    Logger.Warning(
+                        "[GameRuntime] Content shader recovery skipped: no fallback shader available.");
+                }
+                return;
+            }
+
+            var renderersVisited = 0;
+            var materialsChecked = 0;
+            var materialsRecovered = 0;
+            var rootObjects = loadedScene.GetRootGameObjects();
+            if (rootObjects == null || rootObjects.Length == 0)
+            {
+                return;
+            }
+
+            for (var i = 0; i < rootObjects.Length; i++)
+            {
+                var root = rootObjects[i];
+                if (root == null)
+                {
+                    continue;
+                }
+
+                var renderers = root.GetComponentsInChildren<Renderer>(true);
+                if (renderers == null || renderers.Length == 0)
+                {
+                    continue;
+                }
+
+                for (var j = 0; j < renderers.Length; j++)
+                {
+                    var renderer = renderers[j];
+                    if (renderer == null)
+                    {
+                        continue;
+                    }
+
+                    renderersVisited++;
+                    var sharedMaterials = renderer.sharedMaterials;
+                    if (sharedMaterials == null || sharedMaterials.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    var updatedRendererMaterials = false;
+                    for (var m = 0; m < sharedMaterials.Length; m++)
+                    {
+                        var material = sharedMaterials[m];
+                        materialsChecked++;
+                        if (!IsBrokenContentMaterialShader(material))
+                        {
+                            continue;
+                        }
+
+                        var preservedColor = Color.white;
+                        if (material != null && material.HasProperty("_Color"))
+                        {
+                            preservedColor = material.color;
+                        }
+
+                        if (material == null)
+                        {
+                            var created = new Material(fallbackShader)
+                            {
+                                name = "RecoveredContentMaterial"
+                            };
+                            if (created.HasProperty("_Color"))
+                            {
+                                created.color = preservedColor;
+                            }
+
+                            sharedMaterials[m] = created;
+                            materialsRecovered++;
+                            updatedRendererMaterials = true;
+                            continue;
+                        }
+
+                        try
+                        {
+                            material.shader = fallbackShader;
+                            if (material.HasProperty("_Color"))
+                            {
+                                material.color = preservedColor;
+                            }
+                            materialsRecovered++;
+                        }
+                        catch
+                        {
+                            var fallbackMaterial = new Material(fallbackShader)
+                            {
+                                name = "RecoveredContentMaterial"
+                            };
+                            if (fallbackMaterial.HasProperty("_Color"))
+                            {
+                                fallbackMaterial.color = preservedColor;
+                            }
+                            sharedMaterials[m] = fallbackMaterial;
+                            materialsRecovered++;
+                            updatedRendererMaterials = true;
+                        }
+                    }
+
+                    if (updatedRendererMaterials)
+                    {
+                        renderer.sharedMaterials = sharedMaterials;
+                    }
+                }
+            }
+
+            if (_logContentShaderRecovery && materialsRecovered > 0)
+            {
+                Logger.Warning(
+                    $"[GameRuntime] Recovered broken shaders in loaded content scene: " +
+                    $"game={gameId ?? string.Empty}, scene={scenePath ?? string.Empty}, " +
+                    $"renderers={renderersVisited}, checked={materialsChecked}, recovered={materialsRecovered}, " +
+                    $"fallback={fallbackShader.name}");
+            }
+        }
+
+        private Shader ResolveContentFallbackShader()
+        {
+            if (_contentFallbackShader != null && _contentFallbackShader.isSupported)
+            {
+                return _contentFallbackShader;
+            }
+
+            var shaderNames = new[]
+            {
+                "Standard",
+                "Legacy Shaders/Diffuse",
+                "Legacy Shaders/Transparent/Diffuse",
+                "Mobile/Diffuse",
+                "Unlit/Color",
+                "Universal Render Pipeline/Simple Lit",
+                "Universal Render Pipeline/Unlit",
+                "Universal Render Pipeline/Lit",
+                "Sprites/Default",
+                "Hidden/Internal-Colored",
+            };
+
+            for (var i = 0; i < shaderNames.Length; i++)
+            {
+                var shader = Shader.Find(shaderNames[i]);
+                if (shader == null)
+                {
+                    continue;
+                }
+
+                var canUseHiddenFallback = string.Equals(
+                    shader.name,
+                    "Hidden/Internal-Colored",
+                    StringComparison.Ordinal);
+                if (shader.isSupported || canUseHiddenFallback)
+                {
+                    return shader;
+                }
+            }
+
+            return null;
+        }
+
+        private static bool IsBrokenContentMaterialShader(Material material)
+        {
+            return material == null ||
+                material.shader == null ||
+                string.Equals(
+                    material.shader.name,
+                    "Hidden/InternalErrorShader",
+                    StringComparison.Ordinal) ||
+                !material.shader.isSupported;
         }
 
         private bool TryUnloadInstalledContentScene(string reasonCode, bool forceBundleUnload)
@@ -4632,6 +4830,19 @@ namespace TheraplyCore.Games.Runtime
             {
                 _watchdogLastHealthyUtc = DateTime.UtcNow;
                 _watchdogHangReported = false;
+                // Still emit heartbeat in terminal state so the mobile controller
+                // knows Quest is alive and waiting for the next SESSION_ATTACH.
+                // Without this, the mobile liveness watchdog fires RUNTIME_SIGNAL_STALE
+                // after every game completion, causing an unwanted disconnect.
+                if (!string.IsNullOrWhiteSpace(sessionId))
+                {
+                    PublishSessionWatchdogHeartbeat(
+                        heartbeatIntervalSeconds,
+                        sessionState,
+                        _activeGame?.State ?? GameContracts.GameState.NotInitialized,
+                        "TERMINAL_IDLE",
+                        true);
+                }
                 return;
             }
 

@@ -1186,7 +1186,11 @@ namespace TheraplyCore.Firebase
                 else
                 {
                     _outboxSyncFailures++;
-                    await TryRescheduleOutboxBatchAsync(claimedBatch, uploadResult.errorCode);
+                    // Don't retry when endpoint is intentionally unconfigured — discard silently.
+                    if (!string.Equals(uploadResult.errorCode, "FIREBASE_ENDPOINT_NOT_CONFIGURED", StringComparison.Ordinal))
+                    {
+                        await TryRescheduleOutboxBatchAsync(claimedBatch, uploadResult.errorCode);
+                    }
                 }
             }
             catch (Exception e)

@@ -378,6 +378,65 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1558752184}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1062961063
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1062961065}
+  - component: {fileID: 1062961064}
+  m_Layer: 0
+  m_Name: MotionTraceRecorder
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1062961064
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1062961063}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4e8e9c7e13284b0892905f9b17d9d7ce, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Games.Runtime.MotionTraceRecorder
+  _interactionEventBridge: {fileID: 1784697678}
+  _head: {fileID: 1558752191}
+  _leftHand: {fileID: 1558752186}
+  _rightHand: {fileID: 1558752185}
+  _autoResolveRigTransforms: 1
+  _sampleRateHz: 20
+  _maxSamples: 48000
+  _persistTraceToDisk: 1
+  _compressTraceWithGzip: 1
+  _persistDebugTraceAsNdjson: 0
+  _includeTracePayloadInTraceRefEvent: 1
+  _maxInlineTracePayloadBytes: 512000
+  _traceFolder: session_resilience/traces
+  _emitTraceRefEvent: 1
+  _logLifecycle: 0
+--- !u!4 &1062961065
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1062961063}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 5.54094, y: -0, z: 7.97833}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1129943613
 GameObject:
   m_ObjectHideFlags: 0
@@ -609,6 +668,11 @@ MonoBehaviour:
   _lanProbeTimeoutSeconds: 4
   _logStats: 1
   _logVerbose: 0
+--- !u!4 &1558752191 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 400002, guid: 126d619cf4daa52469682f85c1378b4a, type: 3}
+  m_PrefabInstance: {fileID: 1558752183}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1784697665
 GameObject:
   m_ObjectHideFlags: 0
@@ -629,6 +693,7 @@ GameObject:
   - component: {fileID: 1784697667}
   - component: {fileID: 1784697666}
   - component: {fileID: 1784697677}
+  - component: {fileID: 1784697678}
   m_Layer: 0
   m_Name: RuntimeServices
   m_TagString: Untagged
@@ -654,7 +719,7 @@ MonoBehaviour:
   _dropOldestOnFull: 1
   _logWrites: 1
   _simulateFirebase: 0
-  _sessionIngestEndpointUrl: https://us-central1-theraply-vr-demo.cloudfunctions.net/sessionIngest
+  _sessionIngestEndpointUrl: 
   _sessionReconciliationEndpointUrl: http://127.0.0.1:18765/session-reconciliation
   _firebaseAuthBearerToken: 
   _firebaseApiKey: 
@@ -677,13 +742,13 @@ MonoBehaviour:
   _logLocalPersistence: 1
   _allowVolatileQueueFallbackWhenDurableWriteFails: 1
   _sessionContext: {fileID: 1784697675}
-  _enableOutboxSync: 1
+  _enableOutboxSync: 0
   _outboxSyncIntervalSeconds: 2
   _outboxBatchSize: 32
   _outboxBackoffBaseSeconds: 1
   _outboxBackoffMaxSeconds: 60
   _outboxBackoffJitter: 0.2
-  _logOutboxSync: 1
+  _logOutboxSync: 0
   _outboxWorkerId: 
 --- !u!114 &1784697667
 MonoBehaviour:
@@ -749,6 +814,11 @@ MonoBehaviour:
   _contentDeliveryStateFileName: content_delivery_state.json
   _simulatedContentCatalog:
   - gameId: demo_cube_clicker
+    owned: 0
+    installedVersion: 
+    targetVersion: 1.2.0
+    updateOptional: 0
+  - gameId: pulse_target_tap
     owned: 0
     installedVersion: 
     targetVersion: 1.2.0
@@ -907,7 +977,6 @@ MonoBehaviour:
   _patientId: unknown_patient
   _therapistId: unknown_therapist
   _sessionId: 
-  _autoStartSessionOnAwake: 0
   _deferAutoStartWhenRecoverySnapshotExists: 1
   _recoverySnapshotFolder: session_resilience
   _recoverySnapshotFileName: snapshot.json
@@ -940,6 +1009,23 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Network.SessionTcpRelay
   _tcpServer: {fileID: 854900686}
+--- !u!114 &1784697678
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1784697665}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3f9d33d8453f4c3ab9f61642cd513f40, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TheraplyCore.Interactions.InteractionEventBridge
+  _gameTelemetryService: {fileID: 1784697673}
+  _sessionContext: {fileID: 1784697675}
+  _gameRuntimeService: {fileID: 1784697668}
+  _emitCanonicalEvents: 1
+  _logCanonicalEvents: 0
 --- !u!1 &1965591283
 GameObject:
   m_ObjectHideFlags: 0
@@ -995,4 +1081,5 @@ SceneRoots:
   - {fileID: 1784697676}
   - {fileID: 854900685}
   - {fileID: 1965591285}
+  - {fileID: 1062961065}
   - {fileID: 1558752183}
