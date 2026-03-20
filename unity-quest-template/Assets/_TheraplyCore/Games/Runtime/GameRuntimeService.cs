@@ -321,13 +321,7 @@ namespace TheraplyCore.Games.Runtime
 
         private void Awake()
         {
-            if (_registryService == null) _registryService = FindFirstObjectByType<GameRegistryService>();
-            if (_contextService == null) _contextService = FindFirstObjectByType<GameContextService>();
-            if (_commandBus == null) _commandBus = FindFirstObjectByType<GameCommandBus>();
-            if (_tcpServerService == null) _tcpServerService = FindFirstObjectByType<TCPServerService>();
-            if (_sessionTcpRelay == null) _sessionTcpRelay = FindFirstObjectByType<TheraplyCore.Network.SessionTcpRelay>();
-            if (_firebaseDataService == null) _firebaseDataService = FindFirstObjectByType<FirebaseDataService>();
-            _sessionContext = ResolveSessionContext();
+            RefreshSceneBindings();
             _mobileDisconnectBehavior = NormalizeMobileDisconnectBehavior(_defaultMobileDisconnectBehavior);
             EnsureContentDeliveryStatePathInitialized();
 
@@ -478,6 +472,8 @@ namespace TheraplyCore.Games.Runtime
 
         public bool SetActiveGame(string gameId)
         {
+            RefreshSceneBindings();
+
             if (_registryService == null)
             {
                 Logger.Warning("[GameRuntime] Registry service is missing.");
@@ -502,6 +498,23 @@ namespace TheraplyCore.Games.Runtime
             return true;
         }
 
+        public void RefreshSceneBindings()
+        {
+            if (_registryService == null) _registryService = FindFirstObjectByType<GameRegistryService>();
+            if (_contextService == null) _contextService = GetComponent<GameContextService>();
+            if (_contextService == null) _contextService = FindFirstObjectByType<GameContextService>();
+            if (_contextService == null)
+            {
+                _contextService = gameObject.AddComponent<GameContextService>();
+                Logger.Warning("[GameRuntime] Missing GameContextService on runtime root. Added one dynamically.");
+            }
+            if (_commandBus == null) _commandBus = FindFirstObjectByType<GameCommandBus>();
+            if (_tcpServerService == null) _tcpServerService = FindFirstObjectByType<TCPServerService>();
+            if (_sessionTcpRelay == null) _sessionTcpRelay = FindFirstObjectByType<TheraplyCore.Network.SessionTcpRelay>();
+            if (_firebaseDataService == null) _firebaseDataService = FindFirstObjectByType<FirebaseDataService>();
+            _sessionContext = ResolveSessionContext();
+        }
+
         public bool InitializeGame(string gameId, GameContracts.IGameConfig config)
         {
             if (config == null)
@@ -514,6 +527,8 @@ namespace TheraplyCore.Games.Runtime
             {
                 return false;
             }
+
+            RefreshSceneBindings();
 
             if (_contextService == null)
             {
@@ -539,6 +554,7 @@ namespace TheraplyCore.Games.Runtime
                 return false;
             }
 
+            RefreshSceneBindings();
             _knownConfigs[gameId] = config;
 
             if (_activeGame.State == GameContracts.GameState.NotInitialized)
@@ -566,6 +582,7 @@ namespace TheraplyCore.Games.Runtime
                 return false;
             }
 
+            RefreshSceneBindings();
             var shouldEmitSessionStart = _sessionContext != null &&
                                          _sessionContext.SessionState == GameContracts.SessionLifecycleState.CREATED;
 
@@ -727,30 +744,45 @@ namespace TheraplyCore.Games.Runtime
             return true;
         }
 
-        public bool StopActiveGame(GameContracts.GameStopReason reason)
+        public bool StopActiveGame(
+            GameContracts.GameStopReason reason,
+            string requestedReasonCode = null,
+            GameContracts.SessionLifecycleState? sessionStateOverride = null,
+            string sessionTransitionReasonCode = null)
         {
             if (!EnsureActiveGame()) return false;
             var stoppedGameId = _activeGameId ?? string.Empty;
+            var resolvedRequestedReasonCode = string.IsNullOrWhiteSpace(requestedReasonCode)
+                ? reason.ToString()
+                : requestedReasonCode.Trim();
+            var resolvedSessionState = sessionStateOverride ?? MapStopReasonToSessionState(reason);
+            var resolvedTransitionReason = string.IsNullOrWhiteSpace(sessionTransitionReasonCode)
+                ? $"STOP_GAME:{resolvedRequestedReasonCode}"
+                : sessionTransitionReasonCode.Trim();
             _activeGame.StopGame(reason);
-            TryTransitionSessionState(MapStopReasonToSessionState(reason), $"STOP_GAME:{reason}");
+            TryTransitionSessionState(resolvedSessionState, resolvedTransitionReason);
             TrackCriticalRuntimeEvent("game_end", new Dictionary<string, object>
             {
                 { "gameId", stoppedGameId },
-                { "reason", reason.ToString() },
+                { "reason", resolvedRequestedReasonCode },
             });
             _sessionTcpRelay?.OnGameEnd(reason, _sessionContext?.SessionId);
             TryReportActiveGameResult(reason);
             if (_unloadInstalledContentSceneOnStop)
             {
-                TryUnloadInstalledContentScene($"STOP_GAME:{reason}", false);
+                TryUnloadInstalledContentScene(resolvedTransitionReason, false);
             }
-            ClearActiveGameSelection($"STOP_GAME:{reason}");
+            ClearActiveGameSelection(resolvedTransitionReason);
+            PublishDevicePresenceUpdateIfPossible(
+                ResolveCurrentDevicePresenceState(),
+                resolvedTransitionReason,
+                force: true);
             TrackCriticalRuntimeEvent("session_stop", new Dictionary<string, object>
             {
                 { "gameId", stoppedGameId },
-                { "reason", reason.ToString() },
+                { "reason", resolvedRequestedReasonCode },
             });
-            _sessionTcpRelay?.OnSessionStop(_sessionContext?.SessionId, reason.ToString());
+            _sessionTcpRelay?.OnSessionStop(_sessionContext?.SessionId, resolvedRequestedReasonCode);
             return true;
         }
 
@@ -995,14 +1027,22 @@ namespace TheraplyCore.Games.Runtime
                 throw new InvalidOperationException("STOP_GAME_NO_ACTIVE_GAME");
             }
 
-            var reason = GameContracts.GameStopReason.TherapistStop;
-            if (!string.IsNullOrWhiteSpace(command?.reason) &&
-                Enum.TryParse(command.reason, true, out GameContracts.GameStopReason parsedReason))
-            {
-                reason = parsedReason;
-            }
+            var requestedReasonCode = NormalizeStopReason(command?.reason);
+            var isRestartStop = IsRestartStopReason(requestedReasonCode);
+            var isCatalogReturnStop = IsCatalogReturnStopReason(requestedReasonCode);
+            var reason = ResolveStopGameReason(requestedReasonCode);
+            var sessionStateOverride = (isRestartStop || isCatalogReturnStop)
+                ? GameContracts.SessionLifecycleState.INTERRUPTED
+                : (GameContracts.SessionLifecycleState?)null;
+            var sessionTransitionReasonCode = string.IsNullOrWhiteSpace(requestedReasonCode)
+                ? $"STOP_GAME:{reason}"
+                : $"STOP_GAME:{requestedReasonCode}";
 
-            if (!StopActiveGame(reason))
+            if (!StopActiveGame(
+                    reason,
+                    requestedReasonCode: requestedReasonCode,
+                    sessionStateOverride: sessionStateOverride,
+                    sessionTransitionReasonCode: sessionTransitionReasonCode))
             {
                 throw new InvalidOperationException("STOP_GAME_FAILED");
             }
@@ -5037,6 +5077,8 @@ namespace TheraplyCore.Games.Runtime
                 expectedIntervalMs * 3,
                 Mathf.RoundToInt(Mathf.Max(1f, _watchdogHungThresholdSeconds) * 1000f));
 
+            var reportedActiveGameId =
+                _activeGame == null ? string.Empty : _activeGameId ?? string.Empty;
             var command = new SessionWatchdogHeartbeatCommand
             {
                 sessionId = sessionId,
@@ -5051,7 +5093,7 @@ namespace TheraplyCore.Games.Runtime
                 runtimeStatus = ResolveRuntimeStatus(pendingQueueSize),
                 healthCode = healthCode ?? string.Empty,
                 healthy = healthy,
-                activeGameId = _activeGameId ?? string.Empty,
+                activeGameId = reportedActiveGameId,
                 activeGameState = activeGameState.ToString(),
                 heartbeatUnixMs = nowUnixMs,
                 lastHealthyUnixMs = lastHealthyUnixMs,
@@ -5213,6 +5255,26 @@ namespace TheraplyCore.Games.Runtime
             _ = PublishRuntimeStatusUpdateAsync(command);
         }
 
+        private string ResolveCurrentDevicePresenceState()
+        {
+            if (_lastAppPaused)
+            {
+                return DevicePresenceStateValues.Background;
+            }
+
+            if (!_lastAppFocused)
+            {
+                return DevicePresenceStateValues.FocusLost;
+            }
+
+            if (_tcpServerService != null && _tcpServerService.HasClient)
+            {
+                return DevicePresenceStateValues.Connected;
+            }
+
+            return DevicePresenceStateValues.Foreground;
+        }
+
         private void PublishDevicePresenceUpdateIfPossible(
             string presenceState,
             string reasonCode,
@@ -5241,6 +5303,8 @@ namespace TheraplyCore.Games.Runtime
                 return;
             }
 
+            var reportedActiveGameId =
+                _activeGame == null ? string.Empty : _activeGameId ?? string.Empty;
             var command = new DevicePresenceUpdateCommand
             {
                 sessionId = sessionId,
@@ -5255,7 +5319,7 @@ namespace TheraplyCore.Games.Runtime
                 appPaused = _lastAppPaused,
                 appFocused = _lastAppFocused,
                 hasTcpClient = _tcpServerService != null && _tcpServerService.HasClient,
-                activeGameId = _activeGameId ?? string.Empty,
+                activeGameId = reportedActiveGameId,
                 activeGameState = _activeGame == null ? GameContracts.GameState.NotInitialized.ToString() : _activeGame.State.ToString(),
             };
 
@@ -5271,7 +5335,7 @@ namespace TheraplyCore.Games.Runtime
                 { "appPaused", _lastAppPaused },
                 { "appFocused", _lastAppFocused },
                 { "hasTcpClient", command.hasTcpClient },
-                { "activeGameId", _activeGameId ?? string.Empty },
+                { "activeGameId", reportedActiveGameId },
                 { "activeGameState", command.activeGameState ?? string.Empty },
             });
         }
@@ -5570,6 +5634,63 @@ namespace TheraplyCore.Games.Runtime
                 default:
                     return GameContracts.SessionLifecycleState.INTERRUPTED;
             }
+        }
+
+        private static string NormalizeStopReason(string reason)
+        {
+            return string.IsNullOrWhiteSpace(reason)
+                ? string.Empty
+                : reason.Trim();
+        }
+
+        private static bool IsRestartStopReason(string reason)
+        {
+            var normalizedReason = NormalizeStopReason(reason).ToUpperInvariant();
+            return normalizedReason == "RESTART_GAME" ||
+                   normalizedReason == "RESTART" ||
+                   normalizedReason == "RESTART_FROM_SETUP";
+        }
+
+        private static bool IsCatalogReturnStopReason(string reason)
+        {
+            var normalizedReason = NormalizeStopReason(reason).ToUpperInvariant();
+            return normalizedReason == "RETURN_TO_MENU" ||
+                   normalizedReason == "RETURN_TO_CATALOG";
+        }
+
+        private static bool IsReconfigureStopReason(string reason)
+        {
+            var normalizedReason = NormalizeStopReason(reason).ToUpperInvariant();
+            return normalizedReason == "THERAPIST_RECONFIGURE" ||
+                   normalizedReason == "STOP_ROUND" ||
+                   normalizedReason == "STOP_GAME";
+        }
+
+        private static GameContracts.GameStopReason ResolveStopGameReason(string requestedReasonCode)
+        {
+            var normalizedReason = NormalizeStopReason(requestedReasonCode);
+            if (!string.IsNullOrWhiteSpace(normalizedReason) &&
+                Enum.TryParse(normalizedReason, true, out GameContracts.GameStopReason parsedReason))
+            {
+                return parsedReason;
+            }
+
+            if (IsRestartStopReason(normalizedReason))
+            {
+                return GameContracts.GameStopReason.UserExit;
+            }
+
+            if (IsCatalogReturnStopReason(normalizedReason))
+            {
+                return GameContracts.GameStopReason.UserExit;
+            }
+
+            if (IsReconfigureStopReason(normalizedReason))
+            {
+                return GameContracts.GameStopReason.UserExit;
+            }
+
+            return GameContracts.GameStopReason.TherapistStop;
         }
 
         private static string BuildOwnerKey(string therapistId, string studentId)

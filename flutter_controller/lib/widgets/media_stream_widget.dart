@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_controller/services/connection_service.dart';
 import 'package:flutter_controller/services/webrtc_media_service.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
@@ -16,6 +17,7 @@ class MediaStreamWidget extends StatefulWidget {
   final ConnectionService connection;
   final String? deviceIP;
   final int port;
+  final bool previewActive;
   final ValueChanged<MediaPreviewState>? onStateChanged;
 
   const MediaStreamWidget({
@@ -23,6 +25,7 @@ class MediaStreamWidget extends StatefulWidget {
     required this.connection,
     this.deviceIP,
     this.port = 8081,
+    this.previewActive = true,
     this.onStateChanged,
   });
 
@@ -30,8 +33,10 @@ class MediaStreamWidget extends StatefulWidget {
   State<MediaStreamWidget> createState() => _MediaStreamWidgetState();
 }
 
-class _MediaStreamWidgetState extends State<MediaStreamWidget> {
+class _MediaStreamWidgetState extends State<MediaStreamWidget>
+    with WidgetsBindingObserver {
   static const bool _suppressQuestMonitorDuringPtt = true;
+  static const String _androidSpeakerOutputId = 'speakerphone';
 
   WebRTCMediaService? _webrtcService;
   StreamSubscription<MediaStream>? _streamSub;
@@ -41,12 +46,37 @@ class _MediaStreamWidgetState extends State<MediaStreamWidget> {
   bool _rendererReady = false;
   bool _pttPressed = false;
   bool _questAudioEnabled = false;
+  bool _previewSessionActive = false;
+  AppLifecycleState? _appLifecycleState;
   MediaPreviewState _previewState = MediaPreviewState.initializing;
+
+  bool get _effectivePreviewActive {
+    final lifecycleState = _appLifecycleState;
+    final appIsResumed =
+        lifecycleState == null || lifecycleState == AppLifecycleState.resumed;
+    return widget.previewActive && appIsResumed;
+  }
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initWebRTC();
+  }
+
+  @override
+  void didUpdateWidget(covariant MediaStreamWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.previewActive != widget.previewActive) {
+      unawaited(_syncPreviewLifecycle(reasonCode: 'WIDGET_UPDATE'));
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appLifecycleState = state;
+    unawaited(
+        _syncPreviewLifecycle(reasonCode: 'APP_${state.name.toUpperCase()}'));
   }
 
   Future<void> _initWebRTC() async {
@@ -65,26 +95,44 @@ class _MediaStreamWidgetState extends State<MediaStreamWidget> {
       return;
     }
     _webrtcService = WebRTCMediaService(widget.connection);
-    _webrtcService!.start();
     _streamSub = _webrtcService!.onRemoteStream.listen((stream) {
-      if (mounted) {
-        _applyRemoteAudioState(
-          stream,
-          enabled: _resolveEffectiveQuestAudioEnabled(),
-        );
-        setState(() => _renderer?.srcObject = stream);
-        _setPreviewState(MediaPreviewState.streaming);
+      if (!mounted) {
+        return;
       }
+
+      if (!_effectivePreviewActive) {
+        unawaited(_applyRemoteAudioState(stream, enabled: false));
+        setState(() => _renderer?.srcObject = null);
+        _setPreviewState(MediaPreviewState.waitingForStream);
+        return;
+      }
+
+      unawaited(_applyRemoteAudioState(
+        stream,
+        enabled: _resolveEffectiveQuestAudioEnabled(),
+      ));
+      setState(() => _renderer?.srcObject = stream);
+      _setPreviewState(MediaPreviewState.streaming);
     });
 
     _connectionSub = widget.connection.connectionStatus.listen((connected) {
       if (!mounted) return;
       if (!connected) {
+        _previewSessionActive = false;
         unawaited(_setPtt(false));
+        final srcObject = _renderer?.srcObject;
+        if (srcObject is MediaStream) {
+          unawaited(_applyRemoteAudioState(srcObject, enabled: false));
+        }
         setState(() => _renderer?.srcObject = null);
         _setPreviewState(MediaPreviewState.waitingForStream);
+        return;
       }
+
+      unawaited(_syncPreviewLifecycle(reasonCode: 'TCP_CONNECTED'));
     });
+
+    await _syncPreviewLifecycle(reasonCode: 'INIT');
   }
 
   void _setPreviewState(MediaPreviewState nextState) {
@@ -97,12 +145,53 @@ class _MediaStreamWidgetState extends State<MediaStreamWidget> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _streamSub?.cancel();
     _connectionSub?.cancel();
+    unawaited(_applyRendererAudioRouting(false));
     _webrtcService?.dispose();
     _renderer?.srcObject = null;
     _renderer?.dispose();
     super.dispose();
+  }
+
+  Future<void> _syncPreviewLifecycle({required String reasonCode}) async {
+    final service = _webrtcService;
+    if (!mounted || service == null) {
+      return;
+    }
+
+    if (!_effectivePreviewActive) {
+      _previewSessionActive = false;
+      await _setPtt(false);
+      final srcObject = _renderer?.srcObject;
+      if (srcObject is MediaStream) {
+        await _applyRemoteAudioState(srcObject, enabled: false);
+      }
+      if (mounted) {
+        setState(() => _renderer?.srcObject = null);
+      }
+      _setPreviewState(MediaPreviewState.waitingForStream);
+      await service.pausePreview(reasonCode: reasonCode);
+      return;
+    }
+
+    if (mounted) {
+      setState(() => _error = null);
+    }
+    _setPreviewState(MediaPreviewState.waitingForStream);
+
+    if (_previewSessionActive) {
+      return;
+    }
+
+    if (!widget.connection.isConnected) {
+      await service.resumePreview(reasonCode: reasonCode);
+      return;
+    }
+
+    _previewSessionActive = true;
+    await service.resumePreview(reasonCode: reasonCode);
   }
 
   @override
@@ -228,7 +317,7 @@ class _MediaStreamWidgetState extends State<MediaStreamWidget> {
 
     final stream = _renderer?.srcObject;
     if (stream is MediaStream && _suppressQuestMonitorDuringPtt) {
-      _applyRemoteAudioState(
+      await _applyRemoteAudioState(
         stream,
         enabled: _resolveEffectiveQuestAudioEnabled(
           pttPressedOverride: enabled,
@@ -240,11 +329,11 @@ class _MediaStreamWidgetState extends State<MediaStreamWidget> {
     await _webrtcService?.setTalkbackEnabled(enabled);
   }
 
-  void _toggleQuestAudio() {
+  Future<void> _toggleQuestAudio() async {
     final next = !_questAudioEnabled;
     final stream = _renderer?.srcObject;
     if (stream is MediaStream) {
-      _applyRemoteAudioState(
+      await _applyRemoteAudioState(
         stream,
         enabled: _resolveEffectiveQuestAudioEnabled(
           questAudioEnabledOverride: next,
@@ -269,9 +358,50 @@ class _MediaStreamWidgetState extends State<MediaStreamWidget> {
     return effectiveQuestAudioEnabled;
   }
 
-  void _applyRemoteAudioState(MediaStream stream, {required bool enabled}) {
+  Future<void> _applyRemoteAudioState(MediaStream stream,
+      {required bool enabled}) async {
+    await _applyRendererAudioRouting(enabled);
+
     for (final track in stream.getAudioTracks()) {
       track.enabled = enabled;
+      try {
+        await Helper.setVolume(enabled ? 1.0 : 0.0, track);
+      } catch (e) {
+        debugPrint(
+          '[MediaStreamWidget] Failed to set remote audio track volume: $e',
+        );
+      }
+    }
+
+    debugPrint(
+      '[MediaStreamWidget] Quest audio ${enabled ? 'enabled' : 'disabled'} '
+      '(tracks=${stream.getAudioTracks().length})',
+    );
+  }
+
+  Future<void> _applyRendererAudioRouting(bool enabled) async {
+    if (kIsWeb) {
+      return;
+    }
+
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      try {
+        await Helper.setSpeakerphoneOn(enabled);
+      } catch (e) {
+        debugPrint('[MediaStreamWidget] setSpeakerphoneOn failed: $e');
+      }
+
+      try {
+        await _renderer?.audioOutput(_androidSpeakerOutputId);
+      } catch (e) {
+        debugPrint('[MediaStreamWidget] audioOutput(speakerphone) failed: $e');
+      }
+    }
+
+    try {
+      await _renderer?.setVolume(enabled ? 1.0 : 0.0);
+    } catch (e) {
+      debugPrint('[MediaStreamWidget] renderer.setVolume failed: $e');
     }
   }
 

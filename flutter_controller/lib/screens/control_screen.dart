@@ -6,7 +6,6 @@ import 'package:flutter_controller/models/content_delivery_contract.dart';
 import 'package:flutter_controller/models/critical_command_envelope.dart';
 import 'package:flutter_controller/models/device_info.dart';
 import 'package:flutter_controller/models/entitlement_access.dart';
-import 'package:flutter_controller/models/game_catalog_entry.dart';
 import 'package:flutter_controller/models/guided_session_continuation_policy.dart';
 import 'package:flutter_controller/models/guided_session_plan.dart';
 import 'package:flutter_controller/models/mobile_control_schema.dart';
@@ -26,7 +25,6 @@ import 'package:flutter_controller/services/discovery_service.dart';
 import 'package:flutter_controller/services/entitlement_service.dart';
 import 'package:flutter_controller/services/firebase_service.dart';
 import 'package:flutter_controller/services/foreground_service_bridge.dart';
-import 'package:flutter_controller/services/game_catalog_service.dart';
 import 'package:flutter_controller/services/operator_incident_popup_queue.dart';
 import 'package:flutter_controller/services/parent_progress_service.dart';
 import 'package:flutter_controller/services/game_data_service.dart';
@@ -38,17 +36,9 @@ import 'package:flutter_controller/models/therapy_session_record.dart';
 import 'package:flutter_controller/widgets/media_stream_widget.dart';
 import 'package:flutter_controller/widgets/mobile_control_renderer.dart';
 
-enum _SessionGateAction {
-  keepCurrent,
-  resume,
-  startNew,
-  interruptAndExit,
-  completeAndExit
-}
+enum _SessionGateAction { resume, startNew }
 
 enum _WorkflowStep { gameCatalog, gameSetup }
-
-enum _CatalogFilterTab { installed, store }
 
 enum _ExitChoice { keepUnfinished, endSession, cancel }
 
@@ -71,160 +61,773 @@ class ControlScreen extends StatefulWidget {
 class _ControlScreenState extends State<ControlScreen>
     with WidgetsBindingObserver {
   static final bool _contentDeliveryEnabled = true;
-  static const bool _boardSafePackageProbeFeatureEnabled = false;
   static const int _sessionIngestPort = 18765;
   static const String _setVideoBitrateCommandId = 'WEBRTC_SET_VIDEO_BITRATE';
   static final bool _serverAuthoritativeHandoffGate = true;
   static const bool _showCatalogRescueTerminateButton = false;
-  static final MobileControlSchemaParseResult _fallbackDemoCubeSchemaParse =
-      MobileControlSchema.tryParse(
-    const <String, dynamic>{
-      'schema': 'THERAPLY_MOBILE_CONTROL_SCHEMA',
-      'schemaVersion': '2026-02-27',
-      'gameId': 'demo_cube_clicker',
-      'title': 'Demo Cube Controls',
-      'description':
-          'Offline fallback schema for Demo Cube START_GAME and UPDATE_CONFIG.',
-      'layout': <String, dynamic>{
-        'mode': 'grid',
-        'columns': 2,
+
+  static MobileControlSchemaParseResult _parseLegacyBundledSchema({
+    required String expectedGameId,
+    required String gameConfigType,
+    required Map<String, dynamic> staticFields,
+    required List<Map<String, dynamic>> controls,
+    String title = '',
+    String description = '',
+    List<Map<String, dynamic>> sections = const <Map<String, dynamic>>[
+      <String, dynamic>{
+        'sectionId': 'setup',
+        'label': '',
+        'order': 10,
       },
-      'payload': <String, dynamic>{
-        'target': 'game_config',
-        'gameConfigType': 'demo_cube_config_v1',
-        'gameConfigVersion': 1,
-        'includeVersionInGameConfig': true,
+    ],
+  }) {
+    return MobileControlSchema.tryParse(
+      <String, dynamic>{
+        'schema': 'THERAPLY_MOBILE_CONTROL_SCHEMA',
+        'schemaVersion': '2026-03-16',
+        'gameId': expectedGameId,
+        'title': title,
+        'description': description,
+        'layout': const <String, dynamic>{
+          'mode': 'stack',
+          'columns': 1,
+        },
+        'payload': <String, dynamic>{
+          'target': 'game_config',
+          'gameConfigType': gameConfigType,
+          'gameConfigVersion': 1,
+          'includeVersionInGameConfig': false,
+          'staticFields': staticFields,
+        },
+        'sections': sections,
+        'controls': controls,
       },
-      'sections': <Map<String, dynamic>>[
-        <String, dynamic>{'sectionId': 'setup', 'label': 'Setup', 'order': 10},
-        <String, dynamic>{
-          'sectionId': 'runtime',
-          'label': 'Runtime',
-          'order': 20,
-        },
-      ],
-      'controls': <Map<String, dynamic>>[
-        <String, dynamic>{
-          'controlId': 'cube_count',
-          'type': 'slider',
-          'label': 'Cube Count',
-          'sectionId': 'setup',
-          'order': 10,
-          'defaultValue': '12',
-          'binding': <String, dynamic>{
-            'target': 'game_config',
-            'path': 'cubeCount',
-            'valueType': 'int',
-            'emitOnStartGame': true,
-            'emitOnUpdateConfig': true,
-          },
-          'validation': <String, dynamic>{
-            'required': true,
-            'minValue': '4',
-            'maxValue': '40',
-            'step': '1',
-          },
-        },
-        <String, dynamic>{
-          'controlId': 'cube_speed',
-          'type': 'slider',
-          'label': 'Cube Speed',
-          'sectionId': 'setup',
-          'order': 20,
-          'defaultValue': '0.7',
-          'binding': <String, dynamic>{
-            'target': 'game_config',
-            'path': 'cubeSpeed',
-            'valueType': 'double',
-            'emitOnStartGame': true,
-            'emitOnUpdateConfig': true,
-          },
-          'validation': <String, dynamic>{
-            'required': true,
-            'minValue': '0.2',
-            'maxValue': '2.2',
-            'step': '0.1',
-          },
-        },
-        <String, dynamic>{
-          'controlId': 'level_mode',
-          'type': 'select',
-          'label': 'Level Mode',
-          'sectionId': 'setup',
-          'order': 30,
-          'defaultValue': 'basic',
-          'binding': <String, dynamic>{
-            'target': 'game_config',
-            'path': 'levelMode',
-            'valueType': 'string',
-            'emitOnStartGame': true,
-            'emitOnUpdateConfig': true,
-          },
-          'validation': <String, dynamic>{'required': true},
-          'options': <Map<String, dynamic>>[
-            <String, dynamic>{'value': 'basic', 'label': 'Basic'},
-            <String, dynamic>{
-              'value': 'alternate_colors',
-              'label': 'Alternate Colors',
-            },
-            <String, dynamic>{
-              'value': 'random_target_color',
-              'label': 'Random Target',
-            },
-          ],
-        },
-        <String, dynamic>{
-          'controlId': 'resume_from_saved',
-          'type': 'toggle',
-          'label': 'Resume From Saved',
-          'sectionId': 'setup',
-          'order': 40,
-          'defaultValue': 'false',
-          'binding': <String, dynamic>{
-            'target': 'game_config',
-            'path': 'resumeFromSaved',
-            'valueType': 'bool',
-            'emitOnStartGame': true,
-            'emitOnUpdateConfig': true,
-          },
-          'validation': <String, dynamic>{'required': false},
-        },
-        <String, dynamic>{
-          'controlId': 'apply_runtime_update',
-          'type': 'button',
-          'label': 'Apply Runtime Config',
-          'sectionId': 'runtime',
-          'order': 50,
-          'buttonCommandId': 'UPDATE_CONFIG',
-        },
-      ],
+      expectedGameId: expectedGameId,
+    );
+  }
+
+  static Map<String, dynamic> _schemaOption(Object value, String label) {
+    return <String, dynamic>{
+      'value': value.toString(),
+      'label': label,
+    };
+  }
+
+  static Map<String, dynamic> _schemaSelectControl({
+    required String controlId,
+    required String label,
+    required String path,
+    required String defaultValue,
+    required int order,
+    required List<Map<String, dynamic>> options,
+    String hint = '',
+    String sectionId = 'setup',
+    String valueType = MobileControlValueTypes.integer,
+    bool emitOnUpdateConfig = false,
+  }) {
+    return <String, dynamic>{
+      'controlId': controlId,
+      'type': MobileControlTypes.select,
+      'label': label,
+      'hint': hint,
+      'sectionId': sectionId,
+      'order': order,
+      'defaultValue': defaultValue,
+      'binding': <String, dynamic>{
+        'target': MobileControlPayloadTargets.gameConfig,
+        'path': path,
+        'valueType': valueType,
+        'emitOnStartGame': true,
+        'emitOnUpdateConfig': emitOnUpdateConfig,
+      },
+      'validation': const <String, dynamic>{'required': true},
+      'options': options,
+    };
+  }
+
+  static Map<String, dynamic> _schemaSliderControl({
+    required String controlId,
+    required String label,
+    required String path,
+    required String defaultValue,
+    required int order,
+    required num minValue,
+    required num maxValue,
+    required num step,
+    String hint = '',
+    String sectionId = 'setup',
+    String valueType = MobileControlValueTypes.integer,
+    bool emitOnUpdateConfig = false,
+  }) {
+    return <String, dynamic>{
+      'controlId': controlId,
+      'type': MobileControlTypes.slider,
+      'label': label,
+      'hint': hint,
+      'sectionId': sectionId,
+      'order': order,
+      'defaultValue': defaultValue,
+      'binding': <String, dynamic>{
+        'target': MobileControlPayloadTargets.gameConfig,
+        'path': path,
+        'valueType': valueType,
+        'emitOnStartGame': true,
+        'emitOnUpdateConfig': emitOnUpdateConfig,
+      },
+      'validation': <String, dynamic>{
+        'required': true,
+        'minValue': minValue.toString(),
+        'maxValue': maxValue.toString(),
+        'step': step.toString(),
+      },
+    };
+  }
+
+  static Map<String, dynamic> _schemaToggleControl({
+    required String controlId,
+    required String label,
+    required String path,
+    required String defaultValue,
+    required int order,
+    String hint = '',
+    String sectionId = 'setup',
+    bool emitOnUpdateConfig = false,
+  }) {
+    return <String, dynamic>{
+      'controlId': controlId,
+      'type': MobileControlTypes.toggle,
+      'label': label,
+      'hint': hint,
+      'sectionId': sectionId,
+      'order': order,
+      'defaultValue': defaultValue,
+      'binding': <String, dynamic>{
+        'target': MobileControlPayloadTargets.gameConfig,
+        'path': path,
+        'valueType': MobileControlValueTypes.boolean,
+        'emitOnStartGame': true,
+        'emitOnUpdateConfig': emitOnUpdateConfig,
+      },
+      'validation': const <String, dynamic>{'required': false},
+    };
+  }
+
+  static List<Map<String, dynamic>> _buildIndexedOptions({
+    required int start,
+    required int end,
+    required String Function(int value) labelBuilder,
+  }) {
+    return List<Map<String, dynamic>>.generate(
+      end - start + 1,
+      (index) {
+        final value = start + index;
+        return _schemaOption(value, labelBuilder(value));
+      },
+      growable: false,
+    );
+  }
+
+  static List<Map<String, dynamic>> _buildPiniataLevelOptions() {
+    return _buildIndexedOptions(
+      start: 0,
+      end: 14,
+      labelBuilder: (value) {
+        if (value < 5) {
+          return 'Tutorial ${value + 1}';
+        }
+        return 'Level ${value - 4}';
+      },
+    );
+  }
+
+  static List<Map<String, dynamic>> _buildPiniataDifficultyOptions() {
+    return const <Map<String, dynamic>>[
+      {'value': '0', 'label': 'Very Easy'},
+      {'value': '1', 'label': 'Easy'},
+      {'value': '2', 'label': 'Medium'},
+      {'value': '3', 'label': 'Hard'},
+      {'value': '4', 'label': 'Very Hard'},
+    ];
+  }
+
+  static List<Map<String, dynamic>> _buildButterfliesSpeedOptions() {
+    return const <Map<String, dynamic>>[
+      {'value': '0', 'label': 'Slow'},
+      {'value': '1', 'label': 'Medium'},
+      {'value': '2', 'label': 'Fast'},
+    ];
+  }
+
+  static List<Map<String, dynamic>> _buildCodingOptions() {
+    return const <Map<String, dynamic>>[
+      {'value': '0', 'label': 'Numbers'},
+      {'value': '1', 'label': 'Morse'},
+      {'value': '2', 'label': 'Piano'},
+    ];
+  }
+
+  static List<Map<String, dynamic>> _buildHidingOptions() {
+    return const <Map<String, dynamic>>[
+      {'value': '0', 'label': 'Pre-test'},
+      {'value': '1', 'label': 'Training'},
+      {'value': '2', 'label': 'Post-test'},
+    ];
+  }
+
+  static List<Map<String, dynamic>> _buildActiveMindfulnessOptions() {
+    return const <Map<String, dynamic>>[
+      {'value': '0', 'label': 'Wall 1'},
+      {'value': '1', 'label': 'Wall 2'},
+      {'value': '2', 'label': 'Wall 3'},
+      {'value': '3', 'label': 'Wall 4'},
+    ];
+  }
+
+  static List<Map<String, dynamic>> _buildPuzzleOptions() {
+    return const <Map<String, dynamic>>[
+      {'value': '0', 'label': 'Puzzle 1 - 3x4'},
+      {'value': '1', 'label': 'Puzzle 2 - 3x4'},
+      {'value': '2', 'label': 'Puzzle 3 - 4x5'},
+      {'value': '3', 'label': 'Puzzle 4 - 4x5'},
+      {'value': '4', 'label': 'Puzzle 5 - 5x5'},
+      {'value': '5', 'label': 'Puzzle 6 - 5x5'},
+      {'value': '6', 'label': 'Puzzle 7 - 5x6'},
+      {'value': '7', 'label': 'Puzzle 8 - 5x6'},
+      {'value': '8', 'label': 'Puzzle 9 - 6x6'},
+      {'value': '9', 'label': 'Puzzle 10 - 6x6'},
+    ];
+  }
+
+  static List<Map<String, dynamic>> _buildObjectSetOptions() {
+    return const <Map<String, dynamic>>[
+      {'value': '0', 'label': 'Christmas'},
+      {'value': '1', 'label': 'Arrows'},
+      {'value': '2', 'label': 'Squares'},
+      {'value': '3', 'label': 'Triangles'},
+    ];
+  }
+
+  static List<Map<String, dynamic>> _buildSpatialLevelOptions() {
+    return _buildIndexedOptions(
+      start: 0,
+      end: 10,
+      labelBuilder: (value) => value == 0 ? 'Tutorial' : 'Level $value',
+    );
+  }
+
+  static final MobileControlSchemaParseResult _piniataSchemaParse =
+      _parseLegacyBundledSchema(
+    expectedGameId: 'piniata',
+    gameConfigType: 'legacy_piniata_config_v1',
+    staticFields: const <String, dynamic>{
+      'name': 'Piniata',
+      'code': 'Piniata',
+      'sessionSecondsTime': 0,
+      'wrongHits': 0,
+      'averageReactionTime': 0,
+      'maxPoints': 0,
+      'locale': r'$deviceLocale',
     },
-    expectedGameId: 'demo_cube_clicker',
+    controls: <Map<String, dynamic>>[
+      _schemaSelectControl(
+        controlId: 'piniata_level',
+        label: 'Level',
+        path: 'level',
+        defaultValue: '0',
+        order: 10,
+        options: _buildPiniataLevelOptions(),
+      ),
+      _schemaSelectControl(
+        controlId: 'piniata_difficulty',
+        label: 'Difficulty',
+        path: 'difficultyLevel',
+        defaultValue: '0',
+        order: 20,
+        options: _buildPiniataDifficultyOptions(),
+      ),
+    ],
+  );
+
+  static final MobileControlSchemaParseResult _butterfliesSchemaParse =
+      _parseLegacyBundledSchema(
+    expectedGameId: 'butterflies',
+    gameConfigType: 'legacy_butterflies_config_v1',
+    staticFields: const <String, dynamic>{
+      'name': 'Butterflies',
+      'code': 'Butterflies',
+      'sessionSecondsTime': 0,
+      'wrongPoints': 0,
+      'locale': r'$deviceLocale',
+    },
+    controls: <Map<String, dynamic>>[
+      _schemaSelectControl(
+        controlId: 'butterflies_level',
+        label: 'Level',
+        path: 'level',
+        defaultValue: '1',
+        order: 10,
+        options: _buildIndexedOptions(
+          start: 1,
+          end: 12,
+          labelBuilder: (value) => 'Level $value',
+        ),
+      ),
+      _schemaSelectControl(
+        controlId: 'butterflies_speed',
+        label: 'Speed',
+        path: 'butterfliesSpeed',
+        defaultValue: '0',
+        order: 20,
+        options: _buildButterfliesSpeedOptions(),
+      ),
+      _schemaSliderControl(
+        controlId: 'butterflies_count',
+        label: 'Butterflies Count',
+        path: 'butterfliesCount',
+        defaultValue: '10',
+        order: 30,
+        minValue: 8,
+        maxValue: 20,
+        step: 1,
+      ),
+    ],
+  );
+
+  static final MobileControlSchemaParseResult _codingSchemaParse =
+      _parseLegacyBundledSchema(
+    expectedGameId: 'coding',
+    gameConfigType: 'legacy_coding_config_v1',
+    staticFields: const <String, dynamic>{
+      'name': 'Coding',
+      'code': 'Coding',
+      'sessionSecondsTime': 0,
+      'currentLevel': 0,
+      'levelsProgress': 0,
+      'locale': r'$deviceLocale',
+    },
+    controls: <Map<String, dynamic>>[
+      _schemaSelectControl(
+        controlId: 'coding_mode',
+        label: 'Game Mode',
+        path: 'level',
+        defaultValue: '0',
+        order: 10,
+        options: _buildCodingOptions(),
+      ),
+    ],
+  );
+
+  static final MobileControlSchemaParseResult _hidingSchemaParse =
+      _parseLegacyBundledSchema(
+    expectedGameId: 'hiding_game',
+    gameConfigType: 'legacy_hiding_config_v1',
+    staticFields: const <String, dynamic>{
+      'name': 'Hiding Game',
+      'code': 'Hiding',
+      'sessionSecondsTime': 0,
+      'wrongAnswers': 0,
+      'locale': r'$deviceLocale',
+    },
+    controls: <Map<String, dynamic>>[
+      _schemaSelectControl(
+        controlId: 'hiding_mode',
+        label: 'Mode',
+        path: 'level',
+        defaultValue: '0',
+        order: 10,
+        options: _buildHidingOptions(),
+      ),
+    ],
+  );
+
+  static final MobileControlSchemaParseResult _passiveMindfulnessSchemaParse =
+      _parseLegacyBundledSchema(
+    expectedGameId: 'passive_mindfulness',
+    gameConfigType: 'legacy_passive_mindfulness_config_v1',
+    staticFields: const <String, dynamic>{
+      'name': 'Passive Mindfulness',
+      'code': 'PM',
+      'locale': r'$deviceLocale',
+    },
+    controls: <Map<String, dynamic>>[
+      _schemaSelectControl(
+        controlId: 'passive_session',
+        label: 'Session',
+        path: 'level',
+        defaultValue: '0',
+        order: 10,
+        options: _buildIndexedOptions(
+          start: 0,
+          end: 9,
+          labelBuilder: (value) => 'Session ${value + 1}',
+        ),
+      ),
+    ],
+  );
+
+  static final MobileControlSchemaParseResult _activeMindfulnessSchemaParse =
+      _parseLegacyBundledSchema(
+    expectedGameId: 'active_mindfulness',
+    gameConfigType: 'legacy_active_mindfulness_config_v1',
+    staticFields: const <String, dynamic>{
+      'name': 'Active Mindfulness',
+      'code': 'AM',
+      'sessionSecondsTime': 0,
+      'currentLevel': 0,
+      'levelsProgress': 0,
+      'locale': r'$deviceLocale',
+    },
+    controls: <Map<String, dynamic>>[
+      _schemaSelectControl(
+        controlId: 'active_wall',
+        label: 'Sequence',
+        path: 'level',
+        defaultValue: '0',
+        order: 10,
+        options: _buildActiveMindfulnessOptions(),
+      ),
+    ],
+  );
+
+  static final MobileControlSchemaParseResult _puzzleSchemaParse =
+      _parseLegacyBundledSchema(
+    expectedGameId: 'puzzle',
+    gameConfigType: 'legacy_puzzle_config_v1',
+    staticFields: const <String, dynamic>{
+      'name': 'Puzzle',
+      'code': 'Puzzle',
+      'puzzleCompletionTime': 0,
+      'locale': r'$deviceLocale',
+      'hints': <dynamic>[],
+      'completedPuzzles': <dynamic>[],
+    },
+    controls: <Map<String, dynamic>>[
+      _schemaSelectControl(
+        controlId: 'puzzle_index',
+        label: 'Puzzle',
+        path: 'puzzleIndex',
+        defaultValue: '0',
+        order: 10,
+        options: _buildPuzzleOptions(),
+      ),
+    ],
+  );
+
+  static final MobileControlSchemaParseResult _bothHandsSchemaParse =
+      _parseLegacyBundledSchema(
+    expectedGameId: 'both_hands',
+    gameConfigType: 'legacy_two_hands_config_v1',
+    staticFields: const <String, dynamic>{
+      'name': 'Two Hand Manipulation Training',
+      'code': 'two_hand_manipulation',
+    },
+    controls: <Map<String, dynamic>>[
+      _schemaSliderControl(
+        controlId: 'two_hands_rows',
+        label: 'Rows',
+        path: 'rows',
+        defaultValue: '4',
+        order: 10,
+        minValue: 1,
+        maxValue: 4,
+        step: 1,
+      ),
+      _schemaSliderControl(
+        controlId: 'two_hands_repetitions',
+        label: 'Rounds',
+        path: 'repetitions',
+        defaultValue: '3',
+        order: 20,
+        minValue: 1,
+        maxValue: 10,
+        step: 1,
+      ),
+      _schemaToggleControl(
+        controlId: 'two_hands_memory_mode',
+        label: 'Memory Mode',
+        path: 'memoryMode',
+        defaultValue: 'false',
+        order: 30,
+      ),
+      _schemaSelectControl(
+        controlId: 'two_hands_object_set',
+        label: 'Object Set',
+        path: 'objectType',
+        defaultValue: '0',
+        order: 40,
+        options: _buildObjectSetOptions(),
+      ),
+    ],
+  );
+
+  static final MobileControlSchemaParseResult _christmasSchemaParse =
+      _parseLegacyBundledSchema(
+    expectedGameId: 'christmas',
+    gameConfigType: 'legacy_christmas_config_v1',
+    staticFields: const <String, dynamic>{
+      'name': 'Two Hand Manipulation Training',
+      'code': 'two_hand_manipulation',
+      'objectType': 0,
+    },
+    controls: <Map<String, dynamic>>[
+      _schemaSliderControl(
+        controlId: 'christmas_rows',
+        label: 'Rows',
+        path: 'rows',
+        defaultValue: '4',
+        order: 10,
+        minValue: 1,
+        maxValue: 4,
+        step: 1,
+      ),
+      _schemaSliderControl(
+        controlId: 'christmas_repetitions',
+        label: 'Rounds',
+        path: 'repetitions',
+        defaultValue: '3',
+        order: 20,
+        minValue: 1,
+        maxValue: 10,
+        step: 1,
+      ),
+      _schemaToggleControl(
+        controlId: 'christmas_memory_mode',
+        label: 'Memory Mode',
+        path: 'memoryMode',
+        defaultValue: 'false',
+        order: 30,
+      ),
+    ],
+  );
+
+  static final MobileControlSchemaParseResult _spatialSchemaParse =
+      _parseLegacyBundledSchema(
+    expectedGameId: 'spatial',
+    gameConfigType: 'legacy_spatial_config_v1',
+    staticFields: const <String, dynamic>{
+      'bestTime': 0,
+      'results': <dynamic>[],
+    },
+    controls: <Map<String, dynamic>>[
+      _schemaSelectControl(
+        controlId: 'spatial_level',
+        label: 'Starting Level',
+        path: 'studentLevel',
+        defaultValue: '0',
+        order: 10,
+        options: _buildSpatialLevelOptions(),
+      ),
+    ],
   );
 
   static final List<_GameCatalogEntry> _fallbackGameCatalog =
       <_GameCatalogEntry>[
     _GameCatalogEntry(
-      gameId: 'demo_cube_clicker',
-      title: 'Demo Cube Clicker',
+      gameId: 'piniata',
+      title: 'Piniata',
       description:
-          'Wersja pogladowa: klikaj poruszajace sie cubey, mierz czas i best score.',
-      targetContentVersion: '1.2.0',
-      packageUri:
-          'https://pranasense.pl/content/demo_cube_clicker_1_2_0.pkg.json',
-      thumbnailUrl: '',
-      supportsSaveResume: true,
-      availableForPurchase: true,
-      requiresExplicitLicense: true,
+          'A dynamic coordination game focused on reaction time, precision and active full-body play.',
+      targetContentVersion: 'build',
+      packageUri: '',
+      thumbnailUrl:
+          'https://firebasestorage.googleapis.com/v0/b/bloc-learning-uni.appspot.com/o/sessions_cover_photos%2FPINIATA-BASE%20FINAL.jpg?alt=media&token=0a1189bb-9720-4e4b-b51c-e7b9ed722bc9',
+      supportsSaveResume: false,
+      availableForPurchase: false,
+      requiresExplicitLicense: false,
       runtimeLaunchEnabled: true,
       sortOrder: 10,
       previewLines: <String>[
-        'Poziom basic: dowolny kolor.',
-        'Poziom alternation: kolory na zmiane.',
-        'Poziom random target: aktywny kolor celu zmienia sie dynamicznie.',
+        'Visual perception and reaction time.',
+        'Physical interaction with moving targets.',
       ],
-      mobileControlSchema: _fallbackDemoCubeSchemaParse.schema,
-      mobileControlSchemaReasonCode: _fallbackDemoCubeSchemaParse.reasonCode,
+      mobileControlSchema: _piniataSchemaParse.schema,
+      mobileControlSchemaReasonCode: _piniataSchemaParse.reasonCode,
+    ),
+    _GameCatalogEntry(
+      gameId: 'butterflies',
+      title: 'Butterfly Catching',
+      description:
+          'Catch colourful butterflies while training visual attention, accuracy and motor coordination.',
+      targetContentVersion: 'build',
+      packageUri: '',
+      thumbnailUrl:
+          'https://firebasestorage.googleapis.com/v0/b/bloc-learning-uni.appspot.com/o/sessions_cover_photos%2FMOTYLE-BAZA%20fin.jpg?alt=media&token=386372bb-21f1-49a8-9941-59d12dab3c20',
+      supportsSaveResume: false,
+      availableForPurchase: false,
+      requiresExplicitLicense: false,
+      runtimeLaunchEnabled: true,
+      sortOrder: 20,
+      previewLines: <String>[
+        'Fast visual scanning with moving objects.',
+        'Eye-hand coordination under time pressure.',
+      ],
+      mobileControlSchema: _butterfliesSchemaParse.schema,
+      mobileControlSchemaReasonCode: _butterfliesSchemaParse.reasonCode,
+    ),
+    _GameCatalogEntry(
+      gameId: 'coding',
+      title: 'Coding Game',
+      description:
+          'A hearing-focused session with number, Morse and sound-based mini-games.',
+      targetContentVersion: 'build',
+      packageUri: '',
+      thumbnailUrl:
+          'https://firebasestorage.googleapis.com/v0/b/bloc-learning-uni.appspot.com/o/sessions_cover_photos%2FKodowanie_cover.jpeg?alt=media&token=404e281d-14a6-4a56-b37c-23bd8ee008fb',
+      supportsSaveResume: false,
+      availableForPurchase: false,
+      requiresExplicitLicense: false,
+      runtimeLaunchEnabled: true,
+      sortOrder: 30,
+      previewLines: <String>[
+        'Auditory memory and attention.',
+        'Three mini-games in one scene.',
+      ],
+      mobileControlSchema: _codingSchemaParse.schema,
+      mobileControlSchemaReasonCode: _codingSchemaParse.reasonCode,
+    ),
+    _GameCatalogEntry(
+      gameId: 'hiding_game',
+      title: 'Hearing Games',
+      description:
+          'Hide-and-seek style listening tasks that support sound localisation and auditory focus.',
+      targetContentVersion: 'build',
+      packageUri: '',
+      thumbnailUrl:
+          'https://firebasestorage.googleapis.com/v0/b/bloc-learning-uni.appspot.com/o/sessions_cover_photos%2FIKONA-KUKULKA-MAIN.jpg?alt=media&token=a5bd58ad-e44c-4110-bfc2-cfb1c71e10fa',
+      supportsSaveResume: false,
+      availableForPurchase: false,
+      requiresExplicitLicense: false,
+      runtimeLaunchEnabled: true,
+      sortOrder: 40,
+      previewLines: <String>[
+        'Auditory spatial orientation.',
+        'Separating key sounds from background noise.',
+      ],
+      mobileControlSchema: _hidingSchemaParse.schema,
+      mobileControlSchemaReasonCode: _hidingSchemaParse.reasonCode,
+    ),
+    _GameCatalogEntry(
+      gameId: 'passive_mindfulness',
+      title: 'Passive Mindfulness',
+      description:
+          'Guided breathing and relaxation sessions designed for calm, low-intensity regulation work.',
+      targetContentVersion: 'build',
+      packageUri: '',
+      thumbnailUrl:
+          'https://firebasestorage.googleapis.com/v0/b/bloc-learning-uni.appspot.com/o/sessions_cover_photos%2FPasywnyMindfulness_cover.jpeg?alt=media&token=1df1ccd2-1c55-49e9-b90f-f3c82279b49b',
+      supportsSaveResume: true,
+      availableForPurchase: false,
+      requiresExplicitLicense: false,
+      runtimeLaunchEnabled: true,
+      sortOrder: 50,
+      previewLines: <String>[
+        'Breathing support and guided calm.',
+        'Best for lower-intensity regulation sessions.',
+      ],
+      mobileControlSchema: _passiveMindfulnessSchemaParse.schema,
+      mobileControlSchemaReasonCode: _passiveMindfulnessSchemaParse.reasonCode,
+    ),
+    _GameCatalogEntry(
+      gameId: 'active_mindfulness',
+      title: 'Active Mindfulness',
+      description:
+          'A more interactive mindfulness scene with memory, attention and regulation tasks.',
+      targetContentVersion: 'build',
+      packageUri: '',
+      thumbnailUrl:
+          'https://firebasestorage.googleapis.com/v0/b/bloc-learning-uni.appspot.com/o/sessions_cover_photos%2FAktywnyMindfulness_cover.jpeg?alt=media&token=a01efd02-b811-4b3c-94c4-669c99392f60',
+      supportsSaveResume: true,
+      availableForPurchase: false,
+      requiresExplicitLicense: false,
+      runtimeLaunchEnabled: true,
+      sortOrder: 60,
+      previewLines: <String>[
+        'Mindfulness with active tasks.',
+        'Attention, memory and regulation combined.',
+      ],
+      mobileControlSchema: _activeMindfulnessSchemaParse.schema,
+      mobileControlSchemaReasonCode: _activeMindfulnessSchemaParse.reasonCode,
+    ),
+    _GameCatalogEntry(
+      gameId: 'puzzle',
+      title: 'Puzzle with Niko',
+      description:
+          'Puzzle-based session built around visual planning, persistence and structured problem solving.',
+      targetContentVersion: 'build',
+      packageUri: '',
+      thumbnailUrl:
+          'https://firebasestorage.googleapis.com/v0/b/bloc-learning-uni.appspot.com/o/sessions_cover_photos%2FPUZZLE-fin%20Small.jpg?alt=media&token=ac3ab0e6-ffde-4e2d-aa0e-58e74e851d3f',
+      supportsSaveResume: true,
+      availableForPurchase: false,
+      requiresExplicitLicense: false,
+      runtimeLaunchEnabled: true,
+      sortOrder: 70,
+      previewLines: <String>[
+        'Visual planning and sequencing.',
+        'Structured challenge with clear goals.',
+      ],
+      mobileControlSchema: _puzzleSchemaParse.schema,
+      mobileControlSchemaReasonCode: _puzzleSchemaParse.reasonCode,
+    ),
+    _GameCatalogEntry(
+      gameId: 'both_hands',
+      title: 'Two Hands',
+      description:
+          'Bilateral interaction tasks that encourage coordinated use of both hands in VR.',
+      targetContentVersion: 'build',
+      packageUri: '',
+      thumbnailUrl: '',
+      supportsSaveResume: false,
+      availableForPurchase: false,
+      requiresExplicitLicense: false,
+      runtimeLaunchEnabled: true,
+      sortOrder: 80,
+      previewLines: <String>[
+        'Bimanual coordination in immersive space.',
+        'Designed for mirrored or alternating hand work.',
+      ],
+      mobileControlSchema: _bothHandsSchemaParse.schema,
+      mobileControlSchemaReasonCode: _bothHandsSchemaParse.reasonCode,
+    ),
+    _GameCatalogEntry(
+      gameId: 'spatial',
+      title: 'Spatial',
+      description:
+          'Spatial orientation and placement exercises with table-based interaction.',
+      targetContentVersion: 'build',
+      packageUri: '',
+      thumbnailUrl: '',
+      supportsSaveResume: false,
+      availableForPurchase: false,
+      requiresExplicitLicense: false,
+      runtimeLaunchEnabled: true,
+      sortOrder: 90,
+      previewLines: <String>[
+        'Positioning and orientation in 3D space.',
+        'Tabletop tasks with strong spatial cues.',
+      ],
+      mobileControlSchema: _spatialSchemaParse.schema,
+      mobileControlSchemaReasonCode: _spatialSchemaParse.reasonCode,
+    ),
+    _GameCatalogEntry(
+      gameId: 'christmas',
+      title: 'Christmas',
+      description:
+          'Seasonal scene pack with festive interaction, object recognition and playful sensory variety.',
+      targetContentVersion: 'build',
+      packageUri: '',
+      thumbnailUrl: '',
+      supportsSaveResume: false,
+      availableForPurchase: false,
+      requiresExplicitLicense: false,
+      runtimeLaunchEnabled: true,
+      sortOrder: 100,
+      previewLines: <String>[
+        'Festive visuals and object interaction.',
+        'A seasonal alternative for lighter sessions.',
+      ],
+      mobileControlSchema: _christmasSchemaParse.schema,
+      mobileControlSchemaReasonCode: _christmasSchemaParse.reasonCode,
     ),
   ];
 
@@ -238,7 +841,16 @@ class _ControlScreenState extends State<ControlScreen>
   static const String _demoCubeGameId = 'demo_cube_clicker';
   static const String _pulseTargetGameId = 'pulse_target_tap';
   static const Set<String> _localBundledAlwaysReadyGameIds = <String>{
-    'bilateral_markers',
+    'piniata',
+    'butterflies',
+    'coding',
+    'hiding_game',
+    'passive_mindfulness',
+    'active_mindfulness',
+    'puzzle',
+    'both_hands',
+    'spatial',
+    'christmas',
   };
   static const String _updateConfigCommandId = 'UPDATE_CONFIG';
   static const String _interruptedAutoCloseReasonCode =
@@ -278,8 +890,6 @@ class _ControlScreenState extends State<ControlScreen>
   late final GameDataService _gameDataService;
   late final OperatorIncidentPopupQueue _incidentPopupQueue;
   final Set<String> _simulatedOwnedGameIds = <String>{};
-  List<_GameCatalogEntry> _remoteGameCatalog = const <_GameCatalogEntry>[];
-  _CatalogFilterTab _catalogFilterTab = _CatalogFilterTab.installed;
 
   bool _isConnected = false;
   bool _requiresSessionDecision = false;
@@ -287,7 +897,6 @@ class _ControlScreenState extends State<ControlScreen>
   bool _isPrimaryActionInFlight = false;
   bool _allowSystemPop = false;
   bool _contentSyncInFlight = false;
-  bool _packageProbeKillSwitchEnabled = false;
   bool _autoReconnectLoopActive = false;
   bool _autoReconnectEnabled = true;
   bool _isVideoPreviewExpanded = false;
@@ -311,16 +920,13 @@ class _ControlScreenState extends State<ControlScreen>
   StreamSubscription<bool>? _connectionSubscription;
   StreamSubscription<Map<String, dynamic>>? _messageSubscription;
   StreamSubscription<DeviceInfo>? _discoverySubscription;
-  StreamSubscription<List<GameCatalogEntry>>? _gameCatalogSubscription;
   Timer? _connectionLivenessTimer;
 
   late String _activeSessionId;
   late String _selectedGameId;
   String? _remoteSessionIdPendingDecision;
-  // Session ID at the time START_GAME was sent — persists across session rollover
-  // so the VR stats panel continues to display game_runs from the correct session.
-  String? _vrStatsSessionId;
   String? _remoteActiveGameId;
+  String? _optimisticPreparedGameId;
   String? _lastSessionStateUpdateSessionId;
   String? _lastRuntimeStatusSessionId;
   TherapySessionRecord? _latestPersistedSession;
@@ -339,9 +945,22 @@ class _ControlScreenState extends State<ControlScreen>
   DevicePresenceUpdateSignal? _lastDevicePresenceSignal;
   int _lastWatchdogStaleAfterMs = 6000;
   bool _livenessRecoveryInFlight = false;
+  bool _reconnectGameRuntimeRecoveryPending = false;
+  bool _reconnectGameRuntimeRecoveryInFlight = false;
   String? _disconnectReasonOverride;
+  String? _reconnectGameRuntimeGameId;
   final TextEditingController _timelineNoteController = TextEditingController();
   bool _timelineNoteInFlight = false;
+  String _loadedJournalSessionId = '';
+  List<SessionTimelineEvent> _cachedTimelineEvents =
+      const <SessionTimelineEvent>[];
+  List<GameRunRecord> _cachedGameRuns = const <GameRunRecord>[];
+  bool _journalLoading = false;
+  bool _journalRefreshPending = false;
+  String _pendingJournalSessionId = '';
+  String _pendingJournalReason = 'PENDING';
+  String? _journalLoadError;
+  String _lastPersistedWorkflowCheckpointFingerprint = '';
   String? _deferredHandoffSessionId;
   DateTime? _deferredHandoffMarkedAtUtc;
   String? _deferredHandoffReasonCode;
@@ -379,9 +998,13 @@ class _ControlScreenState extends State<ControlScreen>
 
     _connection.setDiscoveryService(widget.discoveryService);
     _gameDataService = GameDataService(_connection);
-    _startGameCatalogSubscription();
+    _gameDataService.onJournalCheckpointCommitted =
+        (String sessionId) => _refreshSessionJournal(
+              reason: 'GAME_DATA_PERSISTED',
+              sessionIdOverride: sessionId,
+            );
     _activeSessionId = _buildLocalSessionId();
-    _selectedGameId = _resolveInitialGameId();
+    _selectedGameId = '';
     _bootstrapLocalContentStates();
 
     _setupConnectionListeners();
@@ -410,8 +1033,8 @@ class _ControlScreenState extends State<ControlScreen>
     _connectionSubscription?.cancel();
     _messageSubscription?.cancel();
     _discoverySubscription?.cancel();
-    _gameCatalogSubscription?.cancel();
     _connectionLivenessTimer?.cancel();
+    _gameDataService.onJournalCheckpointCommitted = null;
     unawaited(ForegroundServiceBridge.stop());
     unawaited(_gameDataService.dispose());
     _connection.dispose();
@@ -432,6 +1055,7 @@ class _ControlScreenState extends State<ControlScreen>
           _sessionAttachReady = false;
           _lastSentPreviewBitrateKbps = null;
           _lastDevicePresenceSignal = null;
+          _optimisticPreparedGameId = null;
           _mediaPreviewState = MediaPreviewState.waitingForStream;
           _lastMediaPreviewStateAtUtc = DateTime.now().toUtc();
         } else if (!wasConnected) {
@@ -451,7 +1075,6 @@ class _ControlScreenState extends State<ControlScreen>
         _hasConnectedAtLeastOnce = true;
 
         unawaited(_loadTherapistSessionSettings());
-        unawaited(_refreshPersistedSessionSnapshot(triggerPrompt: true));
         if (!wasConnected) {
           final connectionEventType = attachReason == 'INITIAL_CONNECT'
               ? 'CONTROLLER_CONNECTED'
@@ -479,6 +1102,7 @@ class _ControlScreenState extends State<ControlScreen>
         if (wasConnected) {
           final disconnectReason = _disconnectReasonOverride ?? 'TCP_LINK_LOST';
           _disconnectReasonOverride = null;
+          _armReconnectGameRuntimeRecovery(source: disconnectReason);
           unawaited(
             _recordConnectionLifecycleEvent(
               eventType: 'CONTROLLER_DISCONNECTED',
@@ -569,6 +1193,9 @@ class _ControlScreenState extends State<ControlScreen>
                 _optimisticRuntimeActive = false;
                 _optimisticRuntimePaused = false;
                 _remoteActiveGameId = null;
+                _lastDevicePresenceSignal = _clearActiveGameFromPresenceSignal(
+                  _lastDevicePresenceSignal,
+                );
               } else if (sessionUpdate.state ==
                   SessionLifecycleState.inProgress) {
                 _optimisticRuntimeActive = true;
@@ -578,7 +1205,11 @@ class _ControlScreenState extends State<ControlScreen>
                 _optimisticRuntimePaused = true;
               } else if (sessionUpdate.state ==
                   SessionLifecycleState.interrupted) {
-                _optimisticRuntimeActive = true;
+                _optimisticRuntimeActive = false;
+                _optimisticRuntimePaused = false;
+                _lastDevicePresenceSignal = _clearActiveGameFromPresenceSignal(
+                  _lastDevicePresenceSignal,
+                );
               }
             }
           }
@@ -596,13 +1227,21 @@ class _ControlScreenState extends State<ControlScreen>
                 _optimisticRuntimePaused = true;
                 break;
               case TherapistRuntimeStatus.interrupted:
-                _optimisticRuntimeActive = true;
+                _optimisticRuntimeActive = false;
+                _optimisticRuntimePaused = false;
+                _lastDevicePresenceSignal = _clearActiveGameFromPresenceSignal(
+                  _lastDevicePresenceSignal,
+                );
                 break;
               case TherapistRuntimeStatus.syncPending:
                 // Sync backlog is not evidence of an unfinished in-progress game.
                 break;
               case TherapistRuntimeStatus.connected:
+                _optimisticRuntimeActive = false;
                 _optimisticRuntimePaused = false;
+                _lastDevicePresenceSignal = _clearActiveGameFromPresenceSignal(
+                  _lastDevicePresenceSignal,
+                );
                 break;
             }
           }
@@ -611,7 +1250,6 @@ class _ControlScreenState extends State<ControlScreen>
             final activeGameId = watchdogHeartbeat.activeGameId.trim();
             if (activeGameId.isNotEmpty) {
               _remoteActiveGameId = activeGameId;
-              _optimisticRuntimeActive = true;
             } else {
               _remoteActiveGameId = null;
               if (sessionUpdate == null && runtimeUpdate == null) {
@@ -623,10 +1261,17 @@ class _ControlScreenState extends State<ControlScreen>
             final activeGameState =
                 watchdogHeartbeat.activeGameState.trim().toUpperCase();
             if (activeGameState == 'PAUSED') {
+              _optimisticRuntimeActive = true;
               _optimisticRuntimePaused = true;
             } else if (activeGameState == 'PLAYING' ||
                 activeGameState == 'RUNNING' ||
                 activeGameState == 'IN_PROGRESS') {
+              _optimisticRuntimeActive = true;
+              _optimisticRuntimePaused = false;
+            } else if (activeGameState.isNotEmpty &&
+                sessionUpdate == null &&
+                runtimeUpdate == null) {
+              _optimisticRuntimeActive = false;
               _optimisticRuntimePaused = false;
             }
 
@@ -1124,11 +1769,51 @@ class _ControlScreenState extends State<ControlScreen>
       );
 
       if (_contentDeliveryEnabled) {
-        unawaited(_syncContentCatalog(silent: true));
+        await _syncContentCatalog(silent: true);
       }
       unawaited(
         _syncPreviewBitrateToHeadset(reasonCode: 'SESSION_ATTACH_ACK'),
       );
+      if (_reconnectGameRuntimeRecoveryPending) {
+        final recoveryGameId = _resolveReconnectGameRuntimeGameId();
+        unawaited(
+          Future<void>.delayed(const Duration(milliseconds: 2200))
+              .then((_) async {
+            if (!mounted ||
+                !_isConnected ||
+                !_sessionAttachReady ||
+                !_reconnectGameRuntimeRecoveryPending) {
+              return;
+            }
+
+            if (_hasRecoveredRuntimeSignalsForGame(recoveryGameId)) {
+              _clearReconnectGameRuntimeRecovery(
+                reasonCode: 'RUNTIME_ALREADY_RECOVERED_AFTER_ATTACH',
+              );
+              return;
+            }
+
+            final ready = await _ensurePreparedGameRuntimeAfterReconnect(
+              trigger: 'SESSION_ATTACH_ACK',
+            );
+            if (!mounted || !ready) {
+              return;
+            }
+
+            final gameTitle = _resolveCatalogGameTitle(recoveryGameId);
+            final recoveryLabel =
+                gameTitle.isEmpty ? 'the selected game' : gameTitle;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Headset restarted. Reloaded $recoveryLabel. Tap Start to continue.',
+                ),
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }),
+        );
+      }
     } catch (e) {
       if (!mounted) {
         return;
@@ -1260,33 +1945,10 @@ class _ControlScreenState extends State<ControlScreen>
     required String reasonCode,
     String? sessionIdOverride,
   }) async {
-    // Use _resolveTimelineSessionId (prioritises mobile-* _activeSessionId)
-    // instead of _resolveAttachTargetSessionId which may return a Quest UUID.
-    final sessionId =
-        (sessionIdOverride ?? _resolveTimelineSessionId()).trim();
-    if (sessionId.isEmpty) {
-      return;
-    }
-
-    final therapistId = _resolveActorTherapistId();
-
-    try {
-      await SessionJournalService.appendSessionEvent(
-        sessionId: sessionId,
-        studentId: widget.student.id,
-        therapistId: therapistId,
-        eventType: eventType,
-        gameId: _selectedGameId,
-        details: <String, dynamic>{
-          'reasonCode': reasonCode,
-          'transportConnected': _isConnected,
-        },
-      );
-    } catch (e) {
-      debugPrint(
-        '[ControlScreen] Connection lifecycle event persist failed: event=$eventType, reason=$reasonCode, error=$e',
-      );
-    }
+    debugPrint(
+      '[ControlScreen] Connection lifecycle event kept local-only: '
+      'event=$eventType reason=$reasonCode session=${sessionIdOverride ?? _resolveTimelineSessionId()}',
+    );
   }
 
   Future<void> _appendOperationalTimelineEvent({
@@ -1298,43 +1960,10 @@ class _ControlScreenState extends State<ControlScreen>
     String discriminator = '',
     Map<String, dynamic> details = const <String, dynamic>{},
   }) async {
-    final sessionId = (sessionIdOverride ?? _resolveTimelineSessionId()).trim();
-    if (sessionId.isEmpty) {
-      return;
-    }
-
-    final eventTime = (eventAtUtc ?? DateTime.now().toUtc()).toUtc();
-    final payloadDetails = <String, dynamic>{
-      ...details,
-      if (reasonCode.trim().isNotEmpty) 'reasonCode': reasonCode.trim(),
-    };
-    final timelineEventId = SessionJournalService.buildTimelineEventId(
-      sessionId: sessionId,
-      eventType: eventType,
-      source: source,
-      eventAtUnixMs: eventTime.millisecondsSinceEpoch,
-      details: payloadDetails,
-      discriminator: discriminator,
+    debugPrint(
+      '[ControlScreen] Operational timeline event kept local-only: '
+      'event=$eventType reason=$reasonCode source=$source discriminator=$discriminator details=$details',
     );
-
-    try {
-      await SessionJournalService.appendSessionEvent(
-        sessionId: sessionId,
-        studentId: widget.student.id,
-        therapistId: _resolveActorTherapistId(),
-        eventType: eventType,
-        gameId: _selectedGameId,
-        source: source,
-        timelineEventId: timelineEventId,
-        eventAtUtc: eventTime,
-        details: payloadDetails,
-      );
-    } catch (e) {
-      debugPrint(
-        '[ControlScreen] Operational timeline event persist failed: '
-        'event=$eventType reason=$reasonCode error=$e',
-      );
-    }
   }
 
   Future<void> _recordReconnectAttemptEvent({
@@ -1418,54 +2047,11 @@ class _ControlScreenState extends State<ControlScreen>
   Future<void> _persistDevicePresenceSignal(
     DevicePresenceUpdateSignal signal,
   ) async {
-    final incomingSessionId = signal.sessionId.trim();
-    if (incomingSessionId.isEmpty) {
-      return;
-    }
-    // Remap Quest's UUID to the mobile's active session ID.
-    final activeSessionId = _activeSessionId.trim();
-    final sessionId =
-        (activeSessionId.isNotEmpty && incomingSessionId != activeSessionId)
-            ? activeSessionId
-            : incomingSessionId;
-
-    final eventAtUtc = signal.changedAtUtc.toUtc();
-    final details = <String, dynamic>{
-      'presenceState': signal.presenceState.wireValue,
-      'reasonCode': signal.reasonCode,
-      'appPaused': signal.appPaused,
-      'appFocused': signal.appFocused,
-      'hasTcpClient': signal.hasTcpClient,
-      'activeGameId': signal.activeGameId,
-      'activeGameState': signal.activeGameState,
-    };
-    final timelineEventId = SessionJournalService.buildTimelineEventId(
-      sessionId: sessionId,
-      eventType: 'VR_DEVICE_PRESENCE_UPDATE',
-      source: 'vr_runtime',
-      eventAtUnixMs: eventAtUtc.millisecondsSinceEpoch,
-      details: details,
-      discriminator: signal.presenceState.wireValue,
+    debugPrint(
+      '[ControlScreen] Device presence kept local-only: '
+      'presence=${signal.presenceState.wireValue} reason=${signal.reasonCode} '
+      'activeGame=${signal.activeGameId}',
     );
-
-    try {
-      await SessionJournalService.appendSessionEvent(
-        sessionId: sessionId,
-        studentId: widget.student.id,
-        therapistId: _resolveActorTherapistId(),
-        eventType: 'VR_DEVICE_PRESENCE_UPDATE',
-        gameId: _selectedGameId,
-        source: 'vr_runtime',
-        timelineEventId: timelineEventId,
-        eventAtUtc: eventAtUtc,
-        details: details,
-      );
-    } catch (e) {
-      debugPrint(
-        '[ControlScreen] Device presence timeline persist failed: '
-        'session=$sessionId error=$e',
-      );
-    }
   }
 
   Future<void> _recordMobileLifecycleEvent(AppLifecycleState state) async {
@@ -1485,13 +2071,13 @@ class _ControlScreenState extends State<ControlScreen>
       return 'APP_BACKGROUND';
     }();
 
-    final nowUtc = DateTime.now().toUtc();
-    await _appendOperationalTimelineEvent(
-      eventType: 'MOBILE_LIFECYCLE_STATE',
+    if (state == AppLifecycleState.resumed) {
+      return;
+    }
+
+    await _persistSessionCheckpoint(
+      eventType: 'MOBILE_LIFECYCLE_CHECKPOINT',
       reasonCode: reasonCode,
-      source: 'mobile_controller',
-      eventAtUtc: nowUtc,
-      discriminator: '${state.name}_${nowUtc.microsecondsSinceEpoch}',
       details: <String, dynamic>{
         'lifecycleState': state.name,
       },
@@ -1527,6 +2113,148 @@ class _ControlScreenState extends State<ControlScreen>
   bool _wasSessionRecentlyEnded(String sessionId) {
     _pruneRecentlyEndedSessions();
     return _recentlyEndedSessionIds.containsKey(sessionId);
+  }
+
+  void _armReconnectGameRuntimeRecovery({required String source}) {
+    final candidateGameId = (_remoteActiveGameId?.trim().isNotEmpty ?? false)
+        ? _remoteActiveGameId!.trim()
+        : _selectedGameId.trim();
+    final shouldRecoverPreparedGame = candidateGameId.isNotEmpty &&
+        _isKnownGameId(candidateGameId) &&
+        _workflowStep == _WorkflowStep.gameSetup;
+    if (!shouldRecoverPreparedGame) {
+      return;
+    }
+
+    _reconnectGameRuntimeRecoveryPending = true;
+    _reconnectGameRuntimeGameId = candidateGameId;
+    debugPrint(
+      '[ControlScreen] Armed reconnect game runtime recovery: '
+      'source=$source game=$candidateGameId',
+    );
+  }
+
+  void _clearReconnectGameRuntimeRecovery({required String reasonCode}) {
+    _reconnectGameRuntimeRecoveryPending = false;
+    _reconnectGameRuntimeRecoveryInFlight = false;
+    _reconnectGameRuntimeGameId = null;
+    debugPrint(
+      '[ControlScreen] Cleared reconnect game runtime recovery: '
+      'reason=$reasonCode',
+    );
+  }
+
+  String _resolveReconnectGameRuntimeGameId() {
+    final pendingGameId = _reconnectGameRuntimeGameId?.trim() ?? '';
+    if (pendingGameId.isNotEmpty) {
+      return pendingGameId;
+    }
+
+    return _selectedGameId.trim();
+  }
+
+  bool _hasFreshRecoveredGameRuntime(String gameId) {
+    final normalizedGameId = gameId.trim();
+    if (normalizedGameId.isEmpty) {
+      return false;
+    }
+
+    final devicePresenceGameId =
+        _lastDevicePresenceSignal?.activeGameId.trim() ?? '';
+    return devicePresenceGameId == normalizedGameId;
+  }
+
+  bool _hasRecoveredRuntimeSignalsForGame(String gameId) {
+    final normalizedGameId = gameId.trim();
+    if (normalizedGameId.isEmpty) {
+      return false;
+    }
+
+    final presenceGameId = _lastDevicePresenceSignal?.activeGameId.trim() ?? '';
+    if (presenceGameId == normalizedGameId) {
+      return true;
+    }
+
+    final remoteGameId = _remoteActiveGameId?.trim() ?? '';
+    if (remoteGameId == normalizedGameId) {
+      return true;
+    }
+
+    return _runtimeStatus == TherapistRuntimeStatus.playing ||
+        _runtimeStatus == TherapistRuntimeStatus.paused ||
+        _sessionLifecycleState == SessionLifecycleState.inProgress ||
+        _sessionLifecycleState == SessionLifecycleState.paused;
+  }
+
+  Future<bool> _ensurePreparedGameRuntimeAfterReconnect({
+    required String trigger,
+  }) async {
+    if (!_reconnectGameRuntimeRecoveryPending) {
+      return true;
+    }
+
+    while (_reconnectGameRuntimeRecoveryInFlight) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+
+    if (!_reconnectGameRuntimeRecoveryPending) {
+      return true;
+    }
+
+    if (!_isConnected || !_sessionAttachReady || _allowSystemPop) {
+      return false;
+    }
+
+    final recoveryGameId = _resolveReconnectGameRuntimeGameId();
+    if (recoveryGameId.isEmpty || !_isKnownGameId(recoveryGameId)) {
+      _clearReconnectGameRuntimeRecovery(
+          reasonCode: 'RECOVERY_GAME_ID_INVALID');
+      return false;
+    }
+
+    if (_hasRecoveredRuntimeSignalsForGame(recoveryGameId)) {
+      _clearReconnectGameRuntimeRecovery(
+        reasonCode: 'RUNTIME_ALREADY_RECOVERED',
+      );
+      return true;
+    }
+
+    if ((_selectedGameId.trim().isEmpty || !_isKnownGameId(_selectedGameId)) &&
+        mounted) {
+      setState(() {
+        _selectedGameId = recoveryGameId;
+      });
+    }
+
+    _reconnectGameRuntimeRecoveryInFlight = true;
+    try {
+      await _prepareSelectedGameScene(
+        reasonCode: 'RECONNECT_RUNTIME_RECOVERY_$trigger',
+        gameIdOverride: recoveryGameId,
+      );
+
+      final deadline = DateTime.now().toUtc().add(const Duration(seconds: 5));
+      while (DateTime.now().toUtc().isBefore(deadline)) {
+        if (!_isConnected || !_sessionAttachReady) {
+          return false;
+        }
+        if (_hasFreshRecoveredGameRuntime(recoveryGameId)) {
+          _clearReconnectGameRuntimeRecovery(
+            reasonCode: 'RECONNECT_RUNTIME_RECOVERY_READY',
+          );
+          return true;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+      }
+
+      debugPrint(
+        '[ControlScreen] Reconnect game runtime recovery timed out: '
+        'trigger=$trigger game=$recoveryGameId',
+      );
+      return false;
+    } finally {
+      _reconnectGameRuntimeRecoveryInFlight = false;
+    }
   }
 
   bool _isRuntimeStatusNonTerminal(TherapistRuntimeStatus? status) {
@@ -1802,80 +2530,32 @@ class _ControlScreenState extends State<ControlScreen>
     }
   }
 
-  Future<void> _attemptUnderWindowRecovery(
-    String remoteSessionId, {
-    required String source,
+  Future<void> _prepareSelectedGameScene({
+    required String reasonCode,
+    String? gameIdOverride,
   }) async {
-    // Mobile-only arch: Firestore session IDs are always mobile-* strings.
-    // If remoteSessionId is already a mobile-* doc (came from Firestore persisted
-    // session), use it directly. If it's a Quest UUID (came from a runtime signal),
-    // keep the existing _activeSessionId so we don't overwrite the mobile-* doc.
-    final existingMobileId = _activeSessionId.trim();
-    final mobileSessionId = remoteSessionId.startsWith('mobile-')
-        ? remoteSessionId
-        : existingMobileId.isNotEmpty
-            ? existingMobileId
-            : remoteSessionId;
-
-    _logSessionDecision(
-      source: source,
-      decision: 'AUTO_ATTACH_UNDER_WINDOW',
-      sessionId: mobileSessionId,
-      reason: 'RECOVERY_UNDER_WINDOW',
-    );
-
-    if (mounted) {
-      setState(() {
-        _requiresSessionDecision = false;
-        _remoteSessionIdPendingDecision = null;
-        _activeSessionId = mobileSessionId;
-      });
-    } else {
-      _requiresSessionDecision = false;
-      _remoteSessionIdPendingDecision = null;
-      _activeSessionId = mobileSessionId;
-    }
-    _gameDataService.attachSession(
-      sessionId: mobileSessionId,
-      studentId: widget.student.id,
-      therapistId: _resolveActorTherapistId(),
-    );
-    _clearDeferredHandoff(
-      sessionId: remoteSessionId,
-      source: source,
-      reasonCode: 'RECOVERY_UNDER_WINDOW',
-    );
-
-    if (!_isConnected) {
+    if (!_isConnected || _allowSystemPop) {
       return;
     }
 
-    await _ensureSessionAttached(
-      reasonCode: 'RECOVERY_UNDER_WINDOW',
-      force: true,
-      sessionIdOverride: remoteSessionId,
-    );
-    if (!mounted || !_sessionAttachReady) {
+    final selectedGameId = (gameIdOverride ?? _selectedGameId).trim();
+    if (selectedGameId.isEmpty || !_isKnownGameId(selectedGameId)) {
       return;
     }
 
-    final selectedGameId = _selectedGameId.trim();
-    setState(() {
-      _lastConnectionLostAtUtc = null;
-      // If a game is already selected, drop straight into game setup so therapist
-      // can immediately start the game after reconnect (auto-load on Quest via PREPARE_GAME).
-      if (selectedGameId.isNotEmpty && _workflowStep == _WorkflowStep.gameCatalog) {
-        _workflowStep = _WorkflowStep.gameSetup;
-      }
-    });
-
-    // Pre-load the game scene on Quest so START_GAME executes instantly.
-    if (selectedGameId.isNotEmpty) {
-      unawaited(
-        _connection.sendCommand(
-          GameCommandIds.prepareGame,
-          <String, dynamic>{'gameId': selectedGameId},
-        ),
+    try {
+      debugPrint(
+        '[ControlScreen] Sending PREPARE_GAME for game=$selectedGameId '
+        'reason=$reasonCode',
+      );
+      await _connection.sendCommand(
+        GameCommandIds.prepareGame,
+        <String, dynamic>{'gameId': selectedGameId},
+      );
+    } catch (e) {
+      debugPrint(
+        '[ControlScreen] PREPARE_GAME dispatch failed: '
+        'game=$selectedGameId reason=$reasonCode error=$e',
       );
     }
   }
@@ -2111,8 +2791,7 @@ class _ControlScreenState extends State<ControlScreen>
       _enqueueIncidentAlert(
         title: 'Preview bitrate sync failed',
         message: 'Could not apply preview bitrate: $summary',
-        reasonCode:
-            OpsErrorCatalog.tryExtractReasonCode(e) ??
+        reasonCode: OpsErrorCatalog.tryExtractReasonCode(e) ??
             'WEBRTC_VIDEO_BITRATE_SYNC_FAILED',
         severity: OperatorIncidentSeverity.warning,
       );
@@ -2393,69 +3072,13 @@ class _ControlScreenState extends State<ControlScreen>
     return false;
   }
 
-  Map<String, dynamic> _buildSelectedGameConfigSnapshot() {
-    final schemaSnapshot = _buildSchemaDrivenConfigSnapshot();
-    if (schemaSnapshot != null) {
-      return schemaSnapshot;
-    }
-
-    if (_isDemoCubeGameSelected) {
-      return <String, dynamic>{
-        'gameConfigType': 'demo_cube_config_v1',
-        'gameConfigVersion': 1,
-        'cubeCount': _demoCubeCount,
-        'cubeSpeed': double.parse(_demoCubeSpeed.toStringAsFixed(2)),
-        'levelMode': _demoLevelMode,
-      };
-    }
-
-    if (_isPulseTargetGameSelected) {
-      final adaptiveDifficultySensitivity = double.parse(
-        _therapistSessionSettings.adaptiveDifficultySensitivity
-            .toStringAsFixed(2),
-      );
-      return <String, dynamic>{
-        'gameConfigType': 'pulse_targets_config_v1',
-        'gameConfigVersion': 1,
-        'targetCount': _pulseTargetCount,
-        'targetSpeed': double.parse(_pulseTargetSpeed.toStringAsFixed(2)),
-        'targetScale': double.parse(_pulseTargetScale.toStringAsFixed(2)),
-        'adaptiveDifficultyEnabled':
-            _therapistSessionSettings.adaptiveDifficultyEnabled,
-        'adaptiveDifficultySensitivity': adaptiveDifficultySensitivity,
-        'adaptiveDifficultyLevel': _resolveAdaptiveDifficultyLevel(),
-        'labelPipelineEnabled': _therapistSessionSettings.labelPipelineEnabled,
-      };
-    }
-
-    return <String, dynamic>{};
-  }
-
-  Map<String, dynamic>? _buildSchemaDrivenConfigSnapshot() {
-    final schema = _selectedGameEntry.mobileControlSchema;
-    if (schema == null) {
-      return null;
-    }
-
-    final gameConfig = _buildSchemaDrivenGameConfigPayload(
-      schema,
-      emitForUpdateConfig: false,
-    );
-
-    return <String, dynamic>{
-      'gameConfigType': _resolveSchemaGameConfigType(schema),
-      'gameConfigVersion': _resolveSchemaGameConfigVersion(schema),
-      ...gameConfig,
-    };
-  }
-
   Map<String, dynamic> _buildSchemaDrivenGameConfigPayload(
     MobileControlSchema schema, {
     required bool emitForUpdateConfig,
   }) {
     _ensureDynamicControlValuesForSelectedSchema();
 
-    final payload = <String, dynamic>{};
+    final payload = _resolveSchemaStaticPayloadFields(schema);
     for (final control in schema.controls) {
       if (control.isButton) {
         continue;
@@ -2485,6 +3108,47 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     return payload;
+  }
+
+  Map<String, dynamic> _resolveSchemaStaticPayloadFields(
+    MobileControlSchema schema,
+  ) {
+    final resolved =
+        _resolveSchemaStaticPayloadValue(schema.payload.staticFields);
+    if (resolved is Map<String, dynamic>) {
+      return Map<String, dynamic>.from(resolved);
+    }
+    if (resolved is Map) {
+      return resolved.map(
+        (key, value) => MapEntry(key.toString(), value),
+      );
+    }
+    return <String, dynamic>{};
+  }
+
+  dynamic _resolveSchemaStaticPayloadValue(dynamic value) {
+    if (value is String) {
+      final normalized = value.trim();
+      if (normalized == r'$deviceLocale') {
+        return Localizations.maybeLocaleOf(context)?.languageCode ??
+            WidgetsBinding.instance.platformDispatcher.locale.languageCode;
+      }
+      return value;
+    }
+    if (value is List) {
+      return value
+          .map<dynamic>((entry) => _resolveSchemaStaticPayloadValue(entry))
+          .toList(growable: false);
+    }
+    if (value is Map) {
+      return value.map(
+        (key, entry) => MapEntry(
+          key.toString(),
+          _resolveSchemaStaticPayloadValue(entry),
+        ),
+      );
+    }
+    return value;
   }
 
   String _resolveSchemaGameConfigType(MobileControlSchema schema) {
@@ -2618,11 +3282,14 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     final persistedGameId = persisted.latestGameId.trim();
-    final shouldAdoptPersistedGameSelection = persisted.requiresHandoffDecision;
     final activeSessionId = _activeSessionId.trim();
-    final canAdoptPersistedSession = activeSessionId.isEmpty ||
-        activeSessionId.startsWith('mobile-') ||
-        activeSessionId == persistedSessionId;
+    final canAdoptPersistedSession =
+        activeSessionId.isEmpty || activeSessionId == persistedSessionId;
+    final isCurrentActivePersistedSession =
+        activeSessionId.isNotEmpty && activeSessionId == persistedSessionId;
+    final shouldAdoptPersistedGameSelection =
+        !persisted.requiresHandoffDecision &&
+            activeSessionId == persistedSessionId;
 
     var shouldSetState = false;
 
@@ -2630,8 +3297,14 @@ class _ControlScreenState extends State<ControlScreen>
     // Keep mismatch so decision gate can prompt therapist (resume/start new).
     // Mobile-only arch: never adopt a Quest UUID as _activeSessionId.
     // Only adopt mobile-* session IDs (generated by _buildLocalSessionId).
+    //
+    // CRITICAL: if we are already attached (_sessionAttachReady == true), do NOT
+    // overwrite _activeSessionId — Quest is already sending heartbeats under the
+    // current session ID. Overwriting here causes an immediate watchdog mismatch
+    // and a spurious disconnect on every first connection.
     if (!persisted.requiresHandoffDecision &&
         !persisted.isTerminal &&
+        !_sessionAttachReady &&
         canAdoptPersistedSession &&
         activeSessionId != persistedSessionId &&
         persistedSessionId.startsWith('mobile-')) {
@@ -2652,7 +3325,8 @@ class _ControlScreenState extends State<ControlScreen>
         _isGameRuntimeActive || _isPrimaryActionInFlight;
     // Keep therapist in the current workflow after game completion.
     // Return to catalog should be explicit (back arrow), not automatic.
-    final shouldPreferCatalog = persisted.requiresHandoffDecision;
+    final shouldPreferCatalog =
+        persisted.requiresHandoffDecision && !isCurrentActivePersistedSession;
     if (shouldPreferCatalog &&
         !hasRuntimeOrActionInProgress &&
         _workflowStep != _WorkflowStep.gameCatalog) {
@@ -2664,6 +3338,313 @@ class _ControlScreenState extends State<ControlScreen>
     if (shouldSetState && mounted) {
       setState(() {});
     }
+  }
+
+  SessionLifecycleState _deriveCheckpointSessionState() {
+    final sessionId = _resolveTimelineSessionId().trim();
+    final persisted = _latestPersistedSession;
+    final persistedState =
+        persisted != null && persisted.sessionId.trim() == sessionId
+            ? persisted.state
+            : null;
+
+    if (persistedState != null &&
+        SessionRecoveryPolicy.isTerminalState(persistedState)) {
+      return persistedState;
+    }
+
+    if (_optimisticRuntimePaused ||
+        _runtimeStatus == TherapistRuntimeStatus.paused) {
+      return SessionLifecycleState.paused;
+    }
+
+    if (_isGameRuntimeActive) {
+      return SessionLifecycleState.inProgress;
+    }
+
+    if (persistedState != null &&
+        !SessionRecoveryPolicy.isTerminalState(persistedState)) {
+      return persistedState;
+    }
+
+    return SessionLifecycleState.created;
+  }
+
+  Future<void> _refreshSessionJournal({
+    String reason = 'MANUAL',
+    String? sessionIdOverride,
+  }) async {
+    final sessionId = (sessionIdOverride ?? _resolveTimelineSessionId()).trim();
+    if (sessionId.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _loadedJournalSessionId = '';
+          _cachedTimelineEvents = const <SessionTimelineEvent>[];
+          _cachedGameRuns = const <GameRunRecord>[];
+          _journalLoading = false;
+          _journalLoadError = null;
+        });
+      }
+      return;
+    }
+
+    if (_journalLoading && _loadedJournalSessionId == sessionId) {
+      _journalRefreshPending = true;
+      _pendingJournalSessionId = sessionId;
+      _pendingJournalReason = reason;
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _loadedJournalSessionId = sessionId;
+        _journalLoading = true;
+        _journalLoadError = null;
+      });
+    }
+
+    try {
+      final results = await Future.wait<Object>([
+        SessionJournalService.fetchSessionTimeline(
+          sessionId: sessionId,
+          limit: 40,
+        ),
+        SessionJournalService.fetchGameRuns(sessionId: sessionId),
+      ]);
+
+      if (!mounted) {
+        return;
+      }
+
+      final currentSessionId =
+          (sessionIdOverride ?? _resolveTimelineSessionId()).trim();
+      if (currentSessionId != sessionId) {
+        if (_loadedJournalSessionId == sessionId) {
+          setState(() {
+            _journalLoading = false;
+          });
+        }
+        return;
+      }
+
+      setState(() {
+        _cachedTimelineEvents = results[0] as List<SessionTimelineEvent>;
+        _cachedGameRuns = results[1] as List<GameRunRecord>;
+        _journalLoading = false;
+        _journalLoadError = null;
+      });
+    } catch (e) {
+      debugPrint(
+        '[ControlScreen] Session journal refresh failed: '
+        'reason=$reason session=$sessionId error=$e',
+      );
+      if (!mounted || _loadedJournalSessionId != sessionId) {
+        return;
+      }
+      final lowerError = e.toString().toLowerCase();
+      final suppressPermissionError =
+          lowerError.contains('permission-denied') ||
+              lowerError.contains('permission denied');
+      setState(() {
+        _journalLoading = false;
+        _journalLoadError = suppressPermissionError ? null : e.toString();
+      });
+    }
+
+    if (_journalRefreshPending) {
+      final pendingSessionId = _pendingJournalSessionId.trim();
+      final pendingReason = _pendingJournalReason;
+      _journalRefreshPending = false;
+      _pendingJournalSessionId = '';
+      _pendingJournalReason = 'PENDING';
+      if (pendingSessionId.isNotEmpty && mounted) {
+        unawaited(
+          _refreshSessionJournal(
+            reason: pendingReason,
+            sessionIdOverride: pendingSessionId,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _persistSessionCheckpoint({
+    required String eventType,
+    required String reasonCode,
+    _WorkflowStep? workflowStepOverride,
+    String? sessionIdOverride,
+    String? gameIdOverride,
+    Map<String, dynamic> details = const <String, dynamic>{},
+    bool includeTimelineEvent = true,
+    bool refreshJournalAfterWrite = false,
+  }) async {
+    final sessionId = (sessionIdOverride ?? _resolveTimelineSessionId()).trim();
+    if (sessionId.isEmpty) {
+      return;
+    }
+
+    final workflowStep = workflowStepOverride ?? _workflowStep;
+    final gameId = (gameIdOverride ?? _selectedGameId).trim();
+    final fingerprint = [
+      sessionId,
+      eventType,
+      reasonCode,
+      workflowStep.name,
+      gameId,
+    ].join('|');
+
+    if (eventType == 'MOBILE_SCREEN_CHANGED' &&
+        _lastPersistedWorkflowCheckpointFingerprint == fingerprint) {
+      return;
+    }
+
+    try {
+      await SessionJournalService.upsertSessionState(
+        sessionId: sessionId,
+        studentId: widget.student.id,
+        therapistId: _resolveActorTherapistId(),
+        state: _deriveCheckpointSessionState(),
+        latestGameId: gameId,
+        reasonCode: reasonCode,
+        metadata: <String, dynamic>{
+          'origin': 'mobile_checkpoint',
+          'workflowStep': workflowStep.name,
+          'transportConnected': _isConnected,
+          'runtimeStatus': _runtimeStatus?.name ?? '',
+          'runtimeActive': _isGameRuntimeActive,
+          'selectedGameId': gameId,
+        },
+      );
+
+      if (includeTimelineEvent) {
+        await SessionJournalService.appendSessionEvent(
+          sessionId: sessionId,
+          studentId: widget.student.id,
+          therapistId: _resolveActorTherapistId(),
+          eventType: eventType,
+          gameId: gameId,
+          source: 'mobile_controller',
+          details: <String, dynamic>{
+            'reasonCode': reasonCode,
+            'workflowStep': workflowStep.name,
+            ...details,
+          },
+        );
+      }
+
+      if (eventType == 'MOBILE_SCREEN_CHANGED') {
+        _lastPersistedWorkflowCheckpointFingerprint = fingerprint;
+      }
+
+      if (refreshJournalAfterWrite) {
+        await _refreshSessionJournal(
+          reason: eventType,
+          sessionIdOverride: sessionId,
+        );
+      }
+    } catch (e) {
+      debugPrint(
+        '[ControlScreen] Session checkpoint persist failed: '
+        'event=$eventType reason=$reasonCode session=$sessionId error=$e',
+      );
+    }
+  }
+
+  Future<void> _persistWorkflowCheckpoint({
+    required _WorkflowStep workflowStep,
+    required String reasonCode,
+    String? gameIdOverride,
+  }) {
+    return _persistSessionCheckpoint(
+      eventType: 'MOBILE_SCREEN_CHANGED',
+      reasonCode: reasonCode,
+      workflowStepOverride: workflowStep,
+      gameIdOverride: gameIdOverride,
+      details: <String, dynamic>{
+        'screen': workflowStep.name,
+      },
+      refreshJournalAfterWrite: true,
+    );
+  }
+
+  bool _isLocalSnapshotTerminalState(SessionLifecycleState state) {
+    return SessionRecoveryPolicy.isTerminalState(state);
+  }
+
+  bool _isLocalSnapshotUnfinishedState(SessionLifecycleState state) {
+    switch (state) {
+      case SessionLifecycleState.inProgress:
+      case SessionLifecycleState.paused:
+      case SessionLifecycleState.interrupted:
+        return true;
+      case SessionLifecycleState.created:
+      case SessionLifecycleState.completed:
+      case SessionLifecycleState.abortedByTherapist:
+      case SessionLifecycleState.failedTechnical:
+        return false;
+    }
+  }
+
+  TherapySessionRecord _buildLocalPersistedSessionSnapshot({
+    required String sessionId,
+    required SessionLifecycleState state,
+    String latestGameId = '',
+    String reasonCode = '',
+    Map<String, dynamic> metadata = const <String, dynamic>{},
+    DateTime? startedAtUtc,
+    DateTime? interruptedAtUtc,
+    DateTime? endedAtUtc,
+    DateTime? updatedAtUtc,
+  }) {
+    final normalizedSessionId = sessionId.trim();
+    final therapistId = _resolveActorTherapistId();
+    final studentId = widget.student.id;
+    final normalizedGameId = latestGameId.trim();
+    final nowUtc = (updatedAtUtc ?? DateTime.now().toUtc()).toUtc();
+    final isTerminal = _isLocalSnapshotTerminalState(state);
+    final isUnfinished = _isLocalSnapshotUnfinishedState(state);
+    final resolvedStartedAtUtc = startedAtUtc ?? nowUtc;
+
+    return TherapySessionRecord(
+      sessionId: normalizedSessionId,
+      studentId: studentId,
+      therapistId: therapistId,
+      ownerKey: SessionOwnership.ownerKey(
+        therapistId: therapistId,
+        studentId: studentId,
+      ),
+      sessionKey: SessionOwnership.sessionKey(
+        therapistId: therapistId,
+        studentId: studentId,
+        sessionId: normalizedSessionId,
+      ),
+      stateWire: state.wireValue,
+      state: state,
+      unfinishedFlag: isUnfinished,
+      terminalFlag: isTerminal,
+      latestGameId: normalizedGameId,
+      reasonCode: reasonCode.trim(),
+      startedAtUtc: resolvedStartedAtUtc,
+      interruptedAtUtc: state == SessionLifecycleState.interrupted
+          ? (interruptedAtUtc ?? nowUtc)
+          : interruptedAtUtc,
+      endedAtUtc: isTerminal ? (endedAtUtc ?? nowUtc) : endedAtUtc,
+      updatedAtUtc: nowUtc,
+      updatedAtUnixMs: nowUtc.millisecondsSinceEpoch,
+      metadata: Map<String, dynamic>.from(metadata),
+    );
+  }
+
+  void _setLatestPersistedSessionSnapshotLocally(TherapySessionRecord? record) {
+    if (mounted) {
+      setState(() {
+        _latestPersistedSession = record;
+      });
+    } else {
+      _latestPersistedSession = record;
+    }
+
+    _rehydrateWorkflowFromPersistedSession(record);
   }
 
   Future<void> _refreshParentInsights() async {
@@ -2799,31 +3780,11 @@ class _ControlScreenState extends State<ControlScreen>
         remoteSessionId: persistedSessionId,
         interruptedAtUtc: persisted.interruptedAtUtc,
       );
-      if (recoveryEvaluation.shouldAutoRecoverSilently) {
-        _clearDeferredHandoff(
-          sessionId: persistedSessionId,
-          source: 'persisted',
-          reasonCode: 'RECOVERY_UNDER_WINDOW',
-        );
-        unawaited(
-          _attemptUnderWindowRecovery(
-            persistedSessionId,
-            source: 'persisted',
-          ),
-        );
-        return true;
-      }
 
       if (!mounted) {
         return false;
       }
 
-      if (_isKnownGameId(persisted.latestGameId) &&
-          persisted.latestGameId != _selectedGameId) {
-        setState(() {
-          _selectedGameId = persisted.latestGameId;
-        });
-      }
       _clearDeferredHandoff(
         sessionId: persistedSessionId,
         source: 'persisted',
@@ -2937,6 +3898,14 @@ class _ControlScreenState extends State<ControlScreen>
     final interruptedAtUtc = persisted.interruptedAtUtc;
     final interruptedAgeMinutes = evaluation.interruptedAge?.inMinutes ?? 0;
     final autoCloseWindowHours = evaluation.autoCloseWindowHours;
+    final metadata = <String, dynamic>{
+      'origin': 'mobile_auto_close_policy',
+      'sourceState': SessionLifecycleState.interrupted.wireValue,
+      'autoCloseWindowHours': autoCloseWindowHours,
+      'interruptedAtUtc': interruptedAtUtc?.toIso8601String() ?? '',
+      'interruptedAgeMinutes': interruptedAgeMinutes,
+      'autoCloseState': evaluation.state.name,
+    };
 
     try {
       await SessionJournalService.upsertSessionState(
@@ -2946,29 +3915,19 @@ class _ControlScreenState extends State<ControlScreen>
         state: SessionLifecycleState.failedTechnical,
         latestGameId: gameId,
         reasonCode: _interruptedAutoCloseReasonCode,
-        metadata: <String, dynamic>{
-          'origin': 'mobile_auto_close_policy',
-          'sourceState': SessionLifecycleState.interrupted.wireValue,
-          'autoCloseWindowHours': autoCloseWindowHours,
-          'interruptedAtUtc': interruptedAtUtc?.toIso8601String() ?? '',
-          'interruptedAgeMinutes': interruptedAgeMinutes,
-          'autoCloseState': evaluation.state.name,
-        },
+        metadata: metadata,
       );
 
-      await SessionJournalService.appendSessionEvent(
-        sessionId: sessionId,
-        studentId: widget.student.id,
-        therapistId: therapistId,
-        eventType: 'INTERRUPTED_SESSION_AUTO_CLOSED',
-        gameId: gameId,
-        details: <String, dynamic>{
-          'reasonCode': _interruptedAutoCloseReasonCode,
-          'autoCloseWindowHours': autoCloseWindowHours,
-          'interruptedAtUtc': interruptedAtUtc?.toIso8601String() ?? '',
-          'interruptedAgeMinutes': interruptedAgeMinutes,
-          'autoCloseState': evaluation.state.name,
-        },
+      _setLatestPersistedSessionSnapshotLocally(
+        _buildLocalPersistedSessionSnapshot(
+          sessionId: sessionId,
+          state: SessionLifecycleState.failedTechnical,
+          latestGameId: gameId,
+          reasonCode: _interruptedAutoCloseReasonCode,
+          metadata: metadata,
+          startedAtUtc: persisted.startedAtUtc,
+          interruptedAtUtc: interruptedAtUtc,
+        ),
       );
 
       _markSessionAsRecentlyEnded(sessionId);
@@ -3002,7 +3961,6 @@ class _ControlScreenState extends State<ControlScreen>
       );
     } finally {
       _interruptedSessionAutoCloseInFlight = false;
-      await _refreshPersistedSessionSnapshot(triggerPrompt: true);
     }
   }
 
@@ -3046,53 +4004,11 @@ class _ControlScreenState extends State<ControlScreen>
       return;
     }
 
-    try {
-      await SessionJournalService.upsertSessionState(
-        sessionId: resolvedSessionId,
-        studentId: widget.student.id,
-        therapistId: _resolveActorTherapistId(),
-        state: sessionUpdate.state,
-        latestGameId: _selectedGameId,
-        reasonCode: sessionUpdate.reasonCode,
-        metadata: <String, dynamic>{
-          'origin': 'runtime_signal',
-          'previousState': sessionUpdate.previousState?.wireValue ?? '',
-        },
-      );
-
-      await SessionJournalService.appendSessionEvent(
-        sessionId: resolvedSessionId,
-        studentId: widget.student.id,
-        therapistId: _resolveActorTherapistId(),
-        eventType: 'RUNTIME_SESSION_STATE_UPDATE',
-        gameId: _selectedGameId,
-        source: 'vr_runtime',
-        eventAtUtc: sessionUpdate.changedAtUtc,
-        timelineEventId: SessionJournalService.buildTimelineEventId(
-          sessionId: resolvedSessionId,
-          eventType: 'RUNTIME_SESSION_STATE_UPDATE',
-          source: 'vr_runtime',
-          eventAtUnixMs: sessionUpdate.changedAtUtc.millisecondsSinceEpoch,
-          details: <String, dynamic>{
-            'state': sessionUpdate.state.wireValue,
-            'previousState': sessionUpdate.previousState?.wireValue ?? '',
-            'reasonCode': sessionUpdate.reasonCode,
-          },
-          discriminator: 'session_state',
-        ),
-        details: <String, dynamic>{
-          'state': sessionUpdate.state.wireValue,
-          'previousState': sessionUpdate.previousState?.wireValue ?? '',
-          'reasonCode': sessionUpdate.reasonCode,
-        },
-      );
-
-      await _refreshPersistedSessionSnapshot(triggerPrompt: true);
-    } catch (e) {
-      debugPrint(
-        '[ControlScreen] Persist runtime session state failed: session=$resolvedSessionId, error=$e',
-      );
-    }
+    debugPrint(
+      '[ControlScreen] Runtime session state kept local-only: '
+      'session=$resolvedSessionId state=${sessionUpdate.state.wireValue} '
+      'reason=${sessionUpdate.reasonCode}',
+    );
   }
 
   Future<void> _persistCommandSideEffects(
@@ -3109,51 +4025,7 @@ class _ControlScreenState extends State<ControlScreen>
     final selectedGameId = _selectedGameId;
 
     try {
-      if (command == CriticalCommandIds.startGame ||
-          command == CriticalCommandIds.resumeGame) {
-        await SessionJournalService.upsertSessionState(
-          sessionId: sessionId,
-          studentId: widget.student.id,
-          therapistId: therapistId,
-          state: SessionLifecycleState.inProgress,
-          latestGameId: selectedGameId,
-          reasonCode: command,
-          metadata: <String, dynamic>{
-            'origin': 'mobile_command',
-            'resumeFromSaved': false,
-          },
-        );
-        await SessionJournalService.appendSessionEvent(
-          sessionId: sessionId,
-          studentId: widget.student.id,
-          therapistId: therapistId,
-          eventType: command == CriticalCommandIds.resumeGame
-              ? 'GAME_RESUMED'
-              : 'GAME_STARTED',
-          gameId: selectedGameId,
-          details: <String, dynamic>{
-            'resumeFromSaved': false,
-            'config': _buildSelectedGameConfigSnapshot(),
-          },
-        );
-      } else if (command == CriticalCommandIds.pauseGame) {
-        await SessionJournalService.upsertSessionState(
-          sessionId: sessionId,
-          studentId: widget.student.id,
-          therapistId: therapistId,
-          state: SessionLifecycleState.paused,
-          latestGameId: selectedGameId,
-          reasonCode: command,
-          metadata: const <String, dynamic>{'origin': 'mobile_command'},
-        );
-        await SessionJournalService.appendSessionEvent(
-          sessionId: sessionId,
-          studentId: widget.student.id,
-          therapistId: therapistId,
-          eventType: 'GAME_PAUSED',
-          gameId: selectedGameId,
-        );
-      } else if (command == CriticalCommandIds.stopGame) {
+      if (command == CriticalCommandIds.stopGame) {
         await SessionJournalService.upsertSessionState(
           sessionId: sessionId,
           studentId: widget.student.id,
@@ -3225,43 +4097,59 @@ class _ControlScreenState extends State<ControlScreen>
         '[ControlScreen] Persist command side effects failed: command=$command, error=$e',
       );
     } finally {
-      await _refreshPersistedSessionSnapshot(triggerPrompt: true);
+      if (command == CriticalCommandIds.endSession) {
+        await _refreshSessionJournal(
+          reason: 'COMMAND_SIDE_EFFECTS',
+          sessionIdOverride: sessionId,
+        );
+      }
     }
   }
 
-  Future<void> _persistStartNewDecisionOutcome(String remoteSessionId) async {
+  Future<void> _persistStartNewDecisionOutcome({
+    required String remoteSessionId,
+    required String replacementSessionId,
+  }) async {
     final normalizedSessionId = remoteSessionId.trim();
+    final normalizedReplacementSessionId = replacementSessionId.trim();
     if (normalizedSessionId.isEmpty) {
       return;
     }
 
     final therapistId = _resolveActorTherapistId();
+    final gameId = _resolveDecisionSessionGameId(normalizedSessionId);
+    final metadata = <String, dynamic>{
+      'origin': 'mobile_decision_gate',
+      'replacementSessionId': normalizedReplacementSessionId,
+      'decision': 'START_NEW',
+    };
     try {
-      await SessionJournalService.markSessionCompletedByTherapist(
+      await SessionJournalService.markSessionAbortedByTherapist(
         sessionId: normalizedSessionId,
         studentId: widget.student.id,
         therapistId: therapistId,
-        latestGameId: _selectedGameId,
-        reasonCode: 'THERAPIST_START_NEW_DECISION',
-        metadata: const <String, dynamic>{'origin': 'mobile_decision_gate'},
+        latestGameId: gameId,
+        reasonCode: 'THERAPIST_ABANDONED_UNFINISHED_SESSION',
+        metadata: metadata,
       );
-      await SessionJournalService.appendSessionEvent(
-        sessionId: normalizedSessionId,
-        studentId: widget.student.id,
-        therapistId: therapistId,
-        eventType: 'SESSION_ENDED_BY_DECISION',
-        gameId: _selectedGameId,
-        details: const <String, dynamic>{
-          'decision': 'START_NEW',
-          'reason': 'THERAPIST_START_NEW_DECISION',
-        },
+
+      _setLatestPersistedSessionSnapshotLocally(
+        _buildLocalPersistedSessionSnapshot(
+          sessionId: normalizedSessionId,
+          state: SessionLifecycleState.abortedByTherapist,
+          latestGameId: gameId,
+          reasonCode: 'THERAPIST_ABANDONED_UNFINISHED_SESSION',
+          metadata: metadata,
+          startedAtUtc:
+              _resolveDecisionSessionRecord(normalizedSessionId)?.startedAtUtc,
+          interruptedAtUtc: _resolveDecisionSessionRecord(normalizedSessionId)
+              ?.interruptedAtUtc,
+        ),
       );
     } catch (e) {
       debugPrint(
         '[ControlScreen] Persist start-new decision outcome failed: session=$normalizedSessionId, error=$e',
       );
-    } finally {
-      await _refreshPersistedSessionSnapshot(triggerPrompt: true);
     }
   }
 
@@ -3269,44 +4157,10 @@ class _ControlScreenState extends State<ControlScreen>
     return gameId.trim().toLowerCase() == _demoCubeGameId;
   }
 
-  static bool _isDemoCatalogEntry(_GameCatalogEntry entry) {
-    return _isDemoCatalogGameId(entry.gameId);
-  }
-
   List<_GameCatalogEntry> get _effectiveGameCatalog {
-    if (_remoteGameCatalog.isNotEmpty) {
-      return _remoteGameCatalog;
-    }
-    return _fallbackGameCatalog.where(_isDemoCatalogEntry).toList(
-          growable: false,
-        );
-  }
-
-  void _startGameCatalogSubscription() {
-    _gameCatalogSubscription?.cancel();
-    _gameCatalogSubscription = GameCatalogService.watchActiveCatalog().listen(
-      (entries) {
-        if (!mounted) {
-          return;
-        }
-
-        final mapped = entries
-            .map(_GameCatalogEntry.fromRemoteEntry)
-            .where((entry) => entry.gameId.isNotEmpty)
-            .toList(growable: false);
-        setState(() {
-          _remoteGameCatalog = mapped;
-          _bootstrapLocalContentStates();
-          if (!_effectiveGameCatalog
-              .any((entry) => entry.gameId == _selectedGameId)) {
-            _selectedGameId = _resolveInitialGameId();
-          }
-        });
-      },
-      onError: (Object error) {
-        debugPrint('[ControlScreen] game_catalog stream failed: $error');
-      },
-    );
+    final sorted = List<_GameCatalogEntry>.from(_fallbackGameCatalog)
+      ..sort((left, right) => left.sortOrder.compareTo(right.sortOrder));
+    return List<_GameCatalogEntry>.unmodifiable(sorted);
   }
 
   bool _isGameOwnedByEntitlement(
@@ -3349,37 +4203,24 @@ class _ControlScreenState extends State<ControlScreen>
     return EntitlementService.canLaunchGame(normalizedGameId, atUtc: nowUtc);
   }
 
-  String _resolveInitialGameId() {
-    final catalog = _effectiveGameCatalog;
-    if (catalog.isEmpty) {
-      return _demoCubeGameId;
-    }
-
-    final nowUtc = DateTime.now().toUtc();
-    for (final entry in catalog) {
-      if (_isGameOwnedByEntitlement(entry, atUtc: nowUtc)) {
-        return entry.gameId;
-      }
-    }
-
-    return catalog.first.gameId;
-  }
-
   List<_GameCatalogEntry> get _entitledGameCatalog {
     return _effectiveGameCatalog;
   }
 
   _GameCatalogEntry get _selectedGameEntry {
     final catalog = _effectiveGameCatalog;
+    final normalizedSelectedGameId = _selectedGameId.trim();
     if (catalog.isNotEmpty) {
       for (final entry in catalog) {
-        if (entry.gameId == _selectedGameId) {
+        if (entry.gameId == normalizedSelectedGameId) {
           return entry;
         }
       }
 
       final fallback = catalog.first;
-      if (_selectedGameId != fallback.gameId) {
+      if (normalizedSelectedGameId.isNotEmpty &&
+          _workflowStep == _WorkflowStep.gameSetup &&
+          _selectedGameId != fallback.gameId) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted || _selectedGameId == fallback.gameId) {
             return;
@@ -3464,41 +4305,21 @@ class _ControlScreenState extends State<ControlScreen>
 
   bool get _isDemoCubeGameSelected => _selectedGameId == _demoCubeGameId;
 
-  bool get _canResetSimulatedPurchases {
-    if (_simulatedOwnedGameIds.isNotEmpty) {
-      return true;
-    }
-
-    for (final entry in _effectiveGameCatalog) {
-      if (!_isDemoCatalogGameId(entry.gameId) && !entry.requiresExplicitLicense) {
-        continue;
-      }
-
-      final state = _contentStatesByGameId[entry.gameId];
-      if (state == null) {
-        continue;
-      }
-
-      final hasInstalledVersion =
-          (state.installedVersion?.trim().isNotEmpty ?? false);
-      if (state.owned || hasInstalledVersion) {
-        return true;
-      }
-    }
-
-    return false;
-  }
   bool get _isPulseTargetGameSelected => _selectedGameId == _pulseTargetGameId;
 
   bool get _isGameRuntimeActive {
-    final activeGameId = _remoteActiveGameId?.trim() ?? '';
-    final inferredFromHeartbeat = activeGameId.isNotEmpty;
+    final presenceGameState =
+        _lastDevicePresenceSignal?.activeGameState.trim().toUpperCase() ?? '';
+    final inferredFromPresence = presenceGameState == 'PLAYING' ||
+        presenceGameState == 'RUNNING' ||
+        presenceGameState == 'IN_PROGRESS' ||
+        presenceGameState == 'PAUSED';
 
     return _runtimeStatus == TherapistRuntimeStatus.playing ||
         _runtimeStatus == TherapistRuntimeStatus.paused ||
         _sessionLifecycleState == SessionLifecycleState.inProgress ||
         _sessionLifecycleState == SessionLifecycleState.paused ||
-        inferredFromHeartbeat ||
+        inferredFromPresence ||
         _optimisticRuntimeActive;
   }
 
@@ -3561,6 +4382,48 @@ class _ControlScreenState extends State<ControlScreen>
       _ => normalized,
     };
     return '$reasonTag $detail';
+  }
+
+  bool _shouldReturnToCatalogAfterStopReason(String? reasonCode) {
+    final normalized = (reasonCode ?? '').trim().toUpperCase();
+    return normalized == 'RETURN_TO_MENU' || normalized == 'RETURN_TO_CATALOG';
+  }
+
+  bool _shouldKeepPreparedGameAfterStopReason(String? reasonCode) {
+    final normalized = (reasonCode ?? '').trim().toUpperCase();
+    return normalized == 'THERAPIST_RECONFIGURE' ||
+        normalized == 'STOP_ROUND' ||
+        normalized == 'STOP_GAME';
+  }
+
+  DevicePresenceUpdateSignal? _clearActiveGameFromPresenceSignal(
+    DevicePresenceUpdateSignal? signal,
+  ) {
+    if (signal == null) {
+      return null;
+    }
+
+    if (signal.activeGameId.trim().isEmpty &&
+        signal.activeGameState.trim().isEmpty) {
+      return signal;
+    }
+
+    return DevicePresenceUpdateSignal(
+      sessionId: signal.sessionId,
+      studentId: signal.studentId,
+      patientId: signal.patientId,
+      therapistId: signal.therapistId,
+      ownerKey: signal.ownerKey,
+      sessionKey: signal.sessionKey,
+      presenceState: signal.presenceState,
+      reasonCode: signal.reasonCode,
+      changedAtUtc: signal.changedAtUtc,
+      appPaused: signal.appPaused,
+      appFocused: signal.appFocused,
+      hasTcpClient: signal.hasTcpClient,
+      activeGameId: '',
+      activeGameState: '',
+    );
   }
 
   void _handleDevicePresenceFeedback({
@@ -3628,29 +4491,71 @@ class _ControlScreenState extends State<ControlScreen>
 
   bool get _isSetupLockedByRuntime => _isGameRuntimeActive;
 
-  PurchasedContentState get _selectedContentState {
-    return _contentStateForGame(_selectedGameId);
+  bool get _isSelectedGamePreparedOnHeadset {
+    final selectedGameId = _selectedGameId.trim();
+    if (selectedGameId.isEmpty || !_isKnownGameId(selectedGameId)) {
+      return false;
+    }
+
+    final optimisticPreparedGameId = _optimisticPreparedGameId?.trim() ?? '';
+    if (optimisticPreparedGameId == selectedGameId) {
+      return true;
+    }
+
+    final devicePresenceGameId =
+        _lastDevicePresenceSignal?.activeGameId.trim() ?? '';
+    if (devicePresenceGameId == selectedGameId) {
+      return true;
+    }
+
+    final remoteGameId = _remoteActiveGameId?.trim() ?? '';
+    return remoteGameId == selectedGameId;
   }
 
-  bool get _isSelectedGameLaunchable {
-    final selectedEntry = _selectedGameEntry;
-    return selectedEntry.runtimeLaunchEnabled &&
-        _isLaunchableContentState(_selectedContentState);
+  bool get _isSelectedGamePreparationPending {
+    final selectedGameId = _selectedGameId.trim();
+    if (!_isConnected ||
+        !_sessionAttachReady ||
+        _isGameRuntimeActive ||
+        selectedGameId.isEmpty ||
+        !_isKnownGameId(selectedGameId)) {
+      return false;
+    }
+
+    return !_isSelectedGamePreparedOnHeadset;
+  }
+
+  bool get _isSelectedGameSceneReadyForControls {
+    if (_isGameRuntimeActive) {
+      return true;
+    }
+
+    return _isSelectedGamePreparedOnHeadset;
+  }
+
+  String get _selectedGameSceneLoadingHint {
+    return 'Quest is still loading the selected game scene. '
+        'Settings and game controls unlock when the scene is ready.';
+  }
+
+  PurchasedContentState get _selectedContentState {
+    return _contentStateForGame(_selectedGameId);
   }
 
   bool get _isControlLinkReadyForCommands {
     return _isConnected && _sessionAttachReady && !_isHeadsetPresenceBlocking;
   }
 
-  bool get _isPackageProbeEnabled {
-    return false;
+  bool get _isPreviewStreamExpected {
+    return _workflowStep == _WorkflowStep.gameSetup && _isVideoPreviewExpanded;
   }
 
   String get _controlLinkBlockedHint {
     if (!_isConnected) {
       return 'Headset is offline.';
     }
-    if (_mediaPreviewState != MediaPreviewState.streaming) {
+    if (_isPreviewStreamExpected &&
+        _mediaPreviewState != MediaPreviewState.streaming) {
       return 'VR preview is unavailable.';
     }
     if (!_sessionAttachReady) {
@@ -3669,7 +4574,8 @@ class _ControlScreenState extends State<ControlScreen>
     if (!_isConnected) {
       return 'Reconnecting';
     }
-    if (_mediaPreviewState != MediaPreviewState.streaming) {
+    if (_isPreviewStreamExpected &&
+        _mediaPreviewState != MediaPreviewState.streaming) {
       return 'No Preview';
     }
     if (!_sessionAttachReady) {
@@ -3688,7 +4594,8 @@ class _ControlScreenState extends State<ControlScreen>
     if (!_isConnected) {
       return Icons.wifi_off;
     }
-    if (_mediaPreviewState != MediaPreviewState.streaming) {
+    if (_isPreviewStreamExpected &&
+        _mediaPreviewState != MediaPreviewState.streaming) {
       return Icons.wifi_tethering_error_rounded;
     }
     return Icons.sync_problem;
@@ -4078,304 +4985,6 @@ class _ControlScreenState extends State<ControlScreen>
     }
   }
 
-  Future<void> _requestInstallOrUpdate(PurchasedContentState state) async {
-    if (!_contentDeliveryEnabled) {
-      return;
-    }
-
-    if (!_isConnected || _contentActionsInFlight.contains(state.gameId)) {
-      return;
-    }
-
-    final nextStatus = ContentDeliveryTransitionRule.nextStatus(
-      current: state.runtimeStatus,
-      action: ContentDeliveryAction.requestInstallOrUpdate,
-    );
-    String packageUri = '';
-    for (final entry in _effectiveGameCatalog) {
-      if (entry.gameId == state.gameId) {
-        packageUri = entry.packageUri;
-        break;
-      }
-    }
-    const shouldRequestPackageProbe = false;
-
-    setState(() {
-      _contentActionsInFlight.add(state.gameId);
-      _contentStatesByGameId[state.gameId] = state.copyWith(
-        runtimeStatus: nextStatus,
-        updateRequired: false,
-        lastError: null,
-        updatedAtUtc: DateTime.now().toUtc(),
-      );
-    });
-
-    final success = await _sendCommand(
-      ContentDeliveryCommandIds.installGame,
-      extraPayload: ContentDeliveryRequests.buildInstallRequest(
-        actorId: _resolveActorTherapistId(),
-        gameId: state.gameId,
-        targetVersion: state.targetVersion,
-        packageUri: packageUri,
-        requestPackageProbe: shouldRequestPackageProbe,
-        probeOnly: false,
-      ),
-      showSuccessSnack: false,
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    if (!success) {
-      setState(() {
-        _contentStatesByGameId[state.gameId] = state.copyWith(
-          runtimeStatus: ContentRuntimeStatus.failed,
-          lastError: 'INSTALL_COMMAND_FAILED',
-          updatedAtUtc: DateTime.now().toUtc(),
-        );
-        _contentActionsInFlight.remove(state.gameId);
-      });
-      return;
-    }
-
-    unawaited(
-      _persistCatalogInteractionEvent(
-        eventType: 'CONTENT_INSTALL_REQUESTED',
-        gameId: state.gameId,
-        details: <String, dynamic>{
-          'targetVersion': state.targetVersion,
-          'requestPackageProbe': shouldRequestPackageProbe,
-          'packageUri': packageUri,
-        },
-      ),
-    );
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Install/update requested for ${state.gameId}'),
-        duration: const Duration(seconds: 1),
-      ),
-    );
-  }
-
-  Future<void> _requestPackageProbe(PurchasedContentState state) async {
-    if (!_contentDeliveryEnabled ||
-        !_boardSafePackageProbeFeatureEnabled ||
-        !_isConnected ||
-        _contentActionsInFlight.contains(state.gameId)) {
-      return;
-    }
-
-    String packageUri = '';
-    for (final entry in _effectiveGameCatalog) {
-      if (entry.gameId == state.gameId) {
-        packageUri = entry.packageUri;
-        break;
-      }
-    }
-
-    if (packageUri.trim().isEmpty) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Selected game has no packageUri to probe.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-
-    setState(() {
-      _contentActionsInFlight.add(state.gameId);
-    });
-
-    final success = await _sendCommand(
-      ContentDeliveryCommandIds.installGame,
-      extraPayload: ContentDeliveryRequests.buildInstallRequest(
-        actorId: _resolveActorTherapistId(),
-        gameId: state.gameId,
-        targetVersion: state.targetVersion,
-        packageUri: packageUri,
-        requestPackageProbe: true,
-        probeOnly: true,
-      ),
-      showSuccessSnack: false,
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    if (!success) {
-      setState(() {
-        _contentActionsInFlight.remove(state.gameId);
-      });
-      return;
-    }
-
-    unawaited(
-      _persistCatalogInteractionEvent(
-        eventType: 'PACKAGE_PROBE_REQUESTED',
-        gameId: state.gameId,
-        details: <String, dynamic>{
-          'packageUri': packageUri,
-          'probeOnly': true,
-          'killSwitchEnabled': _packageProbeKillSwitchEnabled,
-        },
-      ),
-    );
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Package probe requested for ${state.gameId}'),
-        duration: const Duration(seconds: 1),
-      ),
-    );
-  }
-
-  Future<void> _requestUninstall(PurchasedContentState state) async {
-    if (!_contentDeliveryEnabled) {
-      return;
-    }
-
-    if (!_isConnected || _contentActionsInFlight.contains(state.gameId)) {
-      return;
-    }
-
-    var gameTitle = state.gameId;
-    for (final entry in _effectiveGameCatalog) {
-      if (entry.gameId == state.gameId) {
-        gameTitle = entry.title;
-        break;
-      }
-    }
-
-    final confirmed = await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => AlertDialog(
-            title: const Text('Remove installed game?'),
-            content: Text(
-              'Remove "$gameTitle" from Quest storage now? You can install it again anytime from mobile.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Remove'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-
-    if (!confirmed) {
-      unawaited(
-        _persistCatalogInteractionEvent(
-          eventType: 'CONTENT_UNINSTALL_CANCELLED',
-          gameId: state.gameId,
-          details: const <String, dynamic>{
-            'reasonCode': 'THERAPIST_CANCELLED_REMOVE',
-          },
-        ),
-      );
-      return;
-    }
-
-    setState(() {
-      _contentActionsInFlight.add(state.gameId);
-    });
-
-    final success = await _sendCommand(
-      ContentDeliveryCommandIds.uninstallGame,
-      extraPayload: ContentDeliveryRequests.buildUninstallRequest(
-        actorId: _resolveActorTherapistId(),
-        gameId: state.gameId,
-      ),
-      showSuccessSnack: false,
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    if (success) {
-      setState(() {
-        _contentStatesByGameId[state.gameId] = state.copyWith(
-          installedVersion: null,
-          runtimeStatus: ContentRuntimeStatus.notInstalled,
-          updateRequired: false,
-          updateOptional: false,
-          lastError: null,
-          updatedAtUtc: DateTime.now().toUtc(),
-        );
-      });
-
-      unawaited(
-        _persistCatalogInteractionEvent(
-          eventType: 'CONTENT_UNINSTALL_REQUESTED',
-          gameId: state.gameId,
-          details: <String, dynamic>{
-            'targetVersion': state.targetVersion,
-          },
-        ),
-      );
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content:
-              Text('Removed $gameTitle. You can install it again anytime.'),
-          duration: const Duration(seconds: 1),
-        ),
-      );
-    } else {
-      setState(() {
-        _contentStatesByGameId[state.gameId] = state.copyWith(
-          runtimeStatus: ContentRuntimeStatus.failed,
-          lastError: 'UNINSTALL_COMMAND_FAILED',
-          updatedAtUtc: DateTime.now().toUtc(),
-        );
-      });
-    }
-
-    if (mounted) {
-      setState(() {
-        _contentActionsInFlight.remove(state.gameId);
-      });
-    }
-  }
-
-  Future<void> _persistCatalogInteractionEvent({
-    required String eventType,
-    required String gameId,
-    Map<String, dynamic>? details,
-  }) async {
-    final sessionId = _activeSessionId.trim();
-    if (sessionId.isEmpty) {
-      return;
-    }
-
-    try {
-      await SessionJournalService.appendSessionEvent(
-        sessionId: sessionId,
-        studentId: widget.student.id,
-        therapistId: _resolveActorTherapistId(),
-        eventType: eventType,
-        gameId: gameId,
-        details: details ?? const <String, dynamic>{},
-      );
-    } catch (e) {
-      debugPrint(
-        '[ControlScreen] Persist catalog interaction failed: '
-        'eventType=$eventType gameId=$gameId error=$e',
-      );
-    }
-  }
-
   void _handlePotentialSessionDecisionGate(
     SessionStateUpdateSignal? sessionUpdate,
     RuntimeStatusUpdateSignal? runtimeUpdate,
@@ -4483,20 +5092,6 @@ class _ControlScreenState extends State<ControlScreen>
         remoteSessionNeedsDecision: true,
         remoteSessionId: remoteSessionId,
       );
-      if (recoveryEvaluation.shouldAutoRecoverSilently) {
-        _clearDeferredHandoff(
-          sessionId: remoteSessionId,
-          source: 'runtime',
-          reasonCode: 'RECOVERY_UNDER_WINDOW',
-        );
-        unawaited(
-          _attemptUnderWindowRecovery(
-            remoteSessionId,
-            source: 'runtime',
-          ),
-        );
-        return;
-      }
       _clearDeferredHandoff(
         sessionId: remoteSessionId,
         source: 'runtime',
@@ -4564,6 +5159,8 @@ class _ControlScreenState extends State<ControlScreen>
     if (!isTerminal || wasTerminal) {
       return;
     }
+
+    _clearReconnectGameRuntimeRecovery(reasonCode: 'SESSION_TERMINAL');
 
     final runtime = runtimeUpdate?.status;
     if (state == SessionLifecycleState.completed) {
@@ -4723,6 +5320,120 @@ class _ControlScreenState extends State<ControlScreen>
     });
   }
 
+  TherapySessionRecord? _resolveDecisionSessionRecord(String remoteSessionId) {
+    final normalizedSessionId = remoteSessionId.trim();
+    final persisted = _latestPersistedSession;
+    if (persisted == null) {
+      return null;
+    }
+
+    return persisted.sessionId.trim() == normalizedSessionId ? persisted : null;
+  }
+
+  String _resolveCatalogGameTitle(String gameId) {
+    final normalizedGameId = gameId.trim();
+    if (normalizedGameId.isEmpty) {
+      return '';
+    }
+
+    for (final entry in _effectiveGameCatalog) {
+      if (entry.gameId == normalizedGameId) {
+        return entry.title;
+      }
+    }
+
+    return normalizedGameId;
+  }
+
+  String _formatSessionStateLabel(SessionLifecycleState? state) {
+    switch (state) {
+      case SessionLifecycleState.created:
+        return 'utworzona';
+      case SessionLifecycleState.inProgress:
+        return 'w trakcie';
+      case SessionLifecycleState.paused:
+        return 'wstrzymana';
+      case SessionLifecycleState.interrupted:
+        return 'przerwana';
+      case SessionLifecycleState.completed:
+        return 'zakończona';
+      case SessionLifecycleState.abortedByTherapist:
+        return 'porzucona przez terapeutę';
+      case SessionLifecycleState.failedTechnical:
+        return 'zakończona technicznie';
+      case null:
+        return 'nieznany';
+    }
+  }
+
+  String _formatRelativeAge(Duration? age) {
+    if (age == null) {
+      return 'brak danych';
+    }
+
+    final normalizedAge = age.isNegative ? Duration.zero : age;
+    if (normalizedAge < const Duration(minutes: 1)) {
+      return 'mniej niż minutę temu';
+    }
+    if (normalizedAge < const Duration(hours: 1)) {
+      return '${normalizedAge.inMinutes} min temu';
+    }
+    if (normalizedAge < const Duration(days: 1)) {
+      return '${normalizedAge.inHours} godz. temu';
+    }
+
+    return '${normalizedAge.inDays} dni temu';
+  }
+
+  String _buildSessionDecisionDialogContent({
+    required String remoteSessionId,
+    required SessionRecoveryEvaluation recoveryEvaluation,
+  }) {
+    final persisted = _resolveDecisionSessionRecord(remoteSessionId);
+    final latestGameId = persisted?.latestGameId.trim() ?? '';
+    final lastGameTitle = _resolveCatalogGameTitle(latestGameId);
+    final age = recoveryEvaluation.connectionLossAge ??
+        (persisted?.updatedAtUtc != null
+            ? DateTime.now()
+                .toUtc()
+                .difference(persisted!.updatedAtUtc!.toUtc())
+            : null);
+    final recoveryWindowMinutes =
+        _therapistSessionSettings.sessionRecoveryWindowMinutes;
+    final buffer = StringBuffer()
+      ..writeln('Znaleziono niedomkniętą sesję dla tego dziecka.')
+      ..writeln()
+      ..writeln('Aby nie mieszać danych, wybierz jedną ścieżkę:')
+      ..writeln(
+          '• Kontynuuj starą sesję i zapisuj dalej do tego samego sessionId.')
+      ..writeln('• Porzuć starą sesję, zachowaj jej historię i utwórz nową.');
+
+    if (recoveryEvaluation.state ==
+        SessionRecoveryWindowState
+            .interruptedOverWindowNeedsTherapistDecision) {
+      buffer
+        ..writeln()
+        ..writeln(
+          'Okno odzyskiwania ($recoveryWindowMinutes min) zostało przekroczone, '
+          'więc decyzja musi być jawna.',
+        );
+    }
+
+    if (lastGameTitle.isNotEmpty) {
+      buffer
+        ..writeln()
+        ..writeln('Ostatnia gra: $lastGameTitle');
+    }
+
+    if (persisted != null) {
+      buffer
+          .writeln('Stan sesji: ${_formatSessionStateLabel(persisted.state)}');
+    }
+
+    buffer.writeln('Ostatnia aktywność: ${_formatRelativeAge(age)}');
+    return buffer.toString().trim();
+  }
+
   Future<void> _showSessionDecisionDialog() async {
     if (!mounted) {
       _isSessionDecisionDialogOpen = false;
@@ -4757,8 +5468,6 @@ class _ControlScreenState extends State<ControlScreen>
       return;
     }
 
-    final recoveryWindowMinutes =
-        _therapistSessionSettings.sessionRecoveryWindowMinutes;
     final recoveryEvaluation = _evaluateRecoveryWindowState(
       remoteSessionNeedsDecision: true,
       remoteSessionId: remoteSessionId,
@@ -4767,8 +5476,6 @@ class _ControlScreenState extends State<ControlScreen>
               ? _latestPersistedSession?.interruptedAtUtc
               : null,
     );
-    final isRecoveryWindowExceeded = recoveryEvaluation.state ==
-        SessionRecoveryWindowState.interruptedOverWindowNeedsTherapistDecision;
     final action = await showDialog<_SessionGateAction>(
       context: context,
       barrierDismissible: false,
@@ -4776,51 +5483,25 @@ class _ControlScreenState extends State<ControlScreen>
         return PopScope(
           canPop: false,
           child: AlertDialog(
-            title: Text(
-              isRecoveryWindowExceeded
-                  ? 'Recovery window exceeded'
-                  : 'Session handoff needed',
-            ),
+            title: const Text('Niedomknięta sesja'),
             content: Text(
-              isRecoveryWindowExceeded
-                  ? 'Czas odzyskiwania sesji ($recoveryWindowMinutes min) '
-                      'zostal przekroczony.\n\nWybierz: Przerwij albo Zakoncz '
-                      'i wroc do wyboru ucznia.'
-                  : 'The headset reports another unfinished session and the '
-                      'recovery window ($recoveryWindowMinutes min) has passed.\n\n'
-                      'Choose whether to continue it, start a new session, '
-                      'or keep current context for now.',
+              _buildSessionDecisionDialogContent(
+                remoteSessionId: remoteSessionId,
+                recoveryEvaluation: recoveryEvaluation,
+              ),
             ),
-            actions: isRecoveryWindowExceeded
-                ? [
-                    TextButton(
-                      onPressed: () => Navigator.of(context)
-                          .pop(_SessionGateAction.interruptAndExit),
-                      child: const Text('Przerwij'),
-                    ),
-                    ElevatedButton(
-                      onPressed: () => Navigator.of(context)
-                          .pop(_SessionGateAction.completeAndExit),
-                      child: const Text('Zakończ'),
-                    ),
-                  ]
-                : [
-                    TextButton(
-                      onPressed: () => Navigator.of(context)
-                          .pop(_SessionGateAction.keepCurrent),
-                      child: const Text('Keep current'),
-                    ),
-                    TextButton(
-                      onPressed: () =>
-                          Navigator.of(context).pop(_SessionGateAction.resume),
-                      child: const Text('Continue unfinished'),
-                    ),
-                    ElevatedButton(
-                      onPressed: () => Navigator.of(context)
-                          .pop(_SessionGateAction.startNew),
-                      child: const Text('Start new session'),
-                    ),
-                  ],
+            actions: [
+              TextButton(
+                onPressed: () =>
+                    Navigator.of(context).pop(_SessionGateAction.resume),
+                child: const Text('Kontynuuj starą'),
+              ),
+              ElevatedButton(
+                onPressed: () =>
+                    Navigator.of(context).pop(_SessionGateAction.startNew),
+                child: const Text('Porzuć i zacznij nową'),
+              ),
+            ],
           ),
         );
       },
@@ -4832,23 +5513,19 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     switch (action) {
-      case _SessionGateAction.keepCurrent:
-        await _handleKeepCurrentDecision(remoteSessionId);
-        break;
       case _SessionGateAction.resume:
         await _handleResumeDecision(remoteSessionId);
         break;
       case _SessionGateAction.startNew:
         await _handleStartNewDecision(remoteSessionId);
         break;
-      case _SessionGateAction.interruptAndExit:
-        await _handleInterruptAndExitDecision(remoteSessionId);
-        break;
-      case _SessionGateAction.completeAndExit:
-        await _handleCompleteAndExitDecision(remoteSessionId);
-        break;
       case null:
-        await _handleKeepCurrentDecision(remoteSessionId);
+        _logSessionDecision(
+          source: 'dialog',
+          decision: 'DISMISS_WITHOUT_DECISION',
+          sessionId: remoteSessionId,
+          reason: 'DIALOG_DISMISSED_UNEXPECTEDLY',
+        );
         break;
     }
 
@@ -4856,51 +5533,6 @@ class _ControlScreenState extends State<ControlScreen>
     if (_requiresSessionDecision) {
       _promptSessionDecisionIfNeeded();
     }
-  }
-
-  Future<void> _handleKeepCurrentDecision(String remoteSessionId) async {
-    _logSessionDecision(
-      source: 'dialog',
-      decision: 'KEEP_CURRENT',
-      sessionId: remoteSessionId,
-      reason: 'THERAPIST_KEEP_CURRENT',
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _requiresSessionDecision = false;
-      _remoteSessionIdPendingDecision = null;
-      _lastConnectionLostAtUtc = null;
-    });
-    _markDeferredHandoff(
-      sessionId: remoteSessionId,
-      reasonCode: 'THERAPIST_KEEP_CURRENT',
-      source: 'dialog',
-    );
-
-    if (_isConnected && !_sessionAttachReady) {
-      await _ensureSessionAttached(
-        reasonCode: 'HANDOFF_KEEP_CURRENT',
-        force: true,
-        sessionIdOverride: _activeSessionId,
-      );
-    }
-
-    if (!mounted) {
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Keeping current session context. You can reconnect later to hand off.',
-        ),
-        duration: Duration(seconds: 2),
-      ),
-    );
   }
 
   Future<void> _handleResumeDecision(String remoteSessionId) async {
@@ -4911,6 +5543,14 @@ class _ControlScreenState extends State<ControlScreen>
       reason: 'THERAPIST_CONTINUE_UNFINISHED',
     );
     final resolvedGameId = _resolveRemoteGameIdForResume();
+    final recoveryEvaluation = _evaluateRecoveryWindowState(
+      remoteSessionNeedsDecision: true,
+      remoteSessionId: remoteSessionId,
+      interruptedAtUtc:
+          _latestPersistedSession?.sessionId.trim() == remoteSessionId
+              ? _latestPersistedSession?.interruptedAtUtc
+              : null,
+    );
 
     setState(() {
       // Mobile-only arch guard: only adopt mobile-* IDs as active session.
@@ -4928,10 +5568,22 @@ class _ControlScreenState extends State<ControlScreen>
         _selectedGameId = resolvedGameId;
       }
     });
+    unawaited(
+      _persistWorkflowCheckpoint(
+        workflowStep: _WorkflowStep.gameSetup,
+        reasonCode: 'SCREEN_GAME_SETUP',
+        gameIdOverride: resolvedGameId,
+      ),
+    );
     _clearDeferredHandoff(
       sessionId: remoteSessionId,
       source: 'dialog',
       reasonCode: 'THERAPIST_CONTINUE_UNFINISHED',
+    );
+    _persistResumeDecisionOutcome(
+      sessionId: remoteSessionId,
+      resumedGameId: resolvedGameId,
+      recoveryState: recoveryEvaluation.state,
     );
     await _ensureSessionAttached(
       reasonCode: 'HANDOFF_RESUME',
@@ -4946,52 +5598,6 @@ class _ControlScreenState extends State<ControlScreen>
         ),
       );
     }
-  }
-
-  Future<void> _handleInterruptAndExitDecision(String remoteSessionId) async {
-    _logSessionDecision(
-      source: 'dialog',
-      decision: 'INTERRUPT_AND_EXIT',
-      sessionId: remoteSessionId,
-      reason: 'THERAPIST_ABORTED_AFTER_RECOVERY_WINDOW',
-    );
-
-    final ended = await _sendEndSessionWithConfirmation(
-      reasonCode: 'THERAPIST_ABORTED_AFTER_RECOVERY_WINDOW',
-      extraPayload: const <String, dynamic>{
-        'reason': 'TherapistInterruptedAfterRecoveryWindow',
-        'reasonCode': 'THERAPIST_ABORTED_AFTER_RECOVERY_WINDOW',
-      },
-      allowLocalFallbackOnTransportFailure: true,
-    );
-    if (!ended || !mounted) {
-      return;
-    }
-
-    await _disconnectAndPop(returnToStudentSelection: true);
-  }
-
-  Future<void> _handleCompleteAndExitDecision(String remoteSessionId) async {
-    _logSessionDecision(
-      source: 'dialog',
-      decision: 'COMPLETE_AND_EXIT',
-      sessionId: remoteSessionId,
-      reason: 'THERAPIST_CONFIRMED_END_AFTER_RECOVERY_WINDOW',
-    );
-
-    final ended = await _sendEndSessionWithConfirmation(
-      reasonCode: 'THERAPIST_CONFIRMED_END_AFTER_RECOVERY_WINDOW',
-      extraPayload: const <String, dynamic>{
-        'reason': 'TherapistEndedAfterRecoveryWindow',
-        'reasonCode': 'THERAPIST_CONFIRMED_END_AFTER_RECOVERY_WINDOW',
-      },
-      allowLocalFallbackOnTransportFailure: true,
-    );
-    if (!ended || !mounted) {
-      return;
-    }
-
-    await _disconnectAndPop(returnToStudentSelection: true);
   }
 
   String? _resolveRemoteGameIdForResume() {
@@ -5009,6 +5615,89 @@ class _ControlScreenState extends State<ControlScreen>
     return null;
   }
 
+  String _resolveDecisionSessionGameId(
+    String sessionId, {
+    String fallbackGameId = '',
+  }) {
+    final persistedGameId =
+        _resolveDecisionSessionRecord(sessionId)?.latestGameId.trim() ?? '';
+    if (persistedGameId.isNotEmpty) {
+      return persistedGameId;
+    }
+
+    final normalizedFallbackGameId = fallbackGameId.trim();
+    if (normalizedFallbackGameId.isNotEmpty) {
+      return normalizedFallbackGameId;
+    }
+
+    return _selectedGameId.trim();
+  }
+
+  void _persistResumeDecisionOutcome({
+    required String sessionId,
+    String? resumedGameId,
+    required SessionRecoveryWindowState recoveryState,
+  }) {
+    final normalizedSessionId = sessionId.trim();
+    if (normalizedSessionId.isEmpty) {
+      return;
+    }
+
+    debugPrint(
+      '[ControlScreen] Resume decision kept local-only: '
+      'session=$normalizedSessionId game=${_resolveDecisionSessionGameId(normalizedSessionId, fallbackGameId: resumedGameId ?? '')} '
+      'recoveryState=${recoveryState.name}',
+    );
+  }
+
+  Future<void> _bootstrapReplacementSession({
+    required String newSessionId,
+    required String previousSessionId,
+  }) async {
+    final normalizedNewSessionId = newSessionId.trim();
+    final normalizedPreviousSessionId = previousSessionId.trim();
+    if (normalizedNewSessionId.isEmpty || normalizedPreviousSessionId.isEmpty) {
+      return;
+    }
+
+    final therapistId = _resolveActorTherapistId();
+    final previousGameId =
+        _resolveDecisionSessionGameId(normalizedPreviousSessionId);
+    final metadata = <String, dynamic>{
+      'origin': 'mobile_decision_gate',
+      'previousSessionId': normalizedPreviousSessionId,
+      'previousGameId': previousGameId,
+      'decision': 'START_NEW',
+    };
+    try {
+      await SessionJournalService.upsertSessionState(
+        sessionId: normalizedNewSessionId,
+        studentId: widget.student.id,
+        therapistId: therapistId,
+        state: SessionLifecycleState.created,
+        latestGameId: '',
+        reasonCode: 'THERAPIST_STARTED_REPLACEMENT_SESSION',
+        metadata: metadata,
+      );
+
+      _setLatestPersistedSessionSnapshotLocally(
+        _buildLocalPersistedSessionSnapshot(
+          sessionId: normalizedNewSessionId,
+          state: SessionLifecycleState.created,
+          latestGameId: '',
+          reasonCode: 'THERAPIST_STARTED_REPLACEMENT_SESSION',
+          metadata: metadata,
+        ),
+      );
+    } catch (e) {
+      debugPrint(
+        '[ControlScreen] Bootstrap replacement session failed: '
+        'session=$normalizedNewSessionId previous=$normalizedPreviousSessionId '
+        'error=$e',
+      );
+    }
+  }
+
   Future<void> _handleStartNewDecision(String remoteSessionId) async {
     _logSessionDecision(
       source: 'dialog',
@@ -5023,19 +5712,19 @@ class _ControlScreenState extends State<ControlScreen>
             return PopScope(
               canPop: false,
               child: AlertDialog(
-                title: const Text('Start a new session?'),
+                title: const Text('Porzucić starą sesję?'),
                 content: const Text(
-                  'This sends END_SESSION for the unfinished headset session '
-                  'and creates a new one. Continue?',
+                  'Stara sesja zostanie oznaczona jako porzucona, jej dane '
+                  'zostaną zachowane, a my utworzymy nową sesję. Kontynuować?',
                 ),
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(false),
-                    child: const Text('Cancel'),
+                    child: const Text('Anuluj'),
                   ),
                   ElevatedButton(
                     onPressed: () => Navigator.of(context).pop(true),
-                    child: const Text('Start new'),
+                    child: const Text('Porzuć i zacznij nową'),
                   ),
                 ],
               ),
@@ -5054,6 +5743,7 @@ class _ControlScreenState extends State<ControlScreen>
       return;
     }
 
+    final replacementSessionId = _buildLocalSessionId();
     try {
       await _connection.sendCriticalCommand(
         commandId: CriticalCommandIds.endSession,
@@ -5061,6 +5751,11 @@ class _ControlScreenState extends State<ControlScreen>
         payload: _buildCriticalPayload(
           CriticalCommandIds.endSession,
           sessionId: remoteSessionId,
+          extraPayload: <String, dynamic>{
+            'reasonCode': 'THERAPIST_ABANDONED_UNFINISHED_SESSION',
+            'reason': 'TherapistAbandonedUnfinishedSession',
+            'replacementSessionId': replacementSessionId,
+          },
         ),
         expiresAtUtc: DateTime.now().toUtc().add(const Duration(seconds: 30)),
         ackTimeout:
@@ -5068,14 +5763,21 @@ class _ControlScreenState extends State<ControlScreen>
         maxRetries: _resolveCriticalCommandMaxRetries(),
       );
       _markSessionAsRecentlyEnded(remoteSessionId);
-      await _persistStartNewDecisionOutcome(remoteSessionId);
+      await _persistStartNewDecisionOutcome(
+        remoteSessionId: remoteSessionId,
+        replacementSessionId: replacementSessionId,
+      );
+      await _bootstrapReplacementSession(
+        newSessionId: replacementSessionId,
+        previousSessionId: remoteSessionId,
+      );
 
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _activeSessionId = _buildLocalSessionId();
+        _activeSessionId = replacementSessionId;
         _requiresSessionDecision = false;
         _remoteSessionIdPendingDecision = null;
         _lastConnectionLostAtUtc = null;
@@ -5083,14 +5785,22 @@ class _ControlScreenState extends State<ControlScreen>
         _workflowStep = _WorkflowStep.gameCatalog;
         _isVideoPreviewExpanded = false;
       });
+      unawaited(
+        _persistWorkflowCheckpoint(
+          workflowStep: _WorkflowStep.gameCatalog,
+          reasonCode: 'SCREEN_GAME_CATALOG',
+        ),
+      );
+      _clearReconnectGameRuntimeRecovery(reasonCode: 'START_NEW_SESSION');
       _clearDeferredHandoff(
         sessionId: remoteSessionId,
         source: 'dialog',
-        reasonCode: 'END_SESSION_AND_ATTACH_OK',
+        reasonCode: 'THERAPIST_ABANDONED_UNFINISHED_SESSION',
       );
       await _ensureSessionAttached(
         reasonCode: 'HANDOFF_START_NEW',
         force: true,
+        sessionIdOverride: replacementSessionId,
       );
       if (!mounted || !_sessionAttachReady) {
         return;
@@ -5098,14 +5808,16 @@ class _ControlScreenState extends State<ControlScreen>
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Previous session ended. You can start a new one.'),
+          content: Text(
+            'Stara sesja została zachowana jako porzucona. Możesz uruchomić nową.',
+          ),
         ),
       );
       _logSessionDecision(
         source: 'dialog',
         decision: 'START_NEW_COMPLETED',
         sessionId: remoteSessionId,
-        reason: 'END_SESSION_AND_ATTACH_OK',
+        reason: 'ABANDON_OLD_AND_ATTACH_OK',
       );
     } catch (e) {
       if (!mounted) {
@@ -5292,6 +6004,34 @@ class _ControlScreenState extends State<ControlScreen>
       );
     }
 
+    if ((command == CriticalCommandIds.startGame ||
+            command == CriticalCommandIds.resumeGame) &&
+        _reconnectGameRuntimeRecoveryPending) {
+      final recovered = await _ensurePreparedGameRuntimeAfterReconnect(
+        trigger: command,
+      );
+      if (!recovered) {
+        if (!mounted) {
+          return false;
+        }
+
+        final recoveryLabel = _resolveCatalogGameTitle(
+          _resolveReconnectGameRuntimeGameId(),
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              recoveryLabel.isEmpty
+                  ? 'Headset is still reloading the game scene. Try again in a moment.'
+                  : 'Headset is still reloading $recoveryLabel. Try again in a moment.',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return false;
+      }
+    }
+
     final commandSessionId = CriticalCommandIds.isCritical(command)
         ? _resolveSessionIdForCriticalCommand(command)
         : _activeSessionId;
@@ -5341,10 +6081,14 @@ class _ControlScreenState extends State<ControlScreen>
 
       if (mounted) {
         setState(() {
+          final stopReason = resolvedPayload == null
+              ? null
+              : resolvedPayload['reason'] as String?;
           if (command == CriticalCommandIds.startGame ||
               command == CriticalCommandIds.resumeGame) {
             _optimisticRuntimeActive = true;
             _optimisticRuntimePaused = false;
+            _optimisticPreparedGameId = _selectedGameId;
           } else if (command == CriticalCommandIds.pauseGame) {
             _optimisticRuntimeActive = true;
             _optimisticRuntimePaused = true;
@@ -5353,15 +6097,39 @@ class _ControlScreenState extends State<ControlScreen>
             _optimisticRuntimeActive = false;
             _optimisticRuntimePaused = false;
             _remoteActiveGameId = null;
+            _lastDevicePresenceSignal = _clearActiveGameFromPresenceSignal(
+              _lastDevicePresenceSignal,
+            );
+            if (command == CriticalCommandIds.stopGame &&
+                _shouldKeepPreparedGameAfterStopReason(stopReason)) {
+              _optimisticPreparedGameId = _selectedGameId;
+            } else {
+              _optimisticPreparedGameId = null;
+            }
+            if (command == CriticalCommandIds.stopGame &&
+                _shouldReturnToCatalogAfterStopReason(stopReason)) {
+              _workflowStep = _WorkflowStep.gameCatalog;
+              _isVideoPreviewExpanded = false;
+            }
           }
         });
       }
 
-      if (command == CriticalCommandIds.startGame ||
+      if (command == CriticalCommandIds.stopGame ||
+          command == CriticalCommandIds.endSession) {
+        _clearReconnectGameRuntimeRecovery(reasonCode: 'COMMAND_TERMINAL');
+      }
+
+      if (command == CriticalCommandIds.endSession) {
+        await _persistCommandSideEffects(
+          command,
+          sessionIdOverride: commandSessionId,
+          extraPayload: resolvedPayload,
+        );
+      } else if (command == CriticalCommandIds.startGame ||
           command == CriticalCommandIds.pauseGame ||
           command == CriticalCommandIds.resumeGame ||
-          command == CriticalCommandIds.stopGame ||
-          command == CriticalCommandIds.endSession) {
+          command == CriticalCommandIds.stopGame) {
         unawaited(
           _persistCommandSideEffects(
             command,
@@ -5622,6 +6390,20 @@ class _ControlScreenState extends State<ControlScreen>
           SnackBar(
             content: Text(
               'Cannot send UPDATE_CONFIG. $_controlLinkBlockedHint',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return false;
+    }
+
+    if (!_isSelectedGameSceneReadyForControls) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Cannot send UPDATE_CONFIG yet. $_selectedGameSceneLoadingHint',
             ),
             backgroundColor: Colors.orange,
           ),
@@ -6016,6 +6798,12 @@ class _ControlScreenState extends State<ControlScreen>
         _workflowStep = _WorkflowStep.gameSetup;
         _isVideoPreviewExpanded = true;
       });
+      unawaited(
+        _persistWorkflowCheckpoint(
+          workflowStep: _WorkflowStep.gameSetup,
+          reasonCode: 'SCREEN_GAME_SETUP',
+        ),
+      );
     }
 
     await _startFromSetup();
@@ -6031,6 +6819,26 @@ class _ControlScreenState extends State<ControlScreen>
         const SnackBar(
           content: Text(
             'Gra jest aktywna. Najpierw zatrzymaj lub zakoncz sesje, aby zmienic ustawienia.',
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    if (!_isSelectedGamePreparedOnHeadset) {
+      await _prepareSelectedGameScene(
+        reasonCode: 'START_REQUEST_SCENE_NOT_READY',
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Quest is still loading the selected game scene. Wait a moment and tap Start again.',
           ),
           backgroundColor: Colors.orange,
         ),
@@ -6114,6 +6922,9 @@ class _ControlScreenState extends State<ControlScreen>
     await _runPrimaryAction(() async {
       final stopSent = await _sendCommand(
         CriticalCommandIds.stopGame,
+        extraPayload: const <String, dynamic>{
+          'reason': 'RESTART_GAME',
+        },
         showSuccessSnack: false,
       );
       if (!stopSent) {
@@ -6125,6 +6936,34 @@ class _ControlScreenState extends State<ControlScreen>
         extraPayload: const <String, dynamic>{
           'resumeFromSaved': false,
         },
+      );
+    });
+  }
+
+  Future<void> _stopRoundFromSetup() async {
+    if (!_isGameRuntimeActive) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Stop is available only while a game is active.',
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    await _runPrimaryAction(() async {
+      await _sendCommand(
+        CriticalCommandIds.stopGame,
+        extraPayload: const <String, dynamic>{
+          'reason': 'THERAPIST_RECONFIGURE',
+        },
+        showSuccessSnack: false,
       );
     });
   }
@@ -6141,12 +6980,22 @@ class _ControlScreenState extends State<ControlScreen>
         _isVideoPreviewExpanded = false;
         _optimisticRuntimeActive = false;
         _optimisticRuntimePaused = false;
+        _optimisticPreparedGameId = null;
       });
+      _clearReconnectGameRuntimeRecovery(reasonCode: 'RETURN_TO_CATALOG');
+      unawaited(
+        _persistWorkflowCheckpoint(
+          workflowStep: _WorkflowStep.gameCatalog,
+          reasonCode: 'SCREEN_GAME_CATALOG',
+        ),
+      );
       return;
     }
 
-    var shouldStopRunningGame = false;
-    if (_isGameRuntimeActive) {
+    final shouldConfirmCatalogReturn =
+        _workflowStep == _WorkflowStep.gameSetup && _selectedGameId.isNotEmpty;
+    var shouldRouteQuestBackToMenu = false;
+    if (shouldConfirmCatalogReturn) {
       final decision = await showDialog<bool>(
             context: context,
             barrierDismissible: false,
@@ -6155,8 +7004,10 @@ class _ControlScreenState extends State<ControlScreen>
                 canPop: false,
                 child: AlertDialog(
                   title: const Text('Return to game catalog?'),
-                  content: const Text(
-                    'This will stop the current game and return to the game catalog.',
+                  content: Text(
+                    _isGameRuntimeActive
+                        ? 'This will end the current round, fade back to the main scene on Quest, and return to the game catalog. Continue?'
+                        : 'This will leave ${_selectedGameEntry.title}, return Quest to the main scene, and open the game catalog. Continue?',
                   ),
                   actions: [
                     TextButton(
@@ -6178,15 +7029,21 @@ class _ControlScreenState extends State<ControlScreen>
         return;
       }
 
-      shouldStopRunningGame = true;
+      shouldRouteQuestBackToMenu = _isConnected && _sessionAttachReady;
     }
 
     await _runPrimaryAction(() async {
-      if (shouldStopRunningGame) {
-        await _sendCommand(
+      if (shouldRouteQuestBackToMenu) {
+        final stopSent = await _sendCommand(
           CriticalCommandIds.stopGame,
+          extraPayload: const <String, dynamic>{
+            'reason': 'RETURN_TO_CATALOG',
+          },
           showSuccessSnack: false,
         );
+        if (!stopSent) {
+          return;
+        }
       }
 
       if (!mounted) {
@@ -6197,6 +7054,13 @@ class _ControlScreenState extends State<ControlScreen>
         _workflowStep = _WorkflowStep.gameCatalog;
         _isVideoPreviewExpanded = false;
       });
+      _clearReconnectGameRuntimeRecovery(reasonCode: 'RETURN_TO_CATALOG');
+      unawaited(
+        _persistWorkflowCheckpoint(
+          workflowStep: _WorkflowStep.gameCatalog,
+          reasonCode: 'SCREEN_GAME_CATALOG',
+        ),
+      );
     });
   }
 
@@ -6356,6 +7220,18 @@ class _ControlScreenState extends State<ControlScreen>
       return true;
     }
 
+    if (_isPrimaryActionInFlight) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Wait for the current action to finish.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return false;
+    }
+
     final choice = await showDialog<_ExitChoice>(
       context: context,
       barrierDismissible: false,
@@ -6393,18 +7269,29 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     if (choice == _ExitChoice.endSession) {
-      final ended = await _sendEndSessionWithConfirmation(
-        allowLocalFallbackOnTransportFailure: true,
-      );
-      if (!ended) {
-        return false;
-      }
+      await _endSessionAndReturnToStudentSelection();
+      return false;
     }
 
     await _disconnectAndPop(
       returnToStudentSelection: choice == _ExitChoice.endSession,
     );
     return false;
+  }
+
+  Future<bool> _endSessionAndReturnToStudentSelection() async {
+    var ended = false;
+    await _runPrimaryAction(() async {
+      ended = await _sendEndSessionWithConfirmation(
+        allowLocalFallbackOnTransportFailure: true,
+      );
+      if (!ended) {
+        return;
+      }
+
+      await _disconnectAndPop(returnToStudentSelection: true);
+    });
+    return ended;
   }
 
   Future<void> _disconnectAndPop(
@@ -6454,10 +7341,8 @@ class _ControlScreenState extends State<ControlScreen>
               ? IconButton(
                   onPressed: _isPrimaryActionInFlight
                       ? null
-                      : () => unawaited(
-                            _disconnectAndPop(returnToStudentSelection: true),
-                          ),
-                  tooltip: 'Back to student selection',
+                      : () => unawaited(_endSessionFromCatalog()),
+                  tooltip: 'End session and return to student selection',
                   icon: const Icon(Icons.arrow_back),
                 )
               : IconButton(
@@ -6533,9 +7418,13 @@ class _ControlScreenState extends State<ControlScreen>
         body: SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-            child: isCatalogScreen
-                ? _buildGameCatalogStep()
-                : _buildGameSetupStep(),
+            child: IndexedStack(
+              index: isCatalogScreen ? 0 : 1,
+              children: [
+                _buildGameCatalogStep(),
+                _buildGameSetupStep(),
+              ],
+            ),
           ),
         ),
       ),
@@ -6584,6 +7473,7 @@ class _ControlScreenState extends State<ControlScreen>
                   connection: _connection,
                   deviceIP: widget.device.ip,
                   port: widget.device.videoPort,
+                  previewActive: _isPreviewStreamExpected,
                   onStateChanged: _handleMediaPreviewStateChanged,
                 ),
               ),
@@ -6797,7 +7687,6 @@ class _ControlScreenState extends State<ControlScreen>
         gameId: _selectedGameId,
         fromQuickTemplate: fromQuickTemplate,
       );
-      await _refreshPersistedSessionSnapshot(triggerPrompt: false);
       if (!mounted) {
         return;
       }
@@ -6805,6 +7694,13 @@ class _ControlScreenState extends State<ControlScreen>
       if (!fromQuickTemplate) {
         _timelineNoteController.clear();
       }
+
+      unawaited(
+        _refreshSessionJournal(
+          reason: 'THERAPIST_NOTE_SAVED',
+          sessionIdOverride: sessionId,
+        ),
+      );
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -7029,88 +7925,96 @@ class _ControlScreenState extends State<ControlScreen>
   // ── VR game-run stats ──────────────────────────────────────────────────────
 
   Widget _buildVrGameRunsPanel(String sessionId) {
-    return StreamBuilder<List<GameRunRecord>>(
-      stream: SessionJournalService.watchGameRuns(sessionId: sessionId),
-      builder: (context, snapshot) {
-        final runs = snapshot.data ?? [];
-        if (runs.isEmpty) return const SizedBox.shrink();
+    if (_loadedJournalSessionId != sessionId && !_journalLoading) {
+      unawaited(
+        _refreshSessionJournal(
+          reason: 'VR_GAME_RUNS_PANEL',
+          sessionIdOverride: sessionId,
+        ),
+      );
+    }
 
-        final totalInteractions =
-            runs.fold(0, (sum, r) => sum + r.interactionCount);
-        final totalHits = runs.fold(0, (sum, r) => sum + r.hitCount);
-        final totalMisses = runs.fold(0, (sum, r) => sum + r.missCount);
+    final runs = _loadedJournalSessionId == sessionId
+        ? _cachedGameRuns
+        : const <GameRunRecord>[];
+    if (runs.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.indigo.shade50,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: Colors.indigo.shade100),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    final totalInteractions =
+        runs.fold(0, (sum, r) => sum + r.interactionCount);
+    final totalHits = runs.fold(0, (sum, r) => sum + r.hitCount);
+    final totalMisses = runs.fold(0, (sum, r) => sum + r.missCount);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.indigo.shade50,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Colors.indigo.shade100),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.sports_esports, size: 14,
-                          color: Colors.indigo),
-                      const SizedBox(width: 6),
-                      Text(
-                        'VR interactions',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.indigo.shade700,
-                        ),
-                      ),
-                    ],
+                  const Icon(Icons.sports_esports,
+                      size: 14, color: Colors.indigo),
+                  const SizedBox(width: 6),
+                  Text(
+                    'VR interactions',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.indigo.shade700,
+                    ),
                   ),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: [
-                      _vrStatChip(
-                        Icons.check_circle_outline,
-                        '$totalHits hits',
-                        Colors.green.shade700,
-                        Colors.green.shade50,
-                      ),
-                      _vrStatChip(
-                        Icons.cancel_outlined,
-                        '$totalMisses misses',
-                        Colors.red.shade700,
-                        Colors.red.shade50,
-                      ),
-                      _vrStatChip(
-                        Icons.touch_app_outlined,
-                        '$totalInteractions total',
-                        Colors.blue.shade700,
-                        Colors.blue.shade50,
-                      ),
-                      _vrStatChip(
-                        Icons.videogame_asset_outlined,
-                        '${runs.length} ${runs.length == 1 ? "game" : "games"}',
-                        Colors.purple.shade700,
-                        Colors.purple.shade50,
-                      ),
-                    ],
-                  ),
-                  if (runs.length > 1) ...[
-                    const SizedBox(height: 8),
-                    for (final run in runs) _buildGameRunRow(run),
-                  ],
                 ],
               ),
-            ),
-            const SizedBox(height: 8),
-          ],
-        );
-      },
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  _vrStatChip(
+                    Icons.check_circle_outline,
+                    '$totalHits hits',
+                    Colors.green.shade700,
+                    Colors.green.shade50,
+                  ),
+                  _vrStatChip(
+                    Icons.cancel_outlined,
+                    '$totalMisses misses',
+                    Colors.red.shade700,
+                    Colors.red.shade50,
+                  ),
+                  _vrStatChip(
+                    Icons.touch_app_outlined,
+                    '$totalInteractions total',
+                    Colors.blue.shade700,
+                    Colors.blue.shade50,
+                  ),
+                  _vrStatChip(
+                    Icons.videogame_asset_outlined,
+                    '${runs.length} ${runs.length == 1 ? "game" : "games"}',
+                    Colors.purple.shade700,
+                    Colors.purple.shade50,
+                  ),
+                ],
+              ),
+              if (runs.length > 1) ...[
+                const SizedBox(height: 8),
+                for (final run in runs) _buildGameRunRow(run),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+      ],
     );
   }
 
@@ -7188,6 +8092,16 @@ class _ControlScreenState extends State<ControlScreen>
   Widget _buildTherapistTimelinePanel() {
     final sessionId = _resolveTimelineSessionId();
     final hasSessionId = sessionId.isNotEmpty;
+    if (hasSessionId &&
+        _loadedJournalSessionId != sessionId &&
+        !_journalLoading) {
+      unawaited(
+        _refreshSessionJournal(
+          reason: 'TIMELINE_PANEL',
+          sessionIdOverride: sessionId,
+        ),
+      );
+    }
     final templates = _therapistSessionSettings.timelineQuickNoteTemplates
         .map((entry) => entry.trim())
         .where((entry) => entry.isNotEmpty)
@@ -7314,16 +8228,13 @@ class _ControlScreenState extends State<ControlScreen>
             _buildVrGameRunsPanel(sessionId),
             SizedBox(
               height: 250,
-              child: StreamBuilder<List<SessionTimelineEvent>>(
-                stream: SessionJournalService.watchSessionTimeline(
-                  sessionId: sessionId,
-                  limit: 40,
-                ),
-                builder: (context, snapshot) {
-                  if (snapshot.hasError) {
+              child: Builder(
+                builder: (context) {
+                  if (_journalLoadError != null &&
+                      _loadedJournalSessionId == sessionId) {
                     return Center(
                       child: Text(
-                        'Timeline unavailable: ${snapshot.error}',
+                        'Timeline unavailable: $_journalLoadError',
                         style: TextStyle(
                           color: Colors.red.shade700,
                           fontSize: 12,
@@ -7333,13 +8244,17 @@ class _ControlScreenState extends State<ControlScreen>
                     );
                   }
 
-                  if (!snapshot.hasData) {
+                  if (_journalLoading &&
+                      _loadedJournalSessionId == sessionId &&
+                      _cachedTimelineEvents.isEmpty) {
                     return const Center(
                       child: CircularProgressIndicator(),
                     );
                   }
 
-                  final events = snapshot.data!;
+                  final events = _loadedJournalSessionId == sessionId
+                      ? _cachedTimelineEvents
+                      : const <SessionTimelineEvent>[];
                   if (events.isEmpty) {
                     return Center(
                       child: Text(
@@ -7448,196 +8363,6 @@ class _ControlScreenState extends State<ControlScreen>
     }
   }
 
-  Widget _buildMoreGamesHint() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.blueGrey.shade50,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.blueGrey.shade100),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.add_circle_outline, size: 18),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Demo catalog mode',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Only demo_cube_clicker is visible in this build to keep Store -> Buy(sim) -> Install -> Start stable.',
-                  style: TextStyle(
-                    color: Colors.grey.shade700,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          TextButton(
-            onPressed: _showMoreGamesInfo,
-            child: const Text('How to add'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _showMoreGamesInfo() async {
-    if (!mounted) {
-      return;
-    }
-
-    await showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Demo catalog scope'),
-          content: const Text(
-            'This demo scope intentionally exposes only demo_cube_clicker. '
-            'Use CMS seed to keep a single active catalog entry for end-to-end install/start validation.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _resetSimulatedPurchases() async {
-    if (!mounted) {
-      return;
-    }
-
-    final resettableEntries = _effectiveGameCatalog
-        .where(
-          (entry) =>
-              _isDemoCatalogGameId(entry.gameId) || entry.requiresExplicitLicense,
-        )
-        .toList(growable: false);
-    if (resettableEntries.isEmpty && _simulatedOwnedGameIds.isEmpty) {
-      return;
-    }
-
-    final confirmed = await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => AlertDialog(
-            title: const Text('Reset demo purchases?'),
-            content: const Text(
-              'This clears simulated owned state and returns demo games to Store.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Reset'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-    if (!confirmed || !mounted) {
-      return;
-    }
-
-    final requestedUninstalls = <String>[];
-    if (_isConnected) {
-      for (final entry in resettableEntries) {
-        final state = _contentStateForGame(entry.gameId);
-        final hasInstalledVersion =
-            (state.installedVersion?.trim().isNotEmpty ?? false);
-        if (!state.owned && !hasInstalledVersion) {
-          continue;
-        }
-
-        final success = await _sendCommand(
-          ContentDeliveryCommandIds.uninstallGame,
-          extraPayload: ContentDeliveryRequests.buildUninstallRequest(
-            actorId: _resolveActorTherapistId(),
-            gameId: entry.gameId,
-          ),
-          showSuccessSnack: false,
-        );
-        if (success) {
-          requestedUninstalls.add(entry.gameId);
-        }
-      }
-    }
-
-    final nowUtc = DateTime.now().toUtc();
-    final clearedGameIds = resettableEntries
-        .map((entry) => entry.gameId.trim())
-        .where((gameId) => gameId.isNotEmpty)
-        .toList(growable: false)
-      ..sort();
-    setState(() {
-      _simulatedOwnedGameIds.clear();
-      _catalogFilterTab = _CatalogFilterTab.store;
-
-      for (final entry in resettableEntries) {
-        final existing = _contentStatesByGameId[entry.gameId] ??
-            _contentStateForGame(entry.gameId);
-        _contentStatesByGameId[entry.gameId] = existing.copyWith(
-          owned: false,
-          installedVersion: null,
-          runtimeStatus: ContentRuntimeStatus.notInstalled,
-          updateRequired: false,
-          updateOptional: false,
-          lastError: null,
-          updatedAtUtc: nowUtc,
-        );
-      }
-    });
-
-    unawaited(
-      _persistCatalogInteractionEvent(
-        eventType: 'STORE_PURCHASE_SIMULATED_RESET',
-        gameId: _selectedGameId,
-        details: <String, dynamic>{
-          'clearedGameIds': clearedGameIds,
-          'requestedUninstalls': requestedUninstalls,
-        },
-      ),
-    );
-
-    if (_isConnected && _sessionAttachReady) {
-      await _ensureSessionAttached(
-        reasonCode: 'ENTITLEMENT_REFRESH_AFTER_RESET',
-        force: true,
-      );
-      await _syncContentCatalog(silent: true);
-    }
-
-    if (!mounted) {
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Simulated purchases reset. Store is clean again.'),
-        duration: Duration(seconds: 2),
-      ),
-    );
-  }
-
   Future<void> _endSessionFromCatalog() async {
     final confirmed = await showDialog<bool>(
           context: context,
@@ -7664,16 +8389,7 @@ class _ControlScreenState extends State<ControlScreen>
       return;
     }
 
-    await _runPrimaryAction(() async {
-      final ended = await _sendEndSessionWithConfirmation(
-        allowLocalFallbackOnTransportFailure: true,
-      );
-      if (!ended) {
-        return;
-      }
-
-      await _disconnectAndPop(returnToStudentSelection: true);
-    });
+    await _endSessionAndReturnToStudentSelection();
   }
 
   Future<void> _terminateActiveSessionFromCatalog() async {
@@ -8052,12 +8768,14 @@ class _ControlScreenState extends State<ControlScreen>
   }) {
     final controlsReady = _isControlLinkReadyForCommands;
     final planLaunchBlocked = _isPlanBlockingLaunch;
+    final selectedGamePreparedOnHeadset = _isSelectedGamePreparedOnHeadset;
     final canStart = controlsReady &&
         !_isPrimaryActionInFlight &&
         !planLaunchBlocked &&
         entry.runtimeLaunchEnabled &&
         _isLaunchableContentState(contentState) &&
-        !_isGameRuntimeActive;
+        !_isGameRuntimeActive &&
+        selectedGamePreparedOnHeadset;
     final canRestart = controlsReady &&
         !_isPrimaryActionInFlight &&
         !planLaunchBlocked &&
@@ -8074,7 +8792,6 @@ class _ControlScreenState extends State<ControlScreen>
         _isGameRuntimePaused;
     final canEndGame =
         controlsReady && !_isPrimaryActionInFlight && _isGameRuntimeActive;
-
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -8141,15 +8858,10 @@ class _ControlScreenState extends State<ControlScreen>
           ),
           const SizedBox(height: 8),
           ElevatedButton.icon(
-            onPressed: canEndGame
-                ? () => unawaited(
-                      _runPrimaryAction(() async {
-                        await _sendCommand(CriticalCommandIds.stopGame);
-                      }),
-                    )
-                : null,
+            onPressed:
+                canEndGame ? () => unawaited(_stopRoundFromSetup()) : null,
             icon: const Icon(Icons.stop_circle_outlined),
-            label: const Text('End Game'),
+            label: const Text('Stop'),
             style: ElevatedButton.styleFrom(
               minimumSize: const Size.fromHeight(44),
               backgroundColor: Colors.red.shade700,
@@ -8195,639 +8907,663 @@ class _ControlScreenState extends State<ControlScreen>
 
   Widget _buildGameCatalogStep() {
     final catalog = _entitledGameCatalog;
-    final installedCatalog = <_GameCatalogEntry>[];
-    final storeCatalog = <_GameCatalogEntry>[];
-    for (final entry in catalog) {
-      final state = _contentStateForGame(entry.gameId);
-      if (state.owned) {
-        installedCatalog.add(entry);
-      } else if (entry.availableForPurchase) {
-        storeCatalog.add(entry);
-      }
-    }
-    final visibleCatalog = _catalogFilterTab == _CatalogFilterTab.installed
-        ? installedCatalog
-        : storeCatalog;
-    final selectedEntry = _selectedGameEntry;
-    final selectedContentState = _selectedContentState;
-    final launchReadinessHint =
-        _buildLaunchReadinessHint(selectedEntry, selectedContentState);
-    final planGateBannerText = _planGateBannerText;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildVideoPreviewPanel(
-          subtitle: 'Optional live feed from the headset.',
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Game catalog',
-                style: TextStyle(
-                  color: Colors.grey[900],
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            if (_contentDeliveryEnabled)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  TextButton.icon(
-                    onPressed: _isConnected && !_contentSyncInFlight
-                        ? () => unawaited(_syncContentCatalog())
-                        : null,
-                    icon: _contentSyncInFlight
-                        ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.sync, size: 16),
-                    label:
-                        Text(_contentSyncInFlight ? 'Syncing...' : 'Refresh'),
-                  ),
-                  if (_boardSafePackageProbeFeatureEnabled)
-                    TextButton.icon(
-                      onPressed: () {
-                        setState(() {
-                          _packageProbeKillSwitchEnabled =
-                              !_packageProbeKillSwitchEnabled;
-                        });
-                      },
-                      icon: Icon(
-                        _isPackageProbeEnabled
-                            ? Icons.shield_outlined
-                            : Icons.shield_moon_outlined,
-                        size: 16,
-                      ),
-                      label: Text(
-                        _isPackageProbeEnabled ? 'Probe ON' : 'Probe OFF',
-                      ),
-                    ),
-                ],
-              ),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[
+            Colors.white,
+            Colors.orange.shade50,
           ],
         ),
-        Text(
-          _contentDeliveryEnabled
-              ? 'Choose a game, ensure it is ready, then open the game session screen.'
-              : 'Choose a game and open the game session screen.',
-          style: TextStyle(
-            color: Colors.grey[700],
-            fontSize: 12,
-          ),
-        ),
-        if (_boardSafePackageProbeFeatureEnabled)
-          Text(
-            _isPackageProbeEnabled
-                ? 'Board-safe package probe is enabled (HTTP reachability only).'
-                : 'Board-safe package probe is disabled by kill switch.',
-            style: TextStyle(
-              color: _isPackageProbeEnabled
-                  ? Colors.grey.shade700
-                  : Colors.orange.shade800,
-              fontSize: 11,
-              fontWeight:
-                  _isPackageProbeEnabled ? FontWeight.w500 : FontWeight.w700,
-            ),
-          ),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade200,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: FilledButton.tonal(
-                  onPressed: _catalogFilterTab == _CatalogFilterTab.installed
-                      ? null
-                      : () {
-                          setState(() {
-                            _catalogFilterTab = _CatalogFilterTab.installed;
-                          });
-                        },
-                  child: Text('Owned (${installedCatalog.length})'),
-                ),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 12, 10, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (!_isConnected) ...[
+              _buildStateBanner(
+                icon: Icons.wifi_off,
+                color: Colors.red.shade700,
+                text: 'Headset is offline. Reconnect to continue.',
               ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: FilledButton.tonal(
-                  onPressed: _catalogFilterTab == _CatalogFilterTab.store
-                      ? null
-                      : () {
-                          setState(() {
-                            _catalogFilterTab = _CatalogFilterTab.store;
-                          });
-                        },
-                  child: Text('Shop (${storeCatalog.length})'),
-                ),
+              const SizedBox(height: 10),
+            ] else if (!_sessionAttachReady) ...[
+              _buildStateBanner(
+                icon: Icons.sync,
+                color: Colors.orange.shade800,
+                text: _sessionAttachInFlight
+                    ? 'Synchronizing session context with headset...'
+                    : 'Wait for headset session sync before starting a game.',
               ),
+              const SizedBox(height: 10),
+            ] else if (_headsetPresenceBannerText != null) ...[
+              _buildStateBanner(
+                icon: Icons.warning_amber_rounded,
+                color: Colors.orange.shade800,
+                text: _headsetPresenceBannerText!,
+              ),
+              const SizedBox(height: 10),
             ],
-          ),
-        ),
-        const SizedBox(height: 6),
-        if (!_isConnected) ...[
-          _buildStateBanner(
-            icon: Icons.wifi_off,
-            color: Colors.red.shade700,
-            text: _contentDeliveryEnabled
-                ? 'Headset is offline. Install/update actions will stay disabled until reconnect.'
-                : 'Headset is offline. Reconnect to continue.',
-          ),
-          const SizedBox(height: 6),
-        ] else if (_mediaPreviewState != MediaPreviewState.streaming) ...[
-          _buildStateBanner(
-            icon: Icons.wifi_tethering_error_rounded,
-            color: Colors.orange.shade800,
-            text:
-                'Control transport is up, but VR preview is unavailable. You can open setup, but commands stay blocked until preview returns.',
-          ),
-          const SizedBox(height: 6),
-        ] else if (_headsetPresenceBannerText != null) ...[
-          _buildStateBanner(
-            icon: Icons.warning_amber_rounded,
-            color: Colors.orange.shade800,
-            text: _headsetPresenceBannerText!,
-          ),
-          const SizedBox(height: 6),
-        ] else if (!_sessionAttachReady) ...[
-          _buildStateBanner(
-            icon: Icons.sync,
-            color: Colors.orange.shade800,
-            text: _sessionAttachInFlight
-                ? 'Synchronizing session context with headset...'
-                : 'Session context not synced yet. Commands stay blocked until sync completes.',
-          ),
-          const SizedBox(height: 6),
-        ],
-        if (_hasDeferredHandoff) ...[
-          _buildDeferredHandoffBanner(),
-          const SizedBox(height: 6),
-        ],
-        if (planGateBannerText != null) ...[
-          _buildStateBanner(
-            icon: Icons.lock_outline,
-            color: Colors.orange.shade800,
-            text: planGateBannerText,
-          ),
-          const SizedBox(height: 6),
-        ],
-        if (_isSelectedGameLaunchable) ...[
-          _buildStateBanner(
-            icon: Icons.check_circle,
-            color: Colors.green.shade700,
-            text: 'Selected game `${selectedEntry.title}` is ready to open.',
-          ),
-          const SizedBox(height: 6),
-        ] else if (!selectedEntry.runtimeLaunchEnabled) ...[
-          _buildStateBanner(
-            icon: Icons.hourglass_bottom,
-            color: Colors.orange.shade800,
-            text:
-                'Selected game `${selectedEntry.title}` is catalog-only for now. Runtime launch is not enabled yet.',
-          ),
-          const SizedBox(height: 6),
-        ] else if (_contentDeliveryEnabled) ...[
-          _buildStateBanner(
-            icon: Icons.warning_amber_rounded,
-            color: Colors.orange.shade800,
-            text: launchReadinessHint,
-          ),
-          const SizedBox(height: 6),
-        ],
-        if (_isParentRole) ...[
-          _buildParentQuickStartPanel(),
-          const SizedBox(height: 6),
-          _buildParentProgressPanel(),
-          const SizedBox(height: 6),
-        ],
-        Expanded(
-          child: visibleCatalog.isEmpty
-              ? Center(
-                  child: Text(
-                    _catalogFilterTab == _CatalogFilterTab.installed
-                        ? 'No installed games yet for this account.'
-                        : 'No store items available right now.',
-                    style: TextStyle(color: Colors.grey[600]),
-                  ),
-                )
-              : LayoutBuilder(
-                  builder: (context, constraints) {
-                    final maxWidth = constraints.maxWidth;
-                    final crossAxisCount = maxWidth >= 980
-                        ? 3
-                        : maxWidth >= 620
-                            ? 2
-                            : 1;
-                    return GridView.builder(
-                      itemCount: visibleCatalog.length,
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: crossAxisCount,
-                        crossAxisSpacing: 8,
-                        mainAxisSpacing: 8,
-                        childAspectRatio: 0.88,
+            if (_hasDeferredHandoff) ...[
+              _buildDeferredHandoffBanner(),
+              const SizedBox(height: 10),
+            ],
+            Expanded(
+              child: catalog.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No bundled games available in the current build.',
+                        style: TextStyle(color: Colors.grey[700]),
                       ),
-                      itemBuilder: (context, index) {
-                        final entry = visibleCatalog[index];
-                        final selected = entry.gameId == _selectedGameId;
-                        final contentState = _contentStateForGame(entry.gameId);
-                        final actionInFlight =
-                            _contentActionsInFlight.contains(entry.gameId);
-                        final installManaged =
-                            _requiresQuestInstallState(entry.gameId);
-                        final canRemoveInstalled =
-                            installManaged && contentState.isInstalled;
-                        final shouldInstallOrUpdate = contentState.owned &&
-                            ((installManaged &&
-                                    (contentState.runtimeStatus ==
-                                            ContentRuntimeStatus.notInstalled ||
-                                        contentState.runtimeStatus ==
-                                            ContentRuntimeStatus
-                                                .updateRequired ||
-                                        contentState.runtimeStatus ==
-                                            ContentRuntimeStatus.failed ||
-                                        contentState.updateRequired)) ||
-                                contentState.runtimeStatus ==
-                                    ContentRuntimeStatus.updateRequired ||
-                                contentState.updateRequired ||
-                                contentState.runtimeStatus ==
-                                    ContentRuntimeStatus.failed);
-                        final primaryStoreActionEnabled =
-                            !contentState.owned && entry.availableForPurchase;
-                        final latestProbeSignal =
-                            _latestPackageProbeByGameId[entry.gameId];
-                        final hasProbeableUri =
-                            entry.packageUri.trim().isNotEmpty;
-                        final showProbeAction = _contentDeliveryEnabled &&
-                            _boardSafePackageProbeFeatureEnabled &&
-                            hasProbeableUri &&
-                            _catalogFilterTab != _CatalogFilterTab.store;
+                    )
+                  : ListView(
+                      padding: EdgeInsets.zero,
+                      children: [
+                        for (final entry in catalog)
+                          _buildCatalogSessionCard(entry),
+                        if (_isParentRole) ...[
+                          const SizedBox(height: 12),
+                          _buildParentQuickStartPanel(),
+                          const SizedBox(height: 12),
+                          _buildParentProgressPanel(),
+                        ],
+                      ],
+                    ),
+            ),
+            const SizedBox(height: 12),
+            if (_showCatalogRescueTerminateButton) ...[
+              OutlinedButton.icon(
+                onPressed: _isConnected && !_isPrimaryActionInFlight
+                    ? () => unawaited(_terminateActiveSessionFromCatalog())
+                    : null,
+                icon: const Icon(Icons.power_settings_new),
+                label: const Text('Terminate active session (rescue)'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.deepOrange.shade700,
+                  side: BorderSide(color: Colors.deepOrange.shade300),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+            ElevatedButton.icon(
+              onPressed: _isPrimaryActionInFlight
+                  ? null
+                  : () => unawaited(_endSessionFromCatalog()),
+              icon: const Icon(Icons.flag),
+              label: const Text('End Session'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                backgroundColor: Colors.deepOrange.shade700,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-                        return Card(
-                          elevation: selected ? 2 : 0.5,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(
-                              color: selected
-                                  ? Colors.blue.shade300
-                                  : Colors.grey.shade300,
+  Widget _buildCatalogSessionCard(_GameCatalogEntry entry) {
+    final imageUrl = entry.thumbnailUrl.trim();
+    final selected = _selectedGameId.trim() == entry.gameId;
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: GestureDetector(
+          onTap: _isPrimaryActionInFlight
+              ? null
+              : () => unawaited(_openCatalogGameDetails(entry)),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 300),
+            child: SizedBox(
+              height: 200,
+              child: Material(
+                color: Colors.white,
+                elevation: 8,
+                shadowColor: Colors.black.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(16),
+                clipBehavior: Clip.antiAlias,
+                child: Hero(
+                  tag: _catalogHeroTag(entry.gameId),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      _buildCatalogArtworkBackdrop(entry),
+                      if (imageUrl.isNotEmpty)
+                        Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          frameBuilder: (
+                            context,
+                            child,
+                            frame,
+                            wasSynchronouslyLoaded,
+                          ) {
+                            if (wasSynchronouslyLoaded) {
+                              return child;
+                            }
+
+                            return AnimatedOpacity(
+                              opacity: frame == null ? 0 : 1,
+                              duration: const Duration(milliseconds: 220),
+                              curve: Curves.easeOut,
+                              child: child,
+                            );
+                          },
+                          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                        ),
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: <Color>[
+                              Colors.transparent,
+                              Colors.black.withValues(alpha: 0.12),
+                              Colors.black.withValues(alpha: 0.86),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (selected)
+                        Positioned(
+                          top: 12,
+                          right: 12,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.92),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              'Current',
+                              style: TextStyle(
+                                color: Colors.grey.shade900,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(12),
-                            onTap: () {
-                              setState(() {
-                                _selectedGameId = entry.gameId;
-                              });
-                            },
+                        ),
+                      Positioned(
+                        left: 16,
+                        right: 16,
+                        bottom: 14,
+                        child: Text(
+                          entry.title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openCatalogGameDetails(_GameCatalogEntry entry) async {
+    final heroTag = _catalogHeroTag(entry.gameId);
+    final contentState = _contentStateForGame(entry.gameId);
+    final startBlockedReason = _catalogStartBlockedReason(entry, contentState);
+
+    final shouldStart = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        fullscreenDialog: true,
+        builder: (detailContext) {
+          final canStart = startBlockedReason == null;
+          final imageUrl = entry.thumbnailUrl.trim();
+          final accent = _catalogAccentColor(entry.gameId);
+
+          return Scaffold(
+            backgroundColor: Colors.transparent,
+            body: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: <Color>[
+                    Colors.white,
+                    Colors.orange.shade50,
+                  ],
+                ),
+              ),
+              child: SafeArea(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 440),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(24),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.08),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: Center(
+                              child: Text(
+                                'Theraply Playground',
+                                style: TextStyle(
+                                  color: Colors.green.shade700,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          Material(
+                            color: Colors.white,
+                            elevation: 10,
+                            shadowColor: Colors.black.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(24),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(24),
+                              child: AspectRatio(
+                                aspectRatio: 3 / 2,
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    Hero(
+                                      tag: heroTag,
+                                      child: Stack(
+                                        fit: StackFit.expand,
+                                        children: [
+                                          _buildCatalogArtworkBackdrop(entry),
+                                          if (imageUrl.isNotEmpty)
+                                            Image.network(
+                                              imageUrl,
+                                              fit: BoxFit.cover,
+                                              frameBuilder: (
+                                                context,
+                                                child,
+                                                frame,
+                                                wasSynchronouslyLoaded,
+                                              ) {
+                                                if (wasSynchronouslyLoaded) {
+                                                  return child;
+                                                }
+
+                                                return AnimatedOpacity(
+                                                  opacity:
+                                                      frame == null ? 0 : 1,
+                                                  duration: const Duration(
+                                                    milliseconds: 220,
+                                                  ),
+                                                  curve: Curves.easeOut,
+                                                  child: child,
+                                                );
+                                              },
+                                              errorBuilder: (_, __, ___) =>
+                                                  const SizedBox.shrink(),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                    DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          begin: Alignment.topCenter,
+                                          end: Alignment.bottomCenter,
+                                          colors: <Color>[
+                                            Colors.black.withValues(
+                                              alpha: 0.12,
+                                            ),
+                                            Colors.transparent,
+                                            Colors.black.withValues(
+                                              alpha: 0.38,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    Positioned(
+                                      top: 14,
+                                      left: 14,
+                                      child: ElevatedButton.icon(
+                                        onPressed: () {
+                                          Navigator.of(detailContext).pop();
+                                        },
+                                        icon: const Icon(Icons.arrow_back),
+                                        label: const Text('Back'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.white,
+                                          foregroundColor: Colors.grey.shade900,
+                                          elevation: 0,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 14,
+                                            vertical: 10,
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              999,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          Container(
+                            padding: const EdgeInsets.all(18),
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade600,
+                              borderRadius: BorderRadius.circular(24),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.green.shade900.withValues(
+                                    alpha: 0.16,
+                                  ),
+                                  blurRadius: 18,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.18,
+                                        ),
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: const Icon(
+                                        Icons.play_circle_outline,
+                                        color: Colors.white,
+                                        size: 26,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            entry.title,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 24,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            entry.description,
+                                            style: TextStyle(
+                                              color: Colors.white.withValues(
+                                                alpha: 0.94,
+                                              ),
+                                              fontSize: 14,
+                                              height: 1.4,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (entry.previewLines.isNotEmpty) ...[
+                                  const SizedBox(height: 16),
+                                  for (final line in entry.previewLines.take(3))
+                                    Padding(
+                                      padding:
+                                          const EdgeInsets.only(bottom: 10),
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          const Padding(
+                                            padding: EdgeInsets.only(top: 2),
+                                            child: Icon(
+                                              Icons.auto_awesome,
+                                              color: Colors.white,
+                                              size: 16,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              line,
+                                              style: TextStyle(
+                                                color: Colors.white.withValues(
+                                                  alpha: 0.92,
+                                                ),
+                                                fontSize: 13,
+                                                height: 1.3,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          Container(
+                            padding: const EdgeInsets.all(18),
+                            decoration: BoxDecoration(
+                              color: canStart
+                                  ? accent.withValues(alpha: 0.92)
+                                  : Colors.orange.shade700,
+                              borderRadius: BorderRadius.circular(24),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: (canStart
+                                          ? accent
+                                          : Colors.orange.shade900)
+                                      .withValues(alpha: 0.18),
+                                  blurRadius: 18,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                            ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                _buildCatalogArtwork(entry, selected: selected),
-                                Padding(
-                                  padding:
-                                      const EdgeInsets.fromLTRB(10, 10, 10, 4),
-                                  child: Text(
-                                    entry.title,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                Container(
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(18),
                                   ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                  ),
-                                  child: Text(
-                                    entry.description.isEmpty
-                                        ? 'Description placeholder.'
-                                        : entry.description,
-                                    style: TextStyle(
-                                      color: Colors.grey.shade700,
-                                      fontSize: 12,
-                                    ),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    10,
-                                    6,
-                                    10,
-                                    0,
-                                  ),
-                                  child: Wrap(
-                                    spacing: 6,
-                                    runSpacing: 6,
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      _buildContentStatusChip(contentState),
-                                      _buildVersionChip(contentState),
+                                      Icon(
+                                        canStart
+                                            ? Icons.play_arrow_rounded
+                                            : Icons.warning_amber_rounded,
+                                        color: canStart
+                                            ? accent
+                                            : Colors.orange.shade800,
+                                        size: 28,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          canStart
+                                              ? 'Start will tell Unity to load this game and open the mobile setup screen.'
+                                              : startBlockedReason,
+                                          style: TextStyle(
+                                            color: Colors.grey.shade900,
+                                            fontSize: 14,
+                                            height: 1.35,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
-                                if (entry.previewLines.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      10,
-                                      6,
-                                      10,
-                                      0,
+                                const SizedBox(height: 16),
+                                ElevatedButton.icon(
+                                  onPressed: canStart
+                                      ? () {
+                                          Navigator.of(detailContext).pop(true);
+                                        }
+                                      : null,
+                                  icon: Icon(
+                                    canStart
+                                        ? Icons.play_arrow
+                                        : Icons.lock_outline,
+                                  ),
+                                  label: Text(
+                                    canStart ? 'Start' : 'Start unavailable',
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.white,
+                                    foregroundColor: canStart
+                                        ? accent
+                                        : Colors.grey.shade500,
+                                    disabledBackgroundColor:
+                                        Colors.white.withValues(alpha: 0.72),
+                                    disabledForegroundColor:
+                                        Colors.grey.shade500,
+                                    minimumSize: const Size.fromHeight(54),
+                                    textStyle: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w800,
                                     ),
-                                    child: Text(
-                                      entry.previewLines.first,
-                                      style: TextStyle(
-                                        color: Colors.grey.shade600,
-                                        fontSize: 11,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(18),
                                     ),
                                   ),
-                                if (!entry.runtimeLaunchEnabled)
-                                  Padding(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      10,
-                                      6,
-                                      10,
-                                      0,
-                                    ),
-                                    child: Text(
-                                      'Catalog preview only (runtime launch pending).',
-                                      style: TextStyle(
-                                        color: Colors.orange.shade800,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                if (contentState.lastError != null &&
-                                    contentState.lastError!.trim().isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      10,
-                                      6,
-                                      10,
-                                      0,
-                                    ),
-                                    child: Text(
-                                      'Last issue: ${contentState.lastError}',
-                                      style: TextStyle(
-                                        color: Colors.red.shade700,
-                                        fontSize: 11,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                if (latestProbeSignal != null)
-                                  Padding(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      10,
-                                      6,
-                                      10,
-                                      0,
-                                    ),
-                                    child: Text(
-                                      latestProbeSignal.success
-                                          ? 'Probe: HTTP ${latestProbeSignal.statusCode} '
-                                              'len=${latestProbeSignal.contentLength} '
-                                              '${latestProbeSignal.eTag.isNotEmpty ? 'etag=${latestProbeSignal.eTag}' : ''}'
-                                          : 'Probe: ${latestProbeSignal.reasonCode} '
-                                              '(HTTP ${latestProbeSignal.statusCode})',
-                                      style: TextStyle(
-                                        color: latestProbeSignal.success
-                                            ? Colors.green.shade700
-                                            : Colors.orange.shade800,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                const Spacer(),
-                                Padding(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    10,
-                                    8,
-                                    10,
-                                    10,
-                                  ),
-                                  child: _catalogFilterTab ==
-                                          _CatalogFilterTab.store
-                                      ? ElevatedButton.icon(
-                                          onPressed: primaryStoreActionEnabled
-                                              ? () => unawaited(
-                                                    _simulateStorePurchase(
-                                                      entry,
-                                                    ),
-                                                  )
-                                              : null,
-                                          icon: const Icon(
-                                            Icons.shopping_cart_checkout,
-                                          ),
-                                          label: Text(
-                                            contentState.owned
-                                                ? 'Owned'
-                                                : 'Buy (sim)',
-                                          ),
-                                        )
-                                      : (_contentDeliveryEnabled &&
-                                              (shouldInstallOrUpdate ||
-                                                  canRemoveInstalled ||
-                                                  showProbeAction)
-                                          ? Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.stretch,
-                                              children: [
-                                                if (shouldInstallOrUpdate ||
-                                                    canRemoveInstalled)
-                                                  Row(
-                                                    children: [
-                                                      if (shouldInstallOrUpdate)
-                                                        Expanded(
-                                                          child: ElevatedButton
-                                                              .icon(
-                                                            onPressed: !_isConnected ||
-                                                                    actionInFlight ||
-                                                                    !shouldInstallOrUpdate
-                                                                ? null
-                                                                : () =>
-                                                                    unawaited(
-                                                                      _requestInstallOrUpdate(
-                                                                        contentState,
-                                                                      ),
-                                                                    ),
-                                                            icon: const Icon(
-                                                              Icons.download,
-                                                            ),
-                                                            label: Text(
-                                                              contentState.runtimeStatus ==
-                                                                      ContentRuntimeStatus
-                                                                          .updateRequired
-                                                                  ? 'Update'
-                                                                  : contentState
-                                                                              .runtimeStatus ==
-                                                                          ContentRuntimeStatus
-                                                                              .failed
-                                                                      ? 'Retry'
-                                                                      : 'Install',
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      if (shouldInstallOrUpdate &&
-                                                          canRemoveInstalled) ...[
-                                                        const SizedBox(
-                                                          width: 8,
-                                                        ),
-                                                      ],
-                                                      if (canRemoveInstalled)
-                                                        Expanded(
-                                                          child: OutlinedButton
-                                                              .icon(
-                                                            onPressed:
-                                                                !_isConnected ||
-                                                                        actionInFlight
-                                                                    ? null
-                                                                    : () =>
-                                                                        unawaited(
-                                                                          _requestUninstall(
-                                                                            contentState,
-                                                                          ),
-                                                                        ),
-                                                            icon: const Icon(
-                                                              Icons
-                                                                  .delete_outline,
-                                                            ),
-                                                            label: const Text(
-                                                              'Remove',
-                                                            ),
-                                                          ),
-                                                        ),
-                                                    ],
-                                                  ),
-                                                if (showProbeAction) ...[
-                                                  if (shouldInstallOrUpdate)
-                                                    const SizedBox(height: 8),
-                                                  OutlinedButton.icon(
-                                                    onPressed: !_isConnected ||
-                                                            actionInFlight ||
-                                                            !_isPackageProbeEnabled
-                                                        ? null
-                                                        : () => unawaited(
-                                                              _requestPackageProbe(
-                                                                contentState,
-                                                              ),
-                                                            ),
-                                                    icon: const Icon(
-                                                      Icons.travel_explore,
-                                                    ),
-                                                    label: Text(
-                                                      _isPackageProbeEnabled
-                                                          ? 'Probe URL'
-                                                          : 'Probe disabled',
-                                                    ),
-                                                  ),
-                                                ],
-                                              ],
-                                            )
-                                          : const SizedBox.shrink()),
                                 ),
                               ],
                             ),
                           ),
-                        );
-                      },
-                    );
-                  },
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-        ),
-        const SizedBox(height: 8),
-        _buildMoreGamesHint(),
-        if (_canResetSimulatedPurchases) ...[
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: _isPrimaryActionInFlight
-                ? null
-                : () => unawaited(_resetSimulatedPurchases()),
-            icon: const Icon(Icons.restart_alt),
-            label: const Text('Reset demo purchases'),
-          ),
-        ],
-        const SizedBox(height: 8),
-        if (_showCatalogRescueTerminateButton) ...[
-          OutlinedButton.icon(
-            onPressed: _isConnected && !_isPrimaryActionInFlight
-                ? () => unawaited(_terminateActiveSessionFromCatalog())
-                : null,
-            icon: const Icon(Icons.power_settings_new),
-            label: const Text('Terminate active session (rescue)'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.deepOrange.shade700,
-              side: BorderSide(color: Colors.deepOrange.shade300),
-              padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-        ],
-        ElevatedButton.icon(
-          onPressed: _isPrimaryActionInFlight
-              ? null
-              : () => unawaited(_endSessionFromCatalog()),
-          icon: const Icon(Icons.flag),
-          label: const Text('End Session'),
-          style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            backgroundColor: Colors.deepOrange.shade700,
-            foregroundColor: Colors.white,
-          ),
-        ),
-        const SizedBox(height: 8),
-        ElevatedButton.icon(
-          onPressed: _isConnected &&
-                  _sessionAttachReady &&
-                  !_isPlanBlockingLaunch &&
-                  _isSelectedGameLaunchable
-              ? () {
-                  setState(() {
-                    _workflowStep = _WorkflowStep.gameSetup;
-                    _isVideoPreviewExpanded = true;
-                  });
-                }
-              : null,
-          icon: const Icon(Icons.videogame_asset),
-          label: Text(
-            !_sessionAttachReady
-                ? 'Wait for session sync first'
-                : _isPlanBlockingLaunch
-                    ? 'Current plan blocks launching this session'
-                    : !selectedEntry.runtimeLaunchEnabled
-                        ? 'Selected game is catalog-only for now'
-                        : _isSelectedGameLaunchable
-                            ? (_isControlLinkReadyForCommands
-                                ? 'Open game session'
-                                : 'Open game setup (commands blocked)')
-                            : _contentDeliveryEnabled
-                                ? 'Install or update selected game first'
-                                : 'Select available game first',
-          ),
-          style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-          ),
-        ),
-      ],
+          );
+        },
+      ),
     );
+
+    if (shouldStart != true || !mounted) {
+      return;
+    }
+
+    final latestContentState = _contentStateForGame(entry.gameId);
+    final latestBlockedReason = _catalogStartBlockedReason(
+      entry,
+      latestContentState,
+    );
+    if (latestBlockedReason != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(latestBlockedReason),
+          backgroundColor: Colors.orange.shade800,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _selectedGameId = entry.gameId;
+      _workflowStep = _WorkflowStep.gameSetup;
+      _isVideoPreviewExpanded = true;
+    });
+
+    unawaited(
+      _persistWorkflowCheckpoint(
+        workflowStep: _WorkflowStep.gameSetup,
+        reasonCode: 'SCREEN_GAME_SETUP',
+        gameIdOverride: entry.gameId,
+      ),
+    );
+
+    unawaited(
+      _prepareSelectedGameScene(reasonCode: 'CATALOG_START_SELECTION'),
+    );
+  }
+
+  String _catalogHeroTag(String gameId) {
+    return 'catalog-game-$gameId';
+  }
+
+  String? _catalogStartBlockedReason(
+    _GameCatalogEntry entry,
+    PurchasedContentState contentState,
+  ) {
+    if (_isPrimaryActionInFlight) {
+      return 'Please wait for the current action to finish.';
+    }
+    if (_requiresSessionDecision) {
+      return 'Resolve the unfinished session decision before starting a new game.';
+    }
+    if (_isGameRuntimeActive) {
+      return 'A game is already active. Return to the session screen to control it.';
+    }
+    if (!_isConnected) {
+      return 'Headset is offline. Reconnect to continue.';
+    }
+    if (!_sessionAttachReady) {
+      return _sessionAttachInFlight
+          ? 'Session is still synchronizing with the headset.'
+          : 'Wait for headset session sync before starting a game.';
+    }
+    if (_isHeadsetPresenceBlocking) {
+      return _headsetPresenceBannerText ??
+          'Headset is not inside the active VR app right now.';
+    }
+    if (_isPlanBlockingLaunch) {
+      return _planGateBannerText ??
+          'Current plan does not allow starting this session.';
+    }
+    if (!entry.runtimeLaunchEnabled) {
+      return 'This game is not enabled for runtime launch in the current build.';
+    }
+    if (!_isLaunchableContentState(contentState)) {
+      return _buildLaunchReadinessHint(entry, contentState);
+    }
+    return null;
   }
 
   Widget _buildGameSetupStep() {
@@ -8835,6 +9571,8 @@ class _ControlScreenState extends State<ControlScreen>
     final contentState = _selectedContentState;
     final launchReadinessHint = _buildLaunchReadinessHint(entry, contentState);
     final setupLockedByRuntime = _isSetupLockedByRuntime;
+    final selectedGamePreparationPending = _isSelectedGamePreparationPending;
+    final setupLockedUntilSceneReady = !_isSelectedGameSceneReadyForControls;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -8888,7 +9626,8 @@ class _ControlScreenState extends State<ControlScreen>
                       'Headset is offline. Controls are disabled until reconnect.',
                 ),
                 const SizedBox(height: 8),
-              ] else if (_mediaPreviewState != MediaPreviewState.streaming) ...[
+              ] else if (_isPreviewStreamExpected &&
+                  _mediaPreviewState != MediaPreviewState.streaming) ...[
                 _buildStateBanner(
                   icon: Icons.wifi_tethering_error_rounded,
                   color: Colors.orange.shade800,
@@ -8925,6 +9664,14 @@ class _ControlScreenState extends State<ControlScreen>
                 ),
                 const SizedBox(height: 8),
               ],
+              if (selectedGamePreparationPending) ...[
+                _buildStateBanner(
+                  icon: Icons.hourglass_top_rounded,
+                  color: Colors.blueGrey.shade700,
+                  text: _selectedGameSceneLoadingHint,
+                ),
+                const SizedBox(height: 8),
+              ],
               if (setupLockedByRuntime) ...[
                 _buildStateBanner(
                   icon: Icons.lock,
@@ -8948,17 +9695,24 @@ class _ControlScreenState extends State<ControlScreen>
                 _buildSchemaDrivenSettings(
                   entry.mobileControlSchema!,
                   lockedByRuntime: setupLockedByRuntime,
+                  lockedUntilSceneReady: setupLockedUntilSceneReady,
                 )
               else ...[
                 if (_isDemoCubeGameSelected)
-                  _buildDemoCubeSettings(lockedByRuntime: setupLockedByRuntime),
+                  _buildDemoCubeSettings(
+                    lockedByRuntime: setupLockedByRuntime,
+                    lockedUntilSceneReady: setupLockedUntilSceneReady,
+                  ),
                 if (_isPulseTargetGameSelected)
                   _buildPulseTargetsSettings(
-                      lockedByRuntime: setupLockedByRuntime),
+                    lockedByRuntime: setupLockedByRuntime,
+                    lockedUntilSceneReady: setupLockedUntilSceneReady,
+                  ),
                 if (!_isDemoCubeGameSelected && !_isPulseTargetGameSelected)
                   _buildGenericGameSettings(
                     entry,
                     lockedByRuntime: setupLockedByRuntime,
+                    lockedUntilSceneReady: setupLockedUntilSceneReady,
                   ),
               ],
               const SizedBox(height: 8),
@@ -8977,155 +9731,122 @@ class _ControlScreenState extends State<ControlScreen>
     );
   }
 
-  Future<void> _simulateStorePurchase(_GameCatalogEntry entry) async {
-    final normalizedGameId = entry.gameId.trim();
-    if (normalizedGameId.isEmpty) {
-      return;
-    }
+  Widget _buildCatalogArtworkBackdrop(_GameCatalogEntry entry) {
+    final colors = _catalogArtworkGradient(entry.gameId);
+    final icon = _catalogArtworkIcon(entry.gameId);
 
-    final nowUtc = DateTime.now().toUtc();
-    final currentState = _contentStateForGame(normalizedGameId);
-    final requiresExplicitInstall =
-        _isDemoCatalogGameId(normalizedGameId) || entry.requiresExplicitLicense;
-    setState(() {
-      _simulatedOwnedGameIds.add(normalizedGameId);
-      _catalogFilterTab = _CatalogFilterTab.installed;
-      _selectedGameId = normalizedGameId;
-      _contentStatesByGameId[normalizedGameId] = currentState.copyWith(
-        owned: true,
-        targetVersion: entry.targetContentVersion,
-        installedVersion:
-            requiresExplicitInstall ? null : entry.targetContentVersion,
-        runtimeStatus: requiresExplicitInstall
-            ? ContentRuntimeStatus.notInstalled
-            : ContentRuntimeStatus.ready,
-        updateRequired: false,
-        lastError: null,
-        updatedAtUtc: nowUtc,
-      );
-    });
-
-    if (!mounted) {
-      return;
-    }
-
-    unawaited(
-      _persistCatalogInteractionEvent(
-        eventType: 'STORE_PURCHASE_SIMULATED',
-        gameId: normalizedGameId,
-        details: <String, dynamic>{
-          'targetVersion': entry.targetContentVersion,
-          'packageUri': entry.packageUri,
-          'autoInstallOwnedGames':
-              _therapistSessionSettings.autoInstallOwnedGames,
-        },
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: colors,
+        ),
       ),
-    );
-
-    final shouldAutoInstallPurchasedGame =
-        _therapistSessionSettings.autoInstallOwnedGames &&
-            _contentDeliveryEnabled &&
-            requiresExplicitInstall;
-
-    // Refresh Quest entitlement snapshot before INSTALL_GAME so newly bought
-    // content is included in the runtime entitlement gate.
-    if (_isConnected && _sessionAttachReady) {
-      await _ensureSessionAttached(
-        reasonCode: 'ENTITLEMENT_REFRESH_AFTER_BUY',
-        force: true,
-      );
-    }
-
-    if (shouldAutoInstallPurchasedGame) {
-      unawaited(
-        _persistCatalogInteractionEvent(
-          eventType: 'STORE_PURCHASE_AUTO_INSTALL_REQUESTED',
-          gameId: normalizedGameId,
-          details: <String, dynamic>{
-            'targetVersion': entry.targetContentVersion,
-            'packageUri': entry.packageUri,
-          },
-        ),
-      );
-      await _requestInstallOrUpdate(_contentStateForGame(normalizedGameId));
-    }
-
-    if (!mounted) {
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          shouldAutoInstallPurchasedGame
-              ? 'Simulated purchase completed for ${entry.title}. Switched to Owned and started install.'
-              : 'Simulated purchase completed for ${entry.title}. Switched to Owned tab.',
-        ),
-        duration: const Duration(seconds: 2),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -26,
+            top: -18,
+            child: Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          Positioned(
+            left: -18,
+            bottom: -26,
+            child: Container(
+              width: 92,
+              height: 92,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.10),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          Align(
+            alignment: Alignment.center,
+            child: Icon(
+              icon,
+              size: 72,
+              color: Colors.white.withValues(alpha: 0.34),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildCatalogArtwork(
-    _GameCatalogEntry entry, {
-    required bool selected,
-  }) {
-    final borderColor = selected ? Colors.blue.shade300 : Colors.grey.shade300;
-    final imageUrl = entry.thumbnailUrl.trim();
+  List<Color> _catalogArtworkGradient(String gameId) {
+    switch (gameId.trim().toLowerCase()) {
+      case 'piniata':
+        return const <Color>[Color(0xFFFF8A00), Color(0xFFFF4D6D)];
+      case 'butterflies':
+        return const <Color>[Color(0xFF00B3A6), Color(0xFF6DD400)];
+      case 'coding':
+        return const <Color>[Color(0xFF2F6BFF), Color(0xFF8A5CFF)];
+      case 'hiding_game':
+        return const <Color>[Color(0xFF0F766E), Color(0xFF0EA5E9)];
+      case 'passive_mindfulness':
+        return const <Color>[Color(0xFF4CB8C4), Color(0xFF3CD3AD)];
+      case 'active_mindfulness':
+        return const <Color>[Color(0xFFFF7A18), Color(0xFFFFB347)];
+      case 'puzzle':
+        return const <Color>[Color(0xFFF97316), Color(0xFFFACC15)];
+      case 'both_hands':
+        return const <Color>[Color(0xFF2563EB), Color(0xFF14B8A6)];
+      case 'spatial':
+        return const <Color>[Color(0xFF0F766E), Color(0xFF84CC16)];
+      case 'christmas':
+        return const <Color>[Color(0xFFB91C1C), Color(0xFF15803D)];
+      default:
+        return const <Color>[Color(0xFF64748B), Color(0xFFCBD5E1)];
+    }
+  }
 
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-        border: Border(bottom: BorderSide(color: borderColor)),
-      ),
-      child: AspectRatio(
-        aspectRatio: 16 / 9,
-        child: ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-          child: imageUrl.isEmpty
-              ? Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: <Color>[
-                        Colors.blueGrey.shade200,
-                        Colors.blueGrey.shade100,
-                      ],
-                    ),
-                  ),
-                  child: Center(
-                    child: Icon(
-                      Icons.videogame_asset,
-                      size: 36,
-                      color: Colors.blueGrey.shade700,
-                    ),
-                  ),
-                )
-              : Image.network(
-                  imageUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    color: Colors.blueGrey.shade100,
-                    child: Center(
-                      child: Icon(
-                        Icons.broken_image_outlined,
-                        size: 28,
-                        color: Colors.blueGrey.shade700,
-                      ),
-                    ),
-                  ),
-                ),
-        ),
-      ),
-    );
+  IconData _catalogArtworkIcon(String gameId) {
+    switch (gameId.trim().toLowerCase()) {
+      case 'piniata':
+        return Icons.celebration;
+      case 'butterflies':
+        return Icons.filter_vintage;
+      case 'coding':
+        return Icons.music_note_rounded;
+      case 'hiding_game':
+        return Icons.hearing;
+      case 'passive_mindfulness':
+        return Icons.self_improvement;
+      case 'active_mindfulness':
+        return Icons.auto_awesome;
+      case 'puzzle':
+        return Icons.extension_rounded;
+      case 'both_hands':
+        return Icons.back_hand_outlined;
+      case 'spatial':
+        return Icons.grid_on_rounded;
+      case 'christmas':
+        return Icons.stars_rounded;
+      default:
+        return Icons.videogame_asset_rounded;
+    }
+  }
+
+  Color _catalogAccentColor(String gameId) {
+    return _catalogArtworkGradient(gameId).first;
   }
 
   Widget _buildSchemaDrivenSettings(
     MobileControlSchema schema, {
     required bool lockedByRuntime,
+    required bool lockedUntilSceneReady,
   }) {
     _ensureDynamicControlValuesForSelectedSchema();
+    final settingsLocked = lockedByRuntime || lockedUntilSceneReady;
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -9151,7 +9872,8 @@ class _ControlScreenState extends State<ControlScreen>
           MobileControlRenderer(
             schema: schema,
             valuesByControlId: _dynamicControlValuesByControlId,
-            locked: lockedByRuntime,
+            locked: settingsLocked,
+            lockButtons: lockedUntilSceneReady,
             onValueChanged: (change) {
               setState(() {
                 _dynamicControlValuesByControlId[change.control.controlId] =
@@ -9167,7 +9889,12 @@ class _ControlScreenState extends State<ControlScreen>
     );
   }
 
-  Widget _buildDemoCubeSettings({required bool lockedByRuntime}) {
+  Widget _buildDemoCubeSettings({
+    required bool lockedByRuntime,
+    required bool lockedUntilSceneReady,
+  }) {
+    final settingsLocked = lockedByRuntime || lockedUntilSceneReady;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -9208,7 +9935,7 @@ class _ControlScreenState extends State<ControlScreen>
             max: 40,
             divisions: 36,
             label: _demoCubeCount.toString(),
-            onChanged: lockedByRuntime
+            onChanged: settingsLocked
                 ? null
                 : (value) {
                     setState(() {
@@ -9226,7 +9953,7 @@ class _ControlScreenState extends State<ControlScreen>
             max: 2.2,
             divisions: 20,
             label: _demoCubeSpeed.toStringAsFixed(2),
-            onChanged: lockedByRuntime
+            onChanged: settingsLocked
                 ? null
                 : (value) {
                     setState(() {
@@ -9254,7 +9981,7 @@ class _ControlScreenState extends State<ControlScreen>
                   ),
                 )
                 .toList(),
-            onChanged: lockedByRuntime
+            onChanged: settingsLocked
                 ? null
                 : (value) {
                     if (value == null) {
@@ -9274,6 +10001,7 @@ class _ControlScreenState extends State<ControlScreen>
   Widget _buildGenericGameSettings(
     _GameCatalogEntry entry, {
     required bool lockedByRuntime,
+    required bool lockedUntilSceneReady,
   }) {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -9291,7 +10019,12 @@ class _ControlScreenState extends State<ControlScreen>
     );
   }
 
-  Widget _buildPulseTargetsSettings({required bool lockedByRuntime}) {
+  Widget _buildPulseTargetsSettings({
+    required bool lockedByRuntime,
+    required bool lockedUntilSceneReady,
+  }) {
+    final settingsLocked = lockedByRuntime || lockedUntilSceneReady;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -9332,7 +10065,7 @@ class _ControlScreenState extends State<ControlScreen>
             max: 32,
             divisions: 29,
             label: _pulseTargetCount.toString(),
-            onChanged: lockedByRuntime
+            onChanged: settingsLocked
                 ? null
                 : (value) {
                     setState(() {
@@ -9350,7 +10083,7 @@ class _ControlScreenState extends State<ControlScreen>
             max: 2.2,
             divisions: 20,
             label: _pulseTargetSpeed.toStringAsFixed(2),
-            onChanged: lockedByRuntime
+            onChanged: settingsLocked
                 ? null
                 : (value) {
                     setState(() {
@@ -9368,7 +10101,7 @@ class _ControlScreenState extends State<ControlScreen>
             max: 1.0,
             divisions: 22,
             label: _pulseTargetScale.toStringAsFixed(2),
-            onChanged: lockedByRuntime
+            onChanged: settingsLocked
                 ? null
                 : (value) {
                     setState(() {
@@ -9426,23 +10159,4 @@ class _GameCatalogEntry {
     this.mobileControlSchema,
     this.mobileControlSchemaReasonCode = '',
   });
-
-  factory _GameCatalogEntry.fromRemoteEntry(GameCatalogEntry entry) {
-    return _GameCatalogEntry(
-      gameId: entry.gameId,
-      title: entry.title,
-      description: entry.description,
-      targetContentVersion: entry.targetContentVersion,
-      packageUri: entry.packageUri,
-      thumbnailUrl: entry.thumbnailUrl,
-      supportsSaveResume: entry.supportsSaveResume,
-      availableForPurchase: entry.availableForPurchase,
-      requiresExplicitLicense: entry.requiresExplicitLicense,
-      runtimeLaunchEnabled: entry.runtimeLaunchEnabled,
-      sortOrder: entry.sortOrder,
-      previewLines: List<String>.from(entry.previewLines),
-      mobileControlSchema: entry.mobileControlSchema,
-      mobileControlSchemaReasonCode: entry.mobileControlSchemaReasonCode,
-    );
-  }
 }

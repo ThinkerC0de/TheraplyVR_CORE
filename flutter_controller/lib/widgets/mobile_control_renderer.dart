@@ -5,6 +5,7 @@ class MobileControlRenderer extends StatelessWidget {
   final MobileControlSchema schema;
   final Map<String, dynamic> valuesByControlId;
   final bool locked;
+  final bool lockButtons;
   final ValueChanged<MobileControlValueChange> onValueChanged;
   final ValueChanged<MobileControlDefinition> onButtonPressed;
 
@@ -13,6 +14,7 @@ class MobileControlRenderer extends StatelessWidget {
     required this.schema,
     required this.valuesByControlId,
     required this.locked,
+    this.lockButtons = false,
     required this.onValueChanged,
     required this.onButtonPressed,
   });
@@ -149,7 +151,7 @@ class MobileControlRenderer extends StatelessWidget {
 
   Widget _buildControl(BuildContext context, MobileControlDefinition control) {
     final controlValue = valuesByControlId[control.controlId];
-    final controlLocked = locked && !control.isButton;
+    final controlLocked = control.isButton ? lockButtons : locked;
 
     switch (control.type) {
       case MobileControlTypes.slider:

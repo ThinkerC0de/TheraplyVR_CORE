@@ -10,6 +10,8 @@ import 'connection_service.dart';
 class WebRTCMediaService {
   WebRTCMediaService(this._connection);
 
+  static const String _previewPauseCommandId = 'WEBRTC_PREVIEW_PAUSE';
+  static const String _previewResumeCommandId = 'WEBRTC_PREVIEW_RESUME';
   static const bool _preferLanFirst = true;
   static const Duration _lanProbeTimeout = Duration(seconds: 4);
   static const List<Map<String, dynamic>> _stunIceServers =
@@ -35,6 +37,7 @@ class WebRTCMediaService {
   bool _stunFallbackArmed = false;
   bool _usingLanOnlyThisPeer = false;
   bool _connectedInCurrentPeer = false;
+  bool _previewActive = false;
   Timer? _lanProbeTimer;
   Timer? _talkbackStatsTimer;
   Map<String, _OfferAudioMline> _offerAudioMlinesByMid = {};
@@ -109,10 +112,16 @@ class WebRTCMediaService {
       if (commandId == null) return;
       switch (commandId) {
         case 'WEBRTC_OFFER':
+          if (!_previewActive) {
+            return;
+          }
           print('[WebRTCMedia] 📥 Received WEBRTC_OFFER');
           _handleOffer(_payloadString(message));
           break;
         case 'WEBRTC_ICE_CANDIDATE':
+          if (!_previewActive) {
+            return;
+          }
           _handleIceCandidate(_payloadString(message));
           break;
       }
@@ -692,9 +701,44 @@ class WebRTCMediaService {
     _stopTalkbackStatsLogging();
   }
 
-  void stop() {
-    _messageSub?.cancel();
-    _messageSub = null;
+  Future<void> resumePreview({String reasonCode = 'PREVIEW_RESUME'}) async {
+    _previewActive = true;
+    if (_disposed) {
+      return;
+    }
+
+    start();
+    _connection.clearBufferedWebRtcSignaling();
+
+    if (!_connection.isConnected) {
+      print(
+        '[WebRTCMedia] Preview resume deferred until TCP reconnect ($reasonCode).',
+      );
+      return;
+    }
+
+    await _connection.sendCommand(_previewResumeCommandId, <String, dynamic>{
+      'reasonCode': reasonCode,
+    });
+    print('[WebRTCMedia] 📤 Sent $_previewResumeCommandId ($reasonCode)');
+  }
+
+  Future<void> pausePreview({String reasonCode = 'PREVIEW_PAUSE'}) async {
+    _previewActive = false;
+    _connection.clearBufferedWebRtcSignaling();
+    _resetPeerSession();
+
+    if (_disposed || !_connection.isConnected) {
+      return;
+    }
+
+    await _connection.sendCommand(_previewPauseCommandId, <String, dynamic>{
+      'reasonCode': reasonCode,
+    });
+    print('[WebRTCMedia] 📤 Sent $_previewPauseCommandId ($reasonCode)');
+  }
+
+  void _resetPeerSession() {
     _cancelLanProbeTimer();
     _stopTalkbackStatsLogging();
     _stunFallbackArmed = false;
@@ -708,8 +752,23 @@ class WebRTCMediaService {
     unawaited(_disposeTalkbackTrack());
   }
 
+  void stop() {
+    _messageSub?.cancel();
+    _messageSub = null;
+    _resetPeerSession();
+  }
+
   void dispose() {
     _disposed = true;
+    if (_previewActive && _connection.isConnected) {
+      unawaited(
+        _connection.sendCommand(
+          _previewPauseCommandId,
+          const <String, dynamic>{'reasonCode': 'SERVICE_DISPOSE'},
+        ),
+      );
+    }
+    _previewActive = false;
     stop();
     _remoteStreamController.close();
   }

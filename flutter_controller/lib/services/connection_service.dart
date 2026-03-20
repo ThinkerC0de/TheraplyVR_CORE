@@ -215,6 +215,11 @@ class ConnectionService {
     return drained;
   }
 
+  void clearBufferedWebRtcSignaling() {
+    _bufferedWebRtcOffer = null;
+    _bufferedWebRtcCandidates.clear();
+  }
+
   void _bufferWebRtcSignalingIfNeeded(Map<String, dynamic> message) {
     final commandId = message['commandId'];
     if (commandId == 'WEBRTC_OFFER') {

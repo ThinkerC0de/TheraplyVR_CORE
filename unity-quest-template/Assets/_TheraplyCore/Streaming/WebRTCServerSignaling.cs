@@ -9,11 +9,13 @@ namespace TheraplyCore.Streaming
 {
     /// <summary>
     /// WebRTC signaling when Unity is the TCP server (Quest).
-    /// On client connect: start WebRTC, create offer, send via TCP.
+    /// On client connect: keep TCP/session alive and wait for explicit preview resume.
     /// Handles WEBRTC_ANSWER and WEBRTC_ICE_CANDIDATE from Flutter; sends ICE candidates to Flutter.
     /// </summary>
     public class WebRTCServerSignaling : MonoBehaviour
     {
+        private const string PreviewPauseCommandId = "WEBRTC_PREVIEW_PAUSE";
+        private const string PreviewResumeCommandId = "WEBRTC_PREVIEW_RESUME";
         private const string SetVideoBitrateCommandId = "WEBRTC_SET_VIDEO_BITRATE";
         private const string VideoBitrateStatusCommandId = "WEBRTC_VIDEO_BITRATE_STATUS";
 
@@ -26,6 +28,7 @@ namespace TheraplyCore.Streaming
         [SerializeField] private bool _logSignaling = true;
 
         private bool _isNegotiating;
+        private Coroutine _deferredNegotiationCoroutine;
 
         private void Awake()
         {
@@ -72,28 +75,31 @@ namespace TheraplyCore.Streaming
         private void HandleClientConnected(string clientIP)
         {
             if (_mediaStreamService == null || _tcpServer == null) return;
-            if (_mediaStreamService.IsStreaming)
+
+            if (_deferredNegotiationCoroutine != null)
             {
-                if (_logSignaling) Debug.Log("[WebRTCServerSignaling] Already streaming, skipping offer");
-                return;
+                StopCoroutine(_deferredNegotiationCoroutine);
+                _deferredNegotiationCoroutine = null;
             }
-            _mediaStreamService.StartStreaming();
-            StartCoroutine(CreateOfferAndSend());
+
+            _isNegotiating = false;
+
+            if (_logSignaling)
+            {
+                Debug.Log("[WebRTCServerSignaling] Client connected - waiting for explicit preview resume request.");
+            }
         }
 
         private void HandleClientDisconnected()
         {
             _isNegotiating = false;
+            if (_deferredNegotiationCoroutine != null)
+            {
+                StopCoroutine(_deferredNegotiationCoroutine);
+                _deferredNegotiationCoroutine = null;
+            }
             if (_mediaStreamService != null) _mediaStreamService.StopStreaming();
             if (_logSignaling) Debug.Log("[WebRTCServerSignaling] Client disconnected, stopped stream");
-        }
-
-        private IEnumerator CreateOfferAndSend()
-        {
-            if (_isNegotiating) yield break;
-            _isNegotiating = true;
-            yield return CreateOfferAndSendInternal("INITIAL_NEGOTIATION");
-            _isNegotiating = false;
         }
 
         private IEnumerator CreateOfferAndSendInternal(string reasonCode)
@@ -152,10 +158,63 @@ namespace TheraplyCore.Streaming
 
             _mediaStreamService.StopStreaming();
             yield return null;
+            yield return StartStreamingAndNegotiateWhenReady(forceStun: true, reasonCode: "STUN_FALLBACK");
+        }
 
-            _mediaStreamService.StartStreaming(forceStun: true);
-            yield return CreateOfferAndSendInternal("STUN_FALLBACK");
+        private IEnumerator StartStreamingAndNegotiateWhenReady(bool forceStun, string reasonCode)
+        {
+            const float timeoutSeconds = 5f;
+            float waitedSeconds = 0f;
+            bool loggedWait = false;
+            _isNegotiating = true;
+
+            while (_mediaStreamService != null &&
+                   _tcpServer != null &&
+                   _tcpServer.HasClient &&
+                   !_mediaStreamService.EnsureCaptureReady() &&
+                   waitedSeconds < timeoutSeconds)
+            {
+                if (!loggedWait && _logSignaling)
+                {
+                    Debug.Log("[WebRTCServerSignaling] Waiting for MediaStreamService capture to become ready...");
+                    loggedWait = true;
+                }
+
+                waitedSeconds += Time.unscaledDeltaTime;
+                yield return null;
+            }
+
+            if (_mediaStreamService == null || _tcpServer == null || !_tcpServer.HasClient)
+            {
+                _isNegotiating = false;
+                _deferredNegotiationCoroutine = null;
+                yield break;
+            }
+
+            if (!_mediaStreamService.HasCaptureReady)
+            {
+                Debug.LogError("[WebRTCServerSignaling] Cannot negotiate preview - MediaStreamService capture is still not ready.");
+                _isNegotiating = false;
+                _deferredNegotiationCoroutine = null;
+                yield break;
+            }
+
+            if (!_mediaStreamService.IsStreaming)
+            {
+                _mediaStreamService.StartStreaming(forceStun);
+            }
+
+            if (!_mediaStreamService.IsStreaming)
+            {
+                Debug.LogError("[WebRTCServerSignaling] Cannot negotiate preview - WebRTC stream failed to start.");
+                _isNegotiating = false;
+                _deferredNegotiationCoroutine = null;
+                yield break;
+            }
+
+            yield return CreateOfferAndSendInternal(reasonCode);
             _isNegotiating = false;
+            _deferredNegotiationCoroutine = null;
         }
 
         private void HandleTCPMessage(NetworkMessage message)
@@ -171,9 +230,82 @@ namespace TheraplyCore.Streaming
                 case "WEBRTC_STUN_FALLBACK_REQUEST":
                     HandleClientStunFallbackRequest(message.payloadString);
                     break;
+                case PreviewPauseCommandId:
+                    HandlePreviewPause(message.payloadString);
+                    break;
+                case PreviewResumeCommandId:
+                    HandlePreviewResume(message.payloadString);
+                    break;
                 case SetVideoBitrateCommandId:
                     HandleSetVideoBitrate(message.payloadString);
                     break;
+            }
+        }
+
+        private void HandlePreviewResume(string payloadJson)
+        {
+            if (_mediaStreamService == null || _tcpServer == null)
+            {
+                return;
+            }
+
+            if (!_tcpServer.HasClient)
+            {
+                if (_logSignaling)
+                {
+                    Debug.LogWarning("[WebRTCServerSignaling] Ignoring preview resume - no active TCP client.");
+                }
+                return;
+            }
+
+            if (_isNegotiating)
+            {
+                if (_logSignaling)
+                {
+                    Debug.Log("[WebRTCServerSignaling] Ignoring preview resume - negotiation already in progress.");
+                }
+                return;
+            }
+
+            if (_mediaStreamService.IsStreaming)
+            {
+                if (_logSignaling)
+                {
+                    Debug.Log("[WebRTCServerSignaling] Ignoring preview resume - preview stream already active.");
+                }
+                return;
+            }
+
+            var reasonCode = ParsePreviewReasonCode(payloadJson, "PREVIEW_RESUME");
+            _deferredNegotiationCoroutine = StartCoroutine(StartStreamingAndNegotiateWhenReady(
+                forceStun: false,
+                reasonCode: reasonCode));
+        }
+
+        private void HandlePreviewPause(string payloadJson)
+        {
+            if (_mediaStreamService == null)
+            {
+                return;
+            }
+
+            if (_deferredNegotiationCoroutine != null)
+            {
+                StopCoroutine(_deferredNegotiationCoroutine);
+                _deferredNegotiationCoroutine = null;
+            }
+
+            _isNegotiating = false;
+
+            if (_mediaStreamService.IsStreaming)
+            {
+                _mediaStreamService.StopStreaming();
+            }
+
+            if (_logSignaling)
+            {
+                var reasonCode = ParsePreviewReasonCode(payloadJson, "PREVIEW_PAUSE");
+                Debug.Log($"[WebRTCServerSignaling] Preview paused ({reasonCode}) while TCP session stays connected.");
             }
         }
 
@@ -299,6 +431,32 @@ namespace TheraplyCore.Streaming
             StartCoroutine(RestartStreamingWithStunFallback(reasonCode));
         }
 
+        private string ParsePreviewReasonCode(string payloadJson, string fallbackReasonCode)
+        {
+            if (string.IsNullOrWhiteSpace(payloadJson))
+            {
+                return fallbackReasonCode;
+            }
+
+            try
+            {
+                var request = JsonUtility.FromJson<WebRTCPreviewLifecycleMessage>(payloadJson);
+                if (request != null && !string.IsNullOrWhiteSpace(request.reasonCode))
+                {
+                    return request.reasonCode;
+                }
+            }
+            catch (Exception ex)
+            {
+                if (_logSignaling)
+                {
+                    Debug.LogWarning($"[WebRTCServerSignaling] Failed to parse preview lifecycle payload: {ex.Message}");
+                }
+            }
+
+            return fallbackReasonCode;
+        }
+
         private void HandleWebRTCAnswer(string answerJson)
         {
             if (string.IsNullOrEmpty(answerJson) || _mediaStreamService == null) return;
@@ -387,6 +545,12 @@ namespace TheraplyCore.Streaming
 
     [System.Serializable]
     public class WebRTCStunFallbackRequestMessage
+    {
+        public string reasonCode;
+    }
+
+    [System.Serializable]
+    public class WebRTCPreviewLifecycleMessage
     {
         public string reasonCode;
     }
