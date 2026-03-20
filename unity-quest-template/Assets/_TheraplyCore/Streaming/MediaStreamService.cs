@@ -66,6 +66,7 @@ namespace TheraplyCore.Streaming
         private VideoStreamTrack _videoTrack;
         private RTCRtpSender _videoSender;
         private AudioStreamTrack _audioTrack;
+        private RTCRtpSender _audioSender;
         private RTCRtpTransceiver _incomingTherapistVoiceTransceiver;
         private RenderTexture _renderTexture;
         private Camera _captureCamera;
@@ -109,16 +110,13 @@ namespace TheraplyCore.Streaming
         private IEnumerator DelayedInitAndStartStreaming()
         {
             yield return new WaitForSeconds(1f);
-            if (_sourceCamera == null && _autoDetectCamera)
-                _sourceCamera = FindVRCamera();
-            if (_sourceCamera == null)
+            if (!EnsureCaptureReady())
             {
                 Debug.LogError("[MediaStreamService] No camera found! Video streaming disabled.");
                 enabled = false;
                 yield break;
             }
             Debug.Log($"[MediaStreamService] Camera assigned: {_sourceCamera.name}");
-            InitializeCapture();
             // WebRTC streaming starts when client connects (StartStreaming + signaling)
         }
         
@@ -243,8 +241,8 @@ namespace TheraplyCore.Streaming
                 _renderTexture = null;
             }
 
-            // Create RenderTexture for camera output
-            _renderTexture = new RenderTexture(_streamWidth, _streamHeight, 24, RenderTextureFormat.BGRA32);
+            var supportedFormat = WebRTC.GetSupportedRenderTextureFormat(SystemInfo.graphicsDeviceType);
+            _renderTexture = new RenderTexture(_streamWidth, _streamHeight, 24, supportedFormat);
             _renderTexture.name = "VideoStreamRenderTexture";
             _renderTexture.Create();
 
@@ -258,6 +256,10 @@ namespace TheraplyCore.Streaming
                 _captureCamera = _captureCameraGo.AddComponent<Camera>();
                 _captureCamera.CopyFrom(_sourceCamera);
                 _captureCamera.stereoTargetEye = StereoTargetEyeMask.None;
+                _captureCamera.rect = new Rect(0f, 0f, 1f, 1f);
+                _captureCamera.ResetAspect();
+                _captureCamera.aspect = (float)_streamWidth / _streamHeight;
+                _captureCamera.ResetProjectionMatrix();
                 _captureCamera.targetTexture = _renderTexture;
                 _captureCamera.enabled = true;
 
@@ -267,11 +269,153 @@ namespace TheraplyCore.Streaming
             {
                 _sourceCamera.targetTexture = _renderTexture;
             }
+
+            RebindActiveVideoTrackToCapture();
             
-            var configuredBitrateBps = Mathf.Clamp(_targetBitrate, MinTargetBitrateBps, MaxTargetBitrateBps);
+            var configuredBitrateBps = GetEffectiveTargetBitrateBps(_targetBitrate);
+            var configuredTargetFps = GetEffectiveTargetFps();
             Debug.Log(
-                $"[MediaStreamService] Initialized capture: {_streamWidth}x{_streamHeight} @ {_targetFps}fps (target bitrate={configuredBitrateBps}bps)");
+                $"[MediaStreamService] Initialized capture: {_streamWidth}x{_streamHeight} @ {configuredTargetFps}fps (target bitrate={configuredBitrateBps}bps)");
             Debug.Log($"[MediaStreamService] RenderTexture source camera: {(_captureCamera != null ? _captureCamera.name : _sourceCamera.name)}");
+            Debug.Log($"[MediaStreamService] RenderTexture format: {_renderTexture.format} graphicsFormat: {_renderTexture.graphicsFormat}");
+        }
+
+        private void RebindActiveVideoTrackToCapture()
+        {
+            if (!_isStreaming || _videoSender == null || _renderTexture == null)
+            {
+                return;
+            }
+
+            VideoStreamTrack replacementTrack = null;
+            try
+            {
+                replacementTrack = new VideoStreamTrack(_renderTexture);
+                if (!_videoSender.ReplaceTrack(replacementTrack))
+                {
+                    Debug.LogError("[MediaStreamService] Failed to replace active video track after capture refresh.");
+                    replacementTrack.Dispose();
+                    return;
+                }
+
+                var previousTrack = _videoTrack;
+                _videoTrack = replacementTrack;
+                replacementTrack = null;
+
+                if (previousTrack != null)
+                {
+                    previousTrack.Dispose();
+                }
+
+                var configuredBitrateBps = GetEffectiveTargetBitrateBps(_targetBitrate);
+                TryApplyConfiguredVideoBitrate(configuredBitrateBps, out _);
+                Debug.Log("[MediaStreamService] Rebound active video sender to refreshed capture texture.");
+            }
+            catch (Exception ex)
+            {
+                if (replacementTrack != null)
+                {
+                    replacementTrack.Dispose();
+                }
+
+                Debug.LogError($"[MediaStreamService] Failed to refresh active video track after scene camera change: {ex.Message}");
+            }
+        }
+
+        private AudioListener ResolvePreferredAudioListener()
+        {
+            if (_sourceCamera != null)
+            {
+                var directCameraListener = _sourceCamera.GetComponent<AudioListener>();
+                if (directCameraListener != null &&
+                    directCameraListener.enabled &&
+                    directCameraListener.gameObject.activeInHierarchy)
+                {
+                    return directCameraListener;
+                }
+
+                var cameraParentListener = _sourceCamera.GetComponentInParent<AudioListener>();
+                if (cameraParentListener != null &&
+                    cameraParentListener.enabled &&
+                    cameraParentListener.gameObject.activeInHierarchy)
+                {
+                    return cameraParentListener;
+                }
+            }
+
+            var allListeners = FindObjectsByType<AudioListener>(FindObjectsSortMode.None);
+            foreach (var listener in allListeners)
+            {
+                if (listener != null && listener.enabled && listener.gameObject.activeInHierarchy)
+                {
+                    return listener;
+                }
+            }
+
+            return null;
+        }
+
+        private void RefreshQuestAudioTrackBinding(string reasonCode)
+        {
+            if (!_sendQuestAudio)
+            {
+                return;
+            }
+
+            var resolvedListener = ResolvePreferredAudioListener();
+            if (resolvedListener == null)
+            {
+                Debug.LogWarning($"[MediaStreamService] Audio send enabled but no AudioListener found ({reasonCode}).");
+                return;
+            }
+
+            var listenerChanged = !ReferenceEquals(_sourceAudioListener, resolvedListener);
+            _sourceAudioListener = resolvedListener;
+
+            if (!_isStreaming || _audioSender == null)
+            {
+                Debug.Log($"[MediaStreamService] Audio listener ready: {_sourceAudioListener.name} ({reasonCode})");
+                return;
+            }
+
+            if (!listenerChanged && _audioTrack != null)
+            {
+                return;
+            }
+
+            AudioStreamTrack replacementTrack = null;
+            try
+            {
+                replacementTrack = new AudioStreamTrack(_sourceAudioListener);
+                replacementTrack.Loopback = true;
+
+                if (!_audioSender.ReplaceTrack(replacementTrack))
+                {
+                    Debug.LogError($"[MediaStreamService] Failed to replace active audio track ({reasonCode}).");
+                    replacementTrack.Dispose();
+                    return;
+                }
+
+                var previousTrack = _audioTrack;
+                _audioTrack = replacementTrack;
+                replacementTrack = null;
+
+                if (previousTrack != null)
+                {
+                    previousTrack.Dispose();
+                }
+
+                Debug.Log($"[MediaStreamService] Rebound active audio sender to listener: {_sourceAudioListener.name} ({reasonCode})");
+            }
+            catch (Exception ex)
+            {
+                if (replacementTrack != null)
+                {
+                    replacementTrack.Dispose();
+                }
+
+                Debug.LogError($"[MediaStreamService] Failed to refresh active audio track ({reasonCode}): {ex.Message}");
+            }
         }
         
         // ============================================
@@ -282,7 +426,7 @@ namespace TheraplyCore.Streaming
         public void StartStreaming(bool forceStun = false)
         {
             if (_isStreaming) return;
-            if (_sourceCamera == null || _renderTexture == null)
+            if (!EnsureCaptureReady())
             {
                 Debug.LogError("[MediaStreamService] Cannot start streaming - no camera or render texture!");
                 return;
@@ -295,21 +439,12 @@ namespace TheraplyCore.Streaming
 
                 if (_sendQuestAudio)
                 {
-                    if (_sourceAudioListener == null)
-                    {
-                        _sourceAudioListener = _sourceCamera != null
-                            ? _sourceCamera.GetComponent<AudioListener>()
-                            : null;
-                    }
-                    if (_sourceAudioListener == null)
-                    {
-                        _sourceAudioListener = FindFirstObjectByType<AudioListener>();
-                    }
+                    _sourceAudioListener = ResolvePreferredAudioListener();
 
                     if (_sourceAudioListener != null)
                     {
                         _audioTrack = new AudioStreamTrack(_sourceAudioListener);
-                        _audioTrack.Loopback = false;
+                        _audioTrack.Loopback = true;
                         _mediaStream.AddTrack(_audioTrack);
                         Debug.Log($"[MediaStreamService] Audio send enabled from listener: {_sourceAudioListener.name}");
                     }
@@ -352,7 +487,7 @@ namespace TheraplyCore.Streaming
                 _videoSender = _peerConnection.AddTrack(_videoTrack, _mediaStream);
                 if (_audioTrack != null)
                 {
-                    _peerConnection.AddTrack(_audioTrack, _mediaStream);
+                    _audioSender = _peerConnection.AddTrack(_audioTrack, _mediaStream);
                 }
 
                 if (!TryApplyConfiguredVideoBitrate(_targetBitrate, out var bitrateApplyReasonCode))
@@ -405,6 +540,7 @@ namespace TheraplyCore.Streaming
             }
             _incomingTherapistVoiceTransceiver = null;
             _videoSender = null;
+            _audioSender = null;
             if (_videoTrack != null)
             {
                 _videoTrack.Dispose();
@@ -893,7 +1029,7 @@ namespace TheraplyCore.Streaming
             out int appliedBitrateBps,
             out string reasonCode)
         {
-            var normalizedTarget = Mathf.Clamp(bitrateBps, MinTargetBitrateBps, MaxTargetBitrateBps);
+            var normalizedTarget = GetEffectiveTargetBitrateBps(bitrateBps);
             _targetBitrate = normalizedTarget;
             appliedBitrateBps = normalizedTarget;
 
@@ -936,12 +1072,38 @@ namespace TheraplyCore.Streaming
             
             _sourceCamera = camera;
             
-            if (_renderTexture != null && _sourceCamera != null)
+            if (_sourceCamera != null)
             {
                 // Rebuild capture route when source changes.
                 InitializeCapture();
+                RefreshQuestAudioTrackBinding("SCENE_CAMERA_REBOUND");
                 Debug.Log($"[MediaStreamService] Camera changed to: {_sourceCamera.name}");
             }
+        }
+
+        public bool HasCaptureReady =>
+            _sourceCamera != null &&
+            _renderTexture != null &&
+            _renderTexture.IsCreated();
+
+        public bool EnsureCaptureReady()
+        {
+            if (_sourceCamera == null && _autoDetectCamera)
+            {
+                _sourceCamera = FindVRCamera();
+            }
+
+            if (_sourceCamera == null)
+            {
+                return false;
+            }
+
+            if (_renderTexture == null || !_renderTexture.IsCreated())
+            {
+                InitializeCapture();
+            }
+
+            return HasCaptureReady;
         }
 
         private bool TryApplyConfiguredVideoBitrate(int bitrateBps, out string reasonCode)
@@ -970,9 +1132,10 @@ namespace TheraplyCore.Streaming
                 {
                     var encoding = parameters.encodings[i] ?? new RTCRtpEncodingParameters { active = true };
                     encoding.maxBitrate = (ulong)bitrateBps;
-                    if (!encoding.maxFramerate.HasValue && _targetFps > 0)
+                    var effectiveTargetFps = GetEffectiveTargetFps();
+                    if (!encoding.maxFramerate.HasValue && effectiveTargetFps > 0)
                     {
-                        encoding.maxFramerate = (uint)_targetFps;
+                        encoding.maxFramerate = (uint)effectiveTargetFps;
                     }
                     parameters.encodings[i] = encoding;
                 }
@@ -992,6 +1155,28 @@ namespace TheraplyCore.Streaming
                 reasonCode = $"VIDEO_BITRATE_SET_EXCEPTION_{ex.GetType().Name}";
                 return false;
             }
+        }
+
+        private int GetEffectiveTargetFps()
+        {
+            var requestedFps = Mathf.Max(1, _targetFps);
+            if (Application.platform == RuntimePlatform.Android)
+            {
+                return Mathf.Min(requestedFps, 24);
+            }
+
+            return requestedFps;
+        }
+
+        private int GetEffectiveTargetBitrateBps(int requestedBitrateBps)
+        {
+            var maxBitrate = MaxTargetBitrateBps;
+            if (Application.platform == RuntimePlatform.Android)
+            {
+                maxBitrate = 1500000;
+            }
+
+            return Mathf.Clamp(requestedBitrateBps, MinTargetBitrateBps, maxBitrate);
         }
     }
 }

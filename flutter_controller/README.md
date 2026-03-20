@@ -73,7 +73,7 @@ adb install build/app/outputs/flutter-apk/app-release.apk
 - Auto-filled for testing
 
 ### **Scanner Screen**
-- UDP discovery on port 8767
+- UDP discovery on port 8769
 - Finds Quest devices on same WiFi
 - Shows device name + IP
 
@@ -116,7 +116,7 @@ Solution: Make sure google-services.json is in android/app/
 Solution: 
 1. Quest and Phone on same WiFi?
 2. Unity app running on Quest?
-3. Check Quest is broadcasting (port 8767)
+3. Check Quest is broadcasting (port 8769)
 ```
 
 ### **Error: "Connection failed"**
@@ -192,7 +192,7 @@ After app runs successfully:
 ## 💡 Tips
 
 - **Default login** is pre-filled for quick testing
-- **UDP port 8767** must match Unity's discovery port
+- **UDP port 8769** must match Unity's discovery port
 - **TCP port 8080** must match Unity's control port
 - **Control Screen keeps screen awake** (wakelock enabled while active)
 - **Foreground service stops automatically** when app task is removed from recents

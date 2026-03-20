@@ -94,7 +94,12 @@ service cloud.firestore {
     }
 
     match /therapy_sessions/{sessionId} {
-      allow read: if isAdminOperator() || isTherapySessionOwnerByResource();
+      // allow get even when doc doesn't exist yet (resource == null) so the
+      // pre-read in upsertSessionState doesn't fail on first write.
+      allow get: if isAdminOperator() || (isSignedIn() && (resource == null || resource.data.therapistId == request.auth.uid));
+      // list queries work only when the query includes
+      // .where('therapistId', '==', currentUser.uid)
+      allow list: if isAdminOperator() || (isSignedIn() && resource.data.therapistId == request.auth.uid);
       allow create: if isAdminOperator() || isTherapySessionOwnerByRequest();
       allow update, delete: if isAdminOperator() || isTherapySessionOwnerByResource();
 

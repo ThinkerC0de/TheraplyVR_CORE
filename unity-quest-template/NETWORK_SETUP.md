@@ -14,7 +14,7 @@ The Theraply VR Framework uses a client-server architecture for Quest-Controller
 ├─────────────────┤           ├──────────────────┤
 │                 │           │                  │
 │ UDP Discovery   │◄─────────►│ UDP Discovery    │
-│ (Port 8767)     │  Broadcast │ (Port 8767)      │
+│ (Port 8769)     │  Broadcast │ (Port 8769)      │
 │                 │           │                  │
 │ TCP Server      │◄─────────►│ TCP Client       │
 │ (Port 8080)     │  Connect  │                  │
@@ -48,7 +48,7 @@ VideoStreaming (GameObject)
 ### 2. Configure Components
 
 **UDPDiscoveryService:**
-- Discovery Port: `8767`
+- Discovery Port: `8769`
 - Broadcast Interval: `0.5` seconds
 - Device Timeout: `10` seconds
 - Custom Device Name: (optional, defaults to device name)
@@ -188,8 +188,8 @@ connection.messages.listen((message) {
 - Check IP addresses are in same range (e.g., both 192.168.1.x)
 
 ### Firewall Rules
-- **Quest:** Allow UDP 8767 (broadcast) and TCP 8080 (server)
-- **Flutter Device:** Allow UDP 8767 (listen)
+- **Quest:** Allow UDP 8769 (broadcast) and TCP 8080 (server)
+- **Flutter Device:** Allow UDP 8769 (listen)
 
 ### Network Discovery
 - Quest broadcasts to `X.Y.Z.255` (subnet broadcast)
@@ -208,12 +208,12 @@ connection.messages.listen((message) {
   - 192.168.0.221
     -> SELECTED (192.168.x.x - typical home/office network)
 [UDPDiscovery] Calculated broadcast: 192.168.0.221 -> 192.168.0.255
-[UDPDiscovery] Broadcasting to 192.168.0.255:8767
+[UDPDiscovery] Broadcasting to 192.168.0.255:8769
 ```
 
 **Check Flutter Logs:**
 ```
-[Discovery] 🔍 Starting UDP scan on port 8767
+[Discovery] 🔍 Starting UDP scan on port 8769
 [Discovery] ✅ Scanning started
 [Discovery] ✅ Found: Quest3-Demo @ 192.168.0.221
 ```

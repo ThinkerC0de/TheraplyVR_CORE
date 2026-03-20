@@ -18,9 +18,9 @@ class DiscoveryService {
     }
     
     try {
-      print('[Discovery] 🔍 Starting UDP scan on port 8767');
-      
-      _socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 8767);
+      print('[Discovery] 🔍 Starting UDP scan on port 8769');
+
+      _socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 8769);
       _isScanning = true;
       
       _socket!.listen((RawSocketEvent event) {

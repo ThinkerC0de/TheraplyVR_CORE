@@ -23,8 +23,8 @@ Scope is the current implementation in:
 
 ### Main channels
 - UDP discovery:
-  - Quest broadcast: `8767` (`UDPDiscoveryService`)
-  - Flutter listener: `8767` (`DiscoveryService`)
+  - Quest broadcast: `8769` (`UDPDiscoveryService`)
+  - Flutter listener: `8769` (`DiscoveryService`)
 - TCP control/signaling:
   - Quest server: `8080` (`TCPServerService`)
   - Flutter client: `ConnectionService`
@@ -242,7 +242,7 @@ Legend:
   - can pause/resume broadcast while TCP client connected
   - resolves local IP off main thread
 - Inspector configuration:
-  - `_discoveryPort` (default `8767`)
+  - `_discoveryPort` (default `8769`)
   - `_broadcastInterval` (default `0.5`)
   - `_deviceTimeout`
   - `_studentId`, `_customDeviceName`
@@ -485,12 +485,12 @@ Legend:
 - Role: Firestore operations for `students` collection scoped by therapist ID.
 
 ### `discovery_service.dart` (`flutter_controller/lib/services/discovery_service.dart`) - Required
-- Role: UDP scan listener on port `8767`.
+- Role: UDP scan listener on port `8769`.
 - Behavior:
   - start/stop scan
   - pause/resume emitting devices (used when TCP is connected)
 - Configuration:
-  - currently fixed to bind `8767` in code.
+  - currently fixed to bind `8769` in code.
 
 ### `connection_service.dart` (`flutter_controller/lib/services/connection_service.dart`) - Required
 - Role: TCP command transport + critical ACK/retry logic.
@@ -575,7 +575,7 @@ Legend:
 For production scene, ensure these references are wired:
 
 - `UDPDiscoveryService`
-  - discovery port `8767`
+  - discovery port `8769`
 - `TCPServerService`
   - port `8080`
   - `_discoveryService` -> `UDPDiscoveryService`
@@ -613,7 +613,7 @@ If any dependency is intentionally auto-discovered, still prefer explicit Inspec
   - `google-services.json` in `flutter_controller/android/app/`
   - Firebase Auth + Firestore enabled
 - Ports/protocol:
-  - UDP discovery listener on `8767`
+  - UDP discovery listener on `8769`
   - TCP control to Quest `8080`
   - length-prefixed JSON framing
   - payload base64-encoded JSON for Unity compatibility

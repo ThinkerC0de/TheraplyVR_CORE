@@ -13,8 +13,8 @@ namespace TheraplyCore.Network.Discovery
     /// Quest broadcasts presence, therapist controller listens
     /// 
     /// ARCHITECTURE:
-    /// - Quest: Broadcasts DeviceInfo every 2 seconds on port 8767
-    /// - Controller: Listens on port 8767, discovers available devices
+    /// - Quest: Broadcasts DeviceInfo every 2 seconds on port 8769
+    /// - Controller: Listens on port 8769, discovers available devices
     /// 
     /// MESSAGE FORMAT: JSON (DeviceInfo struct)
     /// </summary>
@@ -26,7 +26,7 @@ namespace TheraplyCore.Network.Discovery
         
         [Header("Discovery Settings")]
         [Tooltip("Port for UDP broadcast/listen")]
-        [SerializeField] private int _discoveryPort = 8767;
+        [SerializeField] private int _discoveryPort = 8769;
         
         [Tooltip("Interval between broadcasts (seconds)")]
         [SerializeField] private float _broadcastInterval = 0.5f;
