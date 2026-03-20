@@ -218,6 +218,7 @@ class MobileControlLayoutContract {
         gameConfigType: payload.gameConfigType,
         gameConfigVersion: payload.gameConfigVersion,
         includeVersionInGameConfig: payload.includeVersionInGameConfig,
+        staticFields: const <String, dynamic>{},
       ),
       sections: sections
           .map((entry) => MobileControlSectionDefinition(

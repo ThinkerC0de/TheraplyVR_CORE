@@ -253,6 +253,43 @@ void main() {
 
       expect(latest, isNull);
     });
+
+    test('markSessionAbortedByTherapist stores terminal aborted state',
+        () async {
+      await SessionJournalService.markSessionAbortedByTherapist(
+        sessionId: 'session-aborted',
+        studentId: 'student-a',
+        therapistId: 'therapist-a',
+        latestGameId: 'piniata',
+        reasonCode: 'THERAPIST_ABANDONED_UNFINISHED_SESSION',
+        metadata: const <String, dynamic>{
+          'origin': 'test',
+          'replacementSessionId': 'session-new',
+        },
+      );
+
+      final snapshot = await firestore
+          .collection('therapy_sessions')
+          .doc('session-aborted')
+          .get();
+      final payload = snapshot.data();
+
+      expect(payload, isNotNull);
+      expect(
+        payload!['state'],
+        SessionLifecycleState.abortedByTherapist.wireValue,
+      );
+      expect(payload['unfinished'], isFalse);
+      expect(payload['isTerminal'], isTrue);
+      expect(payload['reasonCode'], 'THERAPIST_ABANDONED_UNFINISHED_SESSION');
+      expect(payload['latestGameId'], 'piniata');
+      expect(payload['endedAtUtc'], isNotNull);
+
+      final metadata = Map<String, dynamic>.from(
+          payload['metadata'] as Map<String, dynamic>);
+      expect(metadata['origin'], 'test');
+      expect(metadata['replacementSessionId'], 'session-new');
+    });
   });
 }
 

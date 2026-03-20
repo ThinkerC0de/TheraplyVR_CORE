@@ -376,12 +376,14 @@ class MobileControlPayloadDefinition {
   final String gameConfigType;
   final int gameConfigVersion;
   final bool includeVersionInGameConfig;
+  final Map<String, dynamic> staticFields;
 
   const MobileControlPayloadDefinition({
     required this.target,
     required this.gameConfigType,
     required this.gameConfigVersion,
     required this.includeVersionInGameConfig,
+    required this.staticFields,
   });
 
   factory MobileControlPayloadDefinition.fromMap(Map<String, dynamic> data) {
@@ -393,6 +395,7 @@ class MobileControlPayloadDefinition {
       gameConfigVersion: _readInt(data['gameConfigVersion'], 1),
       includeVersionInGameConfig:
           _readBool(data['includeVersionInGameConfig'], true),
+      staticFields: MobileControlSchema._asMap(data['staticFields']),
     );
   }
 
@@ -402,6 +405,7 @@ class MobileControlPayloadDefinition {
       'gameConfigType': gameConfigType,
       'gameConfigVersion': gameConfigVersion,
       'includeVersionInGameConfig': includeVersionInGameConfig,
+      'staticFields': staticFields,
     };
   }
 }

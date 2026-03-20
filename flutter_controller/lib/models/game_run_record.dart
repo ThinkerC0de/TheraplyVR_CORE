@@ -2,7 +2,9 @@ class GameRunRecord {
   final String gameRunId;
   final String gameId;
   final DateTime? startedAtUtc;
+  final int startedAtUnixMs;
   final DateTime? endedAtUtc;
+  final int endedAtUnixMs;
   final String? finalState; // "completed" | "interrupted" | "failed" | null
   final int? durationSec;
   final int interactionCount;
@@ -14,7 +16,9 @@ class GameRunRecord {
     required this.gameRunId,
     required this.gameId,
     this.startedAtUtc,
+    required this.startedAtUnixMs,
     this.endedAtUtc,
+    required this.endedAtUnixMs,
     this.finalState,
     this.durationSec,
     required this.interactionCount,
@@ -34,8 +38,12 @@ class GameRunRecord {
     return GameRunRecord(
       gameRunId: id,
       gameId: (json['gameId'] as String? ?? '').trim(),
-      startedAtUtc: _parseDateTime(json['startedAtUtc']),
-      endedAtUtc: _parseDateTime(json['endedAtUtc']),
+      startedAtUtc: _parseDateTime(json['startedAtUtc']) ??
+          _parseDateTimeFromUnixMs(json['startedAtUnixMs']),
+      startedAtUnixMs: _asInt(json['startedAtUnixMs']),
+      endedAtUtc:
+          _parseDateTime(json['endedAtUtc']) ?? _parseDateTimeFromUnixMs(json['endedAtUnixMs']),
+      endedAtUnixMs: _asInt(json['endedAtUnixMs']),
       finalState: json['finalState'] as String?,
       durationSec: _asInt(json['durationSec']),
       interactionCount: _asInt(summary['interactionCount']),
@@ -49,11 +57,32 @@ class GameRunRecord {
   bool get isFailed => finalState == 'failed';
   bool get isInProgress => finalState == null || finalState!.isEmpty;
 
+  DateTime? get sortAnchorUtc => startedAtUtc ?? endedAtUtc;
+
+  int get sortAnchorUnixMs {
+    if (startedAtUnixMs > 0) {
+      return startedAtUnixMs;
+    }
+    if (endedAtUnixMs > 0) {
+      return endedAtUnixMs;
+    }
+    final anchor = sortAnchorUtc;
+    return anchor?.millisecondsSinceEpoch ?? 0;
+  }
+
   static DateTime? _parseDateTime(dynamic value) {
     if (value is String && value.isNotEmpty) {
       return DateTime.tryParse(value)?.toUtc();
     }
     return null;
+  }
+
+  static DateTime? _parseDateTimeFromUnixMs(dynamic value) {
+    final unixMs = _asInt(value);
+    if (unixMs <= 0) {
+      return null;
+    }
+    return DateTime.fromMillisecondsSinceEpoch(unixMs, isUtc: true);
   }
 
   static int _asInt(dynamic value) {

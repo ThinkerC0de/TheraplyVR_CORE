@@ -132,13 +132,15 @@ class SessionJournalService {
     QuerySnapshot<Map<String, dynamic>> snapshot;
     try {
       snapshot = await _sessionsCollection
-          .where('ownerKey', isEqualTo: normalizedOwnerKey)
+          .where('therapistId', isEqualTo: normalizedTherapistId)
+          .where('studentId', isEqualTo: normalizedStudentId)
           .orderBy('updatedAtUnixMs', descending: true)
           .limit(1)
           .get();
     } catch (_) {
-      // Fallback for environments without a ready index yet.
+      // Fallback for environments without a composite index yet.
       snapshot = await _sessionsCollection
+          .where('therapistId', isEqualTo: normalizedTherapistId)
           .where('studentId', isEqualTo: normalizedStudentId)
           .limit(200)
           .get();
@@ -362,6 +364,25 @@ class SessionJournalService {
     );
   }
 
+  static Future<void> markSessionAbortedByTherapist({
+    required String sessionId,
+    required String studentId,
+    required String therapistId,
+    String latestGameId = '',
+    String reasonCode = 'THERAPIST_ABORTED_SESSION',
+    Map<String, dynamic>? metadata,
+  }) {
+    return upsertSessionState(
+      sessionId: sessionId,
+      studentId: studentId,
+      therapistId: therapistId,
+      state: SessionLifecycleState.abortedByTherapist,
+      latestGameId: latestGameId,
+      reasonCode: reasonCode,
+      metadata: metadata,
+    );
+  }
+
   static Future<void> appendSessionEvent({
     required String sessionId,
     required String studentId,
@@ -546,13 +567,58 @@ class SessionJournalService {
     return _sessionsCollection
         .doc(normalizedSessionId)
         .collection('game_runs')
-        .orderBy('startedAtUtc', descending: false)
         .snapshots()
-        .map(
-          (snap) => snap.docs
-              .map((doc) => GameRunRecord.fromFirestore(doc.id, doc.data()))
-              .toList(growable: false),
-        );
+        .map((snap) {
+      final runs = snap.docs
+          .map((doc) => GameRunRecord.fromFirestore(doc.id, doc.data()))
+          .toList(growable: false);
+      runs.sort((a, b) {
+        final startCompare = a.sortAnchorUnixMs.compareTo(b.sortAnchorUnixMs);
+        if (startCompare != 0) {
+          return startCompare;
+        }
+
+        final endCompare = a.endedAtUnixMs.compareTo(b.endedAtUnixMs);
+        if (endCompare != 0) {
+          return endCompare;
+        }
+
+        return a.gameRunId.compareTo(b.gameRunId);
+      });
+      return runs;
+    });
+  }
+
+  static Future<List<GameRunRecord>> fetchGameRuns({
+    required String sessionId,
+  }) async {
+    final normalizedSessionId = sessionId.trim();
+    if (normalizedSessionId.isEmpty) {
+      return const <GameRunRecord>[];
+    }
+
+    final snapshot = await _sessionsCollection
+        .doc(normalizedSessionId)
+        .collection('game_runs')
+        .get();
+
+    final runs = snapshot.docs
+        .map((doc) => GameRunRecord.fromFirestore(doc.id, doc.data()))
+        .toList(growable: false);
+    runs.sort((a, b) {
+      final startCompare = a.sortAnchorUnixMs.compareTo(b.sortAnchorUnixMs);
+      if (startCompare != 0) {
+        return startCompare;
+      }
+
+      final endCompare = a.endedAtUnixMs.compareTo(b.endedAtUnixMs);
+      if (endCompare != 0) {
+        return endCompare;
+      }
+
+      return a.gameRunId.compareTo(b.gameRunId);
+    });
+    return runs;
   }
 
   static String buildTimelineEventId({

@@ -35,18 +35,20 @@ class GameDataService {
   // Tracks current in-progress game run (cleared on game_end).
   String? _activeGameRunId;
   String? _activeGameId;
+  DateTime? _activeGameRunStartedAtUtc;
 
-  // Count of game_runs successfully written this session (reset on attachSession).
-  int _gameRunsWritten = 0;
+  // Tracks unique game_runs written for the current session.
+  final Set<String> _writtenGameRunIds = <String>{};
 
   /// True if at least one game_run was written for the current session.
-  bool get hasGameData => _gameRunsWritten > 0;
+  bool get hasGameData => _writtenGameRunIds.isNotEmpty;
 
   // Pending interaction batch for the current game run (arrives before game_end on the wire).
   // Map: gameRunId → list of interaction maps.
   final Map<String, List<Map<String, dynamic>>> _pendingInteractions = {};
 
   StreamSubscription<Map<String, dynamic>>? _messageSub;
+  Future<void> Function(String sessionId)? onJournalCheckpointCommitted;
 
   GameDataService(this._connection) {
     _messageSub = _connection.messages.listen(_handleMessage);
@@ -64,8 +66,10 @@ class GameDataService {
     _pendingInteractions.clear();
     _activeGameRunId = null;
     _activeGameId = null;
-    _gameRunsWritten = 0;
-    print('[GameData] attachSession: sid=$_sessionId uid=$_therapistId student=$_studentId');
+    _activeGameRunStartedAtUtc = null;
+    _writtenGameRunIds.clear();
+    print(
+        '[GameData] attachSession: sid=$_sessionId uid=$_therapistId student=$_studentId');
   }
 
   /// Call when the session ends or is cleared.
@@ -74,6 +78,9 @@ class GameDataService {
     _studentId = '';
     _therapistId = '';
     _pendingInteractions.clear();
+    _activeGameRunId = null;
+    _activeGameId = null;
+    _activeGameRunStartedAtUtc = null;
   }
 
   Future<void> dispose() async {
@@ -87,7 +94,9 @@ class GameDataService {
     final commandId = message['commandId'] as String? ?? '';
     if (commandId != _gameEventCmd &&
         commandId != _interactionBatchCmd &&
-        commandId != _motionTraceCmd) return;
+        commandId != _motionTraceCmd) {
+      return;
+    }
 
     print('[GameData] 📥 $commandId sid=$_sessionId');
     final payload = _decodePayload(message['payload']);
@@ -143,14 +152,13 @@ class GameDataService {
     final rawEvents = payload['events'];
     if (rawEvents is! List) return;
 
-    final events = rawEvents
-        .whereType<Map<String, dynamic>>()
-        .toList();
+    final events = rawEvents.whereType<Map<String, dynamic>>().toList();
 
     if (events.isNotEmpty) {
       _pendingInteractions[gameRunId] = events;
       if (kDebugMode) {
-        debugPrint('[GameData] Buffered ${events.length} interactions for gameRunId=$gameRunId');
+        debugPrint(
+            '[GameData] Buffered ${events.length} interactions for gameRunId=$gameRunId');
       }
     }
   }
@@ -161,21 +169,15 @@ class GameDataService {
     final gameId = payload['gameId'] as String? ?? '';
     final gameRunId = (payload['gameRunId'] as String? ?? '').trim();
     final occurredAtUtc = payload['occurredAtUtc'] as String?;
+    final startedAtUtc = _resolveOccurredAtUtc(occurredAtUtc);
 
     _activeGameRunId = gameRunId.isNotEmpty ? gameRunId : null;
     _activeGameId = gameId.isNotEmpty ? gameId : null;
+    _activeGameRunStartedAtUtc = startedAtUtc;
 
     if (kDebugMode) {
       debugPrint('[GameData] game_start: gameId=$gameId gameRunId=$gameRunId');
     }
-
-    // Write high-level timeline event immediately.
-    await _appendTimeline(
-      eventType: 'game_started',
-      gameId: gameId,
-      occurredAtUtc: occurredAtUtc,
-      details: {'gameRunId': gameRunId},
-    );
   }
 
   Future<void> _onGameEnd(Map<String, dynamic> payload) async {
@@ -185,8 +187,14 @@ class GameDataService {
     final durationSec = (payload['durationSec'] as num?)?.toInt() ?? 0;
     final hitCount = (payload['hitCount'] as num?)?.toInt() ?? 0;
     final missCount = (payload['missCount'] as num?)?.toInt() ?? 0;
-    final interactionCount = (payload['interactionCount'] as num?)?.toInt() ?? 0;
+    final interactionCount =
+        (payload['interactionCount'] as num?)?.toInt() ?? 0;
     final occurredAtUtc = payload['occurredAtUtc'] as String?;
+    final endedAtUtc = _resolveOccurredAtUtc(occurredAtUtc);
+    final startedAtUtc =
+        (_activeGameRunId == gameRunId && _activeGameRunStartedAtUtc != null)
+            ? _activeGameRunStartedAtUtc!
+            : endedAtUtc;
 
     if (gameRunId.isEmpty) return;
 
@@ -194,22 +202,27 @@ class GameDataService {
     if (_activeGameRunId == gameRunId) {
       _activeGameRunId = null;
       _activeGameId = null;
+      _activeGameRunStartedAtUtc = null;
     }
 
-    print('[GameData] game_end: sid=$_sessionId runId=$gameRunId state=$finalState hits=$hitCount misses=$missCount');
+    print(
+        '[GameData] game_end: sid=$_sessionId runId=$gameRunId state=$finalState hits=$hitCount misses=$missCount');
 
-    final sessionRef = _firestore
-        .collection('therapy_sessions')
-        .doc(_sessionId);
+    final sessionRef =
+        _firestore.collection('therapy_sessions').doc(_sessionId);
 
     // 1. Write game_runs document.
     try {
       await sessionRef.collection('game_runs').doc(gameRunId).set({
         'gameId': gameId,
-        'startedAtUtc': null,
-        'endedAtUtc': occurredAtUtc,
+        'startedAtUtc': startedAtUtc.toIso8601String(),
+        'startedAtUnixMs': startedAtUtc.millisecondsSinceEpoch,
+        'endedAtUtc': endedAtUtc.toIso8601String(),
+        'endedAtUnixMs': endedAtUtc.millisecondsSinceEpoch,
         'finalState': finalState,
         'durationSec': durationSec,
+        'updatedAtUtc': DateTime.now().toUtc().toIso8601String(),
+        'updatedAtUnixMs': DateTime.now().toUtc().millisecondsSinceEpoch,
         // motionTraceUrl is written separately by _handleMotionTrace (merge-safe).
         'summary': {
           'interactionCount': interactionCount,
@@ -218,8 +231,10 @@ class GameDataService {
           'avgReactionTimeMs': null,
         },
       }, SetOptions(merge: true));
-      _gameRunsWritten++;
-      print('[GameData] ✅ game_runs/$gameRunId written (total=$_gameRunsWritten)');
+      _markGameRunWritten(gameRunId);
+      print(
+        '[GameData] ✅ game_runs/$gameRunId written (total=${_writtenGameRunIds.length})',
+      );
     } catch (e) {
       print('[GameData] ❌ game_runs write failed: $e');
     }
@@ -254,7 +269,8 @@ class GameDataService {
 
     // 4. High-level timeline event.
     await _appendTimeline(
-      eventType: finalState == 'completed' ? 'game_completed' : 'game_interrupted',
+      eventType:
+          finalState == 'completed' ? 'game_completed' : 'game_interrupted',
       gameId: gameId,
       occurredAtUtc: occurredAtUtc,
       details: {
@@ -266,26 +282,31 @@ class GameDataService {
         'interactionCount': interactionCount,
       },
     );
+
+    final sessionId = _sessionId.trim();
+    if (sessionId.isNotEmpty) {
+      try {
+        await onJournalCheckpointCommitted?.call(sessionId);
+      } catch (e) {
+        print('[GameData] ❌ journal checkpoint callback failed: $e');
+      }
+    }
   }
 
   Future<void> _onSessionStart(Map<String, dynamic> payload) async {
-    final occurredAtUtc = payload['occurredAtUtc'] as String?;
-    await _appendTimeline(
-      eventType: 'session_start',
-      occurredAtUtc: occurredAtUtc,
-    );
+    if (kDebugMode) {
+      debugPrint('[GameData] session_start received (local-only)');
+    }
   }
 
   Future<void> _onSessionStop(Map<String, dynamic> payload) async {
-    final reason = payload['finalState'] as String?
-        ?? payload['reasonCode'] as String?
-        ?? '';
-    final occurredAtUtc = payload['occurredAtUtc'] as String?;
-    await _appendTimeline(
-      eventType: 'session_stop',
-      occurredAtUtc: occurredAtUtc,
-      details: reason.isNotEmpty ? {'reason': reason} : const {},
-    );
+    final reason = payload['finalState'] as String? ??
+        payload['reasonCode'] as String? ??
+        '';
+    if (kDebugMode) {
+      debugPrint(
+          '[GameData] session_stop received (local-only): reason=$reason');
+    }
   }
 
   // ─── Motion trace upload ──────────────────────────────────────────────────
@@ -306,7 +327,8 @@ class GameDataService {
     if (gameRunId.isEmpty || traceId.isEmpty) return;
 
     if (inlineStatus != 'INCLUDED' || tracePayloadBase64.isEmpty) {
-      print('[GameData] ⚠️ motion_trace: no inline payload (status=$inlineStatus) — skipping upload');
+      print(
+          '[GameData] ⚠️ motion_trace: no inline payload (status=$inlineStatus) — skipping upload');
       return;
     }
 
@@ -324,7 +346,9 @@ class GameDataService {
     try {
       final ref = FirebaseStorage.instance.ref(storagePath);
       final metadata = SettableMetadata(
-        contentType: encoding == 'vrl_gzip' ? 'application/gzip' : 'application/octet-stream',
+        contentType: encoding == 'vrl_gzip'
+            ? 'application/gzip'
+            : 'application/octet-stream',
         customMetadata: {
           'sessionId': _sessionId,
           'gameRunId': gameRunId,
@@ -357,9 +381,8 @@ class GameDataService {
     List<Map<String, dynamic>> interactions,
   ) async {
     const maxPerBatch = 499;
-    final sessionRef = _firestore
-        .collection('therapy_sessions')
-        .doc(_sessionId);
+    final sessionRef =
+        _firestore.collection('therapy_sessions').doc(_sessionId);
 
     for (var offset = 0; offset < interactions.length; offset += maxPerBatch) {
       final chunk = interactions.skip(offset).take(maxPerBatch).toList();
@@ -392,7 +415,8 @@ class GameDataService {
     }
 
     if (kDebugMode) {
-      debugPrint('[GameData] Wrote ${interactions.length} interactions for gameRunId=$gameRunId');
+      debugPrint(
+          '[GameData] Wrote ${interactions.length} interactions for gameRunId=$gameRunId');
     }
   }
 
@@ -402,7 +426,9 @@ class GameDataService {
     String? occurredAtUtc,
     Map<String, dynamic> details = const {},
   }) async {
-    if (_sessionId.isEmpty || _studentId.isEmpty || _therapistId.isEmpty) return;
+    if (_sessionId.isEmpty || _studentId.isEmpty || _therapistId.isEmpty) {
+      return;
+    }
 
     await SessionJournalService.appendSessionEvent(
       sessionId: _sessionId,
@@ -411,7 +437,9 @@ class GameDataService {
       eventType: eventType,
       gameId: gameId,
       source: 'quest_runtime',
-      eventAtUtc: occurredAtUtc != null ? DateTime.tryParse(occurredAtUtc)?.toUtc() : null,
+      eventAtUtc: occurredAtUtc != null
+          ? DateTime.tryParse(occurredAtUtc)?.toUtc()
+          : null,
       details: details.isEmpty ? null : details,
     );
   }
@@ -427,6 +455,8 @@ class GameDataService {
 
     print('[GameData] markActiveRunInterrupted: runId=$runId');
     try {
+      final nowUtc = DateTime.now().toUtc();
+      final startedAtUtc = _activeGameRunStartedAtUtc ?? nowUtc;
       await _firestore
           .collection('therapy_sessions')
           .doc(_sessionId)
@@ -434,10 +464,14 @@ class GameDataService {
           .doc(runId)
           .set({
         'gameId': gameId ?? '',
-        'startedAtUtc': null,
-        'endedAtUtc': DateTime.now().toUtc().toIso8601String(),
+        'startedAtUtc': startedAtUtc.toIso8601String(),
+        'startedAtUnixMs': startedAtUtc.millisecondsSinceEpoch,
+        'endedAtUtc': nowUtc.toIso8601String(),
+        'endedAtUnixMs': nowUtc.millisecondsSinceEpoch,
         'finalState': 'interrupted',
         'durationSec': 0,
+        'updatedAtUtc': nowUtc.toIso8601String(),
+        'updatedAtUnixMs': nowUtc.millisecondsSinceEpoch,
         'summary': {
           'interactionCount': 0,
           'hitCount': 0,
@@ -445,10 +479,21 @@ class GameDataService {
           'avgReactionTimeMs': null,
         },
       }, SetOptions(merge: true));
-      _gameRunsWritten++;
+      _markGameRunWritten(runId);
       _activeGameRunId = null;
       _activeGameId = null;
-      print('[GameData] ✅ interrupted game_run written');
+      _activeGameRunStartedAtUtc = null;
+      print(
+        '[GameData] ✅ interrupted game_run written (total=${_writtenGameRunIds.length})',
+      );
+      final sessionId = _sessionId.trim();
+      if (sessionId.isNotEmpty) {
+        try {
+          await onJournalCheckpointCommitted?.call(sessionId);
+        } catch (e) {
+          print('[GameData] ❌ journal checkpoint callback failed: $e');
+        }
+      }
     } catch (e) {
       print('[GameData] ❌ interrupted game_run write failed: $e');
     }
@@ -457,12 +502,16 @@ class GameDataService {
   /// Deletes the session document from Firestore if no game_runs were written.
   /// Safe to call after EndSession when therapist never played any game.
   Future<void> deleteSessionIfEmpty() async {
-    if (_sessionId.isEmpty || _gameRunsWritten > 0) return;
+    if (_sessionId.isEmpty || _writtenGameRunIds.isNotEmpty) {
+      return;
+    }
 
-    print('[GameData] deleteSessionIfEmpty: deleting empty session $_sessionId');
+    print(
+        '[GameData] deleteSessionIfEmpty: deleting empty session $_sessionId');
     try {
       // Delete subcollection events (timeline) first, then the session doc.
-      final sessionRef = _firestore.collection('therapy_sessions').doc(_sessionId);
+      final sessionRef =
+          _firestore.collection('therapy_sessions').doc(_sessionId);
       final events = await sessionRef.collection('events').get();
       final batch = _firestore.batch();
       for (final doc in events.docs) {
@@ -487,5 +536,24 @@ class GameDataService {
     } catch (_) {
       return null;
     }
+  }
+
+  void _markGameRunWritten(String gameRunId) {
+    final normalizedGameRunId = gameRunId.trim();
+    if (normalizedGameRunId.isEmpty) {
+      return;
+    }
+    _writtenGameRunIds.add(normalizedGameRunId);
+  }
+
+  DateTime _resolveOccurredAtUtc(String? occurredAtUtc) {
+    final normalized = occurredAtUtc?.trim() ?? '';
+    if (normalized.isNotEmpty) {
+      final parsed = DateTime.tryParse(normalized)?.toUtc();
+      if (parsed != null) {
+        return parsed;
+      }
+    }
+    return DateTime.now().toUtc();
   }
 }
