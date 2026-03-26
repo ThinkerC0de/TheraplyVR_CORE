@@ -59,7 +59,7 @@ class ControlScreen extends StatefulWidget {
 }
 
 class _ControlScreenState extends State<ControlScreen>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   static final bool _contentDeliveryEnabled = true;
   static const int _sessionIngestPort = 18765;
   static const String _setVideoBitrateCommandId = 'WEBRTC_SET_VIDEO_BITRATE';
@@ -878,6 +878,11 @@ class _ControlScreenState extends State<ControlScreen>
     'APP_FOCUS_LOST',
     'APP_QUIT',
   };
+  static const bool _rewardsUnlocksTemporarilyDisabled = true;
+  static const double _timelineDrawerCollapsedRailWidth = 5;
+  static const double _timelineDrawerHandleWidth = 28;
+  static const double _timelineDrawerHandleHeight = 96;
+  static const double _timelineDrawerHandleHitWidth = 36;
   static final Map<String, DateTime> _recentlyEndedSessionIds =
       <String, DateTime>{};
   static const List<String> _demoLevelModes = <String>[
@@ -949,10 +954,13 @@ class _ControlScreenState extends State<ControlScreen>
   bool _reconnectGameRuntimeRecoveryInFlight = false;
   String? _disconnectReasonOverride;
   String? _reconnectGameRuntimeGameId;
+  late final AnimationController _timelineDrawerController;
   final TextEditingController _timelineNoteController = TextEditingController();
   bool _timelineNoteInFlight = false;
   String _loadedJournalSessionId = '';
   List<SessionTimelineEvent> _cachedTimelineEvents =
+      const <SessionTimelineEvent>[];
+  List<SessionTimelineEvent> _liveTimelinePreviewEvents =
       const <SessionTimelineEvent>[];
   List<GameRunRecord> _cachedGameRuns = const <GameRunRecord>[];
   bool _journalLoading = false;
@@ -960,7 +968,10 @@ class _ControlScreenState extends State<ControlScreen>
   String _pendingJournalSessionId = '';
   String _pendingJournalReason = 'PENDING';
   String? _journalLoadError;
+  StreamSubscription<List<SessionTimelineEvent>>?
+      _liveTimelinePreviewSubscription;
   String _lastPersistedWorkflowCheckpointFingerprint = '';
+  String _lastPersistedDevicePresenceTimelineFingerprint = '';
   String? _deferredHandoffSessionId;
   DateTime? _deferredHandoffMarkedAtUtc;
   String? _deferredHandoffReasonCode;
@@ -991,6 +1002,11 @@ class _ControlScreenState extends State<ControlScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _timelineDrawerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 240),
+      value: 0,
+    );
     _incidentPopupQueue = OperatorIncidentPopupQueue(
       queueName: 'control_screen',
       languageResolver: () => _therapistSessionSettings.operatorUiLanguage,
@@ -1003,6 +1019,16 @@ class _ControlScreenState extends State<ControlScreen>
               reason: 'GAME_DATA_PERSISTED',
               sessionIdOverride: sessionId,
             );
+    _liveTimelinePreviewEvents = _gameDataService.liveTimelinePreviewEvents;
+    _liveTimelinePreviewSubscription =
+        _gameDataService.liveTimelinePreviewStream.listen((events) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _liveTimelinePreviewEvents = events;
+      });
+    });
     _activeSessionId = _buildLocalSessionId();
     _selectedGameId = '';
     _bootstrapLocalContentStates();
@@ -1029,11 +1055,13 @@ class _ControlScreenState extends State<ControlScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _autoReconnectEnabled = false;
+    _timelineDrawerController.dispose();
     _timelineNoteController.dispose();
     _connectionSubscription?.cancel();
     _messageSubscription?.cancel();
     _discoverySubscription?.cancel();
     _connectionLivenessTimer?.cancel();
+    _liveTimelinePreviewSubscription?.cancel();
     _gameDataService.onJournalCheckpointCommitted = null;
     unawaited(ForegroundServiceBridge.stop());
     unawaited(_gameDataService.dispose());
@@ -1945,9 +1973,11 @@ class _ControlScreenState extends State<ControlScreen>
     required String reasonCode,
     String? sessionIdOverride,
   }) async {
-    debugPrint(
-      '[ControlScreen] Connection lifecycle event kept local-only: '
-      'event=$eventType reason=$reasonCode session=${sessionIdOverride ?? _resolveTimelineSessionId()}',
+    await _appendOperationalTimelineEvent(
+      eventType: eventType,
+      reasonCode: reasonCode,
+      source: 'mobile_controller',
+      sessionIdOverride: sessionIdOverride,
     );
   }
 
@@ -1960,10 +1990,79 @@ class _ControlScreenState extends State<ControlScreen>
     String discriminator = '',
     Map<String, dynamic> details = const <String, dynamic>{},
   }) async {
-    debugPrint(
-      '[ControlScreen] Operational timeline event kept local-only: '
-      'event=$eventType reason=$reasonCode source=$source discriminator=$discriminator details=$details',
+    final normalizedEventType = eventType.trim();
+    final normalizedReasonCode = reasonCode.trim();
+    final normalizedSource =
+        source.trim().isEmpty ? 'mobile_controller' : source.trim();
+    final resolvedSessionId = _resolveOperationalTimelineSessionId(
+        sessionIdOverride: sessionIdOverride);
+
+    if (normalizedEventType.isEmpty || resolvedSessionId.isEmpty) {
+      debugPrint(
+        '[ControlScreen] Operational timeline event skipped: '
+        'event=$normalizedEventType reason=$normalizedReasonCode '
+        'source=$normalizedSource session=$resolvedSessionId',
+      );
+      return;
+    }
+
+    final payloadDetails = <String, dynamic>{
+      'reasonCode': normalizedReasonCode,
+      'workflowStep': _workflowStep.name,
+      'connected': _isConnected,
+      'attachReady': _sessionAttachReady,
+      ...details,
+    };
+
+    if (!_shouldPersistOperationalTimelineEvent(
+      eventType: normalizedEventType,
+      details: payloadDetails,
+    )) {
+      debugPrint(
+        '[ControlScreen] Operational timeline event kept local-only: '
+        'event=$normalizedEventType reason=$normalizedReasonCode '
+        'source=$normalizedSource discriminator=$discriminator details=$payloadDetails',
+      );
+      return;
+    }
+
+    final resolvedEventAtUtc = (eventAtUtc ?? DateTime.now().toUtc()).toUtc();
+    final timelineEventId = SessionJournalService.buildTimelineEventId(
+      sessionId: resolvedSessionId,
+      eventType: normalizedEventType,
+      source: normalizedSource,
+      eventAtUnixMs: resolvedEventAtUtc.millisecondsSinceEpoch,
+      details: payloadDetails,
+      discriminator: discriminator,
     );
+
+    try {
+      await SessionJournalService.appendSessionEvent(
+        sessionId: resolvedSessionId,
+        studentId: widget.student.id,
+        therapistId: _resolveActorTherapistId(),
+        eventType: normalizedEventType,
+        gameId: _resolveOperationalTimelineGameId(),
+        source: normalizedSource,
+        timelineEventId: timelineEventId,
+        eventAtUtc: resolvedEventAtUtc,
+        details: payloadDetails,
+      );
+      if (mounted) {
+        unawaited(
+          _refreshSessionJournal(
+            reason: normalizedEventType,
+            sessionIdOverride: resolvedSessionId,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint(
+        '[ControlScreen] Operational timeline event persist failed: '
+        'event=$normalizedEventType reason=$normalizedReasonCode '
+        'source=$normalizedSource session=$resolvedSessionId error=$e',
+      );
+    }
   }
 
   Future<void> _recordReconnectAttemptEvent({
@@ -2044,14 +2143,134 @@ class _ControlScreenState extends State<ControlScreen>
     );
   }
 
+  String _resolveOperationalTimelineSessionId({String? sessionIdOverride}) {
+    final activeSessionId = _activeSessionId.trim();
+    if (activeSessionId.startsWith('mobile-')) {
+      return activeSessionId;
+    }
+
+    final normalizedOverride = sessionIdOverride?.trim() ?? '';
+    if (normalizedOverride.isNotEmpty) {
+      return normalizedOverride;
+    }
+
+    return _resolveTimelineSessionId().trim();
+  }
+
+  String _resolveOperationalTimelineGameId() {
+    final remoteActiveGameId = _remoteActiveGameId?.trim() ?? '';
+    if (remoteActiveGameId.isNotEmpty) {
+      return remoteActiveGameId;
+    }
+
+    return _selectedGameId.trim();
+  }
+
+  bool _shouldPersistOperationalTimelineEvent({
+    required String eventType,
+    required Map<String, dynamic> details,
+  }) {
+    switch (eventType) {
+      case 'CONTROLLER_CONNECTED':
+      case 'CONTROLLER_RECONNECTED':
+      case 'CONTROLLER_DISCONNECTED':
+      case 'SESSION_ATTACH_ATTEMPT':
+      case 'SESSION_ATTACH_SUCCEEDED':
+      case 'SESSION_ATTACH_FAILED':
+        return true;
+      case 'CONTROLLER_RECONNECT_ATTEMPT':
+        return _readOperationalLoopAttempt(details['loopAttempt']) == 1;
+      case 'CONTROLLER_RECONNECT_SUCCESS':
+      case 'CONTROLLER_RECONNECT_FAILED':
+      case 'SESSION_ATTACH_ACK':
+        return false;
+      default:
+        return true;
+    }
+  }
+
+  int _readOperationalLoopAttempt(dynamic value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is String) {
+      return int.tryParse(value.trim()) ?? 0;
+    }
+    return 0;
+  }
+
   Future<void> _persistDevicePresenceSignal(
     DevicePresenceUpdateSignal signal,
   ) async {
-    debugPrint(
-      '[ControlScreen] Device presence kept local-only: '
-      'presence=${signal.presenceState.wireValue} reason=${signal.reasonCode} '
-      'activeGame=${signal.activeGameId}',
+    final eventType = _eventTypeForDevicePresenceSignal(signal);
+    final resolvedSessionId = _resolveOperationalTimelineSessionId(
+      sessionIdOverride: signal.sessionId,
     );
+    final normalizedReasonCode = signal.reasonCode.trim().toUpperCase();
+    final fingerprint = [
+      resolvedSessionId,
+      eventType,
+      signal.presenceState.wireValue,
+      normalizedReasonCode,
+    ].join('|');
+
+    if (eventType.isEmpty || resolvedSessionId.isEmpty) {
+      debugPrint(
+        '[ControlScreen] Device presence kept local-only: '
+        'presence=${signal.presenceState.wireValue} reason=${signal.reasonCode} '
+        'activeGame=${signal.activeGameId}',
+      );
+      return;
+    }
+
+    if (_lastPersistedDevicePresenceTimelineFingerprint == fingerprint) {
+      return;
+    }
+    _lastPersistedDevicePresenceTimelineFingerprint = fingerprint;
+
+    await _appendOperationalTimelineEvent(
+      eventType: eventType,
+      reasonCode:
+          normalizedReasonCode.isEmpty ? 'UNSPECIFIED' : normalizedReasonCode,
+      source: 'quest_runtime',
+      sessionIdOverride: signal.sessionId,
+      eventAtUtc: signal.changedAtUtc,
+      discriminator: fingerprint,
+      details: <String, dynamic>{
+        'presenceState': signal.presenceState.wireValue,
+        'appPaused': signal.appPaused,
+        'appFocused': signal.appFocused,
+        'hasTcpClient': signal.hasTcpClient,
+        'activeGameId': signal.activeGameId.trim(),
+        'activeGameState': signal.activeGameState.trim(),
+      },
+    );
+  }
+
+  String _eventTypeForDevicePresenceSignal(DevicePresenceUpdateSignal signal) {
+    final normalizedReasonCode = signal.reasonCode.trim().toUpperCase();
+    if (normalizedReasonCode == 'TCP_CLIENT_CONNECTED') {
+      return 'VR_DEVICE_CONNECTED';
+    }
+
+    switch (signal.presenceState) {
+      case DevicePresenceState.connected:
+        return 'VR_DEVICE_CONNECTED';
+      case DevicePresenceState.foreground:
+        if (normalizedReasonCode == 'APP_FOCUS_GAINED') {
+          return 'VR_FOCUS_GAINED';
+        }
+        return 'VR_APP_FOREGROUND';
+      case DevicePresenceState.background:
+        return 'VR_APP_BACKGROUND';
+      case DevicePresenceState.focusLost:
+        return 'VR_FOCUS_LOST';
+      case DevicePresenceState.quitting:
+        return 'VR_APP_QUITTING';
+    }
   }
 
   Future<void> _recordMobileLifecycleEvent(AppLifecycleState state) async {
@@ -4025,7 +4244,37 @@ class _ControlScreenState extends State<ControlScreen>
     final selectedGameId = _selectedGameId;
 
     try {
-      if (command == CriticalCommandIds.stopGame) {
+      if (command == CriticalCommandIds.startGame) {
+        final startEventDetails = _buildStartGameTimelineDetails(extraPayload);
+        final startStateMetadata = <String, dynamic>{
+          'origin': 'mobile_command',
+          'commandId': CriticalCommandIds.startGame,
+          if ((startEventDetails['gameConfigType'] as String? ?? '')
+              .trim()
+              .isNotEmpty)
+            'gameConfigType': startEventDetails['gameConfigType'],
+          if (_asTimelineInt(startEventDetails['gameConfigVersion']) > 0)
+            'gameConfigVersion': startEventDetails['gameConfigVersion'],
+        };
+
+        await SessionJournalService.upsertSessionState(
+          sessionId: sessionId,
+          studentId: widget.student.id,
+          therapistId: therapistId,
+          state: SessionLifecycleState.inProgress,
+          latestGameId: selectedGameId,
+          reasonCode: 'START_GAME_SENT',
+          metadata: startStateMetadata,
+        );
+        await SessionJournalService.appendSessionEvent(
+          sessionId: sessionId,
+          studentId: widget.student.id,
+          therapistId: therapistId,
+          eventType: 'GAME_STARTED',
+          gameId: selectedGameId,
+          details: startEventDetails,
+        );
+      } else if (command == CriticalCommandIds.stopGame) {
         await SessionJournalService.upsertSessionState(
           sessionId: sessionId,
           studentId: widget.student.id,
@@ -4097,7 +4346,11 @@ class _ControlScreenState extends State<ControlScreen>
         '[ControlScreen] Persist command side effects failed: command=$command, error=$e',
       );
     } finally {
-      if (command == CriticalCommandIds.endSession) {
+      if (command == CriticalCommandIds.startGame ||
+          command == CriticalCommandIds.pauseGame ||
+          command == CriticalCommandIds.resumeGame ||
+          command == CriticalCommandIds.stopGame ||
+          command == CriticalCommandIds.endSession) {
         await _refreshSessionJournal(
           reason: 'COMMAND_SIDE_EFFECTS',
           sessionIdOverride: sessionId,
@@ -4272,9 +4525,10 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   bool get _isRewardsUnlocksAllowed {
-    return EntitlementService.isFeatureEnabled(
-      EntitlementFeatureKeys.rewardsUnlocks,
-    );
+    return !_rewardsUnlocksTemporarilyDisabled &&
+        EntitlementService.isFeatureEnabled(
+          EntitlementFeatureKeys.rewardsUnlocks,
+        );
   }
 
   bool get _isPlanBlockingLaunch {
@@ -6313,6 +6567,99 @@ class _ControlScreenState extends State<ControlScreen>
     return null;
   }
 
+  Map<String, dynamic> _buildStartGameTimelineDetails(
+    Map<String, dynamic>? payload,
+  ) {
+    final resolvedPayload = payload == null
+        ? <String, dynamic>{}
+        : Map<String, dynamic>.from(payload);
+    final gameConfigType =
+        (resolvedPayload['gameConfigType'] as String? ?? '').trim();
+    final gameConfigVersion =
+        _asTimelineInt(resolvedPayload['gameConfigVersion']);
+    final gameConfigJson =
+        (resolvedPayload['gameConfigJson'] as String? ?? '').trim();
+
+    return <String, dynamic>{
+      'reasonCode': 'START_GAME_SENT',
+      if (gameConfigType.isNotEmpty) 'gameConfigType': gameConfigType,
+      if (gameConfigVersion > 0) 'gameConfigVersion': gameConfigVersion,
+      if (gameConfigJson.isNotEmpty) 'gameConfigJson': gameConfigJson,
+      if (gameConfigJson.isNotEmpty)
+        'gameConfigSummary': _summarizeGameConfigJson(gameConfigJson),
+    };
+  }
+
+  String _summarizeGameConfigJson(String rawJson) {
+    final normalized = rawJson.trim();
+    if (normalized.isEmpty) {
+      return '';
+    }
+
+    try {
+      final decoded = jsonDecode(normalized);
+      if (decoded is! Map) {
+        return _truncateTimelineConfigSummary(normalized);
+      }
+
+      final fragments = <String>[];
+      for (final entry in decoded.entries) {
+        final key = entry.key.toString().trim();
+        if (key.isEmpty || key == 'version') {
+          continue;
+        }
+
+        final valueText = _formatConfigSummaryValue(entry.value);
+        if (valueText.isEmpty) {
+          continue;
+        }
+
+        fragments.add('$key=$valueText');
+        if (fragments.length >= 4) {
+          break;
+        }
+      }
+
+      if (fragments.isEmpty) {
+        return _truncateTimelineConfigSummary(normalized);
+      }
+
+      return fragments.join(', ');
+    } catch (_) {
+      return _truncateTimelineConfigSummary(normalized);
+    }
+  }
+
+  String _formatConfigSummaryValue(dynamic value) {
+    if (value == null) {
+      return '';
+    }
+    if (value is bool) {
+      return value ? 'true' : 'false';
+    }
+    if (value is num) {
+      return value.toString();
+    }
+    if (value is String) {
+      return value.trim();
+    }
+    if (value is List) {
+      return '[${value.length}]';
+    }
+    if (value is Map) {
+      return '{${value.length}}';
+    }
+    return value.toString().trim();
+  }
+
+  String _truncateTimelineConfigSummary(String value) {
+    const maxLength = 96;
+    if (value.length <= maxLength) {
+      return value;
+    }
+    return '${value.substring(0, maxLength - 1)}...';
+  }
+
   void _cacheAppliedGameConfigFromPayload({
     required String sessionId,
     Map<String, dynamic>? payload,
@@ -7416,15 +7763,22 @@ class _ControlScreenState extends State<ControlScreen>
           ],
         ),
         body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-            child: IndexedStack(
-              index: isCatalogScreen ? 0 : 1,
-              children: [
-                _buildGameCatalogStep(),
-                _buildGameSetupStep(),
-              ],
-            ),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                  child: IndexedStack(
+                    index: isCatalogScreen ? 0 : 1,
+                    children: [
+                      _buildGameCatalogStep(),
+                      _buildGameSetupStep(),
+                    ],
+                  ),
+                ),
+              ),
+              _buildSessionTimelineDrawerOverlay(),
+            ],
           ),
         ),
       ),
@@ -7777,6 +8131,20 @@ class _ControlScreenState extends State<ControlScreen>
         return 'Session attached';
       case 'VR_DEVICE_PRESENCE_UPDATE':
         return 'Headset lifecycle update';
+      case 'VR_DEVICE_CONNECTED':
+        return 'Quest connected';
+      case 'VR_APP_FOREGROUND':
+        return 'Quest app foreground';
+      case 'VR_APP_BACKGROUND':
+        return 'Quest app background';
+      case 'OBJECT_INTERACTION':
+        return 'Object interaction';
+      case 'VR_FOCUS_LOST':
+        return 'Quest focus lost';
+      case 'VR_FOCUS_GAINED':
+        return 'Quest focus gained';
+      case 'VR_APP_QUITTING':
+        return 'Quest app quitting';
       case 'MOBILE_LIFECYCLE_STATE':
         return 'Mobile lifecycle update';
       case 'RUNTIME_SESSION_STATE_UPDATE':
@@ -7821,6 +8189,47 @@ class _ControlScreenState extends State<ControlScreen>
     }
 
     final details = event.details;
+    if (event.eventType.trim() == 'OBJECT_INTERACTION') {
+      final fragments = <String>[];
+      final targetName = (details['targetName'] as String? ?? '').trim();
+      final targetCategory = (details['targetCategory'] as String? ?? '').trim();
+      final interactionEventType =
+          (details['interactionEventType'] as String? ?? '').trim();
+      final actionOutcome =
+          (details['actionOutcome'] as String? ?? '').trim().toUpperCase();
+      final reasonCode = (details['reasonCode'] as String? ?? '').trim();
+
+      if (actionOutcome == 'CORRECT') {
+        fragments.add('Correct');
+      } else if (actionOutcome == 'INCORRECT') {
+        fragments.add('Incorrect');
+      }
+
+      if (targetName.isNotEmpty) {
+        fragments.add(targetName);
+      } else if (targetCategory.isNotEmpty) {
+        fragments.add(targetCategory.toLowerCase().replaceAll('_', ' '));
+      } else if (interactionEventType.isNotEmpty) {
+        fragments.add(interactionEventType.toLowerCase().replaceAll('_', ' '));
+      }
+
+      final responseSec = _resolveTimelineResponseSec(
+        details: details,
+        eventAtUtc: event.eventAtUtc,
+      );
+      if (responseSec != null && responseSec > 0) {
+        final precision = responseSec >= 10 ? 0 : 1;
+        fragments.add('after ${responseSec.toStringAsFixed(precision)}s');
+      }
+
+      if (reasonCode.isNotEmpty) {
+        final knownTag = OpsErrorCatalog.tryBuildKnownReasonTag(reasonCode);
+        fragments.add('reason=${knownTag ?? reasonCode}');
+      }
+
+      return fragments.join(' | ');
+    }
+
     final fragments = <String>[];
     for (final key in <String>[
       'state',
@@ -7844,11 +8253,82 @@ class _ControlScreenState extends State<ControlScreen>
       fragments.add('$key=$text');
     }
 
+    final gameConfigType = (details['gameConfigType'] as String? ?? '').trim();
+    final gameConfigVersion = _asTimelineInt(details['gameConfigVersion']);
+    final gameConfigSummary =
+        (details['gameConfigSummary'] as String? ?? '').trim();
+    if (gameConfigType.isNotEmpty) {
+      final versionSuffix = gameConfigVersion > 0 ? ' v$gameConfigVersion' : '';
+      fragments.add('config=$gameConfigType$versionSuffix');
+    }
+    if (gameConfigSummary.isNotEmpty) {
+      fragments.add('settings=$gameConfigSummary');
+    }
+
     if (fragments.isEmpty) {
       return '';
     }
 
     return fragments.join(' | ');
+  }
+
+  int _asTimelineInt(dynamic value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is String) {
+      return int.tryParse(value.trim()) ?? 0;
+    }
+    return 0;
+  }
+
+  double? _asTimelineDouble(dynamic value) {
+    if (value is double) {
+      return value.isFinite ? value : null;
+    }
+    if (value is int) {
+      return value.toDouble();
+    }
+    if (value is num) {
+      final resolved = value.toDouble();
+      return resolved.isFinite ? resolved : null;
+    }
+    if (value is String) {
+      final parsed = double.tryParse(value.trim());
+      return parsed != null && parsed.isFinite ? parsed : null;
+    }
+    return null;
+  }
+
+  double? _resolveTimelineResponseSec({
+    required Map<String, dynamic> details,
+    required DateTime? eventAtUtc,
+  }) {
+    final explicit = _asTimelineDouble(details['responseSec']);
+    if (explicit != null) {
+      return explicit;
+    }
+
+    final appearedAtRaw = (details['targetAppearedAtUtc'] as String? ?? '').trim();
+    if (appearedAtRaw.isEmpty || eventAtUtc == null) {
+      return null;
+    }
+
+    final appearedAt = DateTime.tryParse(appearedAtRaw)?.toUtc();
+    if (appearedAt == null) {
+      return null;
+    }
+
+    final deltaMs =
+        eventAtUtc.toUtc().millisecondsSinceEpoch - appearedAt.millisecondsSinceEpoch;
+    if (deltaMs < 0) {
+      return 0;
+    }
+
+    return deltaMs / 1000.0;
   }
 
   Widget _buildTimelineEventTile(SessionTimelineEvent event) {
@@ -7860,12 +8340,28 @@ class _ControlScreenState extends State<ControlScreen>
       metaFragments.add('source=${event.source.trim()}');
     }
     if (event.gameId.trim().isNotEmpty) {
-      metaFragments.add('game=${event.gameId.trim()}');
+      metaFragments.add('game=${_resolveCatalogGameTitle(event.gameId.trim())}');
     }
     final metaLine = metaFragments.join(' | ');
 
     final isNote = event.isTherapistNote;
-    final markerColor = isNote ? Colors.indigo.shade700 : Colors.blueGrey;
+    final interactionOutcome = event.eventType.trim() == 'OBJECT_INTERACTION'
+        ? (event.details['actionOutcome'] as String? ?? '').trim().toUpperCase()
+        : '';
+    final markerColor = isNote
+        ? Colors.indigo.shade700
+        : interactionOutcome == 'CORRECT'
+            ? Colors.green.shade700
+            : interactionOutcome == 'INCORRECT'
+                ? Colors.red.shade700
+                : Colors.blueGrey;
+    final eventIcon = isNote
+        ? Icons.sticky_note_2_outlined
+        : interactionOutcome == 'CORRECT'
+            ? Icons.check_circle_outline
+            : interactionOutcome == 'INCORRECT'
+                ? Icons.cancel_outlined
+                : Icons.history;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -7882,7 +8378,7 @@ class _ControlScreenState extends State<ControlScreen>
           Row(
             children: [
               Icon(
-                isNote ? Icons.sticky_note_2_outlined : Icons.history,
+                eventIcon,
                 size: 14,
                 color: markerColor,
               ),
@@ -7925,18 +8421,12 @@ class _ControlScreenState extends State<ControlScreen>
   // ── VR game-run stats ──────────────────────────────────────────────────────
 
   Widget _buildVrGameRunsPanel(String sessionId) {
-    if (_loadedJournalSessionId != sessionId && !_journalLoading) {
-      unawaited(
-        _refreshSessionJournal(
-          reason: 'VR_GAME_RUNS_PANEL',
-          sessionIdOverride: sessionId,
-        ),
-      );
-    }
-
-    final runs = _loadedJournalSessionId == sessionId
+    final allRuns = _loadedJournalSessionId == sessionId
         ? _cachedGameRuns
         : const <GameRunRecord>[];
+    final runs = allRuns
+        .where((run) => !run.isSummaryPlaceholder)
+        .toList(growable: false);
     if (runs.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -8049,7 +8539,12 @@ class _ControlScreenState extends State<ControlScreen>
   }
 
   Widget _buildGameRunRow(GameRunRecord run) {
-    final gameLabel = run.gameId.isNotEmpty ? run.gameId : run.gameRunId;
+    final resolvedTitle = _resolveCatalogGameTitle(run.gameId);
+    final gameLabel = resolvedTitle.isNotEmpty
+        ? resolvedTitle
+        : run.gameId.isNotEmpty
+            ? run.gameId
+            : _shortTimelineRunId(run.gameRunId);
     final stateIcon = run.isCompleted
         ? Icons.check_circle
         : run.isFailed
@@ -8087,25 +8582,516 @@ class _ControlScreenState extends State<ControlScreen>
     );
   }
 
-  // ── Timeline panel ─────────────────────────────────────────────────────────
+  String _shortTimelineRunId(String runId) {
+    final normalized = runId.trim();
+    if (normalized.length <= 12) {
+      return normalized;
+    }
+    return '${normalized.substring(0, 8)}...';
+  }
 
-  Widget _buildTherapistTimelinePanel() {
-    final sessionId = _resolveTimelineSessionId();
-    final hasSessionId = sessionId.isNotEmpty;
-    if (hasSessionId &&
-        _loadedJournalSessionId != sessionId &&
-        !_journalLoading) {
+  List<SessionTimelineEvent> _visibleTimelineEventsForSession(
+    String sessionId, {
+    int limit = 40,
+  }) {
+    final normalizedSessionId = sessionId.trim();
+    if (normalizedSessionId.isEmpty) {
+      return const <SessionTimelineEvent>[];
+    }
+
+    final persisted = _loadedJournalSessionId == normalizedSessionId
+        ? _cachedTimelineEvents
+        : const <SessionTimelineEvent>[];
+    final preview = _liveTimelinePreviewEvents
+        .where((event) => event.sessionId.trim() == normalizedSessionId)
+        .toList(growable: false);
+
+    if (persisted.isEmpty && preview.isEmpty) {
+      return const <SessionTimelineEvent>[];
+    }
+
+    final mergedById = <String, SessionTimelineEvent>{};
+    for (final event in preview) {
+      final key = event.timelineEventId.trim().isNotEmpty
+          ? event.timelineEventId.trim()
+          : event.eventId.trim();
+      if (key.isEmpty) {
+        continue;
+      }
+      mergedById[key] = event;
+    }
+
+    for (final event in persisted) {
+      final key = event.timelineEventId.trim().isNotEmpty
+          ? event.timelineEventId.trim()
+          : event.eventId.trim();
+      if (key.isEmpty) {
+        continue;
+      }
+      mergedById[key] = event;
+    }
+
+    final merged = mergedById.values.toList(growable: false);
+    merged.sort((a, b) {
+      final timestampCompare = b.eventAtUnixMs.compareTo(a.eventAtUnixMs);
+      if (timestampCompare != 0) {
+        return timestampCompare;
+      }
+      return b.eventId.compareTo(a.eventId);
+    });
+
+    if (merged.length <= limit) {
+      return merged;
+    }
+    return merged.sublist(0, limit);
+  }
+
+  bool get _isTimelineDrawerAvailable {
+    if (_isParentRole || _allowSystemPop) {
+      return false;
+    }
+
+    final sessionId = _resolveTimelineSessionId().trim();
+    if (sessionId.isEmpty) {
+      return false;
+    }
+
+    final persisted = _latestPersistedSession;
+    final persistedMatchesActiveSession = persisted != null &&
+        persisted.sessionId.trim() == sessionId &&
+        !persisted.isTerminal;
+
+    return _sessionAttachReady ||
+        _isGameRuntimeActive ||
+        _isPrimaryActionInFlight ||
+        persistedMatchesActiveSession;
+  }
+
+  double _resolveTimelineDrawerWidth(BuildContext context) {
+    return MediaQuery.sizeOf(context).width;
+  }
+
+  void _toggleTimelineDrawer() {
+    if (_timelineDrawerController.value >= 0.5) {
+      _closeTimelineDrawer();
+      return;
+    }
+
+    _openTimelineDrawer();
+  }
+
+  void _openTimelineDrawer() {
+    final sessionId = _resolveTimelineSessionId().trim();
+    if (sessionId.isNotEmpty) {
       unawaited(
         _refreshSessionJournal(
-          reason: 'TIMELINE_PANEL',
+          reason: 'TIMELINE_DRAWER_OPEN',
           sessionIdOverride: sessionId,
         ),
       );
     }
+
+    _timelineDrawerController.animateTo(
+      1,
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _closeTimelineDrawer() {
+    _timelineDrawerController.animateTo(
+      0,
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _handleTimelineDrawerDragUpdate(
+    DragUpdateDetails details,
+    double panelWidth,
+  ) {
+    final delta = details.primaryDelta ?? details.delta.dx;
+    if (delta == 0 || panelWidth <= 0) {
+      return;
+    }
+
+    final nextValue = (_timelineDrawerController.value - (delta / panelWidth))
+        .clamp(0.0, 1.0);
+    _timelineDrawerController.value = nextValue;
+  }
+
+  void _handleTimelineDrawerDragEnd(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    if (velocity.abs() > 280) {
+      if (velocity < 0) {
+        _openTimelineDrawer();
+      } else {
+        _closeTimelineDrawer();
+      }
+      return;
+    }
+
+    if (_timelineDrawerController.value >= 0.5) {
+      _openTimelineDrawer();
+    } else {
+      _closeTimelineDrawer();
+    }
+  }
+
+  Widget _buildSessionTimelineDrawerOverlay() {
+    if (!_isTimelineDrawerAvailable) {
+      return const SizedBox.shrink();
+    }
+
+    final drawerWidth = _resolveTimelineDrawerWidth(context);
+    final screenHeight = MediaQuery.sizeOf(context).height;
+
+    return AnimatedBuilder(
+      animation: _timelineDrawerController,
+      builder: (context, _) {
+        final reveal = _timelineDrawerController.value;
+        final handleLeft =
+            (drawerWidth - _timelineDrawerHandleHitWidth) * (1 - reveal);
+        final handleTop = (screenHeight - _timelineDrawerHandleHeight) / 2;
+        final handleAttachedToLeft = reveal >= 0.5;
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            if (reveal > 0.01)
+              Positioned.fill(
+                child: IgnorePointer(
+                  ignoring: reveal < 0.05,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _closeTimelineDrawer,
+                    child: Container(
+                      color: Colors.black.withValues(alpha: 0.06 * reveal),
+                    ),
+                  ),
+                ),
+              ),
+            Positioned(
+              right: 0,
+              top: 0,
+              bottom: 0,
+              child: IgnorePointer(
+                child: Opacity(
+                  opacity: 1 - reveal,
+                  child: Container(
+                    width: _timelineDrawerCollapsedRailWidth,
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade200,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(999),
+                        bottomLeft: Radius.circular(999),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned.fill(
+              child: IgnorePointer(
+                ignoring: reveal <= 0.01,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Transform.translate(
+                    offset: Offset(drawerWidth * (1 - reveal), 0),
+                    child: SizedBox(
+                      width: drawerWidth,
+                      height: double.infinity,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onHorizontalDragUpdate: (details) =>
+                            _handleTimelineDrawerDragUpdate(
+                                details, drawerWidth),
+                        onHorizontalDragEnd: _handleTimelineDrawerDragEnd,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.16),
+                                blurRadius: 28,
+                                offset: const Offset(-6, 12),
+                              ),
+                            ],
+                          ),
+                          child: Material(
+                            color: Colors.white.withValues(alpha: 0.99),
+                            child: _buildTherapistTimelinePanel(inDrawer: true),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: handleLeft,
+              top: handleTop,
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onHorizontalDragUpdate: (details) =>
+                    _handleTimelineDrawerDragUpdate(details, drawerWidth),
+                onHorizontalDragEnd: _handleTimelineDrawerDragEnd,
+                child: SizedBox(
+                  width: _timelineDrawerHandleHitWidth,
+                  height: _timelineDrawerHandleHeight,
+                  child: Align(
+                    alignment: handleAttachedToLeft
+                        ? Alignment.centerLeft
+                        : Alignment.centerRight,
+                    child: _buildSessionTimelineDrawerHandle(
+                      attachedToLeft: handleAttachedToLeft,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildSessionTimelineDrawerHandle({
+    required bool attachedToLeft,
+  }) {
+    final borderRadius = attachedToLeft
+        ? const BorderRadius.only(
+            topLeft: Radius.circular(8),
+            bottomLeft: Radius.circular(8),
+            topRight: Radius.circular(999),
+            bottomRight: Radius.circular(999),
+          )
+        : const BorderRadius.only(
+            topLeft: Radius.circular(999),
+            bottomLeft: Radius.circular(999),
+            topRight: Radius.circular(8),
+            bottomRight: Radius.circular(8),
+          );
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: borderRadius,
+        onTap: _toggleTimelineDrawer,
+        child: Ink(
+          width: _timelineDrawerHandleWidth,
+          height: _timelineDrawerHandleHeight,
+          decoration: BoxDecoration(
+            color: Colors.green.shade50.withValues(alpha: 0.98),
+            borderRadius: borderRadius,
+            border: Border.all(
+              color: Colors.green.shade200,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.12),
+                blurRadius: 16,
+                offset: const Offset(-2, 6),
+              ),
+            ],
+          ),
+          child: Center(
+            child: Icon(
+              attachedToLeft
+                  ? Icons.keyboard_double_arrow_right
+                  : Icons.keyboard_double_arrow_left,
+              size: 22,
+              color: Colors.green.shade800,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Timeline panel ─────────────────────────────────────────────────────────
+
+  Widget _buildTherapistTimelinePanel({bool inDrawer = false}) {
+    final sessionId = _resolveTimelineSessionId();
+    final hasSessionId = sessionId.isNotEmpty;
+    final events = _visibleTimelineEventsForSession(sessionId);
     final templates = _therapistSessionSettings.timelineQuickNoteTemplates
         .map((entry) => entry.trim())
         .where((entry) => entry.isNotEmpty)
         .toList(growable: false);
+
+    final timelineList = Builder(
+      builder: (context) {
+        if (_journalLoadError != null && _loadedJournalSessionId == sessionId) {
+          return Center(
+            child: Text(
+              'Timeline unavailable: $_journalLoadError',
+              style: TextStyle(
+                color: Colors.red.shade700,
+                fontSize: 12,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          );
+        }
+
+        if (_journalLoading &&
+            _loadedJournalSessionId == sessionId &&
+            events.isEmpty) {
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        }
+
+        if (events.isEmpty) {
+          return Center(
+            child: Text(
+              'No timeline events yet.',
+              style: TextStyle(
+                color: Colors.grey.shade700,
+                fontSize: 12,
+              ),
+            ),
+          );
+        }
+
+        return ListView.separated(
+          itemCount: events.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 6),
+          itemBuilder: (context, index) {
+            return _buildTimelineEventTile(events[index]);
+          },
+        );
+      },
+    );
+
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.timeline, size: 18),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'Session timeline',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            if (hasSessionId)
+              Text(
+                'session: ${sessionId.length > 16 ? sessionId.substring(sessionId.length - 16) : sessionId}',
+                style: TextStyle(
+                  color: Colors.grey.shade700,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'System events and therapist notes in one stream.',
+          style: TextStyle(
+            color: Colors.grey.shade700,
+            fontSize: 12,
+          ),
+        ),
+        const SizedBox(height: 10),
+        if (!hasSessionId)
+          _buildStateBanner(
+            icon: Icons.sync,
+            color: Colors.orange.shade800,
+            text:
+                'Timeline waits for session context. Reconnect/attach to start logging notes.',
+          )
+        else ...[
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _timelineNoteController,
+                  enabled: !_timelineNoteInFlight,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (value) {
+                    if (_timelineNoteInFlight) {
+                      return;
+                    }
+                    unawaited(
+                      _appendTimelineNote(
+                        noteText: value,
+                        fromQuickTemplate: false,
+                      ),
+                    );
+                  },
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    border: OutlineInputBorder(),
+                    labelText: 'Add timeline note',
+                    hintText: 'Type note and press Enter',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: _timelineNoteInFlight
+                    ? null
+                    : () => unawaited(
+                          _appendTimelineNote(
+                            noteText: _timelineNoteController.text,
+                            fromQuickTemplate: false,
+                          ),
+                        ),
+                icon: _timelineNoteInFlight
+                    ? const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.send, size: 16),
+                label: const Text('Add'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (templates.isNotEmpty)
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final template in templates)
+                  ActionChip(
+                    label: Text(template),
+                    onPressed: _timelineNoteInFlight
+                        ? null
+                        : () => unawaited(
+                              _appendTimelineNote(
+                                noteText: template,
+                                fromQuickTemplate: true,
+                              ),
+                            ),
+                  ),
+              ],
+            ),
+          const SizedBox(height: 10),
+          _buildVrGameRunsPanel(sessionId),
+          if (inDrawer)
+            Expanded(child: timelineList)
+          else
+            SizedBox(
+              height: 250,
+              child: timelineList,
+            ),
+        ],
+      ],
+    );
+
+    if (inDrawer) {
+      return Padding(
+        padding: const EdgeInsets.all(12),
+        child: content,
+      );
+    }
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -8113,173 +9099,7 @@ class _ControlScreenState extends State<ControlScreen>
         color: Colors.grey.shade100,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.timeline, size: 18),
-              const SizedBox(width: 8),
-              const Expanded(
-                child: Text(
-                  'Session timeline',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-              if (hasSessionId)
-                Text(
-                  'session: ${sessionId.length > 16 ? sessionId.substring(sessionId.length - 16) : sessionId}',
-                  style: TextStyle(
-                    color: Colors.grey.shade700,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'System events and therapist notes in one stream.',
-            style: TextStyle(
-              color: Colors.grey.shade700,
-              fontSize: 12,
-            ),
-          ),
-          const SizedBox(height: 10),
-          if (!hasSessionId)
-            _buildStateBanner(
-              icon: Icons.sync,
-              color: Colors.orange.shade800,
-              text:
-                  'Timeline waits for session context. Reconnect/attach to start logging notes.',
-            )
-          else ...[
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _timelineNoteController,
-                    enabled: !_timelineNoteInFlight,
-                    textInputAction: TextInputAction.done,
-                    onSubmitted: (value) {
-                      if (_timelineNoteInFlight) {
-                        return;
-                      }
-                      unawaited(
-                        _appendTimelineNote(
-                          noteText: value,
-                          fromQuickTemplate: false,
-                        ),
-                      );
-                    },
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      border: OutlineInputBorder(),
-                      labelText: 'Add timeline note',
-                      hintText: 'Type note and press Enter',
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  onPressed: _timelineNoteInFlight
-                      ? null
-                      : () => unawaited(
-                            _appendTimelineNote(
-                              noteText: _timelineNoteController.text,
-                              fromQuickTemplate: false,
-                            ),
-                          ),
-                  icon: _timelineNoteInFlight
-                      ? const SizedBox(
-                          width: 12,
-                          height: 12,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.send, size: 16),
-                  label: const Text('Add'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            if (templates.isNotEmpty)
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  for (final template in templates)
-                    ActionChip(
-                      label: Text(template),
-                      onPressed: _timelineNoteInFlight
-                          ? null
-                          : () => unawaited(
-                                _appendTimelineNote(
-                                  noteText: template,
-                                  fromQuickTemplate: true,
-                                ),
-                              ),
-                    ),
-                ],
-              ),
-            const SizedBox(height: 10),
-            _buildVrGameRunsPanel(sessionId),
-            SizedBox(
-              height: 250,
-              child: Builder(
-                builder: (context) {
-                  if (_journalLoadError != null &&
-                      _loadedJournalSessionId == sessionId) {
-                    return Center(
-                      child: Text(
-                        'Timeline unavailable: $_journalLoadError',
-                        style: TextStyle(
-                          color: Colors.red.shade700,
-                          fontSize: 12,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    );
-                  }
-
-                  if (_journalLoading &&
-                      _loadedJournalSessionId == sessionId &&
-                      _cachedTimelineEvents.isEmpty) {
-                    return const Center(
-                      child: CircularProgressIndicator(),
-                    );
-                  }
-
-                  final events = _loadedJournalSessionId == sessionId
-                      ? _cachedTimelineEvents
-                      : const <SessionTimelineEvent>[];
-                  if (events.isEmpty) {
-                    return Center(
-                      child: Text(
-                        'No timeline events yet.',
-                        style: TextStyle(
-                          color: Colors.grey.shade700,
-                          fontSize: 12,
-                        ),
-                      ),
-                    );
-                  }
-
-                  return ListView.separated(
-                    itemCount: events.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 6),
-                    itemBuilder: (context, index) {
-                      return _buildTimelineEventTile(events[index]);
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        ],
-      ),
+      child: content,
     );
   }
 
@@ -9721,9 +10541,7 @@ class _ControlScreenState extends State<ControlScreen>
                 contentState: contentState,
               ),
               const SizedBox(height: 8),
-              _isParentRole
-                  ? _buildParentProgressPanel()
-                  : _buildTherapistTimelinePanel(),
+              if (_isParentRole) _buildParentProgressPanel(),
             ],
           ),
         ),

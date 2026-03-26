@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_controller/models/session_ownership.dart';
 import 'package:flutter_controller/services/connection_service.dart';
 import 'package:flutter_controller/services/firebase_service.dart';
 import 'package:flutter_controller/services/session_journal_service.dart';
@@ -20,8 +22,10 @@ import 'package:flutter_controller/services/session_journal_service.dart';
 ///   therapy_sessions/{sessionId}/events/{id}             (timeline via SessionJournalService)
 class GameDataService {
   static const _gameEventCmd = 'QUEST_GAME_EVENT';
+  static const _interactionPreviewCmd = 'QUEST_INTERACTION_PREVIEW';
   static const _interactionBatchCmd = 'QUEST_INTERACTION_BATCH';
   static const _motionTraceCmd = 'QUEST_MOTION_TRACE';
+  static const _interactionTimelineEventType = 'OBJECT_INTERACTION';
 
   static FirebaseFirestore get _firestore => FirebaseService.firestore;
 
@@ -42,10 +46,21 @@ class GameDataService {
 
   /// True if at least one game_run was written for the current session.
   bool get hasGameData => _writtenGameRunIds.isNotEmpty;
+  final Map<String, SessionTimelineEvent> _liveTimelinePreviewById =
+      <String, SessionTimelineEvent>{};
+  final StreamController<List<SessionTimelineEvent>>
+      _liveTimelinePreviewController =
+      StreamController<List<SessionTimelineEvent>>.broadcast();
+  Stream<List<SessionTimelineEvent>> get liveTimelinePreviewStream =>
+      _liveTimelinePreviewController.stream;
+  List<SessionTimelineEvent> get liveTimelinePreviewEvents =>
+      _sortedLiveTimelinePreviewEvents();
 
   // Pending interaction batch for the current game run (arrives before game_end on the wire).
   // Map: gameRunId → list of interaction maps.
   final Map<String, List<Map<String, dynamic>>> _pendingInteractions = {};
+  final Map<String, _CompletedGameRunContext>
+      _completedRunsAwaitingInteractions = <String, _CompletedGameRunContext>{};
 
   StreamSubscription<Map<String, dynamic>>? _messageSub;
   Future<void> Function(String sessionId)? onJournalCheckpointCommitted;
@@ -64,10 +79,12 @@ class GameDataService {
     _studentId = studentId.trim();
     _therapistId = therapistId.trim();
     _pendingInteractions.clear();
+    _completedRunsAwaitingInteractions.clear();
     _activeGameRunId = null;
     _activeGameId = null;
     _activeGameRunStartedAtUtc = null;
     _writtenGameRunIds.clear();
+    _clearLiveTimelinePreview();
     print(
         '[GameData] attachSession: sid=$_sessionId uid=$_therapistId student=$_studentId');
   }
@@ -78,14 +95,18 @@ class GameDataService {
     _studentId = '';
     _therapistId = '';
     _pendingInteractions.clear();
+    _completedRunsAwaitingInteractions.clear();
     _activeGameRunId = null;
     _activeGameId = null;
     _activeGameRunStartedAtUtc = null;
+    _clearLiveTimelinePreview();
   }
 
   Future<void> dispose() async {
     await _messageSub?.cancel();
     _messageSub = null;
+    _clearLiveTimelinePreview();
+    await _liveTimelinePreviewController.close();
   }
 
   // ─── TCP message handling ─────────────────────────────────────────────────
@@ -93,6 +114,7 @@ class GameDataService {
   void _handleMessage(Map<String, dynamic> message) {
     final commandId = message['commandId'] as String? ?? '';
     if (commandId != _gameEventCmd &&
+        commandId != _interactionPreviewCmd &&
         commandId != _interactionBatchCmd &&
         commandId != _motionTraceCmd) {
       return;
@@ -109,6 +131,8 @@ class GameDataService {
       _handleGameEvent(payload).catchError((Object e, StackTrace st) {
         print('[GameData] ❌ handleGameEvent error: $e\n$st');
       });
+    } else if (commandId == _interactionPreviewCmd) {
+      _handleInteractionPreview(payload);
     } else if (commandId == _interactionBatchCmd) {
       _handleInteractionBatch(payload);
     } else {
@@ -152,15 +176,128 @@ class GameDataService {
     final rawEvents = payload['events'];
     if (rawEvents is! List) return;
 
-    final events = rawEvents.whereType<Map<String, dynamic>>().toList();
+    final events = rawEvents
+        .map((event) {
+          if (event is Map<String, dynamic>) {
+            return Map<String, dynamic>.from(event);
+          }
+          if (event is Map) {
+            return Map<String, dynamic>.from(event);
+          }
+          return null;
+        })
+        .whereType<Map<String, dynamic>>()
+        .toList(growable: false);
 
-    if (events.isNotEmpty) {
-      _pendingInteractions[gameRunId] = events;
-      if (kDebugMode) {
-        debugPrint(
-            '[GameData] Buffered ${events.length} interactions for gameRunId=$gameRunId');
-      }
+    if (events.isEmpty) {
+      return;
     }
+
+    final completedContext =
+        _completedRunsAwaitingInteractions.remove(gameRunId);
+    if (completedContext != null) {
+      _persistLateInteractionBatch(
+        gameRunId: gameRunId,
+        context: completedContext,
+        events: events,
+      ).catchError((Object e, StackTrace st) {
+        print('[GameData] ❌ late interaction batch error: $e\n$st');
+      });
+      return;
+    }
+
+    _pendingInteractions[gameRunId] = events;
+    if (kDebugMode) {
+      debugPrint(
+          '[GameData] Buffered ${events.length} interactions for gameRunId=$gameRunId');
+    }
+  }
+
+  void _handleInteractionPreview(Map<String, dynamic> payload) {
+    final previewSessionId = (payload['sessionId'] as String? ?? '').trim();
+    if (previewSessionId.isEmpty) {
+      return;
+    }
+    if (_sessionId.isNotEmpty && previewSessionId != _sessionId) {
+      return;
+    }
+    if (_studentId.trim().isEmpty || _therapistId.trim().isEmpty) {
+      return;
+    }
+
+    final rawEvent = payload['event'];
+    if (rawEvent is! Map && rawEvent is! Map<String, dynamic>) {
+      return;
+    }
+
+    final event = rawEvent is Map<String, dynamic>
+        ? Map<String, dynamic>.from(rawEvent)
+        : Map<String, dynamic>.from(rawEvent as Map);
+    final eventId = (event['eventId'] as String? ?? '').trim();
+    if (eventId.isEmpty) {
+      return;
+    }
+
+    final gameRunId = (payload['gameRunId'] as String? ?? '').trim();
+    final occurredAt =
+        _tryParseUtc((event['occurredAtUtc'] as String?)?.trim()) ??
+            DateTime.now().toUtc();
+    final targetAppearedAtUtc =
+        (event['targetAppearedAtUtc'] as String? ?? '').trim();
+    final targetAppearedAt = _tryParseUtc(targetAppearedAtUtc);
+    final timelineEventId = 'interaction-$eventId';
+
+    _liveTimelinePreviewById[timelineEventId] = SessionTimelineEvent(
+      eventId: eventId,
+      timelineEventId: timelineEventId,
+      sessionId: previewSessionId,
+      studentId: _studentId.trim(),
+      therapistId: _therapistId.trim(),
+      ownerKey: SessionOwnership.ownerKey(
+        therapistId: _therapistId,
+        studentId: _studentId,
+      ),
+      sessionKey: SessionOwnership.sessionKey(
+        therapistId: _therapistId,
+        studentId: _studentId,
+        sessionId: previewSessionId,
+      ),
+      eventType: _interactionTimelineEventType,
+      gameId: (event['gameId'] as String? ?? '').trim(),
+      source: 'quest_runtime',
+      eventAtUtc: occurredAt,
+      eventAtUnixMs: occurredAt.millisecondsSinceEpoch,
+      details: _buildInteractionTimelineDetails(
+        eventId: eventId,
+        gameRunId: gameRunId,
+        sequenceNo: (event['sequenceNo'] as num?)?.toInt() ?? 0,
+        interactionEventType: (event['eventType'] as String? ?? '').trim(),
+        interactionType: (event['interactionType'] as String? ?? '').trim(),
+        actionOutcome: (event['actionOutcome'] as String? ?? '').trim(),
+        reasonCode: (event['reasonCode'] as String? ?? '').trim(),
+        targetId: (event['targetId'] as String? ?? '').trim(),
+        targetName: (event['targetName'] as String? ?? '').trim(),
+        targetCategory: (event['targetCategory'] as String? ?? '').trim(),
+        targetInstanceId: (event['targetInstanceId'] as String? ?? '').trim(),
+        targetAppearedAtUtc: targetAppearedAtUtc,
+        targetAppearedAtUnixMs:
+            targetAppearedAt?.millisecondsSinceEpoch ?? 0,
+        targetAppearedAtElapsedSec:
+            _asDoubleOrNull(event['targetAppearedAtElapsedSec']),
+        responseSec: _resolveInteractionResponseSec(
+          explicitResponseSec: _asDoubleOrNull(event['responseSec']),
+          occurredAtUtc: occurredAt,
+          targetAppearedAtUtc: targetAppearedAt,
+        ),
+        inputHand: (event['inputHand'] as String? ?? '').trim(),
+        inputSource: (event['inputSource'] as String? ?? '').trim(),
+        inputValue: _asDoubleOrNull(event['inputValue']),
+        sourceComponent: (event['sourceComponent'] as String? ?? '').trim(),
+      )
+        ..['previewState'] = 'LIVE_PENDING'
+        ..['persisted'] = false,
+    );
+    _publishLiveTimelinePreview();
   }
 
   // ─── Event handlers ───────────────────────────────────────────────────────
@@ -185,9 +322,9 @@ class GameDataService {
     final gameId = payload['gameId'] as String? ?? '';
     final finalState = payload['finalState'] as String? ?? 'completed';
     final durationSec = (payload['durationSec'] as num?)?.toInt() ?? 0;
-    final hitCount = (payload['hitCount'] as num?)?.toInt() ?? 0;
-    final missCount = (payload['missCount'] as num?)?.toInt() ?? 0;
-    final interactionCount =
+    final reportedHitCount = (payload['hitCount'] as num?)?.toInt() ?? 0;
+    final reportedMissCount = (payload['missCount'] as num?)?.toInt() ?? 0;
+    final reportedInteractionCount =
         (payload['interactionCount'] as num?)?.toInt() ?? 0;
     final occurredAtUtc = payload['occurredAtUtc'] as String?;
     final endedAtUtc = _resolveOccurredAtUtc(occurredAtUtc);
@@ -205,8 +342,23 @@ class GameDataService {
       _activeGameRunStartedAtUtc = null;
     }
 
+    final interactions = _pendingInteractions.remove(gameRunId);
+    final interactionSummary = _summarizeInteractions(interactions);
+    final interactionCount = math.max(
+      reportedInteractionCount,
+      interactionSummary.interactionCount,
+    );
+    final hitCount = math.max(
+      reportedHitCount,
+      interactionSummary.hitCount,
+    );
+    final missCount = math.max(
+      reportedMissCount,
+      interactionSummary.missCount,
+    );
+
     print(
-        '[GameData] game_end: sid=$_sessionId runId=$gameRunId state=$finalState hits=$hitCount misses=$missCount');
+        '[GameData] game_end: sid=$_sessionId runId=$gameRunId state=$finalState hits=$hitCount misses=$missCount interactions=$interactionCount');
 
     final sessionRef =
         _firestore.collection('therapy_sessions').doc(_sessionId);
@@ -240,16 +392,22 @@ class GameDataService {
     }
 
     // 2. Batch write interactions (if received before game_end).
-    final interactions = _pendingInteractions.remove(gameRunId);
     if (interactions != null && interactions.isNotEmpty) {
       try {
-        await _writeInteractionsBatch(gameRunId, interactions);
+        await _writeInteractionsBatch(
+          sessionId: _sessionId,
+          gameRunId: gameRunId,
+          interactions: interactions,
+        );
         print('[GameData] ✅ interactions written: ${interactions.length}');
       } catch (e) {
         print('[GameData] ❌ interactions write failed: $e');
       }
     } else {
       print('[GameData] ⚠️ no pending interactions for $gameRunId');
+      _completedRunsAwaitingInteractions[gameRunId] = _CompletedGameRunContext(
+        sessionId: _sessionId,
+      );
     }
 
     // 3. Update session summary totals.
@@ -316,6 +474,7 @@ class GameDataService {
 
     final gameRunId = (payload['gameRunId'] as String? ?? '').trim();
     final traceId = (payload['traceId'] as String? ?? '').trim();
+    final traceGameId = (payload['gameId'] as String? ?? '').trim();
     final inlineStatus = payload['inlinePayloadStatus'] as String? ?? '';
     final tracePayloadBase64 = payload['tracePayloadBase64'] as String? ?? '';
     final encoding = payload['encoding'] as String? ?? 'none';
@@ -366,7 +525,22 @@ class GameDataService {
           .doc(_sessionId)
           .collection('game_runs')
           .doc(gameRunId)
-          .set({'motionTraceUrl': downloadUrl}, SetOptions(merge: true));
+          .set({
+        'gameId': traceGameId.isNotEmpty
+            ? traceGameId
+            : (_activeGameRunId == gameRunId ? (_activeGameId ?? '') : ''),
+        'startedAtUtc': _activeGameRunId == gameRunId &&
+                _activeGameRunStartedAtUtc != null
+            ? _activeGameRunStartedAtUtc!.toIso8601String()
+            : null,
+        'startedAtUnixMs': _activeGameRunId == gameRunId &&
+                _activeGameRunStartedAtUtc != null
+            ? _activeGameRunStartedAtUtc!.millisecondsSinceEpoch
+            : null,
+        'updatedAtUtc': DateTime.now().toUtc().toIso8601String(),
+        'updatedAtUnixMs': DateTime.now().toUtc().millisecondsSinceEpoch,
+        'motionTraceUrl': downloadUrl,
+      }, SetOptions(merge: true));
 
       print('[GameData] ✅ motion_trace uploaded: $storagePath → $downloadUrl');
     } catch (e) {
@@ -376,39 +550,139 @@ class GameDataService {
 
   // ─── Firestore helpers ────────────────────────────────────────────────────
 
-  Future<void> _writeInteractionsBatch(
-    String gameRunId,
-    List<Map<String, dynamic>> interactions,
-  ) async {
-    const maxPerBatch = 499;
-    final sessionRef =
-        _firestore.collection('therapy_sessions').doc(_sessionId);
+  Future<void> _writeInteractionsBatch({
+    required String sessionId,
+    required String gameRunId,
+    required List<Map<String, dynamic>> interactions,
+  }) async {
+    const maxPerBatch = 240;
+    final sessionRef = _firestore.collection('therapy_sessions').doc(sessionId);
+    final ownerKey = SessionOwnership.ownerKey(
+      therapistId: _therapistId,
+      studentId: _studentId,
+    );
+    final sessionKey = SessionOwnership.sessionKey(
+      therapistId: _therapistId,
+      studentId: _studentId,
+      sessionId: sessionId,
+    );
+    final canWriteTimeline = _studentId.trim().isNotEmpty &&
+        _therapistId.trim().isNotEmpty &&
+        ownerKey.isNotEmpty &&
+        sessionKey.isNotEmpty;
 
     for (var offset = 0; offset < interactions.length; offset += maxPerBatch) {
       final chunk = interactions.skip(offset).take(maxPerBatch).toList();
       final batch = _firestore.batch();
+      final batchCreatedAtUtc = DateTime.now().toUtc();
 
       for (final event in chunk) {
         final eventId = event['eventId'] as String? ?? '';
         if (eventId.isEmpty) continue;
+        final interactionEventType = (event['eventType'] as String? ?? '').trim();
+        final gameId = (event['gameId'] as String? ?? '').trim();
+        final occurredAt =
+            _tryParseUtc((event['occurredAtUtc'] as String?)?.trim());
+        final occurredAtUtc = occurredAt?.toIso8601String() ?? '';
+        final occurredAtUnixMs = occurredAt?.millisecondsSinceEpoch ?? 0;
+        final targetId = (event['targetId'] as String? ?? '').trim();
+        final targetName = (event['targetName'] as String? ?? '').trim();
+        final targetInstanceId =
+            (event['targetInstanceId'] as String? ?? '').trim();
+        final targetCategory = (event['targetCategory'] as String? ?? '').trim();
+        final targetAppearedAtUtc =
+            (event['targetAppearedAtUtc'] as String? ?? '').trim();
+        final targetAppearedAt = _tryParseUtc(targetAppearedAtUtc);
+        final targetAppearedAtUnixMs =
+            targetAppearedAt?.millisecondsSinceEpoch ?? 0;
+        final targetAppearedAtElapsedSec =
+            _asDoubleOrNull(event['targetAppearedAtElapsedSec']);
+        final responseSec = _resolveInteractionResponseSec(
+          explicitResponseSec: _asDoubleOrNull(event['responseSec']),
+          occurredAtUtc: occurredAt,
+          targetAppearedAtUtc: targetAppearedAt,
+        );
+        final actionOutcome = (event['actionOutcome'] as String? ?? '').trim();
+        final reasonCode = (event['reasonCode'] as String? ?? '').trim();
+        final interactionType =
+            (event['interactionType'] as String? ?? '').trim();
+        final inputHand = (event['inputHand'] as String? ?? '').trim();
+        final inputSource = (event['inputSource'] as String? ?? '').trim();
+        final inputValue = _asDoubleOrNull(event['inputValue']);
+        final sourceComponent =
+            (event['sourceComponent'] as String? ?? '').trim();
+        final sequenceNo = (event['sequenceNo'] as num?)?.toInt() ?? 0;
 
         batch.set(
           sessionRef.collection('interactions').doc(eventId),
           {
-            'occurredAtUtc': event['occurredAtUtc'] ?? '',
-            'sequenceNo': (event['sequenceNo'] as num?)?.toInt() ?? 0,
+            'occurredAtUtc': occurredAtUtc,
+            'occurredAtUnixMs': occurredAtUnixMs,
+            'eventType': interactionEventType,
+            'gameId': gameId,
+            'sequenceNo': sequenceNo,
             'gameRunId': gameRunId,
-            'interactionType': event['interactionType'] ?? '',
-            'actionOutcome': event['actionOutcome'] ?? '',
-            'targetId': event['targetId'] ?? '',
-            'targetName': event['targetName'] ?? '',
-            'inputHand': event['inputHand'] ?? '',
-            'inputSource': event['inputSource'] ?? '',
-            'inputValue': (event['inputValue'] as num?)?.toDouble(),
-            'sourceComponent': event['sourceComponent'] ?? '',
-            'reasonCode': event['reasonCode'] ?? '',
+            'interactionType': interactionType,
+            'actionOutcome': actionOutcome,
+            'targetId': targetId,
+            'targetName': targetName,
+            'targetInstanceId': targetInstanceId,
+            'targetCategory': targetCategory,
+            'targetAppearedAtUtc': targetAppearedAtUtc,
+            'targetAppearedAtUnixMs': targetAppearedAtUnixMs,
+            'targetAppearedAtElapsedSec': targetAppearedAtElapsedSec,
+            'responseSec': responseSec,
+            'inputHand': inputHand,
+            'inputSource': inputSource,
+            'inputValue': inputValue,
+            'sourceComponent': sourceComponent,
+            'reasonCode': reasonCode,
           },
         );
+
+        if (canWriteTimeline) {
+          final timelineEventId = 'interaction-$eventId';
+          final eventAtUtc = occurredAt ?? batchCreatedAtUtc;
+          batch.set(
+            sessionRef.collection('events').doc(timelineEventId),
+            {
+              'sessionId': sessionId,
+              'studentId': _studentId.trim(),
+              'therapistId': _therapistId.trim(),
+              'ownerKey': ownerKey,
+              'sessionKey': sessionKey,
+              'eventType': _interactionTimelineEventType,
+              'timelineEventId': timelineEventId,
+              'gameId': gameId,
+              'details': _buildInteractionTimelineDetails(
+                eventId: eventId,
+                gameRunId: gameRunId,
+                sequenceNo: sequenceNo,
+                interactionEventType: interactionEventType,
+                interactionType: interactionType,
+                actionOutcome: actionOutcome,
+                reasonCode: reasonCode,
+                targetId: targetId,
+                targetName: targetName,
+                targetCategory: targetCategory,
+                targetInstanceId: targetInstanceId,
+                targetAppearedAtUtc: targetAppearedAtUtc,
+                targetAppearedAtUnixMs: targetAppearedAtUnixMs,
+                targetAppearedAtElapsedSec: targetAppearedAtElapsedSec,
+                responseSec: responseSec,
+                inputHand: inputHand,
+                inputSource: inputSource,
+                inputValue: inputValue,
+                sourceComponent: sourceComponent,
+              ),
+              'source': 'quest_runtime',
+              'eventAtUtc': eventAtUtc.toIso8601String(),
+              'eventAtUnixMs': eventAtUtc.millisecondsSinceEpoch,
+              'createdAtUtc': batchCreatedAtUtc.toIso8601String(),
+            },
+            SetOptions(merge: true),
+          );
+        }
       }
 
       await batch.commit();
@@ -417,6 +691,86 @@ class GameDataService {
     if (kDebugMode) {
       debugPrint(
           '[GameData] Wrote ${interactions.length} interactions for gameRunId=$gameRunId');
+    }
+  }
+
+  Future<void> _persistLateInteractionBatch({
+    required String gameRunId,
+    required _CompletedGameRunContext context,
+    required List<Map<String, dynamic>> events,
+  }) async {
+    final sessionId = context.sessionId.trim();
+    if (sessionId.isEmpty) {
+      return;
+    }
+
+    final sessionRef = _firestore.collection('therapy_sessions').doc(sessionId);
+    final interactionSummary = _summarizeInteractions(events);
+
+    await _writeInteractionsBatch(
+      sessionId: sessionId,
+      gameRunId: gameRunId,
+      interactions: events,
+    );
+
+    final runSnapshot =
+        await sessionRef.collection('game_runs').doc(gameRunId).get();
+    final runData = runSnapshot.data() ?? <String, dynamic>{};
+    final summary = Map<String, dynamic>.from(
+        runData['summary'] as Map? ?? const <String, dynamic>{});
+    final existingInteractionCount = _asInt(summary['interactionCount']);
+    final existingHitCount = _asInt(summary['hitCount']);
+    final existingMissCount = _asInt(summary['missCount']);
+    final resolvedInteractionCount = math.max(
+      existingInteractionCount,
+      interactionSummary.interactionCount,
+    );
+    final resolvedHitCount = math.max(
+      existingHitCount,
+      interactionSummary.hitCount,
+    );
+    final resolvedMissCount = math.max(
+      existingMissCount,
+      interactionSummary.missCount,
+    );
+
+    final interactionDelta =
+        resolvedInteractionCount - existingInteractionCount;
+    final hitDelta = resolvedHitCount - existingHitCount;
+    final missDelta = resolvedMissCount - existingMissCount;
+    final nowUtc = DateTime.now().toUtc();
+
+    await sessionRef.collection('game_runs').doc(gameRunId).set({
+      'updatedAtUtc': nowUtc.toIso8601String(),
+      'updatedAtUnixMs': nowUtc.millisecondsSinceEpoch,
+      'summary': {
+        'interactionCount': resolvedInteractionCount,
+        'hitCount': resolvedHitCount,
+        'missCount': resolvedMissCount,
+        'avgReactionTimeMs': summary['avgReactionTimeMs'],
+      },
+    }, SetOptions(merge: true));
+
+    if (interactionDelta > 0 || hitDelta > 0 || missDelta > 0) {
+      await sessionRef.set({
+        'summary': {
+          'totalInteractions': FieldValue.increment(interactionDelta),
+          'totalHits': FieldValue.increment(hitDelta),
+          'totalMisses': FieldValue.increment(missDelta),
+        },
+      }, SetOptions(merge: true));
+    }
+
+    print(
+      '[GameData] ✅ late interactions reconciled: runId=$gameRunId '
+      'total=${events.length} deltaInteractions=$interactionDelta '
+      'deltaHits=$hitDelta deltaMisses=$missDelta',
+    );
+
+    try {
+      await onJournalCheckpointCommitted?.call(sessionId);
+    } catch (e) {
+      print('[GameData] ❌ journal checkpoint callback failed: $e');
     }
   }
 
@@ -556,4 +910,193 @@ class GameDataService {
     }
     return DateTime.now().toUtc();
   }
+
+  DateTime? _tryParseUtc(String? value) {
+    final normalized = value?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return null;
+    }
+    return DateTime.tryParse(normalized)?.toUtc();
+  }
+
+  double? _asDoubleOrNull(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is double) {
+      return value.isFinite ? value : null;
+    }
+    if (value is int) {
+      return value.toDouble();
+    }
+    if (value is num) {
+      final resolved = value.toDouble();
+      return resolved.isFinite ? resolved : null;
+    }
+    if (value is String) {
+      final parsed = double.tryParse(value.trim());
+      return parsed != null && parsed.isFinite ? parsed : null;
+    }
+    return null;
+  }
+
+  double? _resolveInteractionResponseSec({
+    required double? explicitResponseSec,
+    required DateTime? occurredAtUtc,
+    required DateTime? targetAppearedAtUtc,
+  }) {
+    if (explicitResponseSec != null && explicitResponseSec.isFinite) {
+      return math.max(0, explicitResponseSec).toDouble();
+    }
+    if (occurredAtUtc == null || targetAppearedAtUtc == null) {
+      return null;
+    }
+    final deltaMs = occurredAtUtc.millisecondsSinceEpoch -
+        targetAppearedAtUtc.millisecondsSinceEpoch;
+    return math.max(0, deltaMs) / 1000.0;
+  }
+
+  Map<String, dynamic> _buildInteractionTimelineDetails({
+    required String eventId,
+    required String gameRunId,
+    required int sequenceNo,
+    required String interactionEventType,
+    required String interactionType,
+    required String actionOutcome,
+    required String reasonCode,
+    required String targetId,
+    required String targetName,
+    required String targetCategory,
+    required String targetInstanceId,
+    required String targetAppearedAtUtc,
+    required int targetAppearedAtUnixMs,
+    required double? targetAppearedAtElapsedSec,
+    required double? responseSec,
+    required String inputHand,
+    required String inputSource,
+    required double? inputValue,
+    required String sourceComponent,
+  }) {
+    final details = <String, dynamic>{
+      'eventId': eventId,
+      'gameRunId': gameRunId,
+      'sequenceNo': sequenceNo,
+      'interactionEventType': interactionEventType,
+      'interactionType': interactionType,
+      'actionOutcome': actionOutcome,
+      'reasonCode': reasonCode,
+      'targetId': targetId,
+      'targetName': targetName,
+      'targetCategory': targetCategory,
+      'targetInstanceId': targetInstanceId,
+      'inputHand': inputHand,
+      'inputSource': inputSource,
+      'sourceComponent': sourceComponent,
+    };
+
+    if (targetAppearedAtUtc.isNotEmpty) {
+      details['targetAppearedAtUtc'] = targetAppearedAtUtc;
+    }
+    if (targetAppearedAtUnixMs > 0) {
+      details['targetAppearedAtUnixMs'] = targetAppearedAtUnixMs;
+    }
+    if (targetAppearedAtElapsedSec != null) {
+      details['targetAppearedAtElapsedSec'] = targetAppearedAtElapsedSec;
+    }
+    if (responseSec != null) {
+      details['responseSec'] = responseSec;
+    }
+    if (inputValue != null) {
+      details['inputValue'] = inputValue;
+    }
+
+    return details;
+  }
+
+  void _clearLiveTimelinePreview() {
+    _liveTimelinePreviewById.clear();
+    _publishLiveTimelinePreview();
+  }
+
+  void _publishLiveTimelinePreview() {
+    if (_liveTimelinePreviewController.isClosed) {
+      return;
+    }
+    _liveTimelinePreviewController.add(_sortedLiveTimelinePreviewEvents());
+  }
+
+  List<SessionTimelineEvent> _sortedLiveTimelinePreviewEvents() {
+    final events = _liveTimelinePreviewById.values.toList(growable: false);
+    events.sort((a, b) {
+      final timestampCompare = b.eventAtUnixMs.compareTo(a.eventAtUnixMs);
+      if (timestampCompare != 0) {
+        return timestampCompare;
+      }
+      return b.eventId.compareTo(a.eventId);
+    });
+    return events;
+  }
+
+  _InteractionBatchSummary _summarizeInteractions(
+    List<Map<String, dynamic>>? interactions,
+  ) {
+    if (interactions == null || interactions.isEmpty) {
+      return const _InteractionBatchSummary(
+        interactionCount: 0,
+        hitCount: 0,
+        missCount: 0,
+      );
+    }
+
+    var hitCount = 0;
+    var missCount = 0;
+    for (final event in interactions) {
+      final actionOutcome =
+          (event['actionOutcome'] as String? ?? '').trim().toUpperCase();
+      if (actionOutcome == 'CORRECT') {
+        hitCount++;
+      } else if (actionOutcome == 'INCORRECT') {
+        missCount++;
+      }
+    }
+
+    return _InteractionBatchSummary(
+      interactionCount: interactions.length,
+      hitCount: hitCount,
+      missCount: missCount,
+    );
+  }
+
+  int _asInt(dynamic value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is String) {
+      return int.tryParse(value.trim()) ?? 0;
+    }
+    return 0;
+  }
+}
+
+class _CompletedGameRunContext {
+  final String sessionId;
+
+  const _CompletedGameRunContext({
+    required this.sessionId,
+  });
+}
+
+class _InteractionBatchSummary {
+  final int interactionCount;
+  final int hitCount;
+  final int missCount;
+
+  const _InteractionBatchSummary({
+    required this.interactionCount,
+    required this.hitCount,
+    required this.missCount,
+  });
 }

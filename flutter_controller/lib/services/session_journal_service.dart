@@ -446,6 +446,33 @@ class SessionJournalService {
         'stored=$existingOwnerKey incoming=$normalizedOwnerKey',
       );
     }
+    if (existingSessionData == null) {
+      await sessionRef.set(
+        <String, dynamic>{
+          'sessionId': normalizedSessionId,
+          'studentId': normalizedStudentId,
+          'therapistId': normalizedTherapistId,
+          'ownerKey': normalizedOwnerKey,
+          'sessionKey': normalizedSessionKey,
+          'state': SessionLifecycleState.created.wireValue,
+          'unfinished': true,
+          'isTerminal': false,
+          'latestGameId': gameId.trim(),
+          'reasonCode': 'TIMELINE_EVENT_SEEDED',
+          'source': normalizedSource,
+          'metadata': <String, dynamic>{
+            'seededByTimeline': true,
+          },
+          'createdAtUtc': nowUtc.toIso8601String(),
+          'createdAtUnixMs': nowUtc.millisecondsSinceEpoch,
+          'updatedAtUtc': nowUtc.toIso8601String(),
+          'updatedAtUnixMs': nowUtc.millisecondsSinceEpoch,
+          'startedAtUtc': resolvedEventAtUtc.toIso8601String(),
+          'startedAtUnixMs': resolvedEventAtUtc.millisecondsSinceEpoch,
+        },
+        SetOptions(merge: true),
+      );
+    }
 
     final eventsCollection = sessionRef.collection('events');
     final payload = <String, dynamic>{

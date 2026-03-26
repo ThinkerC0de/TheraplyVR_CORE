@@ -55,6 +55,42 @@ void main() {
       expect(details['noteSource'], 'quick_template');
     });
 
+    test('appendSessionEvent seeds session root when timeline arrives first',
+        () async {
+      await SessionJournalService.appendSessionEvent(
+        sessionId: 'session-seeded',
+        studentId: 'student-seeded',
+        therapistId: 'therapist-seeded',
+        eventType: 'CONTROLLER_CONNECTED',
+        details: const <String, dynamic>{
+          'reasonCode': 'INITIAL_CONNECT',
+        },
+      );
+
+      final sessionSnapshot = await firestore
+          .collection('therapy_sessions')
+          .doc('session-seeded')
+          .get();
+      final sessionPayload = sessionSnapshot.data();
+
+      expect(sessionPayload, isNotNull);
+      expect(
+        sessionPayload!['state'],
+        SessionLifecycleState.created.wireValue,
+      );
+      expect(sessionPayload['unfinished'], isTrue);
+      expect(sessionPayload['reasonCode'], 'TIMELINE_EVENT_SEEDED');
+
+      final eventsSnapshot = await firestore
+          .collection('therapy_sessions')
+          .doc('session-seeded')
+          .collection('events')
+          .get();
+      expect(eventsSnapshot.docs, hasLength(1));
+      expect(eventsSnapshot.docs.first.data()['eventType'],
+          'CONTROLLER_CONNECTED');
+    });
+
     test('fetchSessionTimeline returns latest events first and applies limit',
         () async {
       final ownerKey = SessionOwnership.ownerKey(

@@ -31,8 +31,8 @@ class GameRunRecord {
     String id,
     Map<String, dynamic> json,
   ) {
-    final summary = json['summary'] is Map<String, dynamic>
-        ? json['summary'] as Map<String, dynamic>
+    final summary = json['summary'] is Map
+        ? Map<String, dynamic>.from(json['summary'] as Map)
         : <String, dynamic>{};
 
     return GameRunRecord(
@@ -56,6 +56,13 @@ class GameRunRecord {
   bool get isCompleted => finalState == 'completed';
   bool get isFailed => finalState == 'failed';
   bool get isInProgress => finalState == null || finalState!.isEmpty;
+  bool get hasEnded => endedAtUnixMs > 0 || endedAtUtc != null;
+  bool get hasAnySummary =>
+      interactionCount > 0 || hitCount > 0 || missCount > 0;
+  bool get isSummaryPlaceholder =>
+      !hasEnded &&
+      !hasAnySummary &&
+      (finalState == null || finalState!.trim().isEmpty);
 
   DateTime? get sortAnchorUtc => startedAtUtc ?? endedAtUtc;
 
