@@ -247,10 +247,13 @@ class WebRTCMediaService {
       print('[WebRTCMedia] Creating answer...');
       final answer = await _peerConnection!.createAnswer();
 
-      print('[WebRTCMedia] Setting local description...');
-      await _peerConnection!.setLocalDescription(answer);
+      final lowLatencySdp = _mungeAnswerSdpForLowLatency(answer.sdp ?? '');
+      final lowLatencyAnswer = RTCSessionDescription(lowLatencySdp, answer.type);
 
-      final answerPayload = {'type': 'answer', 'sdp': answer.sdp};
+      print('[WebRTCMedia] Setting local description (low-latency SDP)...');
+      await _peerConnection!.setLocalDescription(lowLatencyAnswer);
+
+      final answerPayload = {'type': 'answer', 'sdp': lowLatencySdp};
       await _connection.sendCommand('WEBRTC_ANSWER', answerPayload);
       print('[WebRTCMedia] ✅ Sent WEBRTC_ANSWER');
 
@@ -271,7 +274,72 @@ class WebRTCMediaService {
   Map<String, dynamic> _buildPeerConnectionConfig({required bool useStun}) {
     return <String, dynamic>{
       'iceServers': useStun ? _stunIceServers : const <Map<String, dynamic>>[],
+      'sdpSemantics': 'unified-plan',
+      'bundlePolicy': 'max-bundle',
+      'rtcpMuxPolicy': 'require',
     };
+  }
+
+  /// Munge answer SDP to minimise jitter-buffer delay on the receiver side.
+  ///
+  /// Injects `x-google-max-latency=0` into every video codec fmtp line so the
+  /// WebRTC stack targets a zero-buffering policy for the incoming video track.
+  /// Also removes any existing `x-google-max-latency` value first to avoid
+  /// duplicates when the offer already carries it.
+  static String _mungeAnswerSdpForLowLatency(String sdp) {
+    final lines = sdp.split(RegExp(r'\r?\n'));
+    final munged = <String>[];
+
+    // Collect video payload types from m=video lines.
+    final videoPayloads = <String>{};
+    bool inVideo = false;
+
+    for (final rawLine in lines) {
+      final line = rawLine.trim();
+      if (line.startsWith('m=')) {
+        inVideo = line.startsWith('m=video');
+        continue;
+      }
+      if (inVideo && line.startsWith('a=rtpmap:')) {
+        // a=rtpmap:<payload> <codec>/<clock>
+        final match = RegExp(r'^a=rtpmap:(\d+)\s').firstMatch(line);
+        if (match != null) {
+          videoPayloads.add(match.group(1)!);
+        }
+      }
+    }
+
+    // Reset and rewrite lines, injecting x-google-max-latency=0 into fmtp for
+    // video payloads.
+    for (final rawLine in lines) {
+      if (rawLine.isEmpty) {
+        munged.add(rawLine);
+        continue;
+      }
+      final line = rawLine.trim();
+      if (line.startsWith('a=fmtp:')) {
+        final match = RegExp(r'^a=fmtp:(\d+)\s+(.*)$').firstMatch(line);
+        if (match != null && videoPayloads.contains(match.group(1))) {
+          var params = match.group(2)!;
+          // Remove any prior max-latency setting to avoid duplicates.
+          params = params
+              .split(';')
+              .map((p) => p.trim())
+              .where((p) => !p.startsWith('x-google-max-latency'))
+              .join(';');
+          if (params.isNotEmpty) {
+            params = '$params;x-google-max-latency=0';
+          } else {
+            params = 'x-google-max-latency=0';
+          }
+          munged.add('a=fmtp:${match.group(1)} $params');
+          continue;
+        }
+      }
+      munged.add(rawLine);
+    }
+
+    return munged.join('\r\n');
   }
 
   void _armLanProbeTimer() {

@@ -51,10 +51,17 @@ class GameDataService {
   final StreamController<List<SessionTimelineEvent>>
       _liveTimelinePreviewController =
       StreamController<List<SessionTimelineEvent>>.broadcast();
+  LiveGameRunPreview? _activeGameRunPreview;
+  final Set<String> _activeGameRunPreviewEventIds = <String>{};
+  final StreamController<LiveGameRunPreview?> _activeGameRunPreviewController =
+      StreamController<LiveGameRunPreview?>.broadcast();
   Stream<List<SessionTimelineEvent>> get liveTimelinePreviewStream =>
       _liveTimelinePreviewController.stream;
   List<SessionTimelineEvent> get liveTimelinePreviewEvents =>
       _sortedLiveTimelinePreviewEvents();
+  Stream<LiveGameRunPreview?> get activeGameRunPreviewStream =>
+      _activeGameRunPreviewController.stream;
+  LiveGameRunPreview? get activeGameRunPreview => _activeGameRunPreview;
 
   // Pending interaction batch for the current game run (arrives before game_end on the wire).
   // Map: gameRunId → list of interaction maps.
@@ -85,6 +92,7 @@ class GameDataService {
     _activeGameRunStartedAtUtc = null;
     _writtenGameRunIds.clear();
     _clearLiveTimelinePreview();
+    _clearActiveGameRunPreview();
     print(
         '[GameData] attachSession: sid=$_sessionId uid=$_therapistId student=$_studentId');
   }
@@ -100,13 +108,16 @@ class GameDataService {
     _activeGameId = null;
     _activeGameRunStartedAtUtc = null;
     _clearLiveTimelinePreview();
+    _clearActiveGameRunPreview();
   }
 
   Future<void> dispose() async {
     await _messageSub?.cancel();
     _messageSub = null;
     _clearLiveTimelinePreview();
+    _clearActiveGameRunPreview();
     await _liveTimelinePreviewController.close();
+    await _activeGameRunPreviewController.close();
   }
 
   // ─── TCP message handling ─────────────────────────────────────────────────
@@ -191,6 +202,20 @@ class GameDataService {
 
     if (events.isEmpty) {
       return;
+    }
+
+    final interactionSummary = _summarizeInteractions(events);
+    _syncActiveGameRunPreviewCounts(
+      gameRunId: gameRunId,
+      interactionCount: interactionSummary.interactionCount,
+      hitCount: interactionSummary.hitCount,
+      missCount: interactionSummary.missCount,
+    );
+    for (final event in events) {
+      final eventId = (event['eventId'] as String? ?? '').trim();
+      if (eventId.isNotEmpty) {
+        _activeGameRunPreviewEventIds.add(eventId);
+      }
     }
 
     final completedContext =
@@ -298,6 +323,16 @@ class GameDataService {
         ..['persisted'] = false,
     );
     _publishLiveTimelinePreview();
+
+    if (gameRunId.isNotEmpty && !_activeGameRunPreviewEventIds.contains(eventId)) {
+      _activeGameRunPreviewEventIds.add(eventId);
+      _incrementActiveGameRunPreviewOutcome(
+        gameRunId: gameRunId,
+        gameId: (event['gameId'] as String? ?? '').trim(),
+        occurredAtUtc: occurredAt,
+        actionOutcome: (event['actionOutcome'] as String? ?? '').trim(),
+      );
+    }
   }
 
   // ─── Event handlers ───────────────────────────────────────────────────────
@@ -311,6 +346,29 @@ class GameDataService {
     _activeGameRunId = gameRunId.isNotEmpty ? gameRunId : null;
     _activeGameId = gameId.isNotEmpty ? gameId : null;
     _activeGameRunStartedAtUtc = startedAtUtc;
+    _activeGameRunPreviewEventIds.clear();
+
+    if (gameRunId.isNotEmpty) {
+      _activeGameRunPreview = LiveGameRunPreview(
+        sessionId: _sessionId,
+        gameRunId: gameRunId,
+        gameId: gameId.trim(),
+        startedAtUtc: startedAtUtc,
+        startedAtUnixMs: startedAtUtc.millisecondsSinceEpoch,
+        interactionCount: 0,
+        hitCount: 0,
+        missCount: 0,
+      );
+      _publishActiveGameRunPreview();
+      final sessionId = _sessionId.trim();
+      if (sessionId.isNotEmpty) {
+        try {
+          await onJournalCheckpointCommitted?.call(sessionId);
+        } catch (e) {
+          print('[GameData] ❌ journal checkpoint callback failed: $e');
+        }
+      }
+    }
 
     if (kDebugMode) {
       debugPrint('[GameData] game_start: gameId=$gameId gameRunId=$gameRunId');
@@ -359,6 +417,14 @@ class GameDataService {
 
     print(
         '[GameData] game_end: sid=$_sessionId runId=$gameRunId state=$finalState hits=$hitCount misses=$missCount interactions=$interactionCount');
+
+    _syncActiveGameRunPreviewCounts(
+      gameRunId: gameRunId,
+      interactionCount: interactionCount,
+      hitCount: hitCount,
+      missCount: missCount,
+      finalState: finalState,
+    );
 
     final sessionRef =
         _firestore.collection('therapy_sessions').doc(_sessionId);
@@ -448,6 +514,10 @@ class GameDataService {
       } catch (e) {
         print('[GameData] ❌ journal checkpoint callback failed: $e');
       }
+    }
+
+    if (_activeGameRunPreview?.gameRunId.trim() == gameRunId) {
+      _clearActiveGameRunPreview();
     }
   }
 
@@ -778,6 +848,7 @@ class GameDataService {
     required String eventType,
     String gameId = '',
     String? occurredAtUtc,
+    String? timelineEventId,
     Map<String, dynamic> details = const {},
   }) async {
     if (_sessionId.isEmpty || _studentId.isEmpty || _therapistId.isEmpty) {
@@ -791,6 +862,7 @@ class GameDataService {
       eventType: eventType,
       gameId: gameId,
       source: 'quest_runtime',
+      timelineEventId: timelineEventId,
       eventAtUtc: occurredAtUtc != null
           ? DateTime.tryParse(occurredAtUtc)?.toUtc()
           : null,
@@ -848,6 +920,7 @@ class GameDataService {
           print('[GameData] ❌ journal checkpoint callback failed: $e');
         }
       }
+      _clearActiveGameRunPreview();
     } catch (e) {
       print('[GameData] ❌ interrupted game_run write failed: $e');
     }
@@ -1018,11 +1091,83 @@ class GameDataService {
     _publishLiveTimelinePreview();
   }
 
+  void _clearActiveGameRunPreview() {
+    _activeGameRunPreview = null;
+    _activeGameRunPreviewEventIds.clear();
+    _publishActiveGameRunPreview();
+  }
+
   void _publishLiveTimelinePreview() {
     if (_liveTimelinePreviewController.isClosed) {
       return;
     }
     _liveTimelinePreviewController.add(_sortedLiveTimelinePreviewEvents());
+  }
+
+  void _publishActiveGameRunPreview() {
+    if (_activeGameRunPreviewController.isClosed) {
+      return;
+    }
+    _activeGameRunPreviewController.add(_activeGameRunPreview);
+  }
+
+  void _incrementActiveGameRunPreviewOutcome({
+    required String gameRunId,
+    required String gameId,
+    required DateTime occurredAtUtc,
+    required String actionOutcome,
+  }) {
+    final normalizedRunId = gameRunId.trim();
+    if (normalizedRunId.isEmpty) {
+      return;
+    }
+
+    final currentPreview = _activeGameRunPreview;
+    if (currentPreview == null ||
+        currentPreview.gameRunId.trim() != normalizedRunId) {
+      final startedAtUtc = _activeGameRunStartedAtUtc ?? occurredAtUtc;
+      _activeGameRunPreview = LiveGameRunPreview(
+        sessionId: _sessionId,
+        gameRunId: normalizedRunId,
+        gameId: gameId.trim().isNotEmpty ? gameId.trim() : _activeGameId ?? '',
+        startedAtUtc: startedAtUtc,
+        startedAtUnixMs: startedAtUtc.millisecondsSinceEpoch,
+        interactionCount: 0,
+        hitCount: 0,
+        missCount: 0,
+      );
+    }
+
+    final preview = _activeGameRunPreview!;
+    final normalizedOutcome = actionOutcome.trim().toUpperCase();
+    _activeGameRunPreview = preview.copyWith(
+      gameId: preview.gameId.isNotEmpty ? preview.gameId : gameId.trim(),
+      interactionCount: preview.interactionCount + 1,
+      hitCount: preview.hitCount + (normalizedOutcome == 'CORRECT' ? 1 : 0),
+      missCount: preview.missCount + (normalizedOutcome == 'INCORRECT' ? 1 : 0),
+    );
+    _publishActiveGameRunPreview();
+  }
+
+  void _syncActiveGameRunPreviewCounts({
+    required String gameRunId,
+    required int interactionCount,
+    required int hitCount,
+    required int missCount,
+    String? finalState,
+  }) {
+    final preview = _activeGameRunPreview;
+    if (preview == null || preview.gameRunId.trim() != gameRunId.trim()) {
+      return;
+    }
+
+    _activeGameRunPreview = preview.copyWith(
+      interactionCount: math.max(preview.interactionCount, interactionCount),
+      hitCount: math.max(preview.hitCount, hitCount),
+      missCount: math.max(preview.missCount, missCount),
+      finalState: finalState ?? preview.finalState,
+    );
+    _publishActiveGameRunPreview();
   }
 
   List<SessionTimelineEvent> _sortedLiveTimelinePreviewEvents() {
@@ -1100,3 +1245,55 @@ class _InteractionBatchSummary {
     required this.missCount,
   });
 }
+
+class LiveGameRunPreview {
+  final String sessionId;
+  final String gameRunId;
+  final String gameId;
+  final DateTime? startedAtUtc;
+  final int startedAtUnixMs;
+  final String? finalState;
+  final int interactionCount;
+  final int hitCount;
+  final int missCount;
+
+  const LiveGameRunPreview({
+    required this.sessionId,
+    required this.gameRunId,
+    required this.gameId,
+    required this.startedAtUtc,
+    required this.startedAtUnixMs,
+    this.finalState,
+    required this.interactionCount,
+    required this.hitCount,
+    required this.missCount,
+  });
+
+  LiveGameRunPreview copyWith({
+    String? sessionId,
+    String? gameRunId,
+    String? gameId,
+    DateTime? startedAtUtc,
+    int? startedAtUnixMs,
+    Object? finalState = _liveGameRunPreviewNoChange,
+    int? interactionCount,
+    int? hitCount,
+    int? missCount,
+  }) {
+    return LiveGameRunPreview(
+      sessionId: sessionId ?? this.sessionId,
+      gameRunId: gameRunId ?? this.gameRunId,
+      gameId: gameId ?? this.gameId,
+      startedAtUtc: startedAtUtc ?? this.startedAtUtc,
+      startedAtUnixMs: startedAtUnixMs ?? this.startedAtUnixMs,
+      finalState: identical(finalState, _liveGameRunPreviewNoChange)
+          ? this.finalState
+          : finalState as String?,
+      interactionCount: interactionCount ?? this.interactionCount,
+      hitCount: hitCount ?? this.hitCount,
+      missCount: missCount ?? this.missCount,
+    );
+  }
+}
+
+const Object _liveGameRunPreviewNoChange = Object();

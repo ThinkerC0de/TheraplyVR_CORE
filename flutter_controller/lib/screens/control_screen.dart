@@ -963,6 +963,7 @@ class _ControlScreenState extends State<ControlScreen>
   List<SessionTimelineEvent> _liveTimelinePreviewEvents =
       const <SessionTimelineEvent>[];
   List<GameRunRecord> _cachedGameRuns = const <GameRunRecord>[];
+  LiveGameRunPreview? _activeGameRunPreview;
   bool _journalLoading = false;
   bool _journalRefreshPending = false;
   String _pendingJournalSessionId = '';
@@ -970,6 +971,7 @@ class _ControlScreenState extends State<ControlScreen>
   String? _journalLoadError;
   StreamSubscription<List<SessionTimelineEvent>>?
       _liveTimelinePreviewSubscription;
+  StreamSubscription<LiveGameRunPreview?>? _activeGameRunPreviewSubscription;
   String _lastPersistedWorkflowCheckpointFingerprint = '';
   String _lastPersistedDevicePresenceTimelineFingerprint = '';
   String? _deferredHandoffSessionId;
@@ -1020,6 +1022,7 @@ class _ControlScreenState extends State<ControlScreen>
               sessionIdOverride: sessionId,
             );
     _liveTimelinePreviewEvents = _gameDataService.liveTimelinePreviewEvents;
+    _activeGameRunPreview = _gameDataService.activeGameRunPreview;
     _liveTimelinePreviewSubscription =
         _gameDataService.liveTimelinePreviewStream.listen((events) {
       if (!mounted) {
@@ -1027,6 +1030,15 @@ class _ControlScreenState extends State<ControlScreen>
       }
       setState(() {
         _liveTimelinePreviewEvents = events;
+      });
+    });
+    _activeGameRunPreviewSubscription =
+        _gameDataService.activeGameRunPreviewStream.listen((preview) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _activeGameRunPreview = preview;
       });
     });
     _activeSessionId = _buildLocalSessionId();
@@ -1062,6 +1074,7 @@ class _ControlScreenState extends State<ControlScreen>
     _discoverySubscription?.cancel();
     _connectionLivenessTimer?.cancel();
     _liveTimelinePreviewSubscription?.cancel();
+    _activeGameRunPreviewSubscription?.cancel();
     _gameDataService.onJournalCheckpointCommitted = null;
     unawaited(ForegroundServiceBridge.stop());
     unawaited(_gameDataService.dispose());
@@ -8198,6 +8211,7 @@ class _ControlScreenState extends State<ControlScreen>
       final actionOutcome =
           (details['actionOutcome'] as String? ?? '').trim().toUpperCase();
       final reasonCode = (details['reasonCode'] as String? ?? '').trim();
+      final inputHand = (details['inputHand'] as String? ?? '').trim().toUpperCase();
 
       if (actionOutcome == 'CORRECT') {
         fragments.add('Correct');
@@ -8211,6 +8225,10 @@ class _ControlScreenState extends State<ControlScreen>
         fragments.add(targetCategory.toLowerCase().replaceAll('_', ' '));
       } else if (interactionEventType.isNotEmpty) {
         fragments.add(interactionEventType.toLowerCase().replaceAll('_', ' '));
+      }
+
+      if (inputHand == 'LEFT' || inputHand == 'RIGHT') {
+        fragments.add('${inputHand[0]}${inputHand.substring(1).toLowerCase()} hand');
       }
 
       final responseSec = _resolveTimelineResponseSec(
@@ -8420,13 +8438,63 @@ class _ControlScreenState extends State<ControlScreen>
 
   // ── VR game-run stats ──────────────────────────────────────────────────────
 
+  List<GameRunRecord> _visibleVrGameRunsForSession(String sessionId) {
+    final normalizedSessionId = sessionId.trim();
+    if (normalizedSessionId.isEmpty) {
+      return const <GameRunRecord>[];
+    }
+
+    final mergedByRunId = <String, GameRunRecord>{};
+    if (_loadedJournalSessionId == normalizedSessionId) {
+      for (final run in _cachedGameRuns) {
+        if (run.isSummaryPlaceholder) {
+          continue;
+        }
+        mergedByRunId[run.gameRunId] = run;
+      }
+    }
+
+    final preview = _activeGameRunPreview;
+    if (preview != null && preview.sessionId.trim() == normalizedSessionId) {
+      final nowUtc = DateTime.now().toUtc();
+      final normalizedFinalState = preview.finalState?.trim() ?? '';
+      final hasEnded = normalizedFinalState.isNotEmpty;
+      final endedAtUtc = hasEnded ? nowUtc : null;
+      final durationSec = preview.startedAtUtc == null
+          ? null
+          : nowUtc.difference(preview.startedAtUtc!.toUtc()).inSeconds < 0
+              ? 0
+              : nowUtc.difference(preview.startedAtUtc!.toUtc()).inSeconds;
+      mergedByRunId[preview.gameRunId] = GameRunRecord(
+        gameRunId: preview.gameRunId,
+        gameId: preview.gameId,
+        startedAtUtc: preview.startedAtUtc,
+        startedAtUnixMs: preview.startedAtUnixMs,
+        endedAtUtc: endedAtUtc,
+        endedAtUnixMs: endedAtUtc?.millisecondsSinceEpoch ?? 0,
+        finalState: hasEnded ? normalizedFinalState : null,
+        durationSec: durationSec,
+        interactionCount: preview.interactionCount,
+        hitCount: preview.hitCount,
+        missCount: preview.missCount,
+      );
+    }
+
+    final runs = mergedByRunId.values.toList(growable: false);
+    runs.sort((a, b) {
+      final bAnchor = b.sortAnchorUnixMs;
+      final aAnchor = a.sortAnchorUnixMs;
+      final anchorCompare = bAnchor.compareTo(aAnchor);
+      if (anchorCompare != 0) {
+        return anchorCompare;
+      }
+      return b.gameRunId.compareTo(a.gameRunId);
+    });
+    return runs;
+  }
+
   Widget _buildVrGameRunsPanel(String sessionId) {
-    final allRuns = _loadedJournalSessionId == sessionId
-        ? _cachedGameRuns
-        : const <GameRunRecord>[];
-    final runs = allRuns
-        .where((run) => !run.isSummaryPlaceholder)
-        .toList(growable: false);
+    final runs = _visibleVrGameRunsForSession(sessionId);
     if (runs.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -8496,7 +8564,7 @@ class _ControlScreenState extends State<ControlScreen>
                   ),
                 ],
               ),
-              if (runs.length > 1) ...[
+              if (runs.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 for (final run in runs) _buildGameRunRow(run),
               ],
@@ -8545,11 +8613,14 @@ class _ControlScreenState extends State<ControlScreen>
         : run.gameId.isNotEmpty
             ? run.gameId
             : _shortTimelineRunId(run.gameRunId);
+    final isInterrupted = (run.finalState ?? '').trim() == 'interrupted';
     final stateIcon = run.isCompleted
         ? Icons.check_circle
         : run.isFailed
             ? Icons.cancel
-            : Icons.hourglass_bottom;
+            : isInterrupted
+                ? Icons.pause_circle_filled
+                : Icons.play_circle_fill;
     final stateColor = run.isCompleted
         ? Colors.green.shade600
         : run.isFailed
