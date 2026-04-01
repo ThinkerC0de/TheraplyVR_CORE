@@ -5518,6 +5518,25 @@ class _ControlScreenState extends State<ControlScreen>
     return activeSessionId;
   }
 
+  bool get _shouldForceFreshAttachForRoundRestart {
+    final sessionState = _sessionLifecycleState;
+    if (sessionState != null &&
+        SessionRecoveryPolicy.isTerminalState(sessionState)) {
+      return true;
+    }
+
+    final persisted = _latestPersistedSession;
+    if (persisted != null &&
+        persisted.sessionId.trim() == _activeSessionId.trim() &&
+        (persisted.state != null
+            ? SessionRecoveryPolicy.isTerminalState(persisted.state!)
+            : persisted.isTerminal)) {
+      return true;
+    }
+
+    return false;
+  }
+
   int _resolveCriticalCommandMaxRetries() {
     final configured = _therapistSessionSettings.criticalCommandMaxRetries;
     if (configured < TherapistSessionSettings.minCriticalCommandMaxRetries) {
@@ -6250,6 +6269,31 @@ class _ControlScreenState extends State<ControlScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Waiting for session sync. Try again in a moment.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return false;
+      }
+    } else if ((command == CriticalCommandIds.startGame ||
+            command == CriticalCommandIds.resumeGame) &&
+        _shouldForceFreshAttachForRoundRestart) {
+      _logAttachDecision(
+        decision: 'REQUIRE_ATTACH_AFTER_TERMINAL',
+        reasonCode: 'ROUND_RESTART_AFTER_TERMINAL',
+        commandId: command,
+      );
+      await _ensureSessionAttached(
+        reasonCode: 'ROUND_RESTART_AFTER_TERMINAL',
+        force: true,
+        sessionIdOverride: _activeSessionId,
+      );
+      if (!_sessionAttachReady) {
+        if (!mounted) {
+          return false;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Waiting for session reset. Try again in a moment.'),
             backgroundColor: Colors.orange,
           ),
         );
