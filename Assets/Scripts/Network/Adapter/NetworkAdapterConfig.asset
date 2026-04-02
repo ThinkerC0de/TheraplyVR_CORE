@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e03a0f80886c8bc4da92311b6605856f, type: 3}
+  m_Name: NetworkAdapterConfig
+  m_EditorClassIdentifier: 
+  mode: 2
+  enableReliableControl: 1
+  enableSessionResume: 1
+  enableCriticalAck: 1
+  enableCriticalJournal: 1
+  reconnectRecoveryWindowSeconds: 30
+  heartbeatIntervalSeconds: 5
+  idleTimeoutSeconds: 10
+  ackTimeoutSeconds: 2
+  maxCriticalRetries: 3
+  retryBaseDelaySeconds: 1
+  retryMaxDelaySeconds: 8
+  journalFolderName: network-adapter
+  journalFileName: reliable-command-journal.ndjson
+  sessionContextFileName: session-context.json
+  logVerbose: 1
+  extraCriticalCommandIds: []

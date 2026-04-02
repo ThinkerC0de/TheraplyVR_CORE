@@ -1,0 +1,108 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5b11a58205ec3474ca216360e9fa74a8, type: 3}
+  m_Name: Main_Scene_Audio_Clips Shared Data
+  m_EditorClassIdentifier: 
+  m_TableCollectionName: Main_Scene_Audio_Clips
+  m_TableCollectionNameGuidString: 7137dc72a49146b4d8e49b29bf451064
+  m_Entries:
+  - m_Id: 10780360704
+    m_Key: no_kid
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13749927936
+    m_Key: no_therapist
+    m_Metadata:
+      m_Items: []
+  - m_Id: 21979378696192
+    m_Key: no_data
+    m_Metadata:
+      m_Items: []
+  - m_Id: 26369414086656
+    m_Key: on_start
+    m_Metadata:
+      m_Items: []
+  - m_Id: 434250445701120
+    m_Key: no_internet
+    m_Metadata:
+      m_Items: []
+  - m_Id: 112735240741404672
+    m_Key: General_door_number
+    m_Metadata:
+      m_Items: []
+  - m_Id: 112735243006328832
+    m_Key: General_connected
+    m_Metadata:
+      m_Items: []
+  - m_Id: 112735245015400448
+    m_Key: start_scene_on_start
+    m_Metadata:
+      m_Items: []
+  - m_Id: 112735395825795072
+    m_Key: start_scene_on_session_started
+    m_Metadata:
+      m_Items: []
+  m_Metadata:
+    m_Items:
+    - rid: 3600414137618006031
+  m_KeyGenerator:
+    rid: 3600414137618006022
+  references:
+    version: 2
+    RefIds:
+    - rid: 3600414137618006022
+      type: {class: DistributedUIDGenerator, ns: UnityEngine.Localization.Tables,
+        asm: Unity.Localization}
+      data:
+        m_CustomEpoch: 1680000154472
+    - rid: 3600414137618006031
+      type: {class: AssetTypeMetadata, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_Entries:
+        - m_KeyId: 21979378696192
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 10780360704
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 13749927936
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 26369414086656
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 434250445701120
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 112735240741404672
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 112735243006328832
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 112735245015400448
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 112735395825795072
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        m_TypeString: UnityEngine.AudioClip, UnityEngine.AudioModule, Version=0.0.0.0,
+          Culture=neutral, PublicKeyToken=null

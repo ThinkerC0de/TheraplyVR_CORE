@@ -1,0 +1,222 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 743964fedfc1e804c9811a4a7e557c25, type: 3}
+  m_Name: RewardDatabase
+  m_EditorClassIdentifier: 
+  rewards:
+  - name: 'Pogromca Strachu '
+    description: "Za odwag\u0119 i umiej\u0119tno\u015B\u0107 radzenia sobie ze strachem
+      w trudnych sytuacjach."
+    category: 0
+    type: 0
+    prefab: {fileID: 1850157333995018357, guid: 3992b924c671c7f4d9267e197c44acc3,
+      type: 3}
+    audioDescription: Welcome
+  - name: "Stra\u017Cnik Spokoju "
+    description: "Za umiej\u0119tno\u015B\u0107 kontrolowania gniewu i zachowywania
+      spokoju w trudnych momentach. "
+    category: 0
+    type: 0
+    prefab: {fileID: 4525032855262267536, guid: b18572aef30f1e14abdaddab42d002b5,
+      type: 3}
+    audioDescription: Retry
+  - name: Opiekun Smutku
+    description: "Za wsparcie i pocieszenie os\xF3b, kt\xF3re prze\u017Cywaj\u0105
+      smutek lub trudne chwile."
+    category: 0
+    type: 0
+    prefab: {fileID: 1746740730292560383, guid: 97a1dc5bfeee5a54e9f09efccbc715ca,
+      type: 3}
+    audioDescription: Thanks
+  - name: "Medal Rado\u015Bci "
+    description: "Za nieustanne szerzenie rado\u015Bci i pozytywnego nastroju w grupie. "
+    category: 0
+    type: 1
+    prefab: {fileID: 3077735105309726048, guid: 19f445b2bcdad1d4a9c8aac7597254bc,
+      type: 3}
+    audioDescription: 
+  - name: Medal Odwagi
+    description: "Za stawianie czo\u0142a swoim l\u0119kom i dzielenie si\u0119 swoimi
+      prze\u017Cyciami z innymi. "
+    category: 0
+    type: 1
+    prefab: {fileID: 4601494034902837484, guid: 2c5ad874f9e33124dba01a9029221dfb,
+      type: 3}
+    audioDescription: 
+  - name: "Medal Przyja\u017Ani "
+    description: "Za budowanie i piel\u0119gnowanie silnych, zdrowych przyja\u017Ani."
+    category: 0
+    type: 1
+    prefab: {fileID: 4262607906844149805, guid: 23189a278bc92fa4f8b4d79d6c822429,
+      type: 3}
+    audioDescription: 
+  - name: 'Dyplom Wsparcia '
+    description: "Za wyj\u0105tkowe wsparcie i empati\u0119 okazywan\u0105 swoim
+      przyjacio\u0142om. "
+    category: 0
+    type: 2
+    prefab: {fileID: 6632046602222688340, guid: 853360bd1cccb8542a44d00b68d28d61,
+      type: 3}
+    audioDescription: 
+  - name: "Dyplom U\u015Bmiechu "
+    description: "Za nieustanne szerzenie u\u015Bmiechu i dobrego humoru w\u015Br\xF3d
+      koleg\xF3w i kole\u017Canek. "
+    category: 0
+    type: 2
+    prefab: {fileID: 8361739994664989378, guid: 3fee573b54bbf424d9a290c3185adb43,
+      type: 3}
+    audioDescription: 
+  - name: 'Dyplom Zrozumienia '
+    description: "Za umiej\u0119tno\u015B\u0107 zrozumienia i akceptacji r\xF3\u017Cnych
+      emocji, zar\xF3wno swoich, jak i innych. "
+    category: 0
+    type: 2
+    prefab: {fileID: 124328887908686089, guid: f0c49b490f7a6ea47b335bef699d4e2f, type: 3}
+    audioDescription: 
+  - name: "Rycerz Przyja\u017Ani "
+    description: "Za budowanie i piel\u0119gnowanie trwa\u0142ych, serdecznych relacji
+      z r\xF3wie\u015Bnikami. "
+    category: 1
+    type: 0
+    prefab: {fileID: 5743608802057083847, guid: 8fce98d9241cc1e4db656b486ec7caab,
+      type: 3}
+    audioDescription: 
+  - name: "Mistrz Wsp\xF3\u0142pracy "
+    description: "Za wybitn\u0105 umiej\u0119tno\u015B\u0107 pracy zespo\u0142owej
+      i wspieranie innych w realizacji wsp\xF3lnych cel\xF3w. "
+    category: 1
+    type: 0
+    prefab: {fileID: 7531741241403891480, guid: 2dc43b32917417148bf5c1663eb2bcb5,
+      type: 3}
+    audioDescription: 
+  - name: "Stra\u017Cnik Uczciwo\u015Bci "
+    description: "Za konsekwentne wykazywanie si\u0119 uczciwo\u015Bci\u0105 i prawdom\xF3wno\u015Bci\u0105. "
+    category: 1
+    type: 0
+    prefab: {fileID: 2401822645904969595, guid: 4f2b67e9199f6d248be8b165bce054b6,
+      type: 3}
+    audioDescription: 
+  - name: 'Medal Przyjacielskiego Serca '
+    description: 'Za bycie prawdziwym przyjacielem i wspieranie innych w trudnych
+      chwilach. '
+    category: 1
+    type: 1
+    prefab: {fileID: 3485601766089849227, guid: 3fa0e01005f3e2046bdf7da147461772,
+      type: 3}
+    audioDescription: 
+  - name: "Medal Prawdom\xF3wno\u015Bci "
+    description: "Za sta\u0142e przestrzeganie zasad uczciwo\u015Bci i prawdom\xF3wno\u015Bci. "
+    category: 1
+    type: 1
+    prefab: {fileID: 8393435511051321168, guid: c2d66cdadae666a4980f373203d57cb2,
+      type: 3}
+    audioDescription: 
+  - name: "Medal Pomocnej D\u0142oni "
+    description: "Za niesienie pomocy potrzebuj\u0105cym i wspieranie innych w codziennych
+      sytuacjach. "
+    category: 1
+    type: 1
+    prefab: {fileID: 183120964246712898, guid: 9ba16bcec38d7ac4d8c01ca01093da11, type: 3}
+    audioDescription: 
+  - name: "Dyplom Dru\u017Cynowego Gracza "
+    description: "Za znakomite umiej\u0119tno\u015Bci wsp\xF3\u0142pracy i dzia\u0142ania
+      w grupie. "
+    category: 1
+    type: 2
+    prefab: {fileID: 8668908402284887706, guid: 3500b7f1ae06d9249a60940ad2fa322d,
+      type: 3}
+    audioDescription: 
+  - name: Dyplom Prawdziwego Przyjaciela
+    description: "Za lojalno\u015B\u0107, wsparcie i budowanie silnych relacji przyjacielskich. "
+    category: 1
+    type: 2
+    prefab: {fileID: 435722496641809164, guid: af0f58f545cc7dd42a5bb7c5a4e38d4d, type: 3}
+    audioDescription: 
+  - name: "Dyplom Wsp\xF3\u0142pracy "
+    description: "Za aktywne uczestnictwo i zaanga\u017Cowanie w dzia\u0142ania zespo\u0142owe,
+      dbanie o dobro grupy."
+    category: 1
+    type: 2
+    prefab: {fileID: 4907550422799015240, guid: 1941243b6d9ec4e4a9964e457b067463,
+      type: 3}
+    audioDescription: 
+  - name: "Mistrz Samodzielno\u015Bci "
+    description: "Za umiej\u0119tno\u015Bci radzenia sobie samodzielnie w r\xF3\u017Cnych
+      sytuacjach. "
+    category: 2
+    type: 0
+    prefab: {fileID: 1959731307588337074, guid: ee957e2db0f97494f8015bacf8e7a2af,
+      type: 3}
+    audioDescription: 
+  - name: "Stra\u017Cnik Wiary w Siebie "
+    description: "Za konsekwentne pokazywanie, \u017Ce wierzy si\u0119 we w\u0142asne
+      mo\u017Cliwo\u015Bci i podejmowanie nowych wyzwa\u0144. "
+    category: 2
+    type: 0
+    prefab: {fileID: 5336016715541772763, guid: 43f2dfbd80b63374ea0e482dbea4c127,
+      type: 3}
+    audioDescription: 
+  - name: "Odkrywca Mo\u017Cliwo\u015Bci "
+    description: "Za ch\u0119\u0107 i determinacj\u0119 do odkrywania swoich umiej\u0119tno\u015Bci
+      i talent\xF3w. "
+    category: 2
+    type: 0
+    prefab: {fileID: 3682103690326249789, guid: d13f15bec43bdb8489944c08ac41385f,
+      type: 3}
+    audioDescription: 
+  - name: "Medal Niezale\u017Cno\u015Bci "
+    description: "Za umiej\u0119tno\u015B\u0107 samodzielnego podejmowania decyzji
+      i dzia\u0142ania. "
+    category: 2
+    type: 1
+    prefab: {fileID: 2181694188497877915, guid: d2c79b45aa347394ab10b1e6cf1d14ec,
+      type: 3}
+    audioDescription: 
+  - name: "Medal Mocy Wewn\u0119trznej "
+    description: "Za odwag\u0119 i wytrwa\u0142o\u015B\u0107 w wierzeniu we w\u0142asne
+      si\u0142y. "
+    category: 2
+    type: 1
+    prefab: {fileID: 3941470647529936943, guid: 5f133aa89ed45a84e9b350acd96565d6,
+      type: 3}
+    audioDescription: 
+  - name: "Medal Odwagi w Dzia\u0142aniu "
+    description: "Za odwag\u0119 w podejmowaniu nowych wyzwa\u0144 i realizacji swoich
+      cel\xF3w. "
+    category: 2
+    type: 1
+    prefab: {fileID: 3364799583574617336, guid: e5dd8c5b71a5ba644b5cb4c824dbd10f,
+      type: 3}
+    audioDescription: 
+  - name: "Dyplom Odkrywcy Talent\xF3w "
+    description: "Za nieustanne poszukiwanie i rozwijanie swoich talent\xF3w i umiej\u0119tno\u015Bci. "
+    category: 2
+    type: 2
+    prefab: {fileID: 8682307240323260755, guid: 758d36e3fa6cae745b8ea762a18b2659,
+      type: 3}
+    audioDescription: 
+  - name: 'Dyplom Wiary w Siebie '
+    description: "Za konsekwentne pokazywanie, \u017Ce wierzy si\u0119 we w\u0142asne
+      mo\u017Cliwo\u015Bci i realizacj\u0119 swoich plan\xF3w. "
+    category: 2
+    type: 2
+    prefab: {fileID: 2535365729770657894, guid: 82adc5c3516c3f34e9c65a4afc4adcce,
+      type: 3}
+    audioDescription: 
+  - name: "Dyplom Pewno\u015Bci Siebie "
+    description: "Za pewno\u015B\u0107 siebie i inspirowanie innych do wiary w swoje
+      mo\u017Cliwo\u015Bci. "
+    category: 2
+    type: 2
+    prefab: {fileID: 4742408678421173029, guid: 149965f092c039d4d8ff6898d0b7b531,
+      type: 3}
+    audioDescription: 

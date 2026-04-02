@@ -1,0 +1,228 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5b11a58205ec3474ca216360e9fa74a8, type: 3}
+  m_Name: Piniata_Scene_Audio_Clips Shared Data
+  m_EditorClassIdentifier: 
+  m_TableCollectionName: Piniata_Scene_Audio_Clips
+  m_TableCollectionNameGuidString: e2019de747dbccb459e2c0d9e2ad414f
+  m_Entries:
+  - m_Id: 649572910055424
+    m_Key: 0
+    m_Metadata:
+      m_Items: []
+  - m_Id: 649575565049856
+    m_Key: 1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 649599346753536
+    m_Key: 10
+    m_Metadata:
+      m_Items: []
+  - m_Id: 649601389379584
+    m_Key: 11
+    m_Metadata:
+      m_Items: []
+  - m_Id: 649605516574720
+    m_Key: 12
+    m_Metadata:
+      m_Items: []
+  - m_Id: 649607336902656
+    m_Key: 13
+    m_Metadata:
+      m_Items: []
+  - m_Id: 649611552178176
+    m_Key: 14
+    m_Metadata:
+      m_Items: []
+  - m_Id: 649577548955648
+    m_Key: 2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 649580283641856
+    m_Key: 3
+    m_Metadata:
+      m_Items: []
+  - m_Id: 649582645035008
+    m_Key: 4
+    m_Metadata:
+      m_Items: []
+  - m_Id: 649585883037696
+    m_Key: 5
+    m_Metadata:
+      m_Items: []
+  - m_Id: 649590475800576
+    m_Key: 6
+    m_Metadata:
+      m_Items: []
+  - m_Id: 649592551981056
+    m_Key: 7
+    m_Metadata:
+      m_Items: []
+  - m_Id: 649595165032448
+    m_Key: 8
+    m_Metadata:
+      m_Items: []
+  - m_Id: 649596956000256
+    m_Key: 9
+    m_Metadata:
+      m_Items: []
+  - m_Id: 679423251529728
+    m_Key: Choose_Level
+    m_Metadata:
+      m_Items: []
+  - m_Id: 650137262047232
+    m_Key: GameOver
+    m_Metadata:
+      m_Items: []
+  - m_Id: 648564800700416
+    m_Key: Intro_First
+    m_Metadata:
+      m_Items: []
+  - m_Id: 648600141905920
+    m_Key: Intro_General
+    m_Metadata:
+      m_Items: []
+  - m_Id: 648567677992960
+    m_Key: Intro_Last
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2445601867251712
+    m_Key: Intro_Tutorial
+    m_Metadata:
+      m_Items: []
+  - m_Id: 650225690558464
+    m_Key: Last_Present
+    m_Metadata:
+      m_Items: []
+  - m_Id: 650047235506176
+    m_Key: Piniata_Done
+    m_Metadata:
+      m_Items: []
+  - m_Id: 650081712685056
+    m_Key: Sweets_Done
+    m_Metadata:
+      m_Items: []
+  m_Metadata:
+    m_Items:
+    - rid: 3600414026828873730
+  m_KeyGenerator:
+    rid: 3600413986643509392
+  references:
+    version: 2
+    RefIds:
+    - rid: 3600413986643509392
+      type: {class: DistributedUIDGenerator, ns: UnityEngine.Localization.Tables,
+        asm: Unity.Localization}
+      data:
+        m_CustomEpoch: 1679415316275
+    - rid: 3600414026828873730
+      type: {class: AssetTypeMetadata, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_Entries:
+        - m_KeyId: 649572910055424
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 649575565049856
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 649601389379584
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 649605516574720
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 649607336902656
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 649599346753536
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 649611552178176
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 649577548955648
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 649580283641856
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 649582645035008
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 649585883037696
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 649590475800576
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 649592551981056
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 649596956000256
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 649595165032448
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 650137262047232
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 648564800700416
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 648600141905920
+          m_TableCodes:
+          - en-GB
+          - pl-PL
+        - m_KeyId: 648567677992960
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 650225690558464
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 650047235506176
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 650081712685056
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 679423251529728
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 2445601867251712
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        m_TypeString: UnityEngine.AudioClip, UnityEngine.AudioModule, Version=0.0.0.0,
+          Culture=neutral, PublicKeyToken=null

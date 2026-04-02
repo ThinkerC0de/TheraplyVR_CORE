@@ -1,0 +1,364 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5b11a58205ec3474ca216360e9fa74a8, type: 3}
+  m_Name: Kodowanie_Audio_Clips Shared Data
+  m_EditorClassIdentifier: 
+  m_TableCollectionName: Kodowanie_Audio_Clips
+  m_TableCollectionNameGuidString: 9e04bb3c7f64c514aabb53842eaae717
+  m_Entries:
+  - m_Id: 128464142336
+    m_Key: 2Sounds
+    m_Metadata:
+      m_Items: []
+  - m_Id: 287650562048
+    m_Key: 2Numbers
+    m_Metadata:
+      m_Items: []
+  - m_Id: 306843697152
+    m_Key: 3Sounds
+    m_Metadata:
+      m_Items: []
+  - m_Id: 349055172608
+    m_Key: 3Numbers
+    m_Metadata:
+      m_Items: []
+  - m_Id: 351731138560
+    m_Key: 4Sounds
+    m_Metadata:
+      m_Items: []
+  - m_Id: 353975091200
+    m_Key: 4Numbers
+    m_Metadata:
+      m_Items: []
+  - m_Id: 356357455872
+    m_Key: 5Sounds
+    m_Metadata:
+      m_Items: []
+  - m_Id: 430252703744
+    m_Key: 5Numbers
+    m_Metadata:
+      m_Items: []
+  - m_Id: 432832200704
+    m_Key: 6Sounds
+    m_Metadata:
+      m_Items: []
+  - m_Id: 435407503360
+    m_Key: 6Numbers
+    m_Metadata:
+      m_Items: []
+  - m_Id: 437546598400
+    m_Key: 7Sounds
+    m_Metadata:
+      m_Items: []
+  - m_Id: 439622778880
+    m_Key: 7Numbers
+    m_Metadata:
+      m_Items: []
+  - m_Id: 573676929024
+    m_Key: Numbers_Welcome
+    m_Metadata:
+      m_Items: []
+  - m_Id: 576164151296
+    m_Key: Piano_Welcome
+    m_Metadata:
+      m_Items: []
+  - m_Id: 578890448896
+    m_Key: Game_Over
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1043652886528
+    m_Key: Dobrze
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1046026862592
+    m_Key: Doskonale
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1048258232320
+    m_Key: Fantastycznie
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1049990479872
+    m_Key: Perfekcyjnie
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1051747893248
+    m_Key: Super
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1053761159168
+    m_Key: Swietnie
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1350185205760
+    m_Key: 0
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1352483684352
+    m_Key: 1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1354966712320
+    m_Key: 2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1357575569408
+    m_Key: 3
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1359840493568
+    m_Key: 4
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1361761484800
+    m_Key: 5
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1363619561472
+    m_Key: 6
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1366886924288
+    m_Key: 7
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1369940377600
+    m_Key: 8
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1372331130880
+    m_Key: 9
+    m_Metadata:
+      m_Items: []
+  - m_Id: 7356755689472
+    m_Key: MorseWelcome
+    m_Metadata:
+      m_Items: []
+  - m_Id: 365794677260288
+    m_Key: WelcomeAudio
+    m_Metadata:
+      m_Items: []
+  - m_Id: 366026056040448
+    m_Key: FirstGoodPianoAnswer
+    m_Metadata:
+      m_Items: []
+  - m_Id: 366104288198656
+    m_Key: BadPianoAnswer
+    m_Metadata:
+      m_Items: []
+  - m_Id: 366170247823360
+    m_Key: NextGoodPianoAnswer
+    m_Metadata:
+      m_Items: []
+  - m_Id: 366234378731520
+    m_Key: MorseNextLevel
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1438694872219648
+    m_Key: GoBack
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1438701394362368
+    m_Key: Piano_LevelCompleted
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8312787814875136
+    m_Key: CoconutInfo
+    m_Metadata:
+      m_Items: []
+  - m_Id: 8312865958952960
+    m_Key: MorseInfo
+    m_Metadata:
+      m_Items: []
+  m_Metadata:
+    m_Items:
+    - rid: 3600414116662214685
+  m_KeyGenerator:
+    rid: 3600414116662214684
+  references:
+    version: 2
+    RefIds:
+    - rid: 3600414116662214684
+      type: {class: DistributedUIDGenerator, ns: UnityEngine.Localization.Tables,
+        asm: Unity.Localization}
+      data:
+        m_CustomEpoch: 1679918586380
+    - rid: 3600414116662214685
+      type: {class: AssetTypeMetadata, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_Entries:
+        - m_KeyId: 287650562048
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 128464142336
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 349055172608
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 306843697152
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 353975091200
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 351731138560
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 430252703744
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 356357455872
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 435407503360
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 432832200704
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 439622778880
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 437546598400
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 573676929024
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 576164151296
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 578890448896
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 1051747893248
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 1053761159168
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 1043652886528
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 1046026862592
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 1048258232320
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 1049990479872
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 1350185205760
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 1352483684352
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 1354966712320
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 1357575569408
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 1359840493568
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 1361761484800
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 1363619561472
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 1366886924288
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 1369940377600
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 1372331130880
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 7356755689472
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 365794677260288
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 366026056040448
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 366104288198656
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 366170247823360
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 366234378731520
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 1438694872219648
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 1438701394362368
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 8312787814875136
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 8312865958952960
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        m_TypeString: UnityEngine.AudioClip, UnityEngine.AudioModule, Version=0.0.0.0,
+          Culture=neutral, PublicKeyToken=null

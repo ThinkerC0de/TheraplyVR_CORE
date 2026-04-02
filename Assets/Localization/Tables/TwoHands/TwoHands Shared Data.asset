@@ -1,0 +1,172 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5b11a58205ec3474ca216360e9fa74a8, type: 3}
+  m_Name: TwoHands Shared Data
+  m_EditorClassIdentifier: 
+  m_TableCollectionName: TwoHands
+  m_TableCollectionNameGuidString: 805dc3a5895db694c904f8b3142e6907
+  m_Entries:
+  - m_Id: 47962714112
+    m_Key: twoHands_welcome
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1639394897920
+    m_Key: twoHands_markers
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1666284580864
+    m_Key: twoHands_board
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1697460842496
+    m_Key: twoHands_touch
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1727194263552
+    m_Key: twoHands_faster
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1744596430848
+    m_Key: twoHands_good
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1763735040000
+    m_Key: twoHands_bad
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1784777863168
+    m_Key: twoHands_oneHand
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1803748700160
+    m_Key: twoHands_twoSymbols
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1826540548096
+    m_Key: twoHands_twoSymbols_time
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1843892383744
+    m_Key: twoHands_twoSymbols_left
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1864884875264
+    m_Key: twoHands_twoSymbols_right
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1884279336960
+    m_Key: twoHands_twoShadow
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1893485834240
+    m_Key: twoHands_twoShadow_left
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1913308114944
+    m_Key: twoHands_twoShadow_right
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1936607473664
+    m_Key: twoHands_oneSymbol
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1963866255360
+    m_Key: twoHands_oneSymbol_time
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1973391519744
+    m_Key: twoHands_oneSymbol_left
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2006425858048
+    m_Key: twoHands_oneSymbol_right
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2028269793280
+    m_Key: twoHands_oneShadow
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2045709709312
+    m_Key: twoHands_oneShadow_left
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2065070616576
+    m_Key: twoHands_oneShadow_right
+    m_Metadata:
+      m_Items: []
+  m_Metadata:
+    m_Items:
+    - rid: 7123315009066631168
+  m_KeyGenerator:
+    rid: 7123314983615594497
+  references:
+    version: 2
+    RefIds:
+    - rid: 7123314983615594497
+      type: {class: DistributedUIDGenerator, ns: UnityEngine.Localization.Tables,
+        asm: Unity.Localization}
+      data:
+        m_CustomEpoch: 1765453454875
+    - rid: 7123315009066631168
+      type: {class: AssetTypeMetadata, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_Entries:
+        - m_KeyId: 1763735040000
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 1666284580864
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 1727194263552
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 1744596430848
+          m_TableCodes:
+          - en-GB
+          - pl-PL
+        - m_KeyId: 1639394897920
+          m_TableCodes:
+          - en-GB
+          - pl-PL
+        - m_KeyId: 1784777863168
+          m_TableCodes:
+          - en-GB
+          - pl-PL
+        - m_KeyId: 1697460842496
+          m_TableCodes:
+          - en-GB
+          - pl-PL
+        - m_KeyId: 1803748700160
+          m_TableCodes:
+          - en-GB
+          - pl-PL
+        - m_KeyId: 1843892383744
+          m_TableCodes:
+          - en-GB
+          - pl-PL
+        - m_KeyId: 1864884875264
+          m_TableCodes:
+          - en-GB
+          - pl-PL
+        - m_KeyId: 1826540548096
+          m_TableCodes:
+          - en-GB
+          - pl-PL
+        - m_KeyId: 47962714112
+          m_TableCodes:
+          - en-GB
+          - pl-PL
+        m_TypeString: UnityEngine.AudioClip, UnityEngine.AudioModule, Version=0.0.0.0,
+          Culture=neutral, PublicKeyToken=null

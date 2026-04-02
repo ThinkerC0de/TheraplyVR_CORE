@@ -1,0 +1,101 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5b11a58205ec3474ca216360e9fa74a8, type: 3}
+  m_Name: Spatial Shared Data
+  m_EditorClassIdentifier: 
+  m_TableCollectionName: Spatial
+  m_TableCollectionNameGuidString: 954a4c3c5d4428745813ecde24c39dac
+  m_Entries:
+  - m_Id: 36503875584
+    m_Key: spatial_welcome0
+    m_Metadata:
+      m_Items: []
+  - m_Id: 157694095360
+    m_Key: spatial_welcome1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 210739458048
+    m_Key: spatial_welcome2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 248551108608
+    m_Key: spatial_intro1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 302959620096
+    m_Key: spatial_intro2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 349503811584
+    m_Key: spatial_intro3
+    m_Metadata:
+      m_Items: []
+  - m_Id: 383653834752
+    m_Key: spatial_intro4
+    m_Metadata:
+      m_Items: []
+  - m_Id: 402830192640
+    m_Key: spatial_intro5
+    m_Metadata:
+      m_Items: []
+  - m_Id: 421360627712
+    m_Key: spatial_intro6
+    m_Metadata:
+      m_Items: []
+  - m_Id: 439207391232
+    m_Key: spatial_intro7
+    m_Metadata:
+      m_Items: []
+  - m_Id: 457955930112
+    m_Key: spatial_intro8
+    m_Metadata:
+      m_Items: []
+  - m_Id: 475412623360
+    m_Key: spatial_intro9
+    m_Metadata:
+      m_Items: []
+  - m_Id: 490537283584
+    m_Key: spatial_intro10
+    m_Metadata:
+      m_Items: []
+  - m_Id: 607797440512
+    m_Key: spatial_next
+    m_Metadata:
+      m_Items: []
+  - m_Id: 632225067008
+    m_Key: spatial_good
+    m_Metadata:
+      m_Items: []
+  - m_Id: 656556224512
+    m_Key: spatial_tryAgain1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 674902110208
+    m_Key: spatial_tryAgain2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 719680499712
+    m_Key: spatial_end
+    m_Metadata:
+      m_Items: []
+  m_Metadata:
+    m_Items: []
+  m_KeyGenerator:
+    rid: 7123314983615594498
+  references:
+    version: 2
+    RefIds:
+    - rid: 7123314983615594498
+      type: {class: DistributedUIDGenerator, ns: UnityEngine.Localization.Tables,
+        asm: Unity.Localization}
+      data:
+        m_CustomEpoch: 1765453642810

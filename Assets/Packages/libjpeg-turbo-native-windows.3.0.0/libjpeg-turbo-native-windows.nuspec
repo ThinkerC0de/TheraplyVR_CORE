@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+  <metadata>
+    <id>libjpeg-turbo-native-windows</id>
+    <version>3.0.0</version>
+    <title>Native libjpeg-turbo library for Windows</title>
+    <authors>Tobias Schröter</authors>
+    <license type="file">LICENSE.txt</license>
+    <licenseUrl>https://aka.ms/deprecateLicenseUrl</licenseUrl>
+    <readme>README.md</readme>
+    <projectUrl>https://github.com/libjpeg-turbo/libjpeg-turbo</projectUrl>
+    <description>A 64Bit compiled Turbojpeg.dll from the official repository: https://github.com/libjpeg-turbo/libjpeg-turbo. Dependency for the .net wrapper from https://github.com/Sergey-Terekhin/libjpeg-turbo-net.</description>
+    <tags>TurboJpeg, libjpeg-turbo, native</tags>
+    <dependencies>
+      <group targetFramework="net6.0" />
+    </dependencies>
+  </metadata>
+</package>

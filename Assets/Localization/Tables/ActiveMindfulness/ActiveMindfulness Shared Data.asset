@@ -1,0 +1,332 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5b11a58205ec3474ca216360e9fa74a8, type: 3}
+  m_Name: ActiveMindfulness Shared Data
+  m_EditorClassIdentifier: 
+  m_TableCollectionName: ActiveMindfulness
+  m_TableCollectionNameGuidString: a6e8cbd4f0437cc4da2ebf75990df6a8
+  m_Entries:
+  - m_Id: 5059970132295680
+    m_Key: 2_crystals
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5059972506271744
+    m_Key: 3_crystals
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5059974360154112
+    m_Key: 4_crystals
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5059976625078272
+    m_Key: 5_crystals
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5059978575429632
+    m_Key: 6_crystals
+    m_Metadata:
+      m_Items: []
+  - m_Id: 5059980810993664
+    m_Key: 7_crystals
+    m_Metadata:
+      m_Items: []
+  - m_Id: 22188867584
+    m_Key: Bad_round
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1100483407069184
+    m_Key: choose_crystal
+    m_Metadata:
+      m_Items: []
+  - m_Id: 73927981219840
+    m_Key: czerwony
+    m_Metadata:
+      m_Items: []
+  - m_Id: 73905189371904
+    m_Key: fioletowy
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6114803853508608
+    m_Key: Game_1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3641646370471936
+    m_Key: Game_1_instruction
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6114815429787648
+    m_Key: Game_2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6114819238215680
+    m_Key: Game_3
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3641672802975744
+    m_Key: Game_3_instruction
+    m_Metadata:
+      m_Items: []
+  - m_Id: 6114823138918400
+    m_Key: Game_4
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3138468659200
+    m_Key: Game_Ended
+    m_Metadata:
+      m_Items: []
+  - m_Id: 14941110272
+    m_Key: Good_round
+    m_Metadata:
+      m_Items: []
+  - m_Id: 73913762529280
+    m_Key: indygo
+    m_Metadata:
+      m_Items: []
+  - m_Id: 73917348659200
+    m_Key: niebieski
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3961284551720960
+    m_Key: Phase_1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3961289924624384
+    m_Key: Phase_2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3961329120395264
+    m_Key: Phase_3
+    m_Metadata:
+      m_Items: []
+  - m_Id: 73925028429824
+    m_Key: pomaranczowy
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3579792549953536
+    m_Key: RightClick
+    m_Metadata:
+      m_Items: []
+  - m_Id: 900501291008
+    m_Key: Round_finished
+    m_Metadata:
+      m_Items: []
+  - m_Id: 3579856387260416
+    m_Key: WrongClick
+    m_Metadata:
+      m_Items: []
+  - m_Id: 73920465027072
+    m_Key: zielony
+    m_Metadata:
+      m_Items: []
+  - m_Id: 73922633482240
+    m_Key: zolty
+    m_Metadata:
+      m_Items: []
+  - m_Id: 94944355517677568
+    m_Key: AM_Game_1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 94944359267385344
+    m_Key: AM_Game_2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 94944390967934976
+    m_Key: AM_Game_3
+    m_Metadata:
+      m_Items: []
+  - m_Id: 94944395225153536
+    m_Key: AM_Game_4
+    m_Metadata:
+      m_Items: []
+  - m_Id: 94944397490077696
+    m_Key: AM_phase_2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 94944400069574656
+    m_Key: AM_Game_Ended
+    m_Metadata:
+      m_Items: []
+  - m_Id: 102918012240084992
+    m_Key: WrongClick_2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 102918035229065216
+    m_Key: WrongClick_3
+    m_Metadata:
+      m_Items: []
+  m_Metadata:
+    m_Items:
+    - rid: 5985670385424924703
+  m_KeyGenerator:
+    rid: 5985670385424924698
+  references:
+    version: 2
+    RefIds:
+    - rid: 5985670385424924698
+      type: {class: DistributedUIDGenerator, ns: UnityEngine.Localization.Tables,
+        asm: Unity.Localization}
+      data:
+        m_CustomEpoch: 1682339681799
+    - rid: 5985670385424924703
+      type: {class: AssetTypeMetadata, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_Entries:
+        - m_KeyId: 22188867584
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 3138468659200
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 14941110272
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 900501291008
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 73927981219840
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 73905189371904
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 73913762529280
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 73917348659200
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 73925028429824
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 73920465027072
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 73922633482240
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 1100483407069184
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 3579792549953536
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 3579856387260416
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 3641646370471936
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 3641672802975744
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 3961284551720960
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 3961289924624384
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 3961329120395264
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 5059970132295680
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 5059972506271744
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 5059974360154112
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 5059976625078272
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 5059978575429632
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 5059980810993664
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 6114803853508608
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 6114815429787648
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 6114819238215680
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 6114823138918400
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 94944355517677568
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 94944359267385344
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 94944390967934976
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 94944395225153536
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 94944397490077696
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 94944400069574656
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 102918012240084992
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        - m_KeyId: 102918035229065216
+          m_TableCodes:
+          - pl-PL
+          - en-GB
+        m_TypeString: UnityEngine.AudioClip, UnityEngine.AudioModule, Version=0.0.0.0,
+          Culture=neutral, PublicKeyToken=null
