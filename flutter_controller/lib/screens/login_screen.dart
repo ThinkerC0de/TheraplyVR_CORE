@@ -472,6 +472,16 @@ class _LoginScreenState extends State<LoginScreen> {
                   style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                   textAlign: TextAlign.center,
                 ),
+                const SizedBox(height: 24),
+                Text(
+                  'Version 2.0.1',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[500],
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
               ],
             ),
           ),
